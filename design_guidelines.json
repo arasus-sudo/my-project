@@ -1,0 +1,130 @@
+{
+  "project_name": "Pitch EQ",
+  "domain": "B2B SaaS / Sales Outreach & AI",
+  "archetype": "4 (Swiss & High-Contrast) + Editorial Tech Hybrid",
+  "theme": "Light",
+  "design_philosophy": "Confident, high-signal, category-defining. Breaking the 'dark mode tech tool' stereotype with an 'Editorial Tech' aesthetic. Data-dense but breathable. Relies on brutalist structural grids, bone-white backgrounds, ink-black text, and a signature 'Sanguine Red' to represent Emotional Intelligence (EQ).",
+  "colors": {
+    "background": {
+      "base": "#FDFDF9",
+      "surface": "#FFFFFF",
+      "surface_hover": "#F5F5F1",
+      "inverted": "#0F1010"
+    },
+    "text": {
+      "primary": "#0F1010",
+      "secondary": "#5C5D58",
+      "tertiary": "#8A8B86",
+      "inverted": "#FDFDF9"
+    },
+    "border": {
+      "default": "#E5E6E1",
+      "focus": "#0F1010",
+      "transparent": "rgba(15, 16, 16, 0.1)"
+    },
+    "accent": {
+      "primary": "#D94526",
+      "primary_hover": "#C03A1F",
+      "primary_soft": "#F2D8D1",
+      "success": "#118D57",
+      "warning": "#E62E2E"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "headings": "Cabinet Grotesk",
+      "body": "IBM Plex Sans",
+      "mono": "JetBrains Mono"
+    },
+    "scales": {
+      "h1_marketing": "text-5xl sm:text-6xl+ tracking-tighter font-extrabold leading-none",
+      "h2_section": "text-3xl sm:text-4xl tracking-tight font-bold",
+      "h3_card": "text-xl font-bold tracking-tight",
+      "body_base": "text-sm sm:text-base leading-relaxed font-normal",
+      "ui_label": "text-xs font-semibold tracking-[0.05em] uppercase",
+      "eq_score_display": "text-5xl sm:text-6xl font-mono tracking-tighter"
+    },
+    "rules": [
+      "NEVER use Inter, Roboto, or Space Grotesk.",
+      "Use extremely tight tracking (-0.04em or tracking-tighter) for all Cabinet Grotesk headings.",
+      "Use JetBrains Mono for all numeric data, EQ scores, timestamps, and metric values to create a tech-editorial contrast."
+    ]
+  },
+  "spacing_and_layout": {
+    "grid_system": "1px structural grid system. Containers use border-collapse style layouts with strict border-r border-b utilities. No floating soft shadows.",
+    "marketing_padding": "py-24 px-8 md:px-16 md:py-32",
+    "app_padding": "p-4 sm:p-6",
+    "radius": "rounded-none or rounded-sm (max 4px). Avoid heavy rounding to maintain the sharp, editorial tech feel.",
+    "shadows": "Minimal. Use sharp 1px borders instead of drop shadows. If shadow is needed for floating elements (dropdowns, modals), use a harsh, non-diffuse shadow: shadow-[4px_4px_0px_rgba(15,16,16,1)] or a very crisp structural shadow."
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-[#D94526] text-white font-medium hover:bg-[#C03A1F] transition-colors px-6 py-2 rounded-sm",
+      "secondary": "bg-transparent border border-[#0F1010] text-[#0F1010] font-medium hover:bg-[#F5F5F1] transition-colors px-6 py-2 rounded-sm",
+      "ghost": "bg-transparent text-[#5C5D58] hover:text-[#0F1010] hover:bg-[#F5F5F1] transition-colors px-4 py-2"
+    },
+    "cards": {
+      "default": "bg-white border border-[#E5E6E1] p-6 rounded-sm",
+      "interactive": "bg-white border border-[#E5E6E1] p-6 rounded-sm hover:border-[#0F1010] transition-colors cursor-pointer"
+    },
+    "eq_score_meter": {
+      "description": "Do NOT use a standard progress bar. Use a 'seismograph' or a minimalist stacked vertical bar chart component built with absolute 1px lines, with a massive JetBrains Mono number overlaid.",
+      "colors": "Score < 40: #E62E2E. Score 40-70: #5C5D58. Score > 70: #D94526 (Sanguine Red - representing high emotional intelligence)."
+    },
+    "kanban_board": {
+      "column": "bg-[#FDFDF9] border-r border-[#E5E6E1] min-h-screen p-4",
+      "card": "bg-white border border-[#E5E6E1] p-4 shadow-sm hover:shadow-md hover:border-[#0F1010] transition-all cursor-grab active:cursor-grabbing mb-3"
+    },
+    "unified_inbox": {
+      "layout": "3-pane layout. Left: Folders (w-64 border-r). Middle: Thread List (w-80 border-r). Right: Reading Pane (flex-1).",
+      "active_state": "bg-[#F5F5F1] border-l-2 border-l-[#D94526]"
+    }
+  },
+  "interaction_and_motion": {
+    "hover_states": "Instant color changes or crisp transform-y (-2px). No slow/mushy transitions.",
+    "focus_states": "ring-2 ring-offset-2 ring-[#0F1010] outline-none",
+    "page_transitions": "None or very fast opacity fades. Keep it feeling like a high-performance native app."
+  },
+  "accessibility": {
+    "contrast": "Text must meet WCAG AAA where possible. The charcoal text on bone-white background provides excellent, comfortable contrast.",
+    "testing": "All interactive elements MUST include a data-testid attribute formatted as kebab-case and role-based (e.g., data-testid='login-submit-button')."
+  },
+  "media": {
+    "images": {
+      "hero_texture": {
+        "url": "https://images.pexels.com/photos/11927241/pexels-photo-11927241.jpeg",
+        "alt": "Warm rich organic texture",
+        "usage": "Use as a very low opacity (10-15%) background blend for the marketing hero section to break the clinical SaaS feel."
+      },
+      "avatar_1": {
+        "url": "https://images.pexels.com/photos/8111893/pexels-photo-8111893.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "alt": "Professional smiling woman",
+        "usage": "Use in Unified Inbox, CRM Kanban lead profiles, or testmonials."
+      },
+      "avatar_2": {
+        "url": "https://images.pexels.com/photos/29852895/pexels-photo-29852895.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "alt": "Confident African woman",
+        "usage": "Use in Unified Inbox, CRM Kanban lead profiles, or testmonials."
+      },
+      "sponsor_logo_1": {
+        "url": "https://images.pexels.com/photos/26576975/pexels-photo-26576975.jpeg",
+        "alt": "Minimal company logo",
+        "usage": "Use in the 'Trusted By' section of the marketing page."
+      },
+      "sponsor_logo_2": {
+        "url": "https://images.pexels.com/photos/21898300/pexels-photo-21898300.jpeg",
+        "alt": "Pexels minimal logo",
+        "usage": "Use in the 'Trusted By' section of the marketing page."
+      }
+    }
+  },
+  "instructions_to_main_agent": [
+    "Build the application using pure HTML/Tailwind for the marketing pages to allow for exact layout control, asymmetrical layouts, and fluid typography.",
+    "Use highly customized Shadcn components for the app/dashboard views. Strip away default Shadcn border radii (make them rounded-none or rounded-sm) and adjust borders to #E5E6E1 to match the editorial theme.",
+    "Implement lucide-react or @phosphor-icons/react for iconography. Use Phosphor Icons with 'duotone' or 'regular' weight for the best editorial tech match.",
+    "Implement the Unified Inbox pane layout using CSS Grid or Flexbox, ensuring h-screen and proper overflow-y-auto on the middle and right panes.",
+    "The CRM Kanban should be built using standard drag-and-drop primitives but styled meticulously to match the 'Swiss & High-Contrast' strict grid.",
+    "DO NOT use generic purple/blue AI gradients. The 'AI Email Editor' should signify AI through the typography (JetBrains Mono), structure, and the signature #D94526 'Sanguine Red' accent color for the EQ Score.",
+    "All forms and interactive UI must have data-testid attributes for testing."
+  ]
+}
