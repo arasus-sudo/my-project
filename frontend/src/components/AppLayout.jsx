@@ -23,9 +23,9 @@ export default function AppLayout() {
       <aside className="w-60 border-r border-line bg-white flex flex-col">
         <div className="p-5 border-b border-line">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => nav("/app")}>
-            <div className="w-7 h-7 bg-ink text-bone flex items-center justify-center rounded-sm font-display font-bold">P</div>
+            <div className="w-7 h-7 bg-ink text-white flex items-center justify-center rounded-full font-display font-bold text-sm">i</div>
             <div className="leading-tight">
-              <div className="font-display font-bold tracking-tight">Pitch EQ</div>
+              <div className="font-display font-semibold tracking-tight text-sm">Innoira <span className="text-neutral-400">/</span> Pitch EQ</div>
               <div className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider">{workspace?.name}</div>
             </div>
           </div>
@@ -38,9 +38,9 @@ export default function AppLayout() {
               end={n.end}
               data-testid={n.tid}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 text-sm rounded-sm transition-colors ${
+                `flex items-center gap-3 px-3 py-2 text-sm rounded-full transition-colors ${
                   isActive
-                    ? "bg-ink text-bone"
+                    ? "bg-ink text-white"
                     : "text-neutral-700 hover:bg-surfacehover"
                 }`
               }
@@ -52,7 +52,7 @@ export default function AppLayout() {
         </nav>
         <div className="p-3 border-t border-line">
           <div className="flex items-center gap-2 px-2 py-2">
-            <div className="w-8 h-8 bg-sanguine-soft text-sanguine flex items-center justify-center rounded-sm font-mono text-xs font-bold">
+            <div className="w-8 h-8 bg-ink/10 text-ink flex items-center justify-center rounded-full font-mono text-xs font-semibold">
               {(user?.name || "U").slice(0, 2).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">

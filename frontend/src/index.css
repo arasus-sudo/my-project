@@ -1,5 +1,4 @@
-@import url("https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@800,700,500,400&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -7,72 +6,70 @@
 
 @layer base {
   :root {
-    --background: 55 33% 98%;
-    --foreground: 180 3% 6%;
+    --background: 220 5% 91%;
+    --foreground: 260 6% 14%;
     --card: 0 0% 100%;
-    --card-foreground: 180 3% 6%;
+    --card-foreground: 260 6% 14%;
     --popover: 0 0% 100%;
-    --popover-foreground: 180 3% 6%;
-    --primary: 180 3% 6%;
-    --primary-foreground: 55 33% 98%;
-    --secondary: 55 20% 95%;
-    --secondary-foreground: 180 3% 6%;
-    --muted: 55 20% 95%;
-    --muted-foreground: 60 3% 36%;
-    --accent: 12 71% 50%;
+    --popover-foreground: 260 6% 14%;
+    --primary: 260 6% 14%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 5% 85%;
+    --secondary-foreground: 260 6% 14%;
+    --muted: 220 5% 88%;
+    --muted-foreground: 240 4% 38%;
+    --accent: 260 6% 14%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 78% 54%;
     --destructive-foreground: 0 0% 100%;
-    --border: 60 10% 89%;
-    --input: 60 10% 89%;
-    --ring: 180 3% 6%;
-    --chart-1: 12 71% 50%;
-    --chart-2: 180 3% 20%;
-    --chart-3: 60 3% 45%;
-    --chart-4: 148 78% 30%;
-    --chart-5: 30 60% 55%;
-    --radius: 0.125rem;
+    --border: 220 6% 82%;
+    --input: 220 6% 82%;
+    --ring: 260 6% 14%;
+    --radius: 0.875rem;
   }
 }
 
 @layer base {
   * { @apply border-border; }
   html, body {
-    background-color: #FDFDF9;
-    color: #0F1010;
-    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    background-color: #E8E9EB;
+    color: #212025;
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: "ss01", "cv01";
+    letter-spacing: -0.005em;
   }
   h1, h2, h3, h4 {
-    font-family: "Cabinet Grotesk", "IBM Plex Sans", sans-serif;
+    font-family: "Inter", system-ui, sans-serif;
     letter-spacing: -0.03em;
+    font-weight: 700;
   }
-  ::selection { background: #D94526; color: white; }
+  ::selection { background: #212025; color: #E8E9EB; }
 }
 
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-sanguine text-white font-medium rounded-sm hover:bg-sanguine-hover transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ink;
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-ink text-white text-sm font-medium rounded-full hover:bg-ink/90 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ink;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 border border-ink text-ink font-medium rounded-sm bg-transparent hover:bg-surfacehover transition-colors;
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-ink text-sm font-medium rounded-full border border-line hover:border-ink transition-colors;
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 px-3 py-2 text-neutral-600 hover:text-ink hover:bg-surfacehover rounded-sm transition-colors;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-neutral-600 hover:text-ink hover:bg-white/60 rounded-full transition-colors text-sm;
   }
   .ui-label {
-    @apply text-[11px] font-semibold tracking-[0.08em] uppercase text-neutral-500;
+    @apply text-[11px] font-medium tracking-wider uppercase text-neutral-500;
   }
   .card-flat {
-    @apply bg-white border border-line rounded-sm;
+    @apply bg-white border border-line rounded-2xl;
   }
   .kbd {
-    @apply font-mono text-xs px-1.5 py-0.5 border border-line rounded-sm bg-surfacehover;
+    @apply font-mono text-xs px-1.5 py-0.5 border border-line rounded-md bg-neutral-50;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-white border border-line text-neutral-600;
   }
 }
 
-/* Recharts overrides */
-.recharts-cartesian-grid line { stroke: #E5E6E1; }
+.recharts-cartesian-grid line { stroke: #D6D7DA; }
 .recharts-text { font-family: "JetBrains Mono", monospace; font-size: 11px; }

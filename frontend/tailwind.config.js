@@ -5,14 +5,14 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        display: ['"Cabinet Grotesk"', '"IBM Plex Sans"', "sans-serif"],
-        sans: ['"IBM Plex Sans"', "system-ui", "sans-serif"],
+        display: ['"Inter"', "system-ui", "sans-serif"],
+        sans: ['"Inter"', "system-ui", "sans-serif"],
         mono: ['"JetBrains Mono"', "ui-monospace", "monospace"],
       },
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        md: "calc(var(--radius) - 4px)",
+        sm: "calc(var(--radius) - 8px)",
       },
       colors: {
         background: "hsl(var(--background))",
@@ -27,22 +27,15 @@ module.exports = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
-        ink: "#0F1010",
-        bone: "#FDFDF9",
+        ink: "#212025",
+        bone: "#E8E9EB",
         surface: "#FFFFFF",
-        surfacehover: "#F5F5F1",
-        line: "#E5E6E1",
+        surfacehover: "#F1F2F4",
+        line: "#D6D7DA",
         sanguine: {
-          DEFAULT: "#D94526",
-          hover: "#C03A1F",
-          soft: "#F2D8D1",
-        },
-        chart: {
-          1: "hsl(var(--chart-1))",
-          2: "hsl(var(--chart-2))",
-          3: "hsl(var(--chart-3))",
-          4: "hsl(var(--chart-4))",
-          5: "hsl(var(--chart-5))",
+          DEFAULT: "#212025",
+          hover: "#0F0E12",
+          soft: "#F1F2F4",
         },
       },
       keyframes: {

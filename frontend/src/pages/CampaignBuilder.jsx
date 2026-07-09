@@ -205,7 +205,7 @@ export default function CampaignBuilder() {
         <aside className="col-span-3 border-l border-line bg-white p-6">
           <div className="ui-label text-sanguine">EQ Score</div>
           <div className="font-mono text-6xl font-bold tracking-tighter mt-1"
-            style={{ color: eq ? (eq.overall > 70 ? "#D94526" : eq.overall > 40 ? "#5C5D58" : "#E62E2E") : "#8A8B86" }}>
+            style={{ color: eq ? (eq.overall > 70 ? "#212025" : eq.overall > 40 ? "#5A5A63" : "#B33636") : "#8A8B86" }}>
             {eq?.overall ?? "—"}
           </div>
           <div className="mt-6 space-y-4">
