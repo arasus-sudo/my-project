@@ -12,6 +12,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import re
+import json
 import logging
 import uuid
 import bcrypt
@@ -20,6 +21,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
+from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -620,9 +622,57 @@ async def update_deal(did: str, body: Dict[str, Any], user=Depends(current_user)
 
 
 # ----------------------------- AI --------------------------------------------
+EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
+OPENAI_MODEL = "gpt-5.4"
+
+
+def _extract_json(text: str) -> Optional[Dict[str, Any]]:
+    """Pull the first JSON object out of an LLM response (handles ```json fences)."""
+    if not text:
+        return None
+    m = re.search(r"\{[\s\S]*\}", text)
+    if not m:
+        return None
+    try:
+        return json.loads(m.group(0))
+    except Exception:
+        return None
+
+
+async def _llm_chat(system: str, user_text: str, session_id: str) -> str:
+    if not EMERGENT_LLM_KEY:
+        raise RuntimeError("EMERGENT_LLM_KEY not configured")
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=session_id,
+        system_message=system,
+    ).with_model("openai", OPENAI_MODEL)
+    return await chat.send_message(UserMessage(text=user_text))
+
+
 @api.post("/ai/score")
 async def ai_score(body: AIScoreIn, user=Depends(current_user)):
-    return compute_eq(body.subject, body.body)
+    heuristic = compute_eq(body.subject, body.body)
+    if not EMERGENT_LLM_KEY:
+        return heuristic
+    system = (
+        "You are the EQ Score engine for a cold-email tool. "
+        "Given a cold email (subject + body), rate it on 5 axes 0-100: "
+        "relevance, empathy, clarity, cta (call-to-action strength), spam_safety. "
+        "Compute overall = round(relevance*.30 + empathy*.20 + clarity*.20 + cta*.15 + spam_safety*.15). "
+        "Return STRICT JSON only, no prose: "
+        '{"overall":int,"relevance":int,"empathy":int,"clarity":int,"cta":int,"spam_safety":int,"hints":[str,...]} '
+        "Hints must be at most 3 short, concrete, plain-English rewrite suggestions."
+    )
+    user_text = f"Subject: {body.subject}\n\nBody:\n{body.body}"
+    try:
+        resp = await _llm_chat(system, user_text, f"score-{user['id']}")
+        parsed = _extract_json(resp)
+        if parsed and "overall" in parsed:
+            return parsed
+    except Exception as ex:
+        logging.warning("ai_score LLM fallback: %s", ex)
+    return heuristic
 
 
 @api.post("/ai/personalize")
@@ -631,6 +681,31 @@ async def ai_personalize(body: AIPersonalizeIn, user=Depends(current_user)):
     if body.lead_id and not lead:
         lead = await db.leads.find_one({"id": body.lead_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
     lead = lead or {}
+
+    if EMERGENT_LLM_KEY:
+        system = (
+            "You are Pitch EQ — an outbound copywriter for B2B cold email. "
+            "Write ONE email tailored to the lead. Be warm, specific, and human. "
+            "Under 120 words. One clear low-friction ask. No spammy words, no ALL-CAPS, no exclamation marks. "
+            "Return STRICT JSON only: {\"subject\": str, \"body\": str}."
+        )
+        instructions = (body.template or "").strip() or "Book a 15-minute intro call."
+        user_text = (
+            f"Lead: {json.dumps({k: lead.get(k) for k in ('first_name','last_name','title','company','linkedin')}, ensure_ascii=False)}\n"
+            f"Tone: {body.tone}\n"
+            f"Sender product: Pitch EQ (AI outbound agent with an EQ Score that rates emails for tone, empathy, clarity and spam risk before sending).\n"
+            f"Goal / template hint from user:\n{instructions}"
+        )
+        try:
+            resp = await _llm_chat(system, user_text, f"personalize-{user['id']}")
+            parsed = _extract_json(resp)
+            if parsed and parsed.get("subject") and parsed.get("body"):
+                eq = compute_eq(parsed["subject"], parsed["body"], lead)
+                return {"subject": parsed["subject"], "body": parsed["body"], "eq": eq}
+        except Exception as ex:
+            logging.warning("ai_personalize LLM fallback: %s", ex)
+
+    # Heuristic fallback
     subject_tpl = "Quick idea for {{company}}"
     body_tpl = (
         body.template
