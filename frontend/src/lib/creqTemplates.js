@@ -233,6 +233,171 @@ export const TEMPLATES = [
       ],
     }),
   },
+  {
+    id: "manifesto",
+    name: "Manifesto",
+    tag: "Editorial",
+    palette: "paper",
+    thumb_bg: "#F5F1E8",
+    thumb_accent: "#B45309",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 120, w: 920, h: 60, text: "A NEW OUTBOUND MANIFESTO",
+            font: "JetBrains Mono", size: 22, weight: 600, uppercase: true, letter_spacing: 0.24, color: "accent" }),
+        T({ x: 80, y: 220, w: 920, h: 900, text: "We believe cold email should feel warm. That personalisation is more than a merge field. That empathy is measurable. That a great sales team is a great writing team.",
+            font: "Playfair Display", size: 68, weight: 700, italic: true, color: "text", line_height: 1.15 }),
+        T({ x: 80, y: 1180, w: 920, h: 40, text: "— Innoira", font: "Inter", size: 22, weight: 600, color: "muted" }),
+      ],
+    }),
+  },
+  {
+    id: "step-guide",
+    name: "5-Step Guide",
+    tag: "Framework",
+    palette: "coral",
+    thumb_bg: "#FEE2E2",
+    thumb_accent: "#DC2626",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 96, w: 920, h: 100, text: "5 steps to a better subject line",
+            font: "Inter", size: 56, weight: 800, color: "text", line_height: 1 }),
+        ...([1,2,3,4,5].flatMap((n, i) => {
+          const y = 260 + i * 190;
+          return [
+            S({ x: 80, y, w: 80, h: 80, fill: "accent", radius: 999 }),
+            T({ x: 80, y: y + 8, w: 80, h: 60, text: String(n), font: "Archivo Black", size: 44, weight: 900, color: "bg", align: "center" }),
+            T({ x: 200, y, w: 800, h: 60, text: [
+              "Lead with a trigger, not a template",
+              "Reference their world, not yours",
+              "Under 7 words, always",
+              "No questions — questions get archived",
+              "Human voice > professional voice",
+            ][i], font: "Inter", size: 32, weight: 700, color: "text" }),
+            T({ x: 200, y: y + 60, w: 800, h: 60, text: [
+              "Funding, hiring or product-launch beats generic openers.",
+              "'Your work on…' beats 'We help companies like yours…'",
+              "Long subjects get truncated on mobile.",
+              "State the benefit; let them ask the questions.",
+              "Write like you'd text a colleague.",
+            ][i], font: "Inter", size: 22, weight: 400, color: "muted", line_height: 1.35 }),
+          ];
+        })),
+      ],
+    }),
+  },
+  {
+    id: "big-word",
+    name: "Big Word",
+    tag: "Cover",
+    palette: "sunset",
+    thumb_bg: "#FF6B4A",
+    thumb_accent: "#0F172A",
+    build: () => ({
+      bg: { type: "gradient", color: "bg", color2: "bg2", angle: 45 },
+      elements: [
+        T({ x: 40, y: 400, w: 1000, h: 550, text: "REPLY",
+            font: "Archivo Black", size: 380, weight: 900, color: "text", align: "center", line_height: 0.9 }),
+        T({ x: 80, y: 1080, w: 920, h: 100, text: "Every cold email either earns one or dies trying.",
+            font: "Inter", size: 32, weight: 500, italic: true, color: "text", align: "center" }),
+      ],
+    }),
+  },
+  {
+    id: "vs",
+    name: "This vs That",
+    tag: "Compare",
+    palette: "cyber",
+    thumb_bg: "#030712",
+    thumb_accent: "#34D399",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 96, w: 920, h: 80, text: "Merge fields vs Triggers",
+            font: "Inter", size: 48, weight: 700, color: "text" }),
+        S({ x: 80, y: 260, w: 440, h: 900, fill: "muted", radius: 32, opacity: 0.1 }),
+        T({ x: 120, y: 300, w: 360, h: 40, text: "MERGE FIELDS", font: "JetBrains Mono", size: 20, weight: 600, uppercase: true, letter_spacing: 0.2, color: "muted" }),
+        T({ x: 120, y: 380, w: 360, h: 400, text: "Hi {{first_name}},\n\nHope you're doing well!\n\nWe help {{industry}} companies like {{company}}…",
+            font: "JetBrains Mono", size: 22, weight: 400, color: "text", line_height: 1.5 }),
+        S({ x: 560, y: 260, w: 440, h: 900, fill: "accent", radius: 32, opacity: 0.12 }),
+        T({ x: 600, y: 300, w: 360, h: 40, text: "TRIGGERS", font: "JetBrains Mono", size: 20, weight: 600, uppercase: true, letter_spacing: 0.2, color: "accent" }),
+        T({ x: 600, y: 380, w: 360, h: 400, text: "Hey Alex — saw Northloop just closed the Series B. Congrats.\n\nOutbound usually stalls in this phase; happy to share what worked for our founder network.",
+            font: "Inter", size: 22, weight: 500, italic: false, color: "text", line_height: 1.5 }),
+      ],
+    }),
+  },
+  {
+    id: "checklist",
+    name: "Checklist",
+    tag: "Framework",
+    palette: "ocean",
+    thumb_bg: "#0A2540",
+    thumb_accent: "#22D3EE",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 96, w: 920, h: 100, text: "The high-EQ email checklist",
+            font: "Manrope", size: 60, weight: 800, color: "text", line_height: 1 }),
+        ...(["A specific trigger from the last 30 days", "One sentence about their world before yours", "Under 120 words total", "One question — the ask", "No CTA button; a plain sentence", "Signature that reads like a human"].flatMap((line, i) => {
+          const y = 300 + i * 130;
+          return [
+            S({ x: 80, y, w: 60, h: 60, fill: "accent", radius: 12 }),
+            T({ x: 92, y: y + 8, w: 60, h: 60, text: "✓", font: "Inter", size: 40, weight: 800, color: "bg", align: "center" }),
+            T({ x: 180, y: y + 10, w: 800, h: 50, text: line, font: "Manrope", size: 32, weight: 500, color: "text" }),
+          ];
+        })),
+      ],
+    }),
+  },
+  {
+    id: "outro",
+    name: "Follow / Outro",
+    tag: "Cover",
+    palette: "midnight",
+    thumb_bg: "#0F1010",
+    thumb_accent: "#E85D3A",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 300, w: 920, h: 200, text: "That's it.",
+            font: "Instrument Serif", size: 220, weight: 400, italic: true, color: "accent", line_height: 1 }),
+        T({ x: 80, y: 550, w: 920, h: 200, text: "Save this if it helped.\nFollow for more.",
+            font: "Inter", size: 44, weight: 500, color: "text", line_height: 1.3 }),
+        S({ x: 80, y: 1080, w: 300, h: 84, fill: "accent", radius: 999 }),
+        T({ x: 80, y: 1102, w: 300, h: 40, text: "Follow @innoira", font: "Inter", size: 26, weight: 700, color: "bg", align: "center" }),
+      ],
+    }),
+  },
+  {
+    id: "table",
+    name: "Comparison Grid",
+    tag: "Data",
+    palette: "mono",
+    thumb_bg: "#FFFFFF",
+    thumb_accent: "#000000",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 96, w: 920, h: 100, text: "Old outbound vs. Pitch EQ",
+            font: "Inter", size: 52, weight: 800, color: "text" }),
+        // header row
+        T({ x: 80, y: 260, w: 300, h: 40, text: "METRIC", font: "JetBrains Mono", size: 18, weight: 600, uppercase: true, letter_spacing: 0.2, color: "muted" }),
+        T({ x: 400, y: 260, w: 300, h: 40, text: "TYPICAL", font: "JetBrains Mono", size: 18, weight: 600, uppercase: true, letter_spacing: 0.2, color: "muted" }),
+        T({ x: 720, y: 260, w: 280, h: 40, text: "PITCH EQ", font: "JetBrains Mono", size: 18, weight: 600, uppercase: true, letter_spacing: 0.2, color: "accent" }),
+        // rows
+        ...([["Open rate", "42%", "68%"], ["Reply rate", "3%", "12%"], ["Booking rate", "0.4%", "2.1%"], ["Spam complaints", "0.6%", "0.05%"], ["Time per campaign", "6 hrs", "45 min"]].flatMap((row, i) => {
+          const y = 340 + i * 130;
+          return [
+            S({ x: 80, y: y - 10, w: 920, h: 1, fill: "muted", radius: 0, opacity: 0.3 }),
+            T({ x: 80, y, w: 300, h: 60, text: row[0], font: "Inter", size: 30, weight: 500, color: "text" }),
+            T({ x: 400, y, w: 300, h: 60, text: row[1], font: "Inter", size: 30, weight: 400, color: "muted" }),
+            T({ x: 720, y, w: 280, h: 60, text: row[2], font: "Archivo Black", size: 40, weight: 900, color: "accent" }),
+          ];
+        })),
+      ],
+    }),
+  },
 ];
 
 /** Resolve a semantic color name ('bg' | 'accent' | ...) against a palette hex.

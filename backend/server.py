@@ -1313,6 +1313,50 @@ async def prospect_providers(user=Depends(current_user)):
     }
 
 
+# ----------------------------- Brand Kits ------------------------------------
+class BrandKitIn(BaseModel):
+    name: str
+    logo_url: str = ""
+    colors: List[str] = []           # hex list — up to ~8 brand colors
+    fonts: List[str] = []             # font family names
+    palette_id: Optional[str] = None  # if set, becomes the default palette when applied
+
+
+@api.get("/brandkits")
+async def list_brandkits(user=Depends(current_user)):
+    return await db.brandkits.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+
+
+@api.post("/brandkits")
+async def create_brandkit(body: BrandKitIn, user=Depends(current_user)):
+    d = body.model_dump()
+    d.update({
+        "id": new_id(), "workspace_id": user["workspace_id"],
+        "owner_id": user["id"], "created_at": now_iso(),
+    })
+    await db.brandkits.insert_one(d)
+    d.pop("_id", None)
+    await _audit(user, "brandkit.create", {"id": d["id"], "name": d["name"]})
+    return d
+
+
+@api.put("/brandkits/{bid}")
+async def update_brandkit(bid: str, body: BrandKitIn, user=Depends(current_user)):
+    await db.brandkits.update_one(
+        {"id": bid, "workspace_id": user["workspace_id"]},
+        {"$set": body.model_dump()},
+    )
+    return await db.brandkits.find_one({"id": bid}, {"_id": 0})
+
+
+@api.delete("/brandkits/{bid}")
+async def delete_brandkit(bid: str, user=Depends(current_user)):
+    await db.brandkits.delete_one({"id": bid, "workspace_id": user["workspace_id"]})
+    return {"ok": True}
+
+
 # ----------------------------- Create EQ (Carousel Agent) --------------------
 PLATFORM_DIMS = {
     "linkedin": {"w": 1080, "h": 1350, "label": "LinkedIn Deck"},

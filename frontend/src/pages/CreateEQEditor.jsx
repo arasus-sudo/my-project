@@ -3,10 +3,12 @@ import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
+import jsPDF from "jspdf";
 import {
   Save, Download, Palette as PaletteIcon, ChevronLeft, Loader2, Plus, Trash2, Copy,
   Type, Square as SquareIcon, Circle as CircleIcon, Zap, Award, Star, Rocket, Sparkles,
   Layers, Bold, Italic, AlignLeft, AlignCenter, AlignRight, MessageSquare,
+  Image as ImageIcon, Undo2, Redo2, Wand2, FileText,
 } from "lucide-react";
 import {
   PALETTES, FONTS, TEMPLATES, CANVAS, resolveColor, blankSlide, slideFromTemplate,
@@ -55,11 +57,15 @@ export default function CreateEQEditor() {
   const [selectedId, setSelectedId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [zoom, setZoom] = useState(0.38);
+  const [brandKits, setBrandKits] = useState([]);
+  const [showBrandKit, setShowBrandKit] = useState(false);
   const canvasRef = useRef(null);
   const dragState = useRef(null);
+  const historyRef = useRef({ past: [], future: [] });
 
   useEffect(() => {
     api.get(`/carousel/${id}`).then((r) => setProj(hydrate(r.data)));
+    api.get("/brandkits").then((r) => setBrandKits(r.data)).catch(() => {});
   }, [id]);
 
   const palette = useMemo(
@@ -70,14 +76,39 @@ export default function CreateEQEditor() {
   const slide = proj?.slides?.[activeSlide];
   const selected = slide?.elements?.find((e) => e.id === selectedId);
 
+  const pushHistory = useCallback((snapshot) => {
+    historyRef.current.past.push(snapshot);
+    if (historyRef.current.past.length > 50) historyRef.current.past.shift();
+    historyRef.current.future = [];
+  }, []);
+  const undo = useCallback(() => {
+    const h = historyRef.current;
+    if (!h.past.length) return;
+    setProj((cur) => {
+      if (!cur) return cur;
+      h.future.push(JSON.stringify(cur));
+      return JSON.parse(h.past.pop());
+    });
+  }, []);
+  const redo = useCallback(() => {
+    const h = historyRef.current;
+    if (!h.future.length) return;
+    setProj((cur) => {
+      if (!cur) return cur;
+      h.past.push(JSON.stringify(cur));
+      return JSON.parse(h.future.pop());
+    });
+  }, []);
+
   const mutate = useCallback((updater) => {
     setProj((cur) => {
       if (!cur) return cur;
+      pushHistory(JSON.stringify(cur));
       const next = { ...cur, slides: cur.slides.map((s) => ({ ...s, elements: [...(s.elements || [])] })) };
       updater(next);
       return next;
     });
-  }, []);
+  }, [pushHistory]);
 
   const patchSlide = (patch) => mutate((n) => Object.assign(n.slides[activeSlide], patch));
   const patchElement = (elId, patch) => mutate((n) => {
@@ -156,16 +187,18 @@ export default function CreateEQEditor() {
     window.removeEventListener("pointerup", onPointerUp);
   };
 
-  // Keyboard: delete selected on Backspace/Delete.
+  // Keyboard: delete selected on Backspace/Delete, undo/redo shortcuts.
   useEffect(() => {
     const h = (e) => {
-      if (!selectedId) return;
       if (e.target?.tagName === "INPUT" || e.target?.tagName === "TEXTAREA" || e.target?.isContentEditable) return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "z" || e.key === "Z")) { e.preventDefault(); undo(); return; }
+      if ((e.ctrlKey || e.metaKey) && ((e.shiftKey && (e.key === "z" || e.key === "Z")) || e.key === "y")) { e.preventDefault(); redo(); return; }
+      if (!selectedId) return;
       if (e.key === "Backspace" || e.key === "Delete") { e.preventDefault(); deleteElement(selectedId); }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [selectedId]); // eslint-disable-line
+  }, [selectedId, undo, redo]); // eslint-disable-line
 
   const save = async () => {
     setBusy(true);
@@ -209,6 +242,97 @@ export default function CreateEQEditor() {
     img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
   };
 
+  const renderSlideToDataUrl = (slideIdx) => new Promise((resolve, reject) => {
+    // Temporarily mount an off-screen node with the target slide, then rasterise.
+    const container = document.createElement("div");
+    container.style.cssText = `position:fixed;left:-99999px;top:0;width:${CANVAS.w}px;height:${CANVAS.h}px;background:${renderBackground(proj.slides[slideIdx].bg, palette)};`;
+    document.body.appendChild(container);
+    const elsHtml = proj.slides[slideIdx].elements.map((el) => elementToStaticHtml(el, palette)).join("");
+    container.innerHTML = elsHtml;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CANVAS.w}" height="${CANVAS.h}">
+      <foreignObject width="100%" height="100%">
+        <div xmlns="http://www.w3.org/1999/xhtml" style="width:${CANVAS.w}px;height:${CANVAS.h}px;background:${renderBackground(proj.slides[slideIdx].bg, palette)}">${container.innerHTML}</div>
+      </foreignObject></svg>`;
+    document.body.removeChild(container);
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = CANVAS.w; canvas.height = CANVAS.h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = reject;
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  });
+
+  const exportPdf = async () => {
+    if (!proj?.slides?.length) return;
+    setBusy(true);
+    try {
+      const pdf = new jsPDF({
+        orientation: CANVAS.h > CANVAS.w ? "portrait" : "landscape",
+        unit: "px",
+        format: [CANVAS.w, CANVAS.h],
+        compress: true,
+      });
+      for (let i = 0; i < proj.slides.length; i++) {
+        const dataUrl = await renderSlideToDataUrl(i);
+        if (i > 0) pdf.addPage([CANVAS.w, CANVAS.h], CANVAS.h > CANVAS.w ? "portrait" : "landscape");
+        pdf.addImage(dataUrl, "PNG", 0, 0, CANVAS.w, CANVAS.h);
+      }
+      pdf.save(`${(proj.topic || "carousel").slice(0, 40).replace(/\W+/g, "-")}.pdf`);
+      toast.success(`Exported ${proj.slides.length}-page PDF`);
+    } catch (err) {
+      console.error(err);
+      toast.error("PDF export failed");
+    } finally { setBusy(false); }
+  };
+
+  const applyBrandKit = async (kit) => {
+    if (!kit) return;
+    mutate((n) => {
+      if (kit.palette_id) n.palette_id = kit.palette_id;
+      n.brand = { ...(n.brand || {}), logo_url: kit.logo_url, colors: kit.colors, fonts: kit.fonts };
+      // Add logo image to every slide at bottom-left, if there isn't one already.
+      if (kit.logo_url) {
+        for (const s of n.slides) {
+          const hasLogo = (s.elements || []).some((e) => e.type === "image" && e.role === "logo");
+          if (!hasLogo) {
+            s.elements.push({ id: newId(), type: "image", role: "logo", src: kit.logo_url, x: 80, y: CANVAS.h - 160, w: 160, h: 80, fit: "contain" });
+          }
+        }
+      }
+    });
+    toast.success(`Applied brand kit "${kit.name}"`);
+  };
+
+  const aiAssistText = async (mode) => {
+    if (!selected || selected.type !== "text" || !proj) return;
+    setBusy(true);
+    try {
+      const instructionMap = {
+        punchier: "Rewrite this text to be punchier and more direct. Same intent, half the words if possible.",
+        shorter: "Rewrite this text at half the length while preserving the core idea.",
+        catchier: "Rewrite this as a scroll-stopping hook for a LinkedIn / Instagram carousel.",
+        formal: "Rewrite this in a formal, executive tone.",
+      };
+      const { data } = await api.post("/carousel/edit", {
+        project_id: id,
+        slide_index: activeSlide,
+        instruction: `Rewrite ONLY the title field of the slide. ${instructionMap[mode]} Current text: "${selected.text}"`,
+      });
+      if (data?.slide?.title) {
+        patchElement(selected.id, { text: data.slide.title });
+        toast.success("Rewritten by AI");
+      } else {
+        toast.error("No rewrite returned");
+      }
+    } catch { toast.error("AI assist failed"); }
+    finally { setBusy(false); }
+  };
+
   if (!proj) return <div className="p-10 text-neutral-500">Loading…</div>;
 
   return (
@@ -219,7 +343,11 @@ export default function CreateEQEditor() {
         right={
           <div className="flex gap-2">
             <button onClick={() => nav("/app/create-eq")} className="btn-ghost"><ChevronLeft size={14} /> Projects</button>
-            <button onClick={exportSlidePng} data-testid="export-png-btn" className="btn-secondary"><Download size={14} /> Export PNG</button>
+            <button onClick={undo} title="Undo (Ctrl+Z)" data-testid="undo-btn" className="btn-ghost"><Undo2 size={14} /></button>
+            <button onClick={redo} title="Redo (Ctrl+Shift+Z)" data-testid="redo-btn" className="btn-ghost"><Redo2 size={14} /></button>
+            <button onClick={() => setShowBrandKit(true)} data-testid="brand-kit-open" className="btn-secondary"><Sparkles size={14} /> Brand kit</button>
+            <button onClick={exportSlidePng} data-testid="export-png-btn" className="btn-secondary"><Download size={14} /> PNG</button>
+            <button onClick={exportPdf} disabled={busy} data-testid="export-pdf-btn" className="btn-secondary"><FileText size={14} /> PDF</button>
             <button onClick={save} disabled={busy} data-testid="save-carousel-btn" className="btn-primary">
               {busy ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : <><Save size={14} /> Save</>}
             </button>
@@ -234,7 +362,11 @@ export default function CreateEQEditor() {
             onAddText={(preset) => addElement(preset)}
             onAddShape={(shape) => addElement({ type: "shape", shape, x: 400, y: 500, w: 280, h: 280, fill: "accent", opacity: 1, radius: shape === "circle" ? 999 : 24 })}
             onAddBadge={() => addElement({ type: "badge", x: 80, y: 96, text: "NEW", bg: "accent", color: "bg", radius: 999, size: 20 })}
-            onAddIcon={(name) => addElement({ type: "icon", x: 400, y: 500, w: 128, name, color: "accent", stroke: 2 })} />
+            onAddIcon={(name) => addElement({ type: "icon", x: 400, y: 500, w: 128, name, color: "accent", stroke: 2 })}
+            onAddImage={() => {
+              const url = prompt("Paste image URL (PNG/JPG/SVG)");
+              if (url && url.trim()) addElement({ type: "image", src: url.trim(), x: 300, y: 400, w: 480, h: 480, fit: "cover", radius: 24 });
+            }} />
         </aside>
 
         {/* CENTER: canvas */}
@@ -283,16 +415,27 @@ export default function CreateEQEditor() {
             onDuplicate={() => selected && duplicateElement(selected.id)}
             onFront={() => selected && bringToFront(selected.id)}
             onBack={() => selected && sendToBack(selected.id)}
+            onAiAssist={aiAssistText}
           />
         </aside>
       </div>
+
+      {showBrandKit && (
+        <BrandKitDrawer
+          onClose={() => setShowBrandKit(false)}
+          kits={brandKits}
+          onSaved={(kit) => { setBrandKits((k) => [kit, ...k]); }}
+          onDeleted={(bid) => setBrandKits((k) => k.filter((x) => x.id !== bid))}
+          onApply={(kit) => { applyBrandKit(kit); setShowBrandKit(false); }}
+        />
+      )}
     </div>
   );
 }
 
 /* ------------------------------- Panels ---------------------------------- */
 
-function LeftPanel({ palette, onTemplate, onAddText, onAddShape, onAddBadge, onAddIcon }) {
+function LeftPanel({ palette, onTemplate, onAddText, onAddShape, onAddBadge, onAddIcon, onAddImage }) {
   return (
     <div className="p-3 space-y-4">
       <div>
@@ -330,12 +473,13 @@ function LeftPanel({ palette, onTemplate, onAddText, onAddShape, onAddBadge, onA
       <div>
         <div className="ui-label mb-2 px-1">Elements</div>
         <div className="grid grid-cols-3 gap-1">
-          <ElementBtn onClick={() => onAddShape("rect")}><SquareIcon size={16} /></ElementBtn>
-          <ElementBtn onClick={() => onAddShape("circle")}><CircleIcon size={16} /></ElementBtn>
-          <ElementBtn onClick={onAddBadge}>Badge</ElementBtn>
+          <ElementBtn onClick={() => onAddShape("rect")} title="Rectangle"><SquareIcon size={16} /></ElementBtn>
+          <ElementBtn onClick={() => onAddShape("circle")} title="Circle"><CircleIcon size={16} /></ElementBtn>
+          <ElementBtn onClick={onAddBadge} title="Badge">Bdg</ElementBtn>
+          <ElementBtn onClick={onAddImage} title="Image"><ImageIcon size={16} /></ElementBtn>
           {Object.keys(ICONS).map((n) => {
             const IC = ICONS[n];
-            return <ElementBtn key={n} onClick={() => onAddIcon(n)}><IC size={16} /></ElementBtn>;
+            return <ElementBtn key={n} onClick={() => onAddIcon(n)} title={n}><IC size={16} /></ElementBtn>;
           })}
         </div>
       </div>
@@ -355,7 +499,7 @@ function ElementBtn({ children, onClick }) {
   return <button onClick={onClick} className="aspect-square rounded-md border border-line hover:border-ink flex items-center justify-center text-xs">{children}</button>;
 }
 
-function RightPanel({ proj, palette, slide, selected, onPalette, onBg, onEditElement, onDelete, onDuplicate, onFront, onBack }) {
+function RightPanel({ proj, palette, slide, selected, onPalette, onBg, onEditElement, onDelete, onDuplicate, onFront, onBack, onAiAssist }) {
   if (!selected) {
     return (
       <div className="p-4 space-y-5">
@@ -463,6 +607,41 @@ function RightPanel({ proj, palette, slide, selected, onPalette, onBg, onEditEle
             <input type="range" min={0.9} max={2} step={0.05} value={el.line_height || 1.2} onChange={(e) => onEditElement({ line_height: Number(e.target.value) })} className="w-full" />
           </label>
           <ColorPicker label="Color" palette={palette} value={el.color} onChange={(c) => onEditElement({ color: c })} />
+
+          {/* Text effects */}
+          <details className="pt-2 border-t border-line">
+            <summary className="ui-label cursor-pointer">Effects (shadow · stroke)</summary>
+            <div className="mt-2 space-y-2">
+              <label className="flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={!!el.shadow} onChange={(e) => onEditElement({ shadow: e.target.checked })} data-testid="el-shadow" />
+                Drop shadow
+              </label>
+              {el.shadow && (
+                <>
+                  <label className="block text-xs"><span className="ui-label">Shadow blur</span>
+                    <input type="range" min={0} max={40} value={el.shadow_blur ?? 12} onChange={(e) => onEditElement({ shadow_blur: Number(e.target.value) })} className="w-full" /></label>
+                  <label className="block text-xs"><span className="ui-label">Shadow Y</span>
+                    <input type="range" min={-20} max={40} value={el.shadow_y ?? 4} onChange={(e) => onEditElement({ shadow_y: Number(e.target.value) })} className="w-full" /></label>
+                </>
+              )}
+              <label className="block text-xs"><span className="ui-label">Stroke width</span>
+                <input type="range" min={0} max={8} value={el.stroke_w || 0} onChange={(e) => onEditElement({ stroke_w: Number(e.target.value) })} className="w-full" /></label>
+              {el.stroke_w > 0 && <ColorPicker label="Stroke color" palette={palette} value={el.stroke_color || "bg"} onChange={(c) => onEditElement({ stroke_color: c })} />}
+            </div>
+          </details>
+
+          {/* AI Copy Assist */}
+          {onAiAssist && (
+            <div className="pt-3 border-t border-line">
+              <div className="ui-label mb-2 flex items-center gap-1"><Wand2 size={11} /> AI copy assist</div>
+              <div className="grid grid-cols-2 gap-1">
+                {[["punchier","Punchier"],["shorter","Shorter"],["catchier","Hook it"],["formal","Formal"]].map(([k,l]) => (
+                  <button key={k} onClick={() => onAiAssist(k)} data-testid={`ai-assist-${k}`}
+                    className="text-xs py-1.5 rounded-md border border-line hover:border-ink hover:bg-neutral-50">{l}</button>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
       {(isShape || isBadge) && (
@@ -490,6 +669,24 @@ function RightPanel({ proj, palette, slide, selected, onPalette, onBg, onEditEle
             <input type="number" min={20} max={400} value={el.w} onChange={(e) => onEditElement({ w: Number(e.target.value) })} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm font-mono" /></label>
           <label className="block"><span className="ui-label">Stroke width</span>
             <input type="range" min={1} max={4} step={0.5} value={el.stroke || 2} onChange={(e) => onEditElement({ stroke: Number(e.target.value) })} className="w-full" />
+          </label>
+        </>
+      )}
+      {el.type === "image" && (
+        <>
+          <input value={el.src || ""} onChange={(e) => onEditElement({ src: e.target.value })} data-testid="el-image-src"
+            placeholder="Image URL (PNG/JPG/SVG)"
+            className="w-full border border-line rounded-full px-3 py-2 text-sm font-mono" />
+          <label className="block"><span className="ui-label">Fit</span>
+            <select value={el.fit || "cover"} onChange={(e) => onEditElement({ fit: e.target.value })} data-testid="el-image-fit"
+              className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+              <option value="cover">Cover</option>
+              <option value="contain">Contain</option>
+              <option value="fill">Fill / stretch</option>
+            </select>
+          </label>
+          <label className="block"><span className="ui-label">Corner radius</span>
+            <input type="range" min={0} max={480} value={el.radius || 0} onChange={(e) => onEditElement({ radius: Number(e.target.value) })} className="w-full" />
           </label>
         </>
       )}
@@ -532,6 +729,150 @@ function ColorPicker({ label, palette, value, onChange }) {
 
 /* --------------------------- Element rendering --------------------------- */
 
+/** Convert an element to raw HTML for off-screen PDF rasterisation. */
+function elementToStaticHtml(el, palette) {
+  const style = (obj) => Object.entries(obj).map(([k, v]) => `${k.replace(/([A-Z])/g, "-$1").toLowerCase()}:${v}`).join(";");
+  const base = { position: "absolute", left: `${el.x}px`, top: `${el.y}px`, width: `${el.w}px`, height: `${el.h}px` };
+  if (el.type === "text") {
+    const shadow = el.shadow ? `${el.shadow_x || 0}px ${el.shadow_y || 4}px ${el.shadow_blur || 12}px ${el.shadow_color || "rgba(0,0,0,0.35)"}` : "none";
+    const stroke = el.stroke_w
+      ? `-${el.stroke_w}px -${el.stroke_w}px 0 ${resolveColor(el.stroke_color || "bg", palette)}, ${el.stroke_w}px -${el.stroke_w}px 0 ${resolveColor(el.stroke_color || "bg", palette)}, -${el.stroke_w}px ${el.stroke_w}px 0 ${resolveColor(el.stroke_color || "bg", palette)}, ${el.stroke_w}px ${el.stroke_w}px 0 ${resolveColor(el.stroke_color || "bg", palette)}`
+      : null;
+    const s = {
+      ...base,
+      color: resolveColor(el.color, palette),
+      "font-family": `"${el.font || "Inter"}", sans-serif`,
+      "font-size": `${el.size}px`,
+      "font-weight": el.weight,
+      "font-style": el.italic ? "italic" : "normal",
+      "text-transform": el.uppercase ? "uppercase" : "none",
+      "letter-spacing": `${el.letter_spacing || 0}em`,
+      "line-height": el.line_height || 1.2,
+      "text-align": el.align || "left",
+      "white-space": "pre-wrap",
+      "word-break": "break-word",
+      "text-shadow": stroke ? `${stroke}${el.shadow ? `, ${shadow}` : ""}` : shadow,
+    };
+    return `<div style="${style(s)}">${escapeHtml(el.text || "")}</div>`;
+  }
+  if (el.type === "image") {
+    const s = { ...base, "border-radius": `${el.radius || 0}px`, overflow: "hidden" };
+    return `<div style="${style(s)}"><img src="${el.src || ""}" style="width:100%;height:100%;object-fit:${el.fit || "cover"};display:block" /></div>`;
+  }
+  if (el.type === "shape") {
+    const s = { ...base, background: resolveColor(el.fill, palette), opacity: el.opacity ?? 1, "border-radius": `${el.shape === "circle" ? 9999 : (el.radius ?? 0)}px` };
+    return `<div style="${style(s)}"></div>`;
+  }
+  if (el.type === "badge") {
+    const s = { ...base, background: resolveColor(el.bg, palette), color: resolveColor(el.color, palette), "border-radius": `${el.radius ?? 999}px`, padding: "10px 20px", display: "inline-flex", "align-items": "center", "justify-content": "center", "font-family": `"JetBrains Mono", monospace`, "font-size": `${el.size || 20}px`, "letter-spacing": "0.14em", "text-transform": "uppercase", width: "auto", height: "auto" };
+    return `<div style="${style(s)}">${escapeHtml(el.text || "")}</div>`;
+  }
+  if (el.type === "icon") {
+    // Fallback: skip icons in PDF (Lucide is SVG-based; would need inline SVG). Render as label instead.
+    const s = { ...base, color: resolveColor(el.color, palette), display: "flex", "align-items": "center", "justify-content": "center", "font-family": "monospace", "font-size": "14px" };
+    return `<div style="${style(s)}">◇</div>`;
+  }
+  return "";
+}
+
+function escapeHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+/* --------------------------- Brand Kit Drawer ---------------------------- */
+
+function BrandKitDrawer({ onClose, kits, onSaved, onDeleted, onApply }) {
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({ name: "", logo_url: "", colors: ["#212025", "#E85D3A", "#FDFDF9"], fonts: ["Inter"], palette_id: "midnight" });
+
+  const save = async (e) => {
+    e.preventDefault();
+    try {
+      const { data } = await api.post("/brandkits", form);
+      toast.success(`Brand kit saved: ${data.name}`);
+      onSaved(data);
+      setCreating(false);
+      setForm({ name: "", logo_url: "", colors: ["#212025", "#E85D3A", "#FDFDF9"], fonts: ["Inter"], palette_id: "midnight" });
+    } catch { toast.error("Save failed"); }
+  };
+  const del = async (bid) => {
+    if (!confirm("Delete brand kit?")) return;
+    await api.delete(`/brandkits/${bid}`);
+    onDeleted(bid);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-ink/40 z-50 flex justify-end" onClick={onClose}>
+      <div className="w-full max-w-md bg-white h-full overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 bg-white border-b border-line px-5 py-4 flex items-center gap-3 z-10">
+          <Sparkles size={16} />
+          <div className="font-display font-bold">Brand kits</div>
+          <button onClick={() => setCreating(!creating)} data-testid="brandkit-new" className="ml-auto btn-ghost text-xs"><Plus size={12} /> New</button>
+        </div>
+
+        {creating && (
+          <form onSubmit={save} className="p-4 border-b border-line space-y-3 bg-neutral-50">
+            <input required placeholder="Kit name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="brandkit-name" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+            <input placeholder="Logo URL (paste image link)" value={form.logo_url} onChange={(e) => setForm({ ...form, logo_url: e.target.value })} data-testid="brandkit-logo-url" className="w-full border border-line rounded-full px-3 py-2 text-sm font-mono" />
+            <div>
+              <div className="ui-label mb-1">Brand colors</div>
+              <div className="grid grid-cols-6 gap-1">
+                {form.colors.map((c, i) => (
+                  <input key={i} type="color" value={c} onChange={(e) => setForm({ ...form, colors: form.colors.map((x, xi) => xi === i ? e.target.value : x) })} className="w-full h-10 border border-line rounded" />
+                ))}
+                {form.colors.length < 8 && (
+                  <button type="button" onClick={() => setForm({ ...form, colors: [...form.colors, "#000000"] })} className="border border-dashed border-line rounded text-neutral-500 text-lg">+</button>
+                )}
+              </div>
+            </div>
+            <div>
+              <div className="ui-label mb-1">Default palette</div>
+              <select value={form.palette_id} onChange={(e) => setForm({ ...form, palette_id: e.target.value })} className="w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+                {PALETTES.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="ui-label mb-1">Primary font</div>
+              <select value={form.fonts[0] || "Inter"} onChange={(e) => setForm({ ...form, fonts: [e.target.value] })} className="w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+                {FONTS.map((f) => <option key={f.id} value={f.id}>{f.id}</option>)}
+              </select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setCreating(false)} className="btn-secondary text-sm">Cancel</button>
+              <button type="submit" data-testid="brandkit-save" className="btn-primary text-sm">Save</button>
+            </div>
+          </form>
+        )}
+
+        <div className="p-4 space-y-3">
+          {kits.length === 0 && !creating && <div className="text-sm text-neutral-500">No brand kits yet. Create one, then apply it to auto-brand every slide.</div>}
+          {kits.map((k) => (
+            <div key={k.id} className="bg-white border border-line rounded-2xl p-4">
+              <div className="flex items-start gap-3">
+                {k.logo_url ? (
+                  <img src={k.logo_url} alt="" className="w-14 h-14 object-contain border border-line rounded-md bg-white" onError={(e) => { e.currentTarget.style.opacity = 0.3; }} />
+                ) : (
+                  <div className="w-14 h-14 border border-line rounded-md bg-neutral-100 flex items-center justify-center text-neutral-400 text-xs">no logo</div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium">{k.name}</div>
+                  <div className="flex gap-1 mt-1">{(k.colors || []).slice(0, 8).map((c, i) => <span key={i} className="w-4 h-4 rounded-full border border-line" style={{ background: c }} />)}</div>
+                  <div className="text-[11px] text-neutral-500 mt-1 font-mono">Palette: {PALETTES.find(p => p.id === k.palette_id)?.name || "—"} · Font: {(k.fonts || [])[0] || "—"}</div>
+                </div>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button onClick={() => onApply(k)} data-testid={`brandkit-apply-${k.id}`} className="btn-primary text-xs py-1.5">Apply to this deck</button>
+                <button onClick={() => del(k.id)} data-testid={`brandkit-delete-${k.id}`} className="btn-ghost text-xs py-1.5 text-red-600"><Trash2 size={11} /> Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function renderBackground(bg, palette) {
   if (!bg) return palette.bg;
   if (bg.type === "gradient") {
@@ -552,6 +893,10 @@ function ElementRender({ el, palette, selected, onPointerDown, onEdit }) {
     outlineOffset: 4,
   };
   if (el.type === "text") {
+    const shadow = el.shadow ? `${el.shadow_x || 0}px ${el.shadow_y || 4}px ${el.shadow_blur || 12}px ${el.shadow_color || "rgba(0,0,0,0.35)"}` : "none";
+    const stroke = el.stroke_w
+      ? `-${el.stroke_w}px -${el.stroke_w}px 0 ${resolveColor(el.stroke_color || "bg", palette)}, ${el.stroke_w}px -${el.stroke_w}px 0 ${resolveColor(el.stroke_color || "bg", palette)}, -${el.stroke_w}px ${el.stroke_w}px 0 ${resolveColor(el.stroke_color || "bg", palette)}, ${el.stroke_w}px ${el.stroke_w}px 0 ${resolveColor(el.stroke_color || "bg", palette)}`
+      : null;
     return (
       <div style={{
         ...common,
@@ -566,7 +911,17 @@ function ElementRender({ el, palette, selected, onPointerDown, onEdit }) {
         textAlign: el.align || "left",
         whiteSpace: "pre-wrap",
         wordBreak: "break-word",
+        textShadow: stroke ? `${stroke}${el.shadow ? `, ${shadow}` : ""}` : shadow,
       }} onPointerDown={onPointerDown}>{el.text}</div>
+    );
+  }
+  if (el.type === "image") {
+    return (
+      <div onPointerDown={onPointerDown} style={{ ...common, borderRadius: el.radius ?? 0, overflow: "hidden", background: "#00000010" }}>
+        <img src={el.src} alt="" crossOrigin="anonymous"
+          style={{ width: "100%", height: "100%", objectFit: el.fit || "cover", display: "block", pointerEvents: "none" }}
+          onError={(e) => { e.currentTarget.style.opacity = 0.2; }} />
+      </div>
     );
   }
   if (el.type === "shape") {
