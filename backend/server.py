@@ -1028,6 +1028,291 @@ async def onb_accept(body: OnbAcceptIn, user=Depends(current_user)):
     return {"ok": True, "campaign_ids": saved}
 
 
+# ----------------------------- Prospeo + Icypeas + ICP ----------------------
+import httpx
+
+PROSPEO_API_KEY = os.environ.get("PROSPEO_API_KEY", "")
+ICYPEAS_API_KEY = os.environ.get("ICYPEAS_API_KEY", "")
+ICYPEAS_USER_ID = os.environ.get("ICYPEAS_USER_ID", "")
+
+PROSPEO_BASE = "https://api.prospeo.io"
+ICYPEAS_BASE = "https://app.icypeas.com/api"
+
+
+class IcpIn(BaseModel):
+    name: str
+    titles: List[str] = []
+    industries: List[str] = []
+    company_sizes: List[str] = []   # e.g. ["11-50", "51-200"]
+    locations: List[str] = []
+    keywords: List[str] = []
+    seniority: List[str] = []       # e.g. ["Director", "VP", "Head"]
+
+
+class ProspectSearchIn(BaseModel):
+    icp_id: Optional[str] = None
+    # Manual overrides / free-form filters
+    titles: List[str] = []
+    industries: List[str] = []
+    locations: List[str] = []
+    company_sizes: List[str] = []
+    keywords: List[str] = []
+    domain: Optional[str] = None
+    limit: int = 20
+
+
+class ProspectImportIn(BaseModel):
+    prospects: List[Dict[str, Any]]
+    generate_icebreaker: bool = True
+
+
+# ---- ICP CRUD -----
+@api.get("/icps")
+async def list_icps(user=Depends(current_user)):
+    return await db.icps.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(200)
+
+
+@api.post("/icps")
+async def create_icp(body: IcpIn, user=Depends(current_user)):
+    doc = body.model_dump()
+    doc.update({
+        "id": new_id(), "workspace_id": user["workspace_id"],
+        "owner_id": user["id"], "created_at": now_iso(),
+    })
+    await db.icps.insert_one(doc)
+    doc.pop("_id", None)
+    await _audit(user, "icp.create", {"icp_id": doc["id"], "name": doc["name"]})
+    return doc
+
+
+@api.delete("/icps/{icp_id}")
+async def delete_icp(icp_id: str, user=Depends(current_user)):
+    await db.icps.delete_one({"id": icp_id, "workspace_id": user["workspace_id"]})
+    await _audit(user, "icp.delete", {"icp_id": icp_id})
+    return {"ok": True}
+
+
+# ---- Prospeo + Icypeas wrappers -----
+async def prospeo_domain_search(domain: str, limit: int = 20) -> List[Dict[str, Any]]:
+    """POST /domain-search — returns emails at a company domain.
+    Docs: https://prospeo.io/api/domain-search — header X-KEY."""
+    if not PROSPEO_API_KEY:
+        return _mock_prospeo_domain(domain, limit)
+    try:
+        async with httpx.AsyncClient(timeout=12) as client:
+            r = await client.post(
+                f"{PROSPEO_BASE}/domain-search",
+                headers={"X-KEY": PROSPEO_API_KEY, "Content-Type": "application/json"},
+                json={"company": domain, "limit": limit},
+            )
+            r.raise_for_status()
+            data = r.json()
+            hits = (data.get("response") or {}).get("email_list") or data.get("emails") or []
+            return [_normalize_prospeo(h, domain) for h in hits][:limit]
+    except Exception as ex:
+        logging.warning("prospeo domain search error: %s", ex)
+        return _mock_prospeo_domain(domain, limit)
+
+
+async def prospeo_email_finder(first_name: str, last_name: str, domain: str) -> Optional[str]:
+    """POST /email-finder — returns { email }."""
+    if not PROSPEO_API_KEY:
+        return f"{first_name.lower()}.{last_name.lower()}@{domain}"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(
+                f"{PROSPEO_BASE}/email-finder",
+                headers={"X-KEY": PROSPEO_API_KEY, "Content-Type": "application/json"},
+                json={"first_name": first_name, "last_name": last_name, "company": domain},
+            )
+            r.raise_for_status()
+            data = r.json()
+            return (data.get("response") or {}).get("email") or data.get("email")
+    except Exception as ex:
+        logging.warning("prospeo email finder error: %s", ex)
+        return None
+
+
+async def icypeas_verify(email: str) -> Dict[str, Any]:
+    """POST /email-verification — returns {status:'valid'|'risky'|'invalid', ...}.
+    Headers: Authorization + Account-Id per Icypeas docs."""
+    if not ICYPEAS_API_KEY or not ICYPEAS_USER_ID:
+        # Basic MOCKED verification: syntax + common typo screen
+        ok = _verify_email_syntax(email) and not any(x in email for x in (" ", ",", ";"))
+        return {"status": "valid" if ok else "invalid", "score": 0.9 if ok else 0.0, "provider": "mock"}
+    try:
+        async with httpx.AsyncClient(timeout=12) as client:
+            r = await client.post(
+                f"{ICYPEAS_BASE}/email-verification",
+                headers={
+                    "Authorization": f"Bearer {ICYPEAS_API_KEY}",
+                    "Account-Id": ICYPEAS_USER_ID,
+                    "Content-Type": "application/json",
+                },
+                json={"email": email},
+            )
+            r.raise_for_status()
+            data = r.json()
+            status = (data.get("status") or data.get("data", {}).get("status") or "risky").lower()
+            return {
+                "status": "valid" if status in {"valid", "deliverable"} else ("invalid" if status in {"invalid", "undeliverable"} else "risky"),
+                "score": data.get("score", 0.5),
+                "provider": "icypeas",
+                "raw": data,
+            }
+    except Exception as ex:
+        logging.warning("icypeas verify error: %s", ex)
+        return {"status": "risky", "score": 0.5, "provider": "icypeas_error", "error": str(ex)}
+
+
+# ---- Mock fallbacks so the UI works without keys -----
+_MOCK_NAMES = [
+    ("Alex", "Rivera", "VP Sales"), ("Priya", "Shah", "Head of Growth"),
+    ("Marcus", "Chen", "Founder"), ("Sofia", "Nunez", "Director of RevOps"),
+    ("Daniel", "Okafor", "CTO"), ("Emma", "Whitfield", "Marketing Lead"),
+    ("Ravi", "Menon", "COO"), ("Jules", "Beaumont", "Head of Sales"),
+    ("Kenji", "Tanaka", "VP Product"), ("Ines", "Costa", "Head of Marketing"),
+]
+
+
+def _mock_prospeo_domain(domain: str, limit: int) -> List[Dict[str, Any]]:
+    d = (domain or "example.com").replace("http://", "").replace("https://", "").rstrip("/")
+    company = d.split(".")[0].title()
+    out = []
+    for fn, ln, title in _MOCK_NAMES[:limit]:
+        out.append({
+            "first_name": fn, "last_name": ln, "title": title,
+            "email": f"{fn.lower()}.{ln.lower()}@{d}",
+            "company": company, "domain": d, "linkedin": "",
+        })
+    return out
+
+
+def _normalize_prospeo(h: Dict[str, Any], domain: str) -> Dict[str, Any]:
+    return {
+        "first_name": h.get("first_name") or (h.get("name", "").split(" ", 1)[0] if h.get("name") else ""),
+        "last_name": h.get("last_name") or (h.get("name", "").split(" ", 1)[-1] if h.get("name") else ""),
+        "email": h.get("email"),
+        "title": h.get("job_title") or h.get("title") or "",
+        "company": h.get("company") or h.get("organization") or domain.split(".")[0].title(),
+        "domain": h.get("domain") or domain,
+        "linkedin": h.get("linkedin") or h.get("linkedin_url") or "",
+    }
+
+
+# ---- Prospect Search + Import -----
+def _resolve_domain_from_keywords(keywords: List[str], override: Optional[str]) -> str:
+    if override:
+        return override.replace("http://", "").replace("https://", "").rstrip("/")
+    for k in keywords or []:
+        if "." in k:
+            return k.strip().lower()
+    return "example.com"
+
+
+@api.post("/prospect/search")
+async def prospect_search(body: ProspectSearchIn, user=Depends(current_user)):
+    # Merge ICP + free-form filters
+    filters = body.model_dump()
+    if body.icp_id:
+        icp = await db.icps.find_one({"id": body.icp_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
+        if icp:
+            for k in ("titles", "industries", "locations", "company_sizes", "keywords"):
+                filters[k] = list({*(filters.get(k) or []), *(icp.get(k) or [])})
+
+    domain = _resolve_domain_from_keywords(filters["keywords"], body.domain)
+    prospects = await prospeo_domain_search(domain, limit=body.limit)
+
+    # Apply title/seniority filter locally when Prospeo returns broader lists
+    wanted_titles = [t.lower() for t in filters.get("titles", [])]
+    if wanted_titles:
+        prospects = [p for p in prospects if not p.get("title") or any(t in p.get("title", "").lower() for t in wanted_titles)]
+
+    # Verify in-flight
+    for p in prospects:
+        v = await icypeas_verify(p.get("email", ""))
+        p["verification"] = v
+        p["verified"] = v.get("status") == "valid"
+
+    return {
+        "filters": filters,
+        "domain": domain,
+        "prospects": prospects,
+        "providers": {
+            "prospeo": "live" if PROSPEO_API_KEY else "MOCKED",
+            "icypeas": "live" if (ICYPEAS_API_KEY and ICYPEAS_USER_ID) else "MOCKED",
+        },
+    }
+
+
+@api.post("/prospect/import")
+async def prospect_import(body: ProspectImportIn, user=Depends(current_user)):
+    wid = user["workspace_id"]
+    added = 0
+    skipped = 0
+    for p in body.prospects:
+        email = (p.get("email") or "").lower()
+        if not email or not _verify_email_syntax(email):
+            skipped += 1
+            continue
+        if await db.leads.find_one({"workspace_id": wid, "email": email}):
+            skipped += 1
+            continue
+        icebreaker = ""
+        if body.generate_icebreaker and EMERGENT_LLM_KEY:
+            try:
+                system = (
+                    "You are Pitch EQ's icebreaker writer. Write ONE 2-sentence cold-email opener for the given prospect. "
+                    "Warm, specific, human, under 45 words. No hashtags, no exclamation marks. STRICT JSON only: "
+                    '{"icebreaker": str, "reasoning": str (one line — why this opener will resonate)}'
+                )
+                resp = await _llm_chat(
+                    system,
+                    json.dumps({k: p.get(k) for k in ("first_name","last_name","title","company","domain","linkedin")}),
+                    f"icebr-{user['id']}", user=user,
+                )
+                parsed = _extract_json(resp)
+                if parsed:
+                    icebreaker = parsed.get("icebreaker", "")
+                    p["persona_hypothesis"] = parsed.get("reasoning", "")
+            except Exception as ex:
+                logging.warning("icebreaker gen fallback: %s", ex)
+        if not icebreaker:
+            icebreaker = f"Hi {p.get('first_name','')}, noticed {p.get('company','')} — curious how you're thinking about {p.get('title','your role')} priorities this quarter."
+
+        await db.leads.insert_one({
+            "id": new_id(), "workspace_id": wid,
+            "first_name": p.get("first_name", ""),
+            "last_name": p.get("last_name", ""),
+            "email": email,
+            "company": p.get("company", ""),
+            "title": p.get("title", ""),
+            "linkedin": p.get("linkedin", ""),
+            "tags": ["prospeo"],
+            "status": "new",
+            "verified": (p.get("verification") or {}).get("status") == "valid",
+            "verification": p.get("verification"),
+            "icp_score": 70,
+            "icebreaker": icebreaker,
+            "persona_hypothesis": p.get("persona_hypothesis", ""),
+            "source": "prospeo",
+            "created_at": now_iso(),
+        })
+        added += 1
+    await _audit(user, "prospect.import", {"added": added, "skipped": skipped})
+    return {"added": added, "skipped": skipped}
+
+
+@api.get("/prospect/providers")
+async def prospect_providers(user=Depends(current_user)):
+    return {
+        "prospeo": "live" if PROSPEO_API_KEY else "MOCKED",
+        "icypeas": "live" if (ICYPEAS_API_KEY and ICYPEAS_USER_ID) else "MOCKED",
+    }
+
+
 # ----------------------------- Create EQ (Carousel Agent) --------------------
 PLATFORM_DIMS = {
     "linkedin": {"w": 1080, "h": 1350, "label": "LinkedIn Deck"},

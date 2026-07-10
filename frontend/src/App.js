@@ -16,6 +16,8 @@ import CRM from "./pages/CRM";
 import Admin from "./pages/Admin";
 import Analytics from "./pages/Analytics";
 import AuditLog from "./pages/AuditLog";
+import CreateEQEditor from "./pages/CreateEQEditor";
+import CreateEQProjects from "./pages/CreateEQProjects";
 import Onboarding from "./pages/Onboarding";
 import Team from "./pages/Team";
 import Templates from "./pages/Templates";

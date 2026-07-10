@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
+import ProspectFinder from "../components/ProspectFinder";
 import { toast } from "sonner";
-import { Plus, Upload } from "lucide-react";
+import { Plus, Upload, Sparkles } from "lucide-react";
 
 export default function Leads() {
   const [leads, setLeads] = useState([]);
   const [q, setQ] = useState("");
   const [modal, setModal] = useState(false);
+  const [finder, setFinder] = useState(false);
   const [form, setForm] = useState({ first_name: "", last_name: "", email: "", company: "", title: "" });
 
   const load = () => api.get("/leads").then((r) => setLeads(r.data));
@@ -115,6 +117,9 @@ export default function Leads() {
         subtitle={`${leads.length} contacts in your workspace.`}
         right={
           <div className="flex gap-2">
+            <button onClick={() => setFinder(true)} data-testid="find-leads-btn" className="btn-secondary">
+              <Sparkles size={14} /> Find leads
+            </button>
             <label className="btn-secondary cursor-pointer" data-testid="import-csv-btn">
               <Upload size={14} /> Import CSV
               <input type="file" accept=".csv" hidden onChange={importCsv} data-testid="csv-file-input" />
@@ -187,6 +192,8 @@ export default function Leads() {
           </form>
         </div>
       )}
+
+      <ProspectFinder open={finder} onClose={() => setFinder(false)} onDone={load} />
     </div>
   );
 }
