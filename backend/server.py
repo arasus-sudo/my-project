@@ -1410,7 +1410,7 @@ async def carousel_get(pid: str, user=Depends(current_user)):
 
 @api.put("/carousel/{pid}")
 async def carousel_update(pid: str, body: Dict[str, Any], user=Depends(current_user)):
-    allowed = {k: v for k, v in body.items() if k in {"slides", "brand", "platform", "topic"}}
+    allowed = {k: v for k, v in body.items() if k in {"slides", "brand", "platform", "topic", "palette_id"}}
     allowed["updated_at"] = now_iso()
     await db.carousels.update_one(
         {"id": pid, "workspace_id": user["workspace_id"]}, {"$set": allowed}
