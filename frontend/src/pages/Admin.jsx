@@ -155,6 +155,18 @@ export default function Admin() {
                       </span>
                     </td>
                     <td className="p-3 text-right space-x-1">
+                      <button onClick={async () => {
+                        try {
+                          const { data } = await api.post(`/admin/impersonate/${u.id}`);
+                          localStorage.setItem("pitcheq_token", data.token);
+                          localStorage.setItem("pitcheq_user", JSON.stringify(data.user));
+                          localStorage.setItem("pitcheq_workspace", JSON.stringify(data.workspace));
+                          toast.success(`Impersonating ${u.email}`);
+                          window.location.href = "/app";
+                        } catch { toast.error("Impersonation failed"); }
+                      }} data-testid={`admin-impersonate-${u.id}`} className="btn-ghost text-xs">
+                        <Shield size={12} /> Login as
+                      </button>
                       <button onClick={() => toggleUser(u.id)} data-testid={`admin-user-toggle-${u.id}`} className="btn-ghost text-xs">
                         <Ban size={12} /> {u.blocked ? "Unblock" : "Block"}
                       </button>

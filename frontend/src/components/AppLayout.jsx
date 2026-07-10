@@ -2,15 +2,20 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import {
   LayoutDashboard, Send, Users, Inbox as InboxIcon, Kanban, Mail, Settings as SettingsIcon, LogOut, Sparkles, Shield,
+  FileText, BarChart3, UsersRound, ShieldCheck,
 } from "lucide-react";
 
 const NAV = [
   { to: "/app", label: "Overview", icon: LayoutDashboard, end: true, tid: "nav-overview" },
   { to: "/app/campaigns", label: "Campaigns", icon: Send, tid: "nav-campaigns" },
+  { to: "/app/templates", label: "Templates", icon: FileText, tid: "nav-templates" },
   { to: "/app/inbox", label: "Inbox", icon: InboxIcon, tid: "nav-inbox" },
   { to: "/app/crm", label: "Pipeline", icon: Kanban, tid: "nav-crm" },
   { to: "/app/leads", label: "Leads", icon: Users, tid: "nav-leads" },
   { to: "/app/mailboxes", label: "Mailboxes", icon: Mail, tid: "nav-mailboxes" },
+  { to: "/app/analytics", label: "Analytics", icon: BarChart3, tid: "nav-analytics" },
+  { to: "/app/team", label: "Team", icon: UsersRound, tid: "nav-team" },
+  { to: "/app/audit-log", label: "Audit log", icon: ShieldCheck, tid: "nav-audit" },
   { to: "/app/settings", label: "Settings", icon: SettingsIcon, tid: "nav-settings" },
 ];
 

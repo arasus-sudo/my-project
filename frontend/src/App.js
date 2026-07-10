@@ -14,7 +14,11 @@ import Mailboxes from "./pages/Mailboxes";
 import Inbox from "./pages/Inbox";
 import CRM from "./pages/CRM";
 import Admin from "./pages/Admin";
+import Analytics from "./pages/Analytics";
+import AuditLog from "./pages/AuditLog";
 import Onboarding from "./pages/Onboarding";
+import Team from "./pages/Team";
+import Templates from "./pages/Templates";
 import Settings from "./pages/Settings";
 
 function Private({ children }) {
@@ -43,6 +47,10 @@ function App() {
               <Route path="campaigns/:id" element={<CampaignBuilder />} />
               <Route path="leads" element={<Leads />} />
               <Route path="mailboxes" element={<Mailboxes />} />
+              <Route path="templates" element={<Templates />} />
+              <Route path="analytics" element={<Analytics />} />
+              <Route path="team" element={<Team />} />
+              <Route path="audit-log" element={<AuditLog />} />
               <Route path="inbox" element={<Inbox />} />
               <Route path="crm" element={<CRM />} />
               <Route path="settings" element={<Settings />} />

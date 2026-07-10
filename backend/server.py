@@ -465,6 +465,7 @@ async def launch_campaign(cid: str, user=Depends(current_user)):
     if not c:
         raise HTTPException(404, "not found")
     await db.campaigns.update_one({"id": cid}, {"$set": {"status": "active", "launched_at": now_iso()}})
+    await _audit(user, "campaign.launch", {"campaign_id": cid})
 
     # Simulate sending events for each lead and step
     lead_ids = c.get("lead_ids") or []
@@ -645,9 +646,11 @@ def _extract_json(text: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-async def _llm_chat(system: str, user_text: str, session_id: str) -> str:
+async def _llm_chat(system: str, user_text: str, session_id: str, user: Optional[Dict[str, Any]] = None) -> str:
     if not EMERGENT_LLM_KEY:
         raise RuntimeError("EMERGENT_LLM_KEY not configured")
+    if user and not await _rate_ok(user):
+        raise RuntimeError("daily LLM quota exceeded")
     chat = LlmChat(
         api_key=EMERGENT_LLM_KEY,
         session_id=session_id,
@@ -672,7 +675,7 @@ async def ai_score(body: AIScoreIn, user=Depends(current_user)):
     )
     user_text = f"Subject: {body.subject}\n\nBody:\n{body.body}"
     try:
-        resp = await _llm_chat(system, user_text, f"score-{user['id']}")
+        resp = await _llm_chat(system, user_text, f"score-{user['id']}", user=user)
         parsed = _extract_json(resp)
         if parsed and "overall" in parsed:
             return parsed
@@ -703,7 +706,7 @@ async def ai_personalize(body: AIPersonalizeIn, user=Depends(current_user)):
             f"Goal / template hint from user:\n{instructions}"
         )
         try:
-            resp = await _llm_chat(system, user_text, f"personalize-{user['id']}")
+            resp = await _llm_chat(system, user_text, f"personalize-{user['id']}", user=user)
             parsed = _extract_json(resp)
             if parsed and parsed.get("subject") and parsed.get("body"):
                 eq = compute_eq(parsed["subject"], parsed["body"], lead)
@@ -921,7 +924,7 @@ async def onb_analyze(body: OnbAnalyzeIn, user=Depends(current_user)):
             '"questions": ["3 short clarifying questions to sharpen outbound"]}'
         )
         try:
-            resp = await _llm_chat(system, combined, f"onb-a-{user['id']}")
+            resp = await _llm_chat(system, combined, f"onb-a-{user['id']}", user=user)
             parsed = _extract_json(resp)
             if parsed and parsed.get("summary"):
                 parsed.setdefault("services", [])
@@ -952,7 +955,7 @@ async def onb_generate(body: OnbGenerateIn, user=Depends(current_user)):
             f"User answers: {json.dumps(body.answers)}"
         )
         try:
-            resp = await _llm_chat(system, user_text, f"onb-g-{user['id']}")
+            resp = await _llm_chat(system, user_text, f"onb-g-{user['id']}", user=user)
             parsed = _extract_json(resp)
             if parsed and parsed.get("campaigns"):
                 # backfill service field if LLM dropped it
@@ -990,6 +993,174 @@ async def onb_accept(body: OnbAcceptIn, user=Depends(current_user)):
         saved.append(cid)
     await db.workspaces.update_one({"id": user["workspace_id"]}, {"$set": {"onboarded": True}})
     return {"ok": True, "campaign_ids": saved}
+
+
+# ----------------------------- Templates -------------------------------------
+class TemplateIn(BaseModel):
+    name: str
+    subject: str
+    body: str
+    tags: List[str] = []
+
+
+@api.get("/templates")
+async def list_templates(user=Depends(current_user)):
+    return await db.templates.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+@api.post("/templates")
+async def create_template(body: TemplateIn, user=Depends(current_user)):
+    t = body.model_dump()
+    eq = compute_eq(t["subject"], t["body"])
+    t.update({
+        "id": new_id(), "workspace_id": user["workspace_id"], "owner_id": user["id"],
+        "created_at": now_iso(), "eq_score": eq["overall"],
+    })
+    await db.templates.insert_one(t)
+    t.pop("_id", None)
+    await _audit(user, "template.create", {"template_id": t["id"], "name": t["name"]})
+    return t
+
+
+@api.delete("/templates/{tid}")
+async def delete_template(tid: str, user=Depends(current_user)):
+    await db.templates.delete_one({"id": tid, "workspace_id": user["workspace_id"]})
+    await _audit(user, "template.delete", {"template_id": tid})
+    return {"ok": True}
+
+
+# ----------------------------- Team & Invites --------------------------------
+ROLES = {"org_admin", "campaign_manager", "sdr", "viewer"}
+
+
+class TeamInviteIn(BaseModel):
+    name: str
+    email: EmailStr
+    role: str = "campaign_manager"
+    password: str
+
+
+@api.get("/team")
+async def list_team(user=Depends(current_user)):
+    members = await db.users.find(
+        {"workspace_id": user["workspace_id"]},
+        {"_id": 0, "password_hash": 0},
+    ).to_list(500)
+    return members
+
+
+@api.post("/team/invite")
+async def invite_member(body: TeamInviteIn, user=Depends(current_user)):
+    if user.get("role") not in {"org_admin"} and not _is_admin(user):
+        raise HTTPException(403, "Only Org Admin can invite")
+    if body.role not in ROLES:
+        raise HTTPException(400, "invalid role")
+    if await db.users.find_one({"email": body.email.lower()}):
+        raise HTTPException(400, "Email already registered")
+    uid = new_id()
+    await db.users.insert_one({
+        "id": uid, "email": body.email.lower(), "name": body.name,
+        "password_hash": hash_pw(body.password),
+        "workspace_id": user["workspace_id"], "role": body.role,
+        "invited_by": user["id"], "created_at": now_iso(),
+    })
+    await _audit(user, "team.invite", {"user_id": uid, "email": body.email.lower(), "role": body.role})
+    return {"ok": True, "user_id": uid}
+
+
+@api.delete("/team/{uid}")
+async def remove_member(uid: str, user=Depends(current_user)):
+    if uid == user["id"]:
+        raise HTTPException(400, "Cannot remove yourself")
+    victim = await db.users.find_one({"id": uid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not victim:
+        raise HTTPException(404, "not found")
+    if user.get("role") != "org_admin" and not _is_admin(user):
+        raise HTTPException(403, "Only Org Admin can remove")
+    await db.users.delete_one({"id": uid})
+    await _audit(user, "team.remove", {"user_id": uid, "email": victim.get("email")})
+    return {"ok": True}
+
+
+# ----------------------------- Analytics deep-dive ---------------------------
+@api.get("/analytics/campaigns")
+async def analytics_campaigns(user=Depends(current_user)):
+    wid = user["workspace_id"]
+    out = []
+    campaigns = await db.campaigns.find({"workspace_id": wid}, {"_id": 0}).to_list(500)
+    for c in campaigns:
+        steps = c.get("steps", [])
+        events = await db.events.find({"workspace_id": wid, "campaign_id": c["id"]}, {"_id": 0}).to_list(20000)
+        by_step = []
+        for i in range(len(steps)):
+            e = [x for x in events if x.get("step") == i]
+            sent = sum(1 for x in e if x["type"] == "sent")
+            by_step.append({
+                "step": i, "subject": steps[i].get("subject", ""),
+                "sent": sent,
+                "opened": sum(1 for x in e if x["type"] == "opened"),
+                "clicked": sum(1 for x in e if x["type"] == "clicked"),
+                "replied": sum(1 for x in e if x["type"] == "replied"),
+                "open_rate": round(sum(1 for x in e if x["type"] == "opened") / sent * 100, 1) if sent else 0,
+                "reply_rate": round(sum(1 for x in e if x["type"] == "replied") / sent * 100, 1) if sent else 0,
+            })
+        out.append({"id": c["id"], "name": c["name"], "status": c["status"], "by_step": by_step})
+    return out
+
+
+@api.get("/analytics/mailboxes")
+async def analytics_mailboxes(user=Depends(current_user)):
+    return await db.mailboxes.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(500)
+
+
+# ----------------------------- Audit log -------------------------------------
+async def _audit(user: Dict[str, Any], action: str, meta: Dict[str, Any] = None):
+    try:
+        await db.audit_log.insert_one({
+            "id": new_id(),
+            "workspace_id": user.get("workspace_id"),
+            "user_id": user.get("id"),
+            "actor_email": user.get("email"),
+            "action": action,
+            "meta": meta or {},
+            "at": now_iso(),
+        })
+    except Exception:
+        pass
+
+
+@api.get("/audit-log")
+async def audit_log(limit: int = 200, user=Depends(current_user)):
+    q = {"workspace_id": user["workspace_id"]}
+    items = await db.audit_log.find(q, {"_id": 0}).sort("at", -1).to_list(min(limit, 1000))
+    return items
+
+
+# ----------------------------- Rate limit (per workspace) -------------------
+DAILY_LLM_LIMIT = int(os.environ.get("DAILY_LLM_LIMIT", "200"))
+
+
+async def _rate_ok(user: Dict[str, Any]) -> bool:
+    """Return True if workspace under daily LLM quota; increments usage."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    doc = await db.rate_limits.find_one_and_update(
+        {"workspace_id": user["workspace_id"], "day": today},
+        {"$inc": {"count": 1}},
+        upsert=True,
+        return_document=True,
+    )
+    return (doc or {}).get("count", 1) <= DAILY_LLM_LIMIT
+
+
+@api.get("/quota")
+async def quota(user=Depends(current_user)):
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    doc = await db.rate_limits.find_one({"workspace_id": user["workspace_id"], "day": today}, {"_id": 0})
+    used = (doc or {}).get("count", 0)
+    return {"used": used, "limit": DAILY_LLM_LIMIT, "remaining": max(0, DAILY_LLM_LIMIT - used)}
+
+
+# ----------------------------- Impersonation (defined below Admin) ----------
 
 
 # ----------------------------- Admin (Suite Admin) ---------------------------
@@ -1079,6 +1250,18 @@ async def admin_toggle_workspace(wid: str, _: Any = Depends(require_admin)):
 @api.get("/admin/whoami")
 async def admin_whoami(user=Depends(current_user)):
     return {"is_admin": _is_admin(user)}
+
+
+@api.post("/admin/impersonate/{uid}")
+async def impersonate(uid: str, admin=Depends(require_admin)):
+    target = await db.users.find_one({"id": uid}, {"_id": 0})
+    if not target:
+        raise HTTPException(404, "not found")
+    token = make_token(target["id"], target["workspace_id"])
+    await _audit(admin, "admin.impersonate", {"target_user_id": uid, "target_email": target.get("email")})
+    return {"token": token,
+            "user": {"id": target["id"], "email": target["email"], "name": target["name"], "is_admin": _is_admin(target)},
+            "workspace": await db.workspaces.find_one({"id": target["workspace_id"]}, {"_id": 0})}
 
 
 # ----------------------------- Mount -----------------------------------------
