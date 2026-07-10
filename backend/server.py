@@ -813,6 +813,121 @@ async def seed(user=Depends(current_user)):
     return {"ok": True, "campaign_id": cid, "seeded_leads": len(lead_ids)}
 
 
+# ----------------------------- Onboarding ------------------------------------
+import urllib.request
+
+
+class OnbAnalyzeIn(BaseModel):
+    url: str
+
+
+class OnbGenerateIn(BaseModel):
+    business_summary: str
+    answers: Dict[str, str] = {}
+
+
+class OnbAcceptIn(BaseModel):
+    campaigns: List[Dict[str, Any]]
+
+
+def _crawl_text(url: str) -> str:
+    if not url.startswith("http"):
+        url = "https://" + url
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 PitchEQ"})
+        with urllib.request.urlopen(req, timeout=6) as r:
+            raw = r.read(200_000).decode("utf-8", errors="ignore")
+    except Exception:
+        return ""
+    raw = re.sub(r"<(script|style)[\s\S]*?</\1>", " ", raw, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", raw)
+    return re.sub(r"\s+", " ", text)[:8000].strip()
+
+
+DEFAULT_QUESTIONS = [
+    "Who is your ideal customer (industry, role, company size)?",
+    "What problem do you solve for them?",
+    "What outbound goal matters most — demos, signups, replies?",
+    "Which product or service should we lead with?",
+]
+
+
+@api.post("/onboarding/analyze")
+async def onb_analyze(body: OnbAnalyzeIn, user=Depends(current_user)):
+    text = _crawl_text(body.url)
+    if not text:
+        return {"summary": "", "questions": DEFAULT_QUESTIONS, "raw": ""}
+    if EMERGENT_LLM_KEY:
+        system = (
+            "You are a B2B outbound strategist. From website text, respond STRICT JSON only: "
+            '{"summary": "2-3 sentences on what they do, likely ICP, value prop, tone", '
+            '"questions": ["4 short clarifying questions to sharpen their cold-email strategy"]}'
+        )
+        try:
+            resp = await _llm_chat(system, f"Website text:\n{text[:5000]}", f"onb-a-{user['id']}")
+            parsed = _extract_json(resp)
+            if parsed and parsed.get("summary"):
+                return {**parsed, "raw": text[:1500]}
+        except Exception as ex:
+            logging.warning("onb_analyze fallback: %s", ex)
+    return {"summary": text[:400], "questions": DEFAULT_QUESTIONS, "raw": text[:1500]}
+
+
+@api.post("/onboarding/generate")
+async def onb_generate(body: OnbGenerateIn, user=Depends(current_user)):
+    if EMERGENT_LLM_KEY:
+        system = (
+            "You are Pitch EQ's campaign designer. Produce 2 draft cold-email campaigns based on the business. "
+            "Each has 3 steps (day 0, 3, 7). Warm, specific, under 120 words per body. "
+            "Use merge fields {{first_name}}, {{company}}, {{title}}. STRICT JSON only: "
+            '{"campaigns":[{"name":str,"goal":str,"steps":[{"day":int,"subject":str,"body":str}]}]}'
+        )
+        user_text = f"Business: {body.business_summary}\nAnswers: {json.dumps(body.answers)}"
+        try:
+            resp = await _llm_chat(system, user_text, f"onb-g-{user['id']}")
+            parsed = _extract_json(resp)
+            if parsed and parsed.get("campaigns"):
+                return parsed
+        except Exception as ex:
+            logging.warning("onb_generate fallback: %s", ex)
+    focus = (list(body.answers.values())[0] if body.answers else "outbound reply rates")
+    biz = body.business_summary or "improve outbound reply rates"
+    return {"campaigns": [
+        {"name": "Direct value pitch", "goal": "Book meetings", "steps": [
+            {"day": 0, "subject": "Quick idea for {{company}}",
+             "body": f"Hi {{{{first_name}}}},\n\nSaw {{{{company}}}} and wanted to reach out. We help teams like yours with {biz}.\n\nWorth 15 minutes next week?"},
+            {"day": 3, "subject": "Re: Quick idea for {{company}}",
+             "body": "Hi {{first_name}}, circling back — happy to send a one-pager if easier than a call."},
+            {"day": 7, "subject": "Last note, {{first_name}}",
+             "body": "No response, so I'll close the loop. If this becomes relevant, my inbox is open."},
+        ]},
+        {"name": "Curiosity-led", "goal": "Trigger reply", "steps": [
+            {"day": 0, "subject": "{{first_name}}, one question about {{company}}",
+             "body": f"Curious how {{{{company}}}} handles {focus} today?"},
+            {"day": 3, "subject": "Re: one question",
+             "body": "Bumping this in case it slipped."},
+            {"day": 7, "subject": "Closing the loop",
+             "body": "Marking this as closed — feel free to reopen if the topic becomes relevant."},
+        ]},
+    ]}
+
+
+@api.post("/onboarding/accept")
+async def onb_accept(body: OnbAcceptIn, user=Depends(current_user)):
+    saved = []
+    for c in body.campaigns:
+        cid = new_id()
+        await db.campaigns.insert_one({
+            "id": cid, "workspace_id": user["workspace_id"], "name": c.get("name", "Untitled"),
+            "goal": c.get("goal", "Book meetings"), "steps": c.get("steps", []),
+            "lead_ids": [], "status": "draft", "owner_id": user["id"], "created_at": now_iso(),
+            "send_window_start": "09:00", "send_window_end": "17:00", "timezone": "UTC",
+        })
+        saved.append(cid)
+    await db.workspaces.update_one({"id": user["workspace_id"]}, {"$set": {"onboarded": True}})
+    return {"ok": True, "campaign_ids": saved}
+
+
 # ----------------------------- Mount -----------------------------------------
 app.include_router(api)
 

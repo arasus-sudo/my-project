@@ -13,6 +13,7 @@ import Leads from "./pages/Leads";
 import Mailboxes from "./pages/Mailboxes";
 import Inbox from "./pages/Inbox";
 import CRM from "./pages/CRM";
+import Onboarding from "./pages/Onboarding";
 import Settings from "./pages/Settings";
 
 function Private({ children }) {
@@ -32,6 +33,7 @@ function App() {
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/onboarding" element={<Private><Onboarding /></Private>} />
             <Route path="/app" element={<Private><AppLayout /></Private>}>
               <Route index element={<Dashboard />} />
               <Route path="campaigns" element={<Campaigns />} />

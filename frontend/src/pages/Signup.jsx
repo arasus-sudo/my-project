@@ -17,9 +17,8 @@ export default function Signup() {
     setBusy(true);
     try {
       await signup(form);
-      try { await api.post("/demo/seed"); } catch (seedErr) { console.warn("Demo seed skipped:", seedErr); }
-      toast.success("Workspace ready. Sample data seeded.");
-      nav("/app");
+      toast.success("Workspace ready. Let's teach the agent about your business.");
+      nav("/onboarding");
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Signup failed");
     } finally {
