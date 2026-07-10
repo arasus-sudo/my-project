@@ -22,7 +22,16 @@ export default function CreateEQEditor() {
   const [brandUrl, setBrandUrl] = useState("");
   const slideRef = useRef(null);
 
-  useEffect(() => { api.get(`/carousel/${id}`).then((r) => setProj(r.data)); }, [id]);
+  useEffect(() => {
+    api.get(`/carousel/${id}`).then((r) => {
+      const p = r.data;
+      p.slides = (p.slides || []).map((s, i) => ({
+        ...s,
+        _k: s._k || `s_${i}_${Math.random().toString(36).slice(2, 8)}`,
+      }));
+      setProj(p);
+    });
+  }, [id]);
 
   if (!proj) return <div className="p-10 text-neutral-500">Loading…</div>;
   const dim = PLATFORMS[proj.platform] || PLATFORMS.linkedin;
@@ -39,7 +48,8 @@ export default function CreateEQEditor() {
   const save = async () => {
     setBusy(true);
     try {
-      await api.put(`/carousel/${id}`, { slides: proj.slides, brand: proj.brand, platform: proj.platform, topic: proj.topic });
+      const cleanSlides = proj.slides.map(({ _k, ...rest }) => rest);
+      await api.put(`/carousel/${id}`, { slides: cleanSlides, brand: proj.brand, platform: proj.platform, topic: proj.topic });
       toast.success("Saved");
     } catch { toast.error("Save failed"); }
     finally { setBusy(false); }
@@ -111,7 +121,7 @@ export default function CreateEQEditor() {
         <div className="col-span-9 p-8 overflow-auto bg-neutral-100">
           <div className="flex gap-6 flex-wrap items-start">
             {proj.slides.map((s, i) => (
-              <button key={i} onClick={() => setActive(i)} data-testid={`slide-thumb-${i}`}
+              <button key={s._k || i} onClick={() => setActive(i)} data-testid={`slide-thumb-${i}`}
                 className={`relative rounded-2xl overflow-hidden transition-all shrink-0 ${i === active ? "ring-4 ring-ink" : "hover:ring-2 hover:ring-neutral-300"}`}
                 style={{ width: dim.w * scale, height: dim.h * scale }}>
                 <div ref={i === active ? slideRef : null} className="absolute inset-0 p-8 flex flex-col justify-between"
