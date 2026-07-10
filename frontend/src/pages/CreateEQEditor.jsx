@@ -289,36 +289,19 @@ export default function CreateEQEditor() {
     finally { setBusy(false); }
   };
 
-  const exportSlidePng = () => {
-    // Use html-to-canvas via SVG foreignObject: reliable at native resolution.
-    const node = canvasRef.current;
-    if (!node) return;
-    const clone = node.cloneNode(true);
-    clone.style.transform = "";
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CANVAS.w}" height="${CANVAS.h}">
-      <foreignObject width="100%" height="100%">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="width:${CANVAS.w}px;height:${CANVAS.h}px">${clone.innerHTML}</div>
-      </foreignObject></svg>`;
-    const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = CANVAS.w; canvas.height = CANVAS.h;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, CANVAS.w, CANVAS.h);
-      canvas.toBlob((b) => {
-        if (!b) { toast.error("Export failed. Try again."); return; }
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(b);
-        a.download = `${(proj.topic || "slide").slice(0, 40).replace(/\W+/g, "-")}-${activeSlide + 1}.png`;
-        a.click();
-      }, "image/png");
-      URL.revokeObjectURL(url);
-    };
-    img.onerror = () => toast.error("Export failed — try Save first.");
-    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  const exportSlidePng = async () => {
+    setBusy(true);
+    try {
+      const dataUrl = await renderSlideToDataUrl(activeSlide);
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `${(proj.topic || "slide").slice(0, 40).replace(/\W+/g, "-")}-${activeSlide + 1}.png`;
+      a.click();
+      toast.success("PNG exported");
+    } catch (err) {
+      console.error(err);
+      toast.error("PNG export failed");
+    } finally { setBusy(false); }
   };
 
   const renderSlideToDataUrl = (slideIdx) => new Promise((resolve, reject) => {
