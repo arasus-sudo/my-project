@@ -51,6 +51,8 @@ function App() {
               <Route path="analytics" element={<Analytics />} />
               <Route path="team" element={<Team />} />
               <Route path="audit-log" element={<AuditLog />} />
+              <Route path="create-eq" element={<CreateEQProjects />} />
+              <Route path="create-eq/:id" element={<CreateEQEditor />} />
               <Route path="inbox" element={<Inbox />} />
               <Route path="crm" element={<CRM />} />
               <Route path="settings" element={<Settings />} />

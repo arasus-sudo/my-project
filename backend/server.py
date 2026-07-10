@@ -474,6 +474,24 @@ async def launch_campaign(cid: str, user=Depends(current_user)):
         leads = await db.leads.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(200)
         lead_ids = [x["id"] for x in leads]
 
+    # Hard-coded verification gate: check syntax + suppression list; quarantine failures.
+    suppressed = {s["email"] async for s in db.suppressions.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0, "email": 1}
+    )}
+    verified_ids: List[str] = []
+    for lid in lead_ids:
+        lead = await db.leads.find_one({"id": lid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+        if not lead:
+            continue
+        if not _verify_email_syntax(lead.get("email", "")):
+            await _quarantine_lead(user["workspace_id"], lead, "invalid_syntax")
+            continue
+        if lead.get("email", "").lower() in suppressed:
+            await _quarantine_lead(user["workspace_id"], lead, "on_suppression_list")
+            continue
+        verified_ids.append(lid)
+    lead_ids = verified_ids
+
     steps = c.get("steps", [])
     for i, lid in enumerate(lead_ids):
         lead = await db.leads.find_one({"id": lid, "workspace_id": user["workspace_id"]}, {"_id": 0})
@@ -514,12 +532,27 @@ async def launch_campaign(cid: str, user=Depends(current_user)):
                     ],
                 })
                 if classification == "interested":
-                    # auto-create deal
+                    # auto-create deal with persona hypothesis
+                    persona = ""
+                    if EMERGENT_LLM_KEY:
+                        try:
+                            resp = await _llm_chat(
+                                "Given a lead and their positive reply, produce a STRICT JSON: {\"persona_hypothesis\": one-sentence hypothesis about what they care about}",
+                                f"Lead: {json.dumps({k: lead.get(k) for k in ('first_name','last_name','title','company')})}\nReply: {reply_body}",
+                                f"persona-{user['id']}", user=user,
+                            )
+                            parsed = _extract_json(resp)
+                            if parsed:
+                                persona = parsed.get("persona_hypothesis", "")
+                        except Exception:
+                            pass
+                    if not persona:
+                        persona = f"{lead.get('title','Leader')} at {lead.get('company','their org')} is exploring options."
                     await db.deals.insert_one({
                         "id": new_id(), "workspace_id": user["workspace_id"], "lead_id": lid,
                         "title": f"{lead.get('company') or lead['first_name']} — inbound reply",
                         "value": 5000, "stage": "qualified", "created_at": now_iso(),
-                        "source_campaign_id": cid,
+                        "source_campaign_id": cid, "persona_hypothesis": persona,
                     })
                     await db.events.insert_one({
                         "id": new_id(), "workspace_id": user["workspace_id"], "campaign_id": cid,
@@ -993,6 +1026,238 @@ async def onb_accept(body: OnbAcceptIn, user=Depends(current_user)):
         saved.append(cid)
     await db.workspaces.update_one({"id": user["workspace_id"]}, {"$set": {"onboarded": True}})
     return {"ok": True, "campaign_ids": saved}
+
+
+# ----------------------------- Create EQ (Carousel Agent) --------------------
+PLATFORM_DIMS = {
+    "linkedin": {"w": 1080, "h": 1350, "label": "LinkedIn Deck"},
+    "square": {"w": 1080, "h": 1080, "label": "Square Social"},
+    "twitter": {"w": 1080, "h": 1350, "label": "Twitter Cheat Sheet"},
+}
+
+
+class BrandKit(BaseModel):
+    bg: str = "#0F1010"
+    accent: str = "#E85D3A"
+    text: str = "#FFFFFF"
+    font: str = "Inter"
+    logo_text: str = ""
+
+
+class CarouselGenIn(BaseModel):
+    topic: str
+    platform: str = "linkedin"
+    slide_count: int = 6
+    brand: Optional[BrandKit] = None
+    tone: str = "confident, punchy"
+
+
+class CarouselEditIn(BaseModel):
+    project_id: str
+    slide_index: int
+    instruction: str
+
+
+class BrandFromUrlIn(BaseModel):
+    url: str
+
+
+def _default_slides(topic: str, n: int) -> List[Dict[str, Any]]:
+    slides = [{"kind": "hook", "title": topic, "subtitle": "A short, sharp take", "body": ""}]
+    for i in range(n - 2):
+        slides.append({"kind": "body", "title": f"Point {i + 1}", "subtitle": "", "body": "Add insight here."})
+    slides.append({"kind": "cta", "title": "Your turn", "subtitle": "", "body": "Follow for more.", "cta": "Follow"})
+    return slides
+
+
+@api.post("/carousel/generate")
+async def carousel_generate(body: CarouselGenIn, user=Depends(current_user)):
+    if body.platform not in PLATFORM_DIMS:
+        raise HTTPException(400, "invalid platform")
+    slides: List[Dict[str, Any]] = []
+    if EMERGENT_LLM_KEY:
+        system = (
+            f"You are Create EQ, a carousel narrative designer. From a single topic, produce a "
+            f"multi-slide carousel with narrative arc Hook → Body → CTA. Return EXACTLY {body.slide_count} slides. "
+            "Each body slide has a punchy title (<=8 words), optional subtitle (<=12 words), and a body "
+            "paragraph (<=45 words, plain, no emojis, no hashtags). Slide 1 = hook (kind:'hook'), last = cta "
+            "(kind:'cta') with a short 'cta' call-to-action string. Tone: "
+            f"{body.tone}. STRICT JSON only: "
+            '{"slides":[{"kind":"hook|body|cta","title":str,"subtitle":str,"body":str,"cta":str}]}'
+        )
+        try:
+            resp = await _llm_chat(system, f"Topic: {body.topic}", f"creq-gen-{user['id']}", user=user)
+            parsed = _extract_json(resp)
+            if parsed and parsed.get("slides"):
+                slides = parsed["slides"][: body.slide_count]
+        except Exception as ex:
+            logging.warning("carousel gen fallback: %s", ex)
+    if not slides:
+        slides = _default_slides(body.topic, body.slide_count)
+
+    brand = (body.brand or BrandKit()).model_dump()
+    proj_id = new_id()
+    doc = {
+        "id": proj_id, "workspace_id": user["workspace_id"], "owner_id": user["id"],
+        "topic": body.topic, "platform": body.platform, "brand": brand,
+        "slides": slides, "created_at": now_iso(), "updated_at": now_iso(),
+    }
+    await db.carousels.insert_one(doc)
+    await _audit(user, "carousel.create", {"project_id": proj_id, "topic": body.topic})
+    doc.pop("_id", None)
+    return doc
+
+
+@api.get("/carousel")
+async def carousel_list(user=Depends(current_user)):
+    return await db.carousels.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).sort("updated_at", -1).to_list(500)
+
+
+@api.get("/carousel/{pid}")
+async def carousel_get(pid: str, user=Depends(current_user)):
+    doc = await db.carousels.find_one({"id": pid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "not found")
+    return doc
+
+
+@api.put("/carousel/{pid}")
+async def carousel_update(pid: str, body: Dict[str, Any], user=Depends(current_user)):
+    allowed = {k: v for k, v in body.items() if k in {"slides", "brand", "platform", "topic"}}
+    allowed["updated_at"] = now_iso()
+    await db.carousels.update_one(
+        {"id": pid, "workspace_id": user["workspace_id"]}, {"$set": allowed}
+    )
+    return await carousel_get(pid, user)
+
+
+@api.delete("/carousel/{pid}")
+async def carousel_delete(pid: str, user=Depends(current_user)):
+    await db.carousels.delete_one({"id": pid, "workspace_id": user["workspace_id"]})
+    return {"ok": True}
+
+
+@api.post("/carousel/edit")
+async def carousel_edit(body: CarouselEditIn, user=Depends(current_user)):
+    doc = await db.carousels.find_one(
+        {"id": body.project_id, "workspace_id": user["workspace_id"]}, {"_id": 0}
+    )
+    if not doc:
+        raise HTTPException(404, "not found")
+    slides = doc.get("slides", [])
+    if body.slide_index < 0 or body.slide_index >= len(slides):
+        raise HTTPException(400, "invalid slide index")
+    current = slides[body.slide_index]
+    if EMERGENT_LLM_KEY:
+        system = (
+            "You are Create EQ's touch-edit interface. Rewrite the ONE slide provided per the user's "
+            "instruction, preserving its kind. Keep title <=8 words, body <=45 words. STRICT JSON only: "
+            '{"title":str,"subtitle":str,"body":str,"cta":str}'
+        )
+        prompt = f"Slide: {json.dumps(current)}\nInstruction: {body.instruction}"
+        try:
+            resp = await _llm_chat(system, prompt, f"creq-edit-{user['id']}", user=user)
+            parsed = _extract_json(resp)
+            if parsed:
+                for k in ("title", "subtitle", "body", "cta"):
+                    if k in parsed and parsed[k] is not None:
+                        current[k] = parsed[k]
+        except Exception as ex:
+            logging.warning("carousel edit fallback: %s", ex)
+    else:
+        current["title"] = f"{current.get('title', '')} ✱"  # heuristic fallback marker
+    slides[body.slide_index] = current
+    await db.carousels.update_one(
+        {"id": body.project_id}, {"$set": {"slides": slides, "updated_at": now_iso()}}
+    )
+    return {"slide": current, "index": body.slide_index}
+
+
+@api.post("/carousel/brand-from-url")
+async def brand_from_url(body: BrandFromUrlIn, user=Depends(current_user)):
+    text = _fetch_url(body.url)[:4000]
+    if EMERGENT_LLM_KEY and text:
+        system = (
+            "Extract a brand kit from a company's website snippet. Guess primary background hex, "
+            "accent hex, text hex, and a font family (choose from Inter, Manrope, Poppins, IBM Plex Sans, "
+            "Space Grotesk). Return STRICT JSON: {\"bg\":str,\"accent\":str,\"text\":str,\"font\":str,\"logo_text\":str}"
+        )
+        try:
+            resp = await _llm_chat(system, text, f"creq-brand-{user['id']}", user=user)
+            parsed = _extract_json(resp)
+            if parsed:
+                return parsed
+        except Exception as ex:
+            logging.warning("brand-from-url fallback: %s", ex)
+    return {"bg": "#0F1010", "accent": "#E85D3A", "text": "#FFFFFF", "font": "Inter", "logo_text": ""}
+
+
+@api.get("/carousel/platforms")
+async def carousel_platforms():
+    return PLATFORM_DIMS
+
+
+# ----------------------------- Pitch EQ: Research pass + Verify gate --------
+@api.post("/leads/{lead_id}/research")
+async def lead_research(lead_id: str, user=Depends(current_user)):
+    lead = await db.leads.find_one(
+        {"id": lead_id, "workspace_id": user["workspace_id"]}, {"_id": 0}
+    )
+    if not lead:
+        raise HTTPException(404, "not found")
+    domain = ""
+    if lead.get("email") and "@" in lead["email"]:
+        domain = lead["email"].split("@", 1)[1]
+    site_text = _fetch_url(f"https://{domain}") if domain else ""
+    triggers: List[str] = []
+    persona = ""
+    if EMERGENT_LLM_KEY and site_text:
+        system = (
+            "You are Pitch EQ's research agent. Given a lead and a snippet of their company website, "
+            "return STRICT JSON only: "
+            '{"triggers": ["2-4 short outbound-worthy triggers (funding, hiring, tech shift, PR, product)"], '
+            '"persona_hypothesis": "one-sentence guess about what this person cares about right now"}'
+        )
+        prompt = f"Lead: {json.dumps({k: lead.get(k) for k in ('first_name','last_name','title','company')})}\nWebsite: {site_text[:4000]}"
+        try:
+            resp = await _llm_chat(system, prompt, f"research-{user['id']}", user=user)
+            parsed = _extract_json(resp)
+            if parsed:
+                triggers = parsed.get("triggers", [])[:5]
+                persona = parsed.get("persona_hypothesis", "")
+        except Exception as ex:
+            logging.warning("research fallback: %s", ex)
+    research = {
+        "triggers": triggers or [
+            f"Company '{lead.get('company','')}' active domain: {domain}",
+            "Right-fit persona based on title/seniority",
+        ],
+        "persona_hypothesis": persona or f"{lead.get('title','Leader')} likely cares about growth and cost-efficiency.",
+        "researched_at": now_iso(),
+    }
+    await db.leads.update_one({"id": lead_id}, {"$set": {"research": research}})
+    await _audit(user, "lead.research", {"lead_id": lead_id, "domain": domain})
+    return research
+
+
+def _verify_email_syntax(email: str) -> bool:
+    return bool(re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email or ""))
+
+
+async def _quarantine_lead(wid: str, lead: Dict[str, Any], reason: str):
+    await db.quarantine.insert_one({
+        "id": new_id(), "workspace_id": wid, "lead_id": lead.get("id"),
+        "email": lead.get("email"), "reason": reason, "at": now_iso(),
+    })
+
+
+@api.get("/quarantine")
+async def list_quarantine(user=Depends(current_user)):
+    return await db.quarantine.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).sort("at", -1).to_list(500)
 
 
 # ----------------------------- Templates -------------------------------------
