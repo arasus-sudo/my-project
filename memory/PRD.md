@@ -28,13 +28,31 @@ Multi-tenant B2B SaaS per BRD: two AI agents under one roof.
 - **NEW (2026-07):** **html2canvas-based export** — reliable PDF/PNG raster on complex slides with gradients/web fonts
 - **NEW (2026-07):** **Webhooks page** — trigger Create EQ carousels from Airtable, Notion, or generic HTTP POST. Public `/api/hooks/carousel/{token}` endpoint, per-webhook field mapping, event log.
 - **NEW (2026-07):** **HubSpot two-way sync page (MOCKED)** — connect, push leads, pull contacts, sync deals. Awaiting user Client ID + Secret for live OAuth.
+- **NEW (2026-07):** **Manual-mode panorama controls** — RightPanel exposes per-slide horizontal / vertical / zoom sliders + Reset + Apply-to-all when panorama is in manual mode. Canvas also supports direct pointer-drag pan + scroll-wheel zoom.
+- **NEW (2026-07):** **CreateEQEditor split** — main editor shrunk from 1647 → 623 LOC by extracting `/components/creq/{utils, ElementRender, PanoramaLayer, BoardView, LeftPanel, RightPanel, drawers/*}`.
 
 ## Deferred (P1/P2)
 - Real Prospeo + Icypeas API integration (user API keys pending)
 - Real HubSpot OAuth (Client ID + Secret pending)
 - Real email sending via Gmail/M365 OAuth or SMTP
-- Advanced editor: split CreateEQEditor.jsx (~1665 LOC) into hook-per-concern modules
-- Manual-mode panorama pan controls in Right inspector
+
+## Modular architecture (2026-07)
+CreateEQEditor.jsx split from 1647 → 623 LOC:
+```
+/app/frontend/src/pages/CreateEQEditor.jsx           (main shell, state, canvas, toolbar)
+/app/frontend/src/components/creq/
+├── utils.js                                          (newId, renderBackground, stripLocalKeys)
+├── ElementRender.jsx                                 (ICONS + <ElementRender>)
+├── PanoramaLayer.jsx                                 (panoramaSliceStyle + <PanoramaLayer>)
+├── BoardView.jsx                                     (multi-slide board)
+├── LeftPanel.jsx                                     (templates, text presets, elements, image)
+├── RightPanel.jsx                                    (inspector + PanoramaManualControls)
+└── drawers/
+    ├── BrandKitDrawer.jsx
+    ├── AiImageDrawer.jsx
+    ├── PanoramaDrawer.jsx
+    └── PdfExportDialog.jsx
+```
 
 ## Test credentials
 `demo@innoira.ai` / `Demo@1234` (seeded workspace: Innoira Demo, 8 leads, 1 launched campaign, 2 inbox replies, 1 deal, seeded Create EQ carousels).
