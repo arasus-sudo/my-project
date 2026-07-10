@@ -1,8 +1,8 @@
-import { Square as SquareIcon, Circle as CircleIcon, Image as ImageIcon, MessageSquare } from "lucide-react";
+import { Square as SquareIcon, Circle as CircleIcon, Image as ImageIcon, MessageSquare, User as UserIcon } from "lucide-react";
 import { TEMPLATES } from "../../lib/creqTemplates";
 import { ICONS } from "./ElementRender";
 
-export default function LeftPanel({ onTemplate, onAddText, onAddShape, onAddBadge, onAddIcon, onAddImage, onAddImageUrl }) {
+export default function LeftPanel({ onTemplate, onAddText, onAddShape, onAddBadge, onAddIcon, onAddImage, onAddImageUrl, onAddHeadshot, hasHeadshot }) {
   return (
     <div className="p-3 space-y-4">
       <div>
@@ -65,6 +65,13 @@ export default function LeftPanel({ onTemplate, onAddText, onAddShape, onAddBadg
             className="w-full text-left p-2 rounded-md border border-line hover:border-ink flex items-center gap-2 text-xs">
             <MessageSquare size={12} />
             <span className="text-neutral-700">Paste image URL</span>
+          </button>
+          <button onClick={onAddHeadshot} data-testid="add-headshot-btn"
+            className={`w-full text-left p-2 rounded-md border flex items-center gap-2 text-xs ${hasHeadshot ? "border-line hover:border-ink" : "border-line hover:border-ink opacity-70"}`}
+            title={hasHeadshot ? "Add your profile photo" : "Upload a headshot in Settings → Profile first"}>
+            <UserIcon size={12} />
+            <span className="text-neutral-700">Your headshot</span>
+            {!hasHeadshot && <span className="ml-auto text-[9px] font-mono text-neutral-400">setup</span>}
           </button>
         </div>
       </div>

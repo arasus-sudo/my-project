@@ -48,8 +48,19 @@ export function AuthProvider({ children }) {
     window.location.href = "/";
   };
 
+  const refresh = async () => {
+    try {
+      const { data } = await api.get("/auth/me");
+      setUser(data.user);
+      setWorkspace(data.workspace);
+      localStorage.setItem("pitcheq_user", JSON.stringify(data.user));
+      localStorage.setItem("pitcheq_workspace", JSON.stringify(data.workspace));
+      return data;
+    } catch { return null; }
+  };
+
   return (
-    <AuthCtx.Provider value={{ user, workspace, loading, login, signup, logout }}>
+    <AuthCtx.Provider value={{ user, workspace, loading, login, signup, logout, refresh }}>
       {children}
     </AuthCtx.Provider>
   );

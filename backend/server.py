@@ -286,8 +286,55 @@ async def login(body: LoginIn):
 async def me(user=Depends(current_user)):
     ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0})
     return {"user": {"id": user["id"], "email": user["email"], "name": user["name"], "role": user["role"],
-                     "is_admin": _is_admin(user)},
+                     "is_admin": _is_admin(user),
+                     "avatar_url": user.get("avatar_url") or None,
+                     "headline": user.get("headline") or None},
             "workspace": ws}
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@api.post("/auth/change-password")
+async def change_password(body: ChangePasswordIn, user=Depends(current_user)):
+    if len(body.new_password) < 8:
+        raise HTTPException(400, "New password must be at least 8 characters")
+    fresh = await db.users.find_one({"id": user["id"]})
+    if not fresh or not verify_pw(body.current_password, fresh.get("password_hash", "")):
+        raise HTTPException(401, "Current password is incorrect")
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password_hash": hash_pw(body.new_password), "password_changed_at": now_iso()}},
+    )
+    await _audit(user, "auth.password_changed", {})
+    return {"ok": True}
+
+
+class ProfileUpdateIn(BaseModel):
+    name: Optional[str] = None
+    headline: Optional[str] = None
+    avatar_url: Optional[str] = None  # data URL or hosted URL
+
+
+@api.put("/auth/profile")
+async def update_profile(body: ProfileUpdateIn, user=Depends(current_user)):
+    updates: Dict[str, Any] = {}
+    if body.name is not None:
+        updates["name"] = body.name.strip()[:80]
+    if body.headline is not None:
+        updates["headline"] = body.headline.strip()[:120]
+    if body.avatar_url is not None:
+        # Basic size guard: reject data URLs bigger than ~4MB to avoid bloating Mongo.
+        if len(body.avatar_url) > 6_000_000:
+            raise HTTPException(413, "Avatar too large (max ~4 MB)")
+        updates["avatar_url"] = body.avatar_url
+    if updates:
+        await db.users.update_one({"id": user["id"]}, {"$set": updates})
+    await _audit(user, "auth.profile_updated", {"fields": list(updates.keys())})
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
+    return {"user": fresh}
 
 
 # ----------------------------- Leads -----------------------------------------

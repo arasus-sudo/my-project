@@ -11,6 +11,7 @@ import {
 
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
+import { useAuth } from "../lib/auth";
 import { PALETTES, CANVAS, blankSlide, slideFromTemplate } from "../lib/creqTemplates";
 
 import LeftPanel from "../components/creq/LeftPanel";
@@ -57,6 +58,7 @@ function hydrate(project) {
 export default function CreateEQEditor() {
   const { id } = useParams();
   const nav = useNavigate();
+  const { user } = useAuth();
   const [proj, setProj] = useState(null);
   const [activeSlide, setActiveSlide] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
@@ -71,8 +73,10 @@ export default function CreateEQEditor() {
   const [dropHint, setDropHint] = useState(false);
   const canvasRef = useRef(null);
   const dragState = useRef(null);
+  const resizeState = useRef(null);
   const panoDragState = useRef(null);
   const historyRef = useRef({ past: [], future: [] });
+  const clipboardRef = useRef(null); // { el } — copied element for paste
   const imageFileRef = useRef(null);
 
   useEffect(() => {
@@ -258,6 +262,53 @@ export default function CreateEQEditor() {
     window.removeEventListener("pointerup", onPointerUp);
   };
 
+  /* --- Resize handles (8-directional) --- */
+  const onResizeStart = (e, el, pos) => {
+    e.stopPropagation();
+    setSelectedId(el.id);
+    resizeState.current = {
+      id: el.id, pos,
+      startX: e.clientX, startY: e.clientY,
+      ox: el.x, oy: el.y, ow: el.w, oh: el.h,
+      keepAspect: el.type === "image" || el.type === "icon",
+      scale: zoom,
+    };
+    window.addEventListener("pointermove", onResizeMove);
+    window.addEventListener("pointerup", onResizeEnd);
+  };
+  const onResizeMove = (e) => {
+    const rs = resizeState.current;
+    if (!rs) return;
+    const dx = (e.clientX - rs.startX) / rs.scale;
+    const dy = (e.clientY - rs.startY) / rs.scale;
+    let { ox, oy, ow, oh } = rs;
+    let nx = ox, ny = oy, nw = ow, nh = oh;
+    const min = 24;
+    // Handle position → dimension deltas
+    if (rs.pos.includes("e")) nw = Math.max(min, ow + dx);
+    if (rs.pos.includes("s")) nh = Math.max(min, oh + dy);
+    if (rs.pos.includes("w")) { nw = Math.max(min, ow - dx); nx = ox + (ow - nw); }
+    if (rs.pos.includes("n")) { nh = Math.max(min, oh - dy); ny = oy + (oh - nh); }
+    if (rs.keepAspect && rs.pos.length === 2) {
+      const aspect = ow / oh;
+      // choose the dominant axis change
+      if (Math.abs(dx) > Math.abs(dy)) nh = nw / aspect;
+      else nw = nh * aspect;
+      // reapply anchor for w/n handles
+      if (rs.pos.includes("w")) nx = ox + (ow - nw);
+      if (rs.pos.includes("n")) ny = oy + (oh - nh);
+    }
+    patchElement(rs.id, {
+      x: Math.round(nx), y: Math.round(ny),
+      w: Math.round(nw), h: Math.round(nh),
+    });
+  };
+  const onResizeEnd = () => {
+    resizeState.current = null;
+    window.removeEventListener("pointermove", onResizeMove);
+    window.removeEventListener("pointerup", onResizeEnd);
+  };
+
   /* --- Panorama direct-drag overlay (manual mode) --- */
   const panoManual = proj?.panorama?.mode === "manual" && proj?.panorama?.src && !selected;
   const onPanoDragStart = (e) => {
@@ -294,14 +345,55 @@ export default function CreateEQEditor() {
   useEffect(() => {
     const h = (e) => {
       if (e.target?.tagName === "INPUT" || e.target?.tagName === "TEXTAREA" || e.target?.isContentEditable) return;
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "z" || e.key === "Z")) { e.preventDefault(); undo(); return; }
-      if ((e.ctrlKey || e.metaKey) && ((e.shiftKey && (e.key === "z" || e.key === "Z")) || e.key === "y")) { e.preventDefault(); redo(); return; }
+      const meta = e.ctrlKey || e.metaKey;
+      if (meta && !e.shiftKey && (e.key === "z" || e.key === "Z")) { e.preventDefault(); undo(); return; }
+      if (meta && ((e.shiftKey && (e.key === "z" || e.key === "Z")) || e.key === "y")) { e.preventDefault(); redo(); return; }
+      // Copy selected element to internal clipboard.
+      if (meta && (e.key === "c" || e.key === "C") && selectedId) {
+        const el = slide?.elements?.find((x) => x.id === selectedId);
+        if (el) {
+          clipboardRef.current = JSON.parse(JSON.stringify(el));
+          toast.success("Copied");
+        }
+        e.preventDefault();
+        return;
+      }
+      // Paste from internal clipboard.
+      if (meta && (e.key === "v" || e.key === "V") && clipboardRef.current) {
+        e.preventDefault();
+        const src = clipboardRef.current;
+        const copy = { ...src, id: newId(), x: (src.x || 0) + 40, y: (src.y || 0) + 40 };
+        mutate((n) => n.slides[activeSlide].elements.push(copy));
+        setSelectedId(copy.id);
+        toast.success("Pasted");
+        return;
+      }
+      // Duplicate selected in-place.
+      if (meta && (e.key === "d" || e.key === "D") && selectedId) {
+        e.preventDefault();
+        duplicateElement(selectedId);
+        return;
+      }
       if (!selectedId) return;
       if (e.key === "Backspace" || e.key === "Delete") { e.preventDefault(); deleteElement(selectedId); }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [selectedId, undo, redo]);
+  }, [selectedId, undo, redo, slide, activeSlide, mutate]);
+
+  /* --- Insert your own headshot as an element on the current slide. --- */
+  const insertHeadshot = () => {
+    if (!user?.avatar_url) {
+      toast.error("Upload your headshot in Settings → Profile first");
+      return;
+    }
+    addElement({
+      type: "image", role: "headshot", src: user.avatar_url,
+      x: 720, y: CANVAS.h - 340,
+      w: 260, h: 260,
+      fit: "cover", radius: 999,
+    });
+  };
 
   /* --- Save / export --- */
   const save = async () => {
@@ -486,6 +578,8 @@ export default function CreateEQEditor() {
                 const url = prompt("Paste image URL (PNG/JPG/SVG)");
                 if (url && url.trim()) addElement({ type: "image", src: url.trim(), x: 300, y: 400, w: 480, h: 480, fit: "cover", radius: 24 });
               }}
+              onAddHeadshot={insertHeadshot}
+              hasHeadshot={!!user?.avatar_url}
             />
           </aside>
 
@@ -516,7 +610,8 @@ export default function CreateEQEditor() {
                   )}
                   {slide.elements.map((el) => (
                     <ElementRender key={el.id} el={el} palette={palette} selected={selectedId === el.id}
-                      onPointerDown={(e) => onPointerDown(e, el)} />
+                      onPointerDown={(e) => onPointerDown(e, el)}
+                      onResizeStart={onResizeStart} />
                   ))}
                 </div>
               </div>
@@ -567,6 +662,7 @@ export default function CreateEQEditor() {
         <BrandKitDrawer
           onClose={() => setShowBrandKit(false)} kits={brandKits}
           onSaved={(kit) => setBrandKits((k) => [kit, ...k])}
+          onUpdated={(kit) => setBrandKits((k) => k.map((x) => x.id === kit.id ? kit : x))}
           onDeleted={(bid) => setBrandKits((k) => k.filter((x) => x.id !== bid))}
           onApply={(kit) => { applyBrandKit(kit); setShowBrandKit(false); }}
         />
