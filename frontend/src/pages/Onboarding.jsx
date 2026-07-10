@@ -35,14 +35,23 @@ export default function Onboarding() {
     setBusy(true);
     try {
       const { data } = await api.post("/onboarding/generate", { business_summary: summary, services, answers });
-      setCampaigns(data.campaigns || []);
-      const init = {}; (data.campaigns || []).forEach((_, i) => (init[i] = true));
+      const list = (data.campaigns || []).map((c, i) => ({
+        ...c,
+        _k: `c_${i}_${Date.now()}`,
+        steps: (c.steps || []).map((s, si) => ({ ...s, _k: `s_${i}_${si}_${Date.now()}` })),
+      }));
+      setCampaigns(list);
+      const init = {}; list.forEach((_, i) => (init[i] = true));
       setAccept(init); setStep(3);
     } catch { toast.error("Generation failed"); }
     finally { setBusy(false); }
   };
   const finish = async () => {
-    const chosen = campaigns.filter((_, i) => accept[i]);
+    const strip = ({ _k, steps, ...rest }) => ({
+      ...rest,
+      steps: (steps || []).map(({ _k: _, ...s }) => s),
+    });
+    const chosen = campaigns.filter((_, i) => accept[i]).map(strip);
     setBusy(true);
     try {
       if (chosen.length) await api.post("/onboarding/accept", { campaigns: chosen });
@@ -52,7 +61,8 @@ export default function Onboarding() {
     finally { setBusy(false); }
   };
   const skip = async () => {
-    try { await api.post("/onboarding/accept", { campaigns: [] }); } catch {}
+    try { await api.post("/onboarding/accept", { campaigns: [] }); }
+    catch (err) { console.warn("skip accept failed", err); }
     nav("/app");
   };
 
@@ -113,7 +123,7 @@ export default function Onboarding() {
                 <div className="ui-label mb-2">Detected services / offerings</div>
                 <div className="flex flex-wrap gap-2">
                   {services.map((s, i) => (
-                    <span key={i} className="pill bg-ink text-white border-ink" data-testid={`onboarding-service-${i}`}>{s}
+                    <span key={s} className="pill bg-ink text-white border-ink" data-testid={`onboarding-service-${i}`}>{s}
                       <button onClick={() => setServices(services.filter((_, x) => x !== i))} className="ml-1 opacity-70 hover:opacity-100"><X size={11} /></button>
                     </span>
                   ))}
@@ -154,7 +164,7 @@ export default function Onboarding() {
             </div>
             <div className="space-y-4">
               {campaigns.map((c, ci) => (
-                <div key={ci} className={`bg-white border rounded-2xl p-6 ${accept[ci] ? "border-ink" : "border-line"}`}>
+                <div key={c._k || ci} className={`bg-white border rounded-2xl p-6 ${accept[ci] ? "border-ink" : "border-line"}`}>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       {c.service && <div className="ui-label mb-1">Service: {c.service}</div>}
@@ -173,7 +183,7 @@ export default function Onboarding() {
                     {c.steps?.map((s, si) => {
                       const isEdit = editing && editing.ci === ci && editing.si === si;
                       return (
-                        <div key={si} className="border-l-2 border-line pl-4">
+                        <div key={s._k || si} className="border-l-2 border-line pl-4">
                           <div className="ui-label flex items-center gap-2">
                             <span>Step {si + 1} · day {s.day}</span>
                             <button onClick={() => setEditing(isEdit ? null : { ci, si })}
