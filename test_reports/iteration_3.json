@@ -1,0 +1,36 @@
+{
+  "summary": "Retested PDF export fix on wizard-generated carousel (id 02662d36-45ad-4cf3-b2aa-d3502f327708). html2canvas-based renderSlideToDataUrl path works reliably across all scenarios. No 'PDF export failed' toast observed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_flows": [
+    {"flow": "PDF export - all 5 slides (default)", "result": "PASS - Downloaded 'Why-cold-outreach-fails-in-2026-and-the-5-slides.pdf' (731064 bytes). Toast: 'Exported 5-page PDF'."},
+    {"flow": "PDF export - deselect 2 slides", "result": "PASS - Dialog shows '3 of 5 selected'. Downloaded '...-3-slides.pdf' (437558 bytes). Toast: 'Exported 3-page PDF'."},
+    {"flow": "PDF export - Select all after clearing", "result": "PASS - All 5 slides re-selected, 5-page PDF downloaded (731064 bytes)."},
+    {"flow": "PNG export (export-png-btn)", "result": "PASS - Downloaded '...-1.png' (133775 bytes) of active slide. SVG-foreignObject path still functions in this browser."},
+    {"flow": "Panorama drawer open (panorama-open)", "result": "PASS - Opens without console errors."},
+    {"flow": "Brand kit drawer", "result": "PASS - Opens without console errors."},
+    {"flow": "AI Image drawer", "result": "PASS - Opens without console errors."},
+    {"flow": "Board toggle", "result": "PASS - Toggles view."},
+    {"flow": "Hidden file input (editor-image-upload)", "result": "PASS - Element present in DOM."}
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "CreateEQEditor.jsx is 1665 lines - candidate for splitting (toolbar, drawers, PDF picker dialog, canvas renderer could be separate modules).",
+    "Dead code: elementToStaticHtml, panoramaSliceHtml, escapeAttr, safeUrl (~line 958+) are still present but unused after switch to html2canvas. Consider removing to reduce bundle size and confusion.",
+    "exportSlidePng (line 292) still uses the old SVG-foreignObject approach that was deemed unreliable for PDF - it happens to work here but may fail on complex slides with gradients/web-fonts (same failure mode PDF originally had). Recommend migrating PNG export to reuse renderSlideToDataUrl for consistency.",
+    "renderSlideToDataUrl uses fixed 150ms wait for React commit - could use flushSync or MutationObserver for robustness on slower machines.",
+    "Non-blocking: html2canvas 1.4.1 is an older library; consider migrating to modern-screenshot or html-to-image v1.11+ for better perf/CSS coverage, but current setup works."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (not tested per request)", "frontend": "100%"},
+  "test_credentials": "demo@innoira.ai / Demo@1234",
+  "seed_data_creation": "Reused existing wizard-generated project 02662d36-45ad-4cf3-b2aa-d3502f327708.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "PDF export via html2canvas is fully working. Existing wizard project '02662d36-45ad-4cf3-b2aa-d3502f327708' has 5 slides on Midnight palette and is reliable for PDF/PNG export testing. Slide checkbox testids follow pattern 'pdf-pick-{i}' (not 'pdf-pick-slide-{i}'). Dialog testid is 'pdf-picker-dialog'."
+}

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { createRoot } from "react-dom/client";
 import { useParams, useNavigate } from "react-router-dom";
+import html2canvas from "html2canvas";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
@@ -320,26 +322,60 @@ export default function CreateEQEditor() {
   };
 
   const renderSlideToDataUrl = (slideIdx) => new Promise((resolve, reject) => {
-    // Build the SVG foreignObject payload directly from escaped element HTML — no live
-    // DOM mount required, which also removes an XSS surface via innerHTML.
-    const panoHtml = panoramaSliceHtml(proj.panorama, slideIdx, proj.slides.length);
-    const elsHtml = proj.slides[slideIdx].elements.map((el) => elementToStaticHtml(el, palette)).join("");
-    const bg = renderBackground(proj.slides[slideIdx].bg, palette);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CANVAS.w}" height="${CANVAS.h}">
-      <foreignObject width="100%" height="100%">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="width:${CANVAS.w}px;height:${CANVAS.h}px;background:${bg};position:relative;overflow:hidden">${panoHtml}${elsHtml}</div>
-      </foreignObject></svg>`;
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = CANVAS.w; canvas.height = CANVAS.h;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0);
-      resolve(canvas.toDataURL("image/png"));
+    // Live-render the target slide into an off-screen React root, then rasterise
+    // with html2canvas. Using React (instead of hand-serialised HTML→SVG foreignObject)
+    // means what you see on the canvas is exactly what gets exported — no drift, no
+    // browser-specific SVG-foreignObject quirks with gradients or web fonts.
+    const host = document.createElement("div");
+    host.setAttribute("data-export-slide", String(slideIdx));
+    host.style.cssText = [
+      "position:fixed", "left:-99999px", "top:0",
+      `width:${CANVAS.w}px`, `height:${CANVAS.h}px`,
+      `background:${renderBackground(proj.slides[slideIdx].bg, palette)}`,
+      "overflow:hidden", "pointer-events:none",
+    ].join(";");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const cleanup = () => {
+      try { root.unmount(); } catch { /* ignore */ }
+      try { host.remove(); } catch { /* ignore */ }
     };
-    img.onerror = reject;
-    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    (async () => {
+      try {
+        root.render(
+          <>
+            <PanoramaLayer panorama={proj.panorama} slideIdx={slideIdx} totalSlides={proj.slides.length} />
+            {proj.slides[slideIdx].elements.map((el) => (
+              <ElementRender key={el.id} el={el} palette={palette} selected={false}
+                onPointerDown={() => {}} onEdit={() => {}} />
+            ))}
+          </>
+        );
+        // Let React commit + wait for images to decode.
+        await new Promise((r) => setTimeout(r, 150));
+        const imgs = host.querySelectorAll("img");
+        await Promise.all(Array.from(imgs).map((img) => new Promise((res) => {
+          if (img.complete && img.naturalWidth) return res();
+          img.onload = () => res();
+          img.onerror = () => res(); // don't block on a broken image
+          setTimeout(res, 3000);
+        })));
+
+        const canvas = await html2canvas(host, {
+          width: CANVAS.w, height: CANVAS.h,
+          windowWidth: CANVAS.w, windowHeight: CANVAS.h,
+          scale: 2, useCORS: true, allowTaint: true,
+          backgroundColor: null, logging: false,
+        });
+        const dataUrl = canvas.toDataURL("image/png", 0.92);
+        cleanup();
+        resolve(dataUrl);
+      } catch (err) {
+        cleanup();
+        console.error("[creq] slide", slideIdx, "render failed:", err);
+        reject(err instanceof Error ? err : new Error(String(err?.message || err || "render_failed")));
+      }
+    })();
   });
 
   const exportPdfSlides = async (indices) => {
@@ -1577,8 +1613,8 @@ function PdfExportDialog({ proj, palette, onClose, busy, onExport }) {
         </div>
 
         <div className="px-6 py-3 flex items-center gap-2 border-b border-line bg-neutral-50">
-          <button onClick={selectAll} data-testid="pdf-pick-all" className="btn-ghost text-xs">Select all ({total})</button>
-          <button onClick={selectNone} data-testid="pdf-pick-none" className="btn-ghost text-xs">Clear</button>
+          <button onClick={selectAll} data-testid="pdf-pick-all" data-testid-alt="pdf-select-all" className="btn-ghost text-xs">Select all ({total})</button>
+          <button onClick={selectNone} data-testid="pdf-pick-none" data-testid-alt="pdf-clear" className="btn-ghost text-xs">Clear</button>
           <div className="ml-auto text-xs font-mono text-neutral-500">
             {picked.length} of {total} selected
           </div>
