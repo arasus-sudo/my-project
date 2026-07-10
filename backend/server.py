@@ -1444,6 +1444,11 @@ async def carousel_list(user=Depends(current_user)):
     ).sort("updated_at", -1).to_list(500)
 
 
+@api.get("/carousel/platforms")
+async def carousel_platforms():
+    return PLATFORM_DIMS
+
+
 @api.get("/carousel/{pid}")
 async def carousel_get(pid: str, user=Depends(current_user)):
     doc = await db.carousels.find_one({"id": pid, "workspace_id": user["workspace_id"]}, {"_id": 0})
@@ -1589,11 +1594,6 @@ async def carousel_ai_image(body: AiImageIn, user=Depends(current_user)):
     except Exception as ex:
         logging.warning("nano-banana gen error: %s", ex)
         raise HTTPException(502, f"nano-banana failed: {ex}")
-
-
-@api.get("/carousel/platforms")
-async def carousel_platforms():
-    return PLATFORM_DIMS
 
 
 # ----------------------------- Pitch EQ: Research pass + Verify gate --------

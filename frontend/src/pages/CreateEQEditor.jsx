@@ -538,7 +538,7 @@ function RightPanel({ proj, palette, slide, selected, onPalette, onBg, onEditEle
               <button key={p.id} onClick={() => onPalette(p.id)} data-testid={`palette-${p.id}`}
                 className={`text-left p-2 rounded-lg border ${p.id === palette.id ? "border-ink" : "border-line"}`}>
                 <div className="flex gap-1">
-                  {[p.bg, p.bg2, p.accent, p.text].map((c) => <span key={c} className="w-4 h-4 rounded" style={{ background: c }} />)}
+                  {[p.bg, p.bg2, p.accent, p.text].map((c, i) => <span key={`${c}-${i}`} className="w-4 h-4 rounded" style={{ background: c }} />)}
                 </div>
                 <div className="text-[11px] mt-1">{p.name}</div>
               </button>
