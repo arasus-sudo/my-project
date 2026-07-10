@@ -271,16 +271,22 @@ async def login(body: LoginIn):
     user = await db.users.find_one({"email": body.email.lower()}, {"_id": 0})
     if not user or not verify_pw(body.password, user["password_hash"]):
         raise HTTPException(401, "Invalid credentials")
+    if user.get("blocked"):
+        raise HTTPException(403, "Account has been suspended. Contact your admin.")
+    ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0})
+    if ws and ws.get("blocked"):
+        raise HTTPException(403, "Workspace has been suspended. Contact your admin.")
     token = make_token(user["id"], user["workspace_id"])
     ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0})
-    return {"token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"]},
+    return {"token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"], "is_admin": _is_admin(user)},
             "workspace": {"id": ws["id"], "name": ws["name"]}}
 
 
 @api.get("/auth/me")
 async def me(user=Depends(current_user)):
     ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0})
-    return {"user": {"id": user["id"], "email": user["email"], "name": user["name"], "role": user["role"]},
+    return {"user": {"id": user["id"], "email": user["email"], "name": user["name"], "role": user["role"],
+                     "is_admin": _is_admin(user)},
             "workspace": ws}
 
 
@@ -823,6 +829,7 @@ class OnbAnalyzeIn(BaseModel):
 
 class OnbGenerateIn(BaseModel):
     business_summary: str
+    services: List[str] = []
     answers: Dict[str, str] = {}
 
 
@@ -831,6 +838,11 @@ class OnbAcceptIn(BaseModel):
 
 
 def _crawl_text(url: str) -> str:
+    """Homepage-only crawl (kept for backwards compat)."""
+    return _fetch_url(url)
+
+
+def _fetch_url(url: str) -> str:
     if not url.startswith("http"):
         url = "https://" + url
     try:
@@ -839,6 +851,48 @@ def _crawl_text(url: str) -> str:
             raw = r.read(200_000).decode("utf-8", errors="ignore")
     except Exception:
         return ""
+    raw = re.sub(r"<(script|style)[\s\S]*?</\1>", " ", raw, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", raw)
+    return re.sub(r"\s+", " ", text)[:8000].strip()
+
+
+def _crawl_site(root: str, max_pages: int = 4) -> Dict[str, str]:
+    """Fetch homepage plus up to N candidate sub-pages relevant to services/pricing/about."""
+    if not root.startswith("http"):
+        root = "https://" + root
+    from urllib.parse import urljoin, urlparse
+    parsed = urlparse(root)
+    base = f"{parsed.scheme}://{parsed.netloc}"
+
+    home_html = ""
+    try:
+        req = urllib.request.Request(root, headers={"User-Agent": "Mozilla/5.0 PitchEQ"})
+        with urllib.request.urlopen(req, timeout=6) as r:
+            home_html = r.read(200_000).decode("utf-8", errors="ignore")
+    except Exception:
+        return {}
+
+    pages = {root: _html_to_text(home_html)}
+    hrefs = re.findall(r'href=["\']([^"\']+)["\']', home_html, flags=re.I)
+    keywords = ("service", "product", "solution", "pricing", "feature", "platform", "about", "what-we-do")
+    seen = {root}
+    for h in hrefs:
+        if len(pages) >= max_pages:
+            break
+        low = h.lower()
+        if not any(k in low for k in keywords):
+            continue
+        full = urljoin(base + "/", h.split("#")[0])
+        if urlparse(full).netloc != parsed.netloc or full in seen:
+            continue
+        seen.add(full)
+        txt = _fetch_url(full)
+        if txt:
+            pages[full] = txt
+    return pages
+
+
+def _html_to_text(raw: str) -> str:
     raw = re.sub(r"<(script|style)[\s\S]*?</\1>", " ", raw, flags=re.I)
     text = re.sub(r"<[^>]+>", " ", raw)
     return re.sub(r"\s+", " ", text)[:8000].strip()
@@ -854,61 +908,71 @@ DEFAULT_QUESTIONS = [
 
 @api.post("/onboarding/analyze")
 async def onb_analyze(body: OnbAnalyzeIn, user=Depends(current_user)):
-    text = _crawl_text(body.url)
-    if not text:
-        return {"summary": "", "questions": DEFAULT_QUESTIONS, "raw": ""}
+    pages = _crawl_site(body.url, max_pages=4)
+    combined = "\n\n".join(f"URL: {u}\n{t[:3500]}" for u, t in pages.items())[:14000]
+    if not combined:
+        return {"summary": "", "services": [], "questions": DEFAULT_QUESTIONS, "raw": "", "crawled": []}
     if EMERGENT_LLM_KEY:
         system = (
-            "You are a B2B outbound strategist. From website text, respond STRICT JSON only: "
-            '{"summary": "2-3 sentences on what they do, likely ICP, value prop, tone", '
-            '"questions": ["4 short clarifying questions to sharpen their cold-email strategy"]}'
+            "You are a B2B outbound strategist analysing a company website. "
+            "Read the crawled pages and return STRICT JSON only: "
+            '{"summary": "2-3 sentences: what the company does + ideal customer + value prop + tone", '
+            '"services": ["up to 3 distinct products/services or use-cases they sell — short names"], '
+            '"questions": ["3 short clarifying questions to sharpen outbound"]}'
         )
         try:
-            resp = await _llm_chat(system, f"Website text:\n{text[:5000]}", f"onb-a-{user['id']}")
+            resp = await _llm_chat(system, combined, f"onb-a-{user['id']}")
             parsed = _extract_json(resp)
             if parsed and parsed.get("summary"):
-                return {**parsed, "raw": text[:1500]}
+                parsed.setdefault("services", [])
+                parsed.setdefault("questions", DEFAULT_QUESTIONS)
+                return {**parsed, "raw": combined[:1500], "crawled": list(pages.keys())}
         except Exception as ex:
             logging.warning("onb_analyze fallback: %s", ex)
-    return {"summary": text[:400], "questions": DEFAULT_QUESTIONS, "raw": text[:1500]}
+    return {
+        "summary": combined[:400], "services": [], "questions": DEFAULT_QUESTIONS,
+        "raw": combined[:1500], "crawled": list(pages.keys()),
+    }
 
 
 @api.post("/onboarding/generate")
 async def onb_generate(body: OnbGenerateIn, user=Depends(current_user)):
+    services = [s for s in (body.services or []) if s][:3] or ["Core offering"]
     if EMERGENT_LLM_KEY:
         system = (
-            "You are Pitch EQ's campaign designer. Produce 2 draft cold-email campaigns based on the business. "
-            "Each has 3 steps (day 0, 3, 7). Warm, specific, under 120 words per body. "
-            "Use merge fields {{first_name}}, {{company}}, {{title}}. STRICT JSON only: "
-            '{"campaigns":[{"name":str,"goal":str,"steps":[{"day":int,"subject":str,"body":str}]}]}'
+            f"You are Pitch EQ's campaign designer. Return EXACTLY {len(services)} campaigns "
+            f"— one per service in the input list, in the same order. Each campaign has 3 steps (day 0, 3, 7). "
+            "Warm, specific, under 120 words per body. Use merge fields {{first_name}}, {{company}}, {{title}}. "
+            "STRICT JSON only: {\"campaigns\":[{\"service\":str,\"name\":str,\"goal\":str,\"steps\":[{\"day\":int,\"subject\":str,\"body\":str}]}]} "
+            "The 'service' field of each campaign must exactly match the input service name."
         )
-        user_text = f"Business: {body.business_summary}\nAnswers: {json.dumps(body.answers)}"
+        user_text = (
+            f"Business summary: {body.business_summary}\n"
+            f"Services (one campaign per service, keep order): {json.dumps(services)}\n"
+            f"User answers: {json.dumps(body.answers)}"
+        )
         try:
             resp = await _llm_chat(system, user_text, f"onb-g-{user['id']}")
             parsed = _extract_json(resp)
             if parsed and parsed.get("campaigns"):
+                # backfill service field if LLM dropped it
+                for i, c in enumerate(parsed["campaigns"]):
+                    if not c.get("service") and i < len(services):
+                        c["service"] = services[i]
                 return parsed
         except Exception as ex:
             logging.warning("onb_generate fallback: %s", ex)
-    focus = (list(body.answers.values())[0] if body.answers else "outbound reply rates")
     biz = body.business_summary or "improve outbound reply rates"
+    focus = (list(body.answers.values())[0] if body.answers else "outbound reply rates")
     return {"campaigns": [
-        {"name": "Direct value pitch", "goal": "Book meetings", "steps": [
-            {"day": 0, "subject": "Quick idea for {{company}}",
-             "body": f"Hi {{{{first_name}}}},\n\nSaw {{{{company}}}} and wanted to reach out. We help teams like yours with {biz}.\n\nWorth 15 minutes next week?"},
-            {"day": 3, "subject": "Re: Quick idea for {{company}}",
-             "body": "Hi {{first_name}}, circling back — happy to send a one-pager if easier than a call."},
+        {"service": svc, "name": f"{svc} outreach", "goal": "Book meetings", "steps": [
+            {"day": 0, "subject": f"Quick idea for {{{{company}}}} on {svc}",
+             "body": f"Hi {{{{first_name}}}},\n\nSaw {{{{company}}}} and wanted to reach out about {svc}. We help teams like yours with {biz}. Worth 15 minutes next week?"},
+            {"day": 3, "subject": "Re: quick idea",
+             "body": f"Hi {{{{first_name}}}}, circling back on {svc}. Happy to send a one-pager if easier than a call."},
             {"day": 7, "subject": "Last note, {{first_name}}",
-             "body": "No response, so I'll close the loop. If this becomes relevant, my inbox is open."},
-        ]},
-        {"name": "Curiosity-led", "goal": "Trigger reply", "steps": [
-            {"day": 0, "subject": "{{first_name}}, one question about {{company}}",
-             "body": f"Curious how {{{{company}}}} handles {focus} today?"},
-            {"day": 3, "subject": "Re: one question",
-             "body": "Bumping this in case it slipped."},
-            {"day": 7, "subject": "Closing the loop",
-             "body": "Marking this as closed — feel free to reopen if the topic becomes relevant."},
-        ]},
+             "body": f"Closing the loop on {svc}. Feel free to reopen if {focus} becomes a priority."},
+        ]} for svc in services
     ]}
 
 
@@ -928,8 +992,115 @@ async def onb_accept(body: OnbAcceptIn, user=Depends(current_user)):
     return {"ok": True, "campaign_ids": saved}
 
 
+# ----------------------------- Admin (Suite Admin) ---------------------------
+ADMIN_EMAILS = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "demo@innoira.ai").split(",") if e.strip()}
+
+
+def _is_admin(user: Dict[str, Any]) -> bool:
+    return (user.get("email") or "").lower() in ADMIN_EMAILS or user.get("role") == "suite_admin"
+
+
+async def require_admin(user=Depends(current_user)):
+    if not _is_admin(user):
+        raise HTTPException(403, "Admin only")
+    return user
+
+
+@api.get("/admin/summary")
+async def admin_summary(_: Any = Depends(require_admin)):
+    return {
+        "workspaces": await db.workspaces.count_documents({}),
+        "users": await db.users.count_documents({}),
+        "campaigns": await db.campaigns.count_documents({}),
+        "active_campaigns": await db.campaigns.count_documents({"status": "active"}),
+        "leads": await db.leads.count_documents({}),
+        "mailboxes": await db.mailboxes.count_documents({}),
+        "sent_events": await db.events.count_documents({"type": "sent"}),
+        "replied_events": await db.events.count_documents({"type": "replied"}),
+        "blocked_users": await db.users.count_documents({"blocked": True}),
+        "blocked_workspaces": await db.workspaces.count_documents({"blocked": True}),
+    }
+
+
+@api.get("/admin/workspaces")
+async def admin_workspaces(_: Any = Depends(require_admin)):
+    out = []
+    async for ws in db.workspaces.find({}, {"_id": 0}):
+        wid = ws["id"]
+        ws["stats"] = {
+            "users": await db.users.count_documents({"workspace_id": wid}),
+            "campaigns": await db.campaigns.count_documents({"workspace_id": wid}),
+            "leads": await db.leads.count_documents({"workspace_id": wid}),
+            "sent": await db.events.count_documents({"workspace_id": wid, "type": "sent"}),
+            "replied": await db.events.count_documents({"workspace_id": wid, "type": "replied"}),
+        }
+        out.append(ws)
+    return out
+
+
+@api.get("/admin/users")
+async def admin_users(_: Any = Depends(require_admin)):
+    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(5000)
+    ws_map = {w["id"]: w["name"] async for w in db.workspaces.find({}, {"_id": 0, "id": 1, "name": 1})}
+    for u in users:
+        u["workspace_name"] = ws_map.get(u.get("workspace_id"))
+        u["is_admin"] = (u.get("email") or "").lower() in ADMIN_EMAILS
+    return users
+
+
+@api.post("/admin/users/{uid}/toggle")
+async def admin_toggle_user(uid: str, _: Any = Depends(require_admin)):
+    u = await db.users.find_one({"id": uid}, {"_id": 0})
+    if not u:
+        raise HTTPException(404, "not found")
+    blocked = not u.get("blocked", False)
+    await db.users.update_one({"id": uid}, {"$set": {"blocked": blocked}})
+    return {"ok": True, "blocked": blocked}
+
+
+@api.delete("/admin/users/{uid}")
+async def admin_delete_user(uid: str, admin=Depends(require_admin)):
+    if uid == admin["id"]:
+        raise HTTPException(400, "Cannot delete yourself")
+    await db.users.delete_one({"id": uid})
+    return {"ok": True}
+
+
+@api.post("/admin/workspaces/{wid}/toggle")
+async def admin_toggle_workspace(wid: str, _: Any = Depends(require_admin)):
+    ws = await db.workspaces.find_one({"id": wid}, {"_id": 0})
+    if not ws:
+        raise HTTPException(404, "not found")
+    blocked = not ws.get("blocked", False)
+    await db.workspaces.update_one({"id": wid}, {"$set": {"blocked": blocked}})
+    return {"ok": True, "blocked": blocked}
+
+
+@api.get("/admin/whoami")
+async def admin_whoami(user=Depends(current_user)):
+    return {"is_admin": _is_admin(user)}
+
+
 # ----------------------------- Mount -----------------------------------------
 app.include_router(api)
+
+
+@app.on_event("startup")
+async def _create_indexes():
+    """Ensure indexes for multi-tenant queries and lookups. Idempotent."""
+    try:
+        await db.users.create_index("email", unique=True)
+        await db.users.create_index("id", unique=True)
+        await db.workspaces.create_index("id", unique=True)
+        for col in ("leads", "campaigns", "mailboxes", "conversations", "deals", "events", "suppressions"):
+            await db[col].create_index([("workspace_id", 1), ("id", 1)])
+        await db.leads.create_index([("workspace_id", 1), ("email", 1)], unique=False)
+        await db.events.create_index([("workspace_id", 1), ("type", 1)])
+        await db.events.create_index([("workspace_id", 1), ("at", -1)])
+        await db.suppressions.create_index([("workspace_id", 1), ("email", 1)], unique=True)
+        logger.info("indexes ensured")
+    except Exception as ex:
+        logger.warning("index setup: %s", ex)
 
 app.add_middleware(
     CORSMiddleware,

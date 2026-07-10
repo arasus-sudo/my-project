@@ -26,26 +26,73 @@ export default function Leads() {
 
   const importCsv = async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
-    const text = await file.text();
-    const [head, ...rows] = text.trim().split(/\r?\n/);
-    const cols = head.split(",").map((c) => c.trim().toLowerCase());
-    const items = rows.map((r) => {
-      const vals = r.split(",");
-      const obj = {};
-      cols.forEach((c, i) => (obj[c] = (vals[i] || "").trim()));
-      return {
-        first_name: obj.first_name || obj.firstname || obj.name || "",
-        last_name: obj.last_name || obj.lastname || "",
-        email: obj.email || "",
-        company: obj.company || obj.org || "",
-        title: obj.title || obj.role || "",
-      };
-    }).filter((x) => x.email && x.first_name);
+    e.target.value = ""; // allow re-selecting same file
+    let text = await file.text();
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); // strip BOM
+
+    // RFC 4180-ish CSV parse (quotes with commas + doubled quotes)
+    const parseLine = (line) => {
+      const out = []; let cur = ""; let q = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (q) {
+          if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+          else if (ch === '"') { q = false; }
+          else cur += ch;
+        } else {
+          if (ch === '"') q = true;
+          else if (ch === ",") { out.push(cur); cur = ""; }
+          else cur += ch;
+        }
+      }
+      out.push(cur);
+      return out.map((v) => v.trim());
+    };
+
+    const lines = text.trim().split(/\r?\n/).filter(Boolean);
+    if (lines.length < 2) { toast.error("CSV needs a header row and at least one data row"); return; }
+
+    const norm = (k) => k.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+    const cols = parseLine(lines[0]).map(norm);
+    const HEADER_MAP = {
+      first_name: ["first_name", "firstname", "first", "given_name", "fname"],
+      last_name: ["last_name", "lastname", "last", "family_name", "surname", "lname"],
+      email: ["email", "email_address", "e_mail", "mail"],
+      company: ["company", "company_name", "organization", "org", "account"],
+      title: ["title", "job_title", "role", "position"],
+    };
+    const idx = {};
+    for (const [k, aliases] of Object.entries(HEADER_MAP)) {
+      idx[k] = cols.findIndex((c) => aliases.includes(c));
+    }
+    if (idx.email === -1) { toast.error("CSV must include an 'email' column"); return; }
+
+    const items = [];
+    for (let li = 1; li < lines.length; li++) {
+      const vals = parseLine(lines[li]);
+      const get = (k) => (idx[k] !== -1 ? (vals[idx[k]] || "") : "").trim();
+      const email = get("email").toLowerCase();
+      let first = get("first_name");
+      // fallback: split "Full Name" style
+      if (!first) {
+        const full = (vals.find((v) => v && v.includes(" ")) || "").trim();
+        if (full) { const [f, ...rest] = full.split(/\s+/); first = f; if (!get("last_name")) vals.push(rest.join(" ")); }
+      }
+      if (!email || !first) continue;
+      items.push({
+        first_name: first,
+        last_name: get("last_name"),
+        email,
+        company: get("company"),
+        title: get("title"),
+      });
+    }
+    if (!items.length) { toast.error("No valid rows found. Need first_name + email at minimum."); return; }
     try {
       const { data } = await api.post("/leads/bulk", { leads: items });
-      toast.success(`Imported ${data.added} · skipped ${data.skipped}`);
+      toast.success(`Imported ${data.added} · skipped ${data.skipped} duplicate(s)`);
       load();
-    } catch { toast.error("Import failed"); }
+    } catch (err) { toast.error(err?.response?.data?.detail || "Import failed"); }
   };
 
   const remove = async (id) => {

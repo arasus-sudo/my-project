@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import {
-  LayoutDashboard, Send, Users, Inbox as InboxIcon, Kanban, Mail, Settings as SettingsIcon, LogOut, Sparkles,
+  LayoutDashboard, Send, Users, Inbox as InboxIcon, Kanban, Mail, Settings as SettingsIcon, LogOut, Sparkles, Shield,
 } from "lucide-react";
 
 const NAV = [
@@ -59,7 +59,13 @@ export default function AppLayout() {
               <div className="text-xs font-medium truncate">{user?.name}</div>
               <div className="text-[10px] text-neutral-500 truncate">{user?.email}</div>
             </div>
-            <button data-testid="logout-btn" onClick={logout} className="p-1.5 text-neutral-500 hover:text-ink hover:bg-surfacehover rounded-sm">
+            {user?.is_admin && (
+              <button onClick={() => nav("/admin")} data-testid="admin-link" title="Suite Admin"
+                className="p-1.5 text-neutral-500 hover:text-ink hover:bg-surfacehover rounded-full">
+                <Shield size={14} />
+              </button>
+            )}
+            <button data-testid="logout-btn" onClick={logout} className="p-1.5 text-neutral-500 hover:text-ink hover:bg-surfacehover rounded-full">
               <LogOut size={14} />
             </button>
           </div>
