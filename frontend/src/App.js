@@ -22,6 +22,8 @@ import Onboarding from "./pages/Onboarding";
 import Team from "./pages/Team";
 import Templates from "./pages/Templates";
 import Settings from "./pages/Settings";
+import Webhooks from "./pages/Webhooks";
+import HubSpotSettings from "./pages/HubSpotSettings";
 
 function Private({ children }) {
   const { user, loading } = useAuth();
@@ -55,6 +57,8 @@ function App() {
               <Route path="audit-log" element={<AuditLog />} />
               <Route path="create-eq" element={<CreateEQProjects />} />
               <Route path="create-eq/:id" element={<CreateEQEditor />} />
+              <Route path="webhooks" element={<Webhooks />} />
+              <Route path="hubspot" element={<HubSpotSettings />} />
               <Route path="inbox" element={<Inbox />} />
               <Route path="crm" element={<CRM />} />
               <Route path="settings" element={<Settings />} />

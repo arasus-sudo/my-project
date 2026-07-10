@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 2 tested Webhooks (Airtable/Notion/Generic) + HubSpot mock integration + Gamma-style 4-step wizard + Create EQ editor (Panorama drawer, Board/Focus view toggle, real image upload, PDF picker export). 19/19 backend pytest cases PASS covering webhooks CRUD, public /api/hooks/carousel/{token} firing with Airtable payload, HubSpot connect/sync/pull/deals/disconnect, and Pitch EQ regression. Frontend: all new testids present (hubspot-*, webhook-*, wizard-*, panorama-open/drawer/close, view-mode-toggle, board-view, board-slide-N, export-pdf-btn, pdf-picker-dialog, editor-image-upload, upload-image-btn, url-image-btn). Full wizard flow (topic → audience → platform+palette+count → review → generate) navigates to editor with a valid new carousel. HubSpot connect → push-leads → pull-contacts → disconnect works end-to-end with correct toasts. Webhook create → toggle-details → copy-URL → delete works. Panorama drawer opens, board view shows 5 slide thumbs matching wizard's chosen slide-count, thumb click returns to focus. ONE HIGH-priority frontend bug: PDF export fails on wizard-generated carousels with a 'PDF export failed' toast — img.onerror fires while rasterising the SVG foreignObject; picker dialog opens & closes cleanly, only the actual jsPDF render fails.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/webhooks", "issue": "Iteration 1 flagged /api/carousel/platforms route-ordering — verified NOW WORKING (200), can be removed from iteration_1 action items."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PdfExportDialog (CreateEQEditor.jsx:345 exportPdfSlides / :322 renderSlideToDataUrl)", "issue": "PDF export throws (img.onerror fires) when rasterising the SVG-with-foreignObject on wizard-generated projects. Toast 'PDF export failed' appears. Dialog itself opens/closes correctly. Root cause candidates: (a) renderBackground() returns a CSS gradient/linear-gradient that Blob-loaded SVG-foreignObject-to-<img> conversion doesn't paint reliably across browsers, (b) an element style referencing a font/asset the SVG image loader can't fetch, or (c) escapeAttr/safeUrl chain producing an invalid src attribute when panorama is undefined. Please add a try/catch around img.onerror that logs the actual failing SVG string and either fall back to html2canvas + jsPDF for slides that fail the SVG path, or sanitise renderBackground into a solid color when a gradient is present.", "selector": "[data-testid='pdf-export-btn']", "priority": "HIGH"},
+      {"component": "PdfExportDialog testid naming", "issue": "Spec/PRD says data-testid='pdf-select-all' and 'pdf-clear' + checkboxes; code actually uses 'pdf-pick-all', 'pdf-pick-none' and slide buttons 'pdf-pick-{i}' (no <input type=checkbox>). Not a functional bug — but any downstream automation written against the spec names will miss them.", "selector": "pdf-pick-all/pdf-pick-none", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_webhooks_hubspot.py",
+    "/app/backend/tests/test_ai_image.py",
+    "/app/test_reports/pytest/iteration_2.xml"
+  ],
+  "action_items": [
+    "HIGH: Debug PDF export failure on wizard-generated carousels — img.onerror during SVG→canvas raster in renderSlideToDataUrl (CreateEQEditor.jsx line ~332). Log the SVG string that fails; consider swapping to html2canvas for slides that use gradient backgrounds; ensure safeUrl handles undefined panorama src cleanly.",
+    "LOW: Rename pdf-pick-all/pdf-pick-none testids to pdf-select-all/pdf-clear to match PRD (or update PRD)."
+  ],
+  "critical_code_review_comments": [
+    "CreateEQEditor.jsx is now 1629 lines — well over the 700-line guideline. Split BoardView, PanoramaDrawer, PanoramaLayer, PdfExportDialog, BrandKitDrawer, AiImageDrawer into separate files under src/pages/creq/.",
+    "server.py webhook_carousel (line 1677) is public with only the URL token as auth — that is intentional per problem statement, but the endpoint should rate-limit by hook.id (currently unbounded, could DoS via LLM cost).",
+    "HubSpot mock endpoints (hubspot_pull ~line 1825, hubspot_sync ~line 1788) hard-code mocked=True on every response — clean pattern, but ensure the same shape is preserved once real OAuth is wired.",
+    "PDF renderSlideToDataUrl rejects with the raw ErrorEvent (img.onerror = reject), so the catch in exportPdfSlides logs 'Event' with no context. Improve error surface: reject(new Error('SVG raster failed for slide '+idx))."
+  ],
+  "updated_files": ["/app/backend/tests/test_webhooks_hubspot.py"],
+  "success_rate": {"backend": "100% (19/19 — 6 webhook, 6 hubspot, 7 regression)", "frontend": "~92% (all core flows verified; PDF actual raster failing but dialog + selection UI working)"},
+  "test_credentials": "demo@innoira.ai / Demo@1234",
+  "seed_data_creation": "Test-created (and cleaned up): 1 webhook, 5 mock HubSpot contacts pulled into demo workspace via /api/hubspot/pull. HubSpot integration doc replaced/upserted per workspace. One new carousel (id 02662d36-45ad-4cf3-b2aa-d3502f327708) created via wizard was left in the workspace.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend fully green. Focus retest on PDF export — reproduce by (1) login demo, (2) /app/create-eq → Create with AI → wizard through with any starter → Generate, (3) in editor click PDF button, (4) click Export N slides. Expected: PDF downloads. Actual: toast 'PDF export failed' + console error 'Event'. All other new features (wizard, panorama drawer, board view, HubSpot mock, webhooks) working. Testid naming drift between PRD and code for the PDF picker (pdf-pick-all vs pdf-select-all) is documented above.",
+  "rca of the issue": "PDF export failing — the SVG-with-foreignObject → HTMLImageElement conversion path in renderSlideToDataUrl (CreateEQEditor.jsx line ~322-343) triggers img.onerror. Modern browsers refuse to raster SVG foreignObject content that contains any tainted resource (external image, cross-origin font), gradients with certain color-stop syntax, or unparseable inline style. The reject handler passes the raw ErrorEvent up (labelled 'Event' in the caught console.error), so the exact CSS/HTML that broke the render is invisible. Reproduction is deterministic on wizard-generated carousels (no user-added images, only text elements + palette background). Mitigation: (a) instrument reject with a serialised copy of the SVG, (b) fall back to html2canvas for slides where the SVG path fails, (c) verify renderBackground(palette) output is a simple `#rgba` or `linear-gradient` with valid syntax."
+}

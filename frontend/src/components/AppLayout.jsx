@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useAuth } from "../lib/auth";
 import {
   LayoutDashboard, Send, Users, Inbox as InboxIcon, Kanban, Mail, Settings as SettingsIcon, LogOut, Sparkles, Shield,
-  FileText, BarChart3, UsersRound, ShieldCheck, Image as ImageIcon, ChevronDown, Layers,
+  FileText, BarChart3, UsersRound, ShieldCheck, Image as ImageIcon, ChevronDown, Layers, Webhook, Link2,
 } from "lucide-react";
 
 const PITCH_NAV = [
@@ -15,6 +15,7 @@ const PITCH_NAV = [
   { to: "/app/leads", label: "Leads", icon: Users, tid: "nav-leads" },
   { to: "/app/mailboxes", label: "Mailboxes", icon: Mail, tid: "nav-mailboxes" },
   { to: "/app/analytics", label: "Analytics", icon: BarChart3, tid: "nav-analytics" },
+  { to: "/app/hubspot", label: "HubSpot", icon: Link2, tid: "nav-hubspot" },
   { to: "/app/team", label: "Team", icon: UsersRound, tid: "nav-team" },
   { to: "/app/audit-log", label: "Audit log", icon: ShieldCheck, tid: "nav-audit" },
   { to: "/app/settings", label: "Settings", icon: SettingsIcon, tid: "nav-settings" },
@@ -22,6 +23,7 @@ const PITCH_NAV = [
 
 const CREATE_NAV = [
   { to: "/app/create-eq", label: "Projects", icon: Layers, end: true, tid: "creq-nav-projects" },
+  { to: "/app/webhooks", label: "Webhooks", icon: Webhook, tid: "creq-nav-webhooks" },
 ];
 
 const AGENTS = [

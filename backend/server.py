@@ -1459,7 +1459,7 @@ async def carousel_get(pid: str, user=Depends(current_user)):
 
 @api.put("/carousel/{pid}")
 async def carousel_update(pid: str, body: Dict[str, Any], user=Depends(current_user)):
-    allowed = {k: v for k, v in body.items() if k in {"slides", "brand", "platform", "topic", "palette_id"}}
+    allowed = {k: v for k, v in body.items() if k in {"slides", "brand", "platform", "topic", "palette_id", "panorama"}}
     allowed["updated_at"] = now_iso()
     await db.carousels.update_one(
         {"id": pid, "workspace_id": user["workspace_id"]}, {"$set": allowed}
@@ -1594,6 +1594,295 @@ async def carousel_ai_image(body: AiImageIn, user=Depends(current_user)):
     except Exception as ex:
         logging.warning("nano-banana gen error: %s", ex)
         raise HTTPException(502, f"nano-banana failed: {ex}")
+
+
+# ----------------------------- Webhooks: Airtable / Notion → Carousel -------
+import secrets
+
+
+class WebhookIn(BaseModel):
+    name: str
+    source: str = "generic"  # airtable | notion | generic
+    field_map: Dict[str, str] = {}  # e.g. {"topic": "fields.Topic", "platform": "fields.Platform"}
+    default_platform: str = "linkedin"
+    default_slide_count: int = 6
+
+
+@api.get("/webhooks")
+async def list_webhooks(user=Depends(current_user)):
+    hooks = await db.webhooks.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(200)
+    return hooks
+
+
+@api.post("/webhooks")
+async def create_webhook(body: WebhookIn, user=Depends(current_user)):
+    doc = body.model_dump()
+    doc.update({
+        "id": new_id(),
+        "workspace_id": user["workspace_id"],
+        "owner_id": user["id"],
+        "token": secrets.token_urlsafe(24),
+        "active": True,
+        "created_at": now_iso(),
+        "call_count": 0,
+        "last_called_at": None,
+    })
+    await db.webhooks.insert_one(doc)
+    doc.pop("_id", None)
+    await _audit(user, "webhook.create", {"id": doc["id"], "name": doc["name"], "source": doc["source"]})
+    return doc
+
+
+@api.delete("/webhooks/{wid}")
+async def delete_webhook(wid: str, user=Depends(current_user)):
+    await db.webhooks.delete_one({"id": wid, "workspace_id": user["workspace_id"]})
+    await db.webhook_events.delete_many({"webhook_id": wid, "workspace_id": user["workspace_id"]})
+    await _audit(user, "webhook.delete", {"id": wid})
+    return {"ok": True}
+
+
+@api.get("/webhooks/{wid}/events")
+async def webhook_events(wid: str, user=Depends(current_user)):
+    hook = await db.webhooks.find_one({"id": wid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not hook:
+        raise HTTPException(404, "not found")
+    return await db.webhook_events.find(
+        {"webhook_id": wid}, {"_id": 0}
+    ).sort("at", -1).to_list(50)
+
+
+def _extract_field(payload: Any, path: str) -> Any:
+    """Walk a nested payload using a dot-path — supports Airtable ('fields.Topic')
+    and Notion ('properties.title.title.0.plain_text') style keys."""
+    if not path:
+        return None
+    cur = payload
+    for part in path.split("."):
+        if isinstance(cur, list):
+            try:
+                cur = cur[int(part)]
+            except (ValueError, IndexError):
+                return None
+        elif isinstance(cur, dict):
+            cur = cur.get(part)
+        else:
+            return None
+        if cur is None:
+            return None
+    return cur
+
+
+@api.post("/hooks/carousel/{token}")
+async def webhook_carousel(token: str, payload: Dict[str, Any]):
+    """PUBLIC (no JWT). Airtable / Notion / any webhook fires here → carousel generated."""
+    hook = await db.webhooks.find_one({"token": token}, {"_id": 0})
+    if not hook or not hook.get("active", True):
+        raise HTTPException(404, "webhook not found")
+
+    fm = hook.get("field_map") or {}
+    topic = _extract_field(payload, fm.get("topic", "")) or payload.get("topic") or payload.get("Topic") or ""
+    platform = _extract_field(payload, fm.get("platform", "")) or hook.get("default_platform") or "linkedin"
+    if platform not in PLATFORM_DIMS:
+        platform = "linkedin"
+    slide_count_raw = _extract_field(payload, fm.get("slide_count", "")) or hook.get("default_slide_count") or 6
+    try:
+        slide_count = int(slide_count_raw)
+    except (TypeError, ValueError):
+        slide_count = 6
+    slide_count = max(2, min(12, slide_count))
+
+    event_id = new_id()
+    if not topic or not isinstance(topic, str) or not topic.strip():
+        await db.webhook_events.insert_one({
+            "id": event_id, "webhook_id": hook["id"], "workspace_id": hook["workspace_id"],
+            "at": now_iso(), "status": "error", "reason": "missing_topic",
+            "payload_preview": json.dumps(payload, default=str)[:400],
+        })
+        raise HTTPException(400, "topic missing after field-mapping — check your webhook config")
+    topic = topic.strip()
+
+    slides: List[Dict[str, Any]] = []
+    if EMERGENT_LLM_KEY:
+        system = (
+            f"You are Create EQ. Produce EXACTLY {slide_count} slides for a "
+            f"{platform} carousel from a topic. Narrative arc: Hook → Body → CTA. "
+            "Titles <=8 words, bodies <=45 words, plain text, no emojis. "
+            "STRICT JSON: "
+            '{"slides":[{"kind":"hook|body|cta","title":str,"subtitle":str,"body":str,"cta":str}]}'
+        )
+        try:
+            resp = await _llm_chat(system, f"Topic: {topic}", f"wh-{hook['id']}-{event_id[:6]}")
+            parsed = _extract_json(resp)
+            if parsed and parsed.get("slides"):
+                slides = parsed["slides"][:slide_count]
+        except Exception as ex:
+            logging.warning("webhook LLM error: %s", ex)
+    if not slides:
+        slides = _default_slides(topic, slide_count)
+
+    proj_id = new_id()
+    await db.carousels.insert_one({
+        "id": proj_id, "workspace_id": hook["workspace_id"], "owner_id": hook.get("owner_id"),
+        "topic": topic, "platform": platform, "brand": {},
+        "slides": slides, "created_at": now_iso(), "updated_at": now_iso(),
+        "source": f"webhook:{hook.get('source', 'generic')}", "source_webhook_id": hook["id"],
+    })
+
+    await db.webhooks.update_one(
+        {"id": hook["id"]},
+        {"$inc": {"call_count": 1}, "$set": {"last_called_at": now_iso()}},
+    )
+    await db.webhook_events.insert_one({
+        "id": event_id, "webhook_id": hook["id"], "workspace_id": hook["workspace_id"],
+        "at": now_iso(), "status": "ok", "project_id": proj_id, "topic": topic[:200],
+        "payload_preview": json.dumps(payload, default=str)[:400],
+    })
+    return {"ok": True, "project_id": proj_id, "topic": topic, "slides": len(slides)}
+
+
+# ----------------------------- HubSpot (MOCKED until keys provided) ----------
+class HubspotConnectIn(BaseModel):
+    portal_id: Optional[str] = None
+
+
+@api.get("/hubspot/status")
+async def hubspot_status(user=Depends(current_user)):
+    doc = await db.hubspot_integrations.find_one(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    )
+    if not doc:
+        return {"connected": False, "mocked": True}
+    doc["mocked"] = True
+    return doc
+
+
+@api.post("/hubspot/connect")
+async def hubspot_connect(body: HubspotConnectIn, user=Depends(current_user)):
+    doc = {
+        "id": new_id(),
+        "workspace_id": user["workspace_id"],
+        "connected": True,
+        "portal_id": body.portal_id or f"mock-{new_id()[:6]}",
+        "connected_at": now_iso(),
+        "last_sync_at": None,
+        "pushed_count": 0,
+        "pulled_count": 0,
+    }
+    await db.hubspot_integrations.replace_one(
+        {"workspace_id": user["workspace_id"]}, doc, upsert=True
+    )
+    await _audit(user, "hubspot.connect", {"portal_id": doc["portal_id"], "mocked": True})
+    doc["mocked"] = True
+    return doc
+
+
+@api.post("/hubspot/disconnect")
+async def hubspot_disconnect(user=Depends(current_user)):
+    await db.hubspot_integrations.delete_one({"workspace_id": user["workspace_id"]})
+    await _audit(user, "hubspot.disconnect", {})
+    return {"ok": True}
+
+
+@api.post("/hubspot/sync")
+async def hubspot_sync(user=Depends(current_user)):
+    conn = await db.hubspot_integrations.find_one(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    )
+    if not conn or not conn.get("connected"):
+        raise HTTPException(400, "HubSpot not connected")
+    leads = await db.leads.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).to_list(1000)
+    pushed = 0
+    for lead in leads:
+        await db.leads.update_one(
+            {"id": lead["id"]},
+            {"$set": {
+                "hubspot_id": lead.get("hubspot_id") or f"hs-{lead['id'][:8]}",
+                "hubspot_synced_at": now_iso(),
+            }},
+        )
+        pushed += 1
+    await db.hubspot_integrations.update_one(
+        {"workspace_id": user["workspace_id"]},
+        {"$set": {"last_sync_at": now_iso()}, "$inc": {"pushed_count": pushed}},
+    )
+    await _audit(user, "hubspot.sync", {"pushed": pushed, "mocked": True})
+    return {"pushed": pushed, "pulled": 0, "mocked": True}
+
+
+_HUBSPOT_MOCK_PULL = [
+    {"first_name": "Owen", "last_name": "Bright", "company": "Acme Corp", "title": "VP RevOps"},
+    {"first_name": "Nina", "last_name": "Kaur", "company": "Laser Analytics", "title": "Head of Marketing"},
+    {"first_name": "Theo", "last_name": "Marchetti", "company": "Bright Labs", "title": "CTO"},
+    {"first_name": "Aisha", "last_name": "Nkomo", "company": "Northwind", "title": "Director of Sales"},
+    {"first_name": "Leo", "last_name": "Girard", "company": "Volt Studios", "title": "Founder"},
+]
+
+
+@api.post("/hubspot/pull")
+async def hubspot_pull(user=Depends(current_user)):
+    conn = await db.hubspot_integrations.find_one(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    )
+    if not conn or not conn.get("connected"):
+        raise HTTPException(400, "HubSpot not connected")
+    pulled = 0
+    for c in _HUBSPOT_MOCK_PULL:
+        email = f"{c['first_name'].lower()}.{c['last_name'].lower()}.{new_id()[:6]}@{c['company'].split()[0].lower()}.co"
+        if await db.leads.find_one({"workspace_id": user["workspace_id"], "email": email}):
+            continue
+        await db.leads.insert_one({
+            **c,
+            "id": new_id(),
+            "workspace_id": user["workspace_id"],
+            "email": email,
+            "status": "new",
+            "icp_score": 65,
+            "verified": True,
+            "source": "hubspot",
+            "hubspot_id": f"hs-import-{new_id()[:8]}",
+            "hubspot_synced_at": now_iso(),
+            "created_at": now_iso(),
+        })
+        pulled += 1
+    await db.hubspot_integrations.update_one(
+        {"workspace_id": user["workspace_id"]},
+        {"$set": {"last_sync_at": now_iso()}, "$inc": {"pulled_count": pulled}},
+    )
+    await _audit(user, "hubspot.pull", {"pulled": pulled, "mocked": True})
+    return {"pushed": 0, "pulled": pulled, "mocked": True}
+
+
+@api.post("/hubspot/deals/sync")
+async def hubspot_deals_sync(user=Depends(current_user)):
+    conn = await db.hubspot_integrations.find_one(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    )
+    if not conn or not conn.get("connected"):
+        raise HTTPException(400, "HubSpot not connected")
+    deals = await db.deals.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).to_list(1000)
+    synced = 0
+    for d in deals:
+        await db.deals.update_one(
+            {"id": d["id"]},
+            {"$set": {
+                "hubspot_deal_id": d.get("hubspot_deal_id") or f"hsd-{d['id'][:8]}",
+                "hubspot_synced_at": now_iso(),
+            }},
+        )
+        synced += 1
+    await db.hubspot_integrations.update_one(
+        {"workspace_id": user["workspace_id"]},
+        {"$set": {"last_sync_at": now_iso()}},
+    )
+    await _audit(user, "hubspot.deals_sync", {"synced": synced, "mocked": True})
+    return {"synced": synced, "mocked": True}
+
 
 
 # ----------------------------- Pitch EQ: Research pass + Verify gate --------

@@ -8,7 +8,7 @@ import {
   Save, Download, Palette as PaletteIcon, ChevronLeft, Loader2, Plus, Trash2, Copy,
   Type, Square as SquareIcon, Circle as CircleIcon, Zap, Award, Star, Rocket, Sparkles,
   Layers, Bold, Italic, AlignLeft, AlignCenter, AlignRight, MessageSquare,
-  Image as ImageIcon, Undo2, Redo2, Wand2, FileText,
+  Image as ImageIcon, Undo2, Redo2, Wand2, FileText, LayoutGrid, Maximize2, Mountain,
 } from "lucide-react";
 import {
   PALETTES, FONTS, TEMPLATES, CANVAS, resolveColor, blankSlide, slideFromTemplate,
@@ -60,9 +60,14 @@ export default function CreateEQEditor() {
   const [brandKits, setBrandKits] = useState([]);
   const [showBrandKit, setShowBrandKit] = useState(false);
   const [showAiImage, setShowAiImage] = useState(false);
+  const [showPanorama, setShowPanorama] = useState(false);
+  const [showPdfPicker, setShowPdfPicker] = useState(false);
+  const [viewMode, setViewMode] = useState("focus"); // "focus" | "board"
   const canvasRef = useRef(null);
   const dragState = useRef(null);
   const historyRef = useRef({ past: [], future: [] });
+  const imageFileRef = useRef(null);
+  const [dropHint, setDropHint] = useState(false);
 
   useEffect(() => {
     api.get(`/carousel/${id}`).then((r) => setProj(hydrate(r.data)));
@@ -122,6 +127,77 @@ export default function CreateEQEditor() {
     mutate((n) => n.slides[activeSlide].elements.push(withId));
     setSelectedId(withId.id);
   };
+
+  const insertImageFile = (file, position) => new Promise((resolve, reject) => {
+    if (!file || !file.type?.startsWith("image/")) {
+      toast.error("Please pick an image file");
+      reject(new Error("not_image"));
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error("Image too large (max ~15 MB)");
+      reject(new Error("too_large"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      const x = position?.x ?? 300;
+      const y = position?.y ?? 400;
+      // Try to preserve aspect ratio with a max width of 720px on the slide.
+      const probe = new window.Image();
+      probe.onload = () => {
+        const maxW = 720;
+        const scale = probe.width > maxW ? maxW / probe.width : 1;
+        const w = Math.round(probe.width * scale);
+        const h = Math.round(probe.height * scale);
+        addElement({ type: "image", src: dataUrl, x, y, w, h, fit: "cover", radius: 24 });
+        toast.success("Image added");
+        resolve();
+      };
+      probe.onerror = () => {
+        addElement({ type: "image", src: dataUrl, x, y, w: 480, h: 480, fit: "cover", radius: 24 });
+        resolve();
+      };
+      probe.src = dataUrl;
+    };
+    reader.onerror = () => { toast.error("Failed to read file"); reject(new Error("read_failed")); };
+    reader.readAsDataURL(file);
+  });
+
+  const onImageFilesSelected = async (files) => {
+    if (!files || !files.length) return;
+    for (const f of Array.from(files)) {
+      try { await insertImageFile(f); } catch { /* skip */ }
+    }
+  };
+
+  const onCanvasDragOver = (e) => {
+    if (e.dataTransfer?.types?.includes("Files")) {
+      e.preventDefault();
+      setDropHint(true);
+    }
+  };
+  const onCanvasDragLeave = () => setDropHint(false);
+  const onCanvasDrop = async (e) => {
+    e.preventDefault();
+    setDropHint(false);
+    const files = Array.from(e.dataTransfer?.files || []).filter((f) => f.type.startsWith("image/"));
+    if (!files.length) return;
+    // Translate drop coordinates into slide space using zoom + canvas offset.
+    const rect = canvasRef.current?.getBoundingClientRect();
+    let px = 200, py = 200;
+    if (rect) {
+      px = Math.round((e.clientX - rect.left) / zoom) - 200;
+      py = Math.round((e.clientY - rect.top) / zoom) - 200;
+      px = Math.max(0, Math.min(CANVAS.w - 400, px));
+      py = Math.max(0, Math.min(CANVAS.h - 400, py));
+    }
+    for (const f of files) {
+      try { await insertImageFile(f, { x: px, y: py }); px += 40; py += 40; } catch { /* skip */ }
+    }
+  };
+
   const deleteElement = (elId) => {
     mutate((n) => { n.slides[activeSlide].elements = n.slides[activeSlide].elements.filter((e) => e.id !== elId); });
     setSelectedId(null);
@@ -205,7 +281,7 @@ export default function CreateEQEditor() {
     setBusy(true);
     try {
       const clean = stripLocalKeys(proj);
-      await api.put(`/carousel/${id}`, { slides: clean.slides, brand: proj.brand, platform: proj.platform, topic: proj.topic, palette_id: proj.palette_id });
+      await api.put(`/carousel/${id}`, { slides: clean.slides, brand: proj.brand, platform: proj.platform, topic: proj.topic, palette_id: proj.palette_id, panorama: proj.panorama || null });
       toast.success("Saved");
     } catch { toast.error("Save failed"); }
     finally { setBusy(false); }
@@ -246,11 +322,12 @@ export default function CreateEQEditor() {
   const renderSlideToDataUrl = (slideIdx) => new Promise((resolve, reject) => {
     // Build the SVG foreignObject payload directly from escaped element HTML — no live
     // DOM mount required, which also removes an XSS surface via innerHTML.
+    const panoHtml = panoramaSliceHtml(proj.panorama, slideIdx, proj.slides.length);
     const elsHtml = proj.slides[slideIdx].elements.map((el) => elementToStaticHtml(el, palette)).join("");
     const bg = renderBackground(proj.slides[slideIdx].bg, palette);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CANVAS.w}" height="${CANVAS.h}">
       <foreignObject width="100%" height="100%">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="width:${CANVAS.w}px;height:${CANVAS.h}px;background:${bg}">${elsHtml}</div>
+        <div xmlns="http://www.w3.org/1999/xhtml" style="width:${CANVAS.w}px;height:${CANVAS.h}px;background:${bg};position:relative;overflow:hidden">${panoHtml}${elsHtml}</div>
       </foreignObject></svg>`;
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -265,8 +342,12 @@ export default function CreateEQEditor() {
     img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
   });
 
-  const exportPdf = async () => {
+  const exportPdfSlides = async (indices) => {
     if (!proj?.slides?.length) return;
+    const chosen = (indices && indices.length ? indices : proj.slides.map((_, i) => i))
+      .filter((i) => i >= 0 && i < proj.slides.length)
+      .sort((a, b) => a - b);
+    if (!chosen.length) { toast.error("Pick at least one slide"); return; }
     setBusy(true);
     try {
       const pdf = new jsPDF({
@@ -275,13 +356,14 @@ export default function CreateEQEditor() {
         format: [CANVAS.w, CANVAS.h],
         compress: true,
       });
-      for (let i = 0; i < proj.slides.length; i++) {
-        const dataUrl = await renderSlideToDataUrl(i);
-        if (i > 0) pdf.addPage([CANVAS.w, CANVAS.h], CANVAS.h > CANVAS.w ? "portrait" : "landscape");
+      for (let k = 0; k < chosen.length; k++) {
+        const idx = chosen[k];
+        const dataUrl = await renderSlideToDataUrl(idx);
+        if (k > 0) pdf.addPage([CANVAS.w, CANVAS.h], CANVAS.h > CANVAS.w ? "portrait" : "landscape");
         pdf.addImage(dataUrl, "PNG", 0, 0, CANVAS.w, CANVAS.h);
       }
-      pdf.save(`${(proj.topic || "carousel").slice(0, 40).replace(/\W+/g, "-")}.pdf`);
-      toast.success(`Exported ${proj.slides.length}-page PDF`);
+      pdf.save(`${(proj.topic || "carousel").slice(0, 40).replace(/\W+/g, "-")}-${chosen.length}-slides.pdf`);
+      toast.success(`Exported ${chosen.length}-page PDF`);
     } catch (err) {
       console.error(err);
       toast.error("PDF export failed");
@@ -343,81 +425,105 @@ export default function CreateEQEditor() {
             <button onClick={() => nav("/app/create-eq")} className="btn-ghost"><ChevronLeft size={14} /> Projects</button>
             <button onClick={undo} title="Undo (Ctrl+Z)" data-testid="undo-btn" className="btn-ghost"><Undo2 size={14} /></button>
             <button onClick={redo} title="Redo (Ctrl+Shift+Z)" data-testid="redo-btn" className="btn-ghost"><Redo2 size={14} /></button>
+            <button onClick={() => setViewMode(viewMode === "focus" ? "board" : "focus")} data-testid="view-mode-toggle" title={viewMode === "focus" ? "Board view (all slides)" : "Focus view (single slide)"} className="btn-ghost">
+              {viewMode === "focus" ? <><LayoutGrid size={14} /> Board</> : <><Maximize2 size={14} /> Focus</>}
+            </button>
+            <button onClick={() => setShowPanorama(true)} data-testid="panorama-open" className="btn-secondary"><Mountain size={14} /> Panorama</button>
             <button onClick={() => setShowAiImage(true)} data-testid="ai-image-open" className="btn-secondary"><Wand2 size={14} /> AI Image</button>
             <button onClick={() => setShowBrandKit(true)} data-testid="brand-kit-open" className="btn-secondary"><Sparkles size={14} /> Brand kit</button>
             <button onClick={exportSlidePng} data-testid="export-png-btn" className="btn-secondary"><Download size={14} /> PNG</button>
-            <button onClick={exportPdf} disabled={busy} data-testid="export-pdf-btn" className="btn-secondary"><FileText size={14} /> PDF</button>
+            <button onClick={() => setShowPdfPicker(true)} disabled={busy} data-testid="export-pdf-btn" className="btn-secondary"><FileText size={14} /> PDF</button>
             <button onClick={save} disabled={busy} data-testid="save-carousel-btn" className="btn-primary">
               {busy ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : <><Save size={14} /> Save</>}
             </button>
           </div>
         }
       />
-      <div className="grid grid-cols-12 min-h-[calc(100vh-90px)] bg-neutral-100">
-        {/* LEFT: templates & elements */}
-        <aside className="col-span-2 border-r border-line bg-white overflow-y-auto">
-          <LeftPanel palette={palette}
-            onTemplate={(tpl) => addSlide(tpl)}
-            onAddText={(preset) => addElement(preset)}
-            onAddShape={(shape) => addElement({ type: "shape", shape, x: 400, y: 500, w: 280, h: 280, fill: "accent", opacity: 1, radius: shape === "circle" ? 999 : 24 })}
-            onAddBadge={() => addElement({ type: "badge", x: 80, y: 96, text: "NEW", bg: "accent", color: "bg", radius: 999, size: 20 })}
-            onAddIcon={(name) => addElement({ type: "icon", x: 400, y: 500, w: 128, name, color: "accent", stroke: 2 })}
-            onAddImage={() => {
-              const url = prompt("Paste image URL (PNG/JPG/SVG)");
-              if (url && url.trim()) addElement({ type: "image", src: url.trim(), x: 300, y: 400, w: 480, h: 480, fit: "cover", radius: 24 });
-            }} />
-        </aside>
+      {viewMode === "focus" ? (
+        <div className="grid grid-cols-12 min-h-[calc(100vh-90px)] bg-neutral-100">
+          {/* LEFT: templates & elements */}
+          <aside className="col-span-2 border-r border-line bg-white overflow-y-auto">
+            <LeftPanel palette={palette}
+              onTemplate={(tpl) => addSlide(tpl)}
+              onAddText={(preset) => addElement(preset)}
+              onAddShape={(shape) => addElement({ type: "shape", shape, x: 400, y: 500, w: 280, h: 280, fill: "accent", opacity: 1, radius: shape === "circle" ? 999 : 24 })}
+              onAddBadge={() => addElement({ type: "badge", x: 80, y: 96, text: "NEW", bg: "accent", color: "bg", radius: 999, size: 20 })}
+              onAddIcon={(name) => addElement({ type: "icon", x: 400, y: 500, w: 128, name, color: "accent", stroke: 2 })}
+              onAddImage={() => imageFileRef.current?.click()}
+              onAddImageUrl={() => {
+                const url = prompt("Paste image URL (PNG/JPG/SVG)");
+                if (url && url.trim()) addElement({ type: "image", src: url.trim(), x: 300, y: 400, w: 480, h: 480, fit: "cover", radius: 24 });
+              }} />
+          </aside>
 
-        {/* CENTER: canvas */}
-        <section className="col-span-7 relative overflow-auto">
-          <div className="p-6 flex items-start justify-center">
-            <div className="relative" style={{ width: CANVAS.w * zoom, height: CANVAS.h * zoom }}>
-              <div
-                ref={canvasRef}
-                onClick={() => setSelectedId(null)}
-                className="absolute inset-0 origin-top-left overflow-hidden shadow-[0_20px_80px_-30px_rgba(0,0,0,0.35)] rounded-md"
-                style={{ width: CANVAS.w, height: CANVAS.h, transform: `scale(${zoom})`, transformOrigin: "top left", background: renderBackground(slide.bg, palette) }}
-              >
-                {slide.elements.map((el) => (
-                  <ElementRender key={el.id} el={el} palette={palette} selected={selectedId === el.id}
-                    onPointerDown={(e) => onPointerDown(e, el)}
-                    onEdit={(patch) => patchElement(el.id, patch)} />
-                ))}
+          {/* CENTER: canvas */}
+          <section className="col-span-7 relative overflow-auto"
+            onDragOver={onCanvasDragOver}
+            onDragLeave={onCanvasDragLeave}
+            onDrop={onCanvasDrop}>
+            {dropHint && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+                <div className="bg-ink text-white px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest">
+                  Drop image to add
+                </div>
+              </div>
+            )}
+            <div className="p-6 flex items-start justify-center">
+              <div className="relative" style={{ width: CANVAS.w * zoom, height: CANVAS.h * zoom }}>
+                <div
+                  ref={canvasRef}
+                  onClick={() => setSelectedId(null)}
+                  className={`absolute inset-0 origin-top-left overflow-hidden shadow-[0_20px_80px_-30px_rgba(0,0,0,0.35)] rounded-md ${dropHint ? "ring-2 ring-ink" : ""}`}
+                  style={{ width: CANVAS.w, height: CANVAS.h, transform: `scale(${zoom})`, transformOrigin: "top left", background: renderBackground(slide.bg, palette) }}
+                >
+                  <PanoramaLayer panorama={proj.panorama} slideIdx={activeSlide} totalSlides={proj.slides.length} />
+                  {slide.elements.map((el) => (
+                    <ElementRender key={el.id} el={el} palette={palette} selected={selectedId === el.id}
+                      onPointerDown={(e) => onPointerDown(e, el)}
+                      onEdit={(patch) => patchElement(el.id, patch)} />
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-          <div className="sticky bottom-0 left-0 right-0 bg-white/90 backdrop-blur border-t border-line px-4 py-2 flex items-center gap-2 text-xs">
-            <span className="ui-label">Zoom</span>
-            <input type="range" min={0.15} max={0.7} step={0.02} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} data-testid="zoom-slider" className="w-32" />
-            <span className="font-mono text-neutral-500">{Math.round(zoom * 100)}%</span>
-            <div className="ml-4 flex items-center gap-1 flex-wrap">
-              {proj.slides.map((s, i) => (
-                <button key={s._k} onClick={() => { setActiveSlide(i); setSelectedId(null); }} data-testid={`slide-thumb-${i}`}
-                  className={`px-2.5 py-1 rounded-full text-xs font-mono ${i === activeSlide ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
-                  {i + 1}
-                </button>
-              ))}
-              <button onClick={() => addSlide()} data-testid="add-slide" className="btn-ghost text-xs py-1"><Plus size={12} /> Slide</button>
-              <button onClick={duplicateSlide} data-testid="dup-slide" className="btn-ghost text-xs py-1"><Copy size={12} /></button>
-              <button onClick={deleteSlide} data-testid="del-slide" className="btn-ghost text-xs py-1 text-red-600"><Trash2 size={12} /></button>
+            <div className="sticky bottom-0 left-0 right-0 bg-white/90 backdrop-blur border-t border-line px-4 py-2 flex items-center gap-2 text-xs">
+              <span className="ui-label">Zoom</span>
+              <input type="range" min={0.15} max={0.7} step={0.02} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} data-testid="zoom-slider" className="w-32" />
+              <span className="font-mono text-neutral-500">{Math.round(zoom * 100)}%</span>
+              <div className="ml-4 flex items-center gap-1 flex-wrap">
+                {proj.slides.map((s, i) => (
+                  <button key={s._k} onClick={() => { setActiveSlide(i); setSelectedId(null); }} data-testid={`slide-thumb-${i}`}
+                    className={`px-2.5 py-1 rounded-full text-xs font-mono ${i === activeSlide ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
+                    {i + 1}
+                  </button>
+                ))}
+                <button onClick={() => addSlide()} data-testid="add-slide" className="btn-ghost text-xs py-1"><Plus size={12} /> Slide</button>
+                <button onClick={duplicateSlide} data-testid="dup-slide" className="btn-ghost text-xs py-1"><Copy size={12} /></button>
+                <button onClick={deleteSlide} data-testid="del-slide" className="btn-ghost text-xs py-1 text-red-600"><Trash2 size={12} /></button>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* RIGHT: inspector */}
-        <aside className="col-span-3 border-l border-line bg-white overflow-y-auto">
-          <RightPanel proj={proj} palette={palette} slide={slide} selected={selected}
-            onPalette={(pid) => setProj({ ...proj, palette_id: pid })}
-            onBg={(bg) => patchSlide({ bg })}
-            onEditElement={(patch) => selected && patchElement(selected.id, patch)}
-            onDelete={() => selected && deleteElement(selected.id)}
-            onDuplicate={() => selected && duplicateElement(selected.id)}
-            onFront={() => selected && bringToFront(selected.id)}
-            onBack={() => selected && sendToBack(selected.id)}
-            onAiAssist={aiAssistText}
-          />
-        </aside>
-      </div>
+          {/* RIGHT: inspector */}
+          <aside className="col-span-3 border-l border-line bg-white overflow-y-auto">
+            <RightPanel proj={proj} palette={palette} slide={slide} selected={selected}
+              onPalette={(pid) => setProj({ ...proj, palette_id: pid })}
+              onBg={(bg) => patchSlide({ bg })}
+              onEditElement={(patch) => selected && patchElement(selected.id, patch)}
+              onDelete={() => selected && deleteElement(selected.id)}
+              onDuplicate={() => selected && duplicateElement(selected.id)}
+              onFront={() => selected && bringToFront(selected.id)}
+              onBack={() => selected && sendToBack(selected.id)}
+              onAiAssist={aiAssistText}
+            />
+          </aside>
+        </div>
+      ) : (
+        <BoardView
+          proj={proj}
+          palette={palette}
+          onFocus={(i) => { setActiveSlide(i); setSelectedId(null); setViewMode("focus"); }}
+        />
+      )}
 
       {showBrandKit && (
         <BrandKitDrawer
@@ -457,13 +563,50 @@ export default function CreateEQEditor() {
           }}
         />
       )}
+
+      {showPanorama && (
+        <PanoramaDrawer
+          onClose={() => setShowPanorama(false)}
+          panorama={proj.panorama}
+          slideCount={proj.slides.length}
+          onApply={(pano) => {
+            mutate((n) => { n.panorama = pano; });
+            setShowPanorama(false);
+            toast.success(pano ? "Panorama applied to deck" : "Panorama removed");
+          }}
+        />
+      )}
+
+      {showPdfPicker && (
+        <PdfExportDialog
+          proj={proj}
+          palette={palette}
+          onClose={() => setShowPdfPicker(false)}
+          busy={busy}
+          onExport={async (indices) => {
+            setShowPdfPicker(false);
+            await exportPdfSlides(indices);
+          }}
+        />
+      )}
+
+      {/* Hidden file input used by 'Add image' button + drag-drop fallback */}
+      <input
+        ref={imageFileRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        data-testid="editor-image-upload"
+        onChange={(e) => { onImageFilesSelected(e.target.files); e.target.value = ""; }}
+      />
     </div>
   );
 }
 
 /* ------------------------------- Panels ---------------------------------- */
 
-function LeftPanel({ palette, onTemplate, onAddText, onAddShape, onAddBadge, onAddIcon, onAddImage }) {
+function LeftPanel({ palette, onTemplate, onAddText, onAddShape, onAddBadge, onAddIcon, onAddImage, onAddImageUrl }) {
   return (
     <div className="p-3 space-y-4">
       <div>
@@ -504,11 +647,29 @@ function LeftPanel({ palette, onTemplate, onAddText, onAddShape, onAddBadge, onA
           <ElementBtn onClick={() => onAddShape("rect")} title="Rectangle"><SquareIcon size={16} /></ElementBtn>
           <ElementBtn onClick={() => onAddShape("circle")} title="Circle"><CircleIcon size={16} /></ElementBtn>
           <ElementBtn onClick={onAddBadge} title="Badge">Bdg</ElementBtn>
-          <ElementBtn onClick={onAddImage} title="Image"><ImageIcon size={16} /></ElementBtn>
           {Object.keys(ICONS).map((n) => {
             const IC = ICONS[n];
             return <ElementBtn key={n} onClick={() => onAddIcon(n)} title={n}><IC size={16} /></ElementBtn>;
           })}
+        </div>
+      </div>
+
+      <div>
+        <div className="ui-label mb-2 px-1">Image</div>
+        <div className="space-y-1.5">
+          <button onClick={onAddImage} data-testid="upload-image-btn"
+            className="w-full text-left p-3 rounded-lg border border-dashed border-line hover:border-ink hover:bg-neutral-50 flex items-center gap-2 text-xs">
+            <ImageIcon size={14} />
+            <div className="flex-1">
+              <div className="font-medium">Upload from device</div>
+              <div className="text-[10px] text-neutral-500">or drag &amp; drop onto canvas</div>
+            </div>
+          </button>
+          <button onClick={onAddImageUrl} data-testid="url-image-btn"
+            className="w-full text-left p-2 rounded-md border border-line hover:border-ink flex items-center gap-2 text-xs">
+            <MessageSquare size={12} />
+            <span className="text-neutral-700">Paste image URL</span>
+          </button>
         </div>
       </div>
     </div>
@@ -1176,6 +1337,290 @@ function AiImageDrawer({ onClose, onAddAsElement, onAddAsBackground }) {
           <div className="text-[11px] text-neutral-500 pt-3 border-t border-line">
             Images are generated on-demand and embedded directly in your slide — nothing is uploaded anywhere.
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/* --------------------------- Panorama helpers ---------------------------- */
+
+/** Compute inline style for the panorama slice image on a slide (auto or manual mode). */
+function panoramaSliceStyle(panorama, slideIdx, totalSlides) {
+  if (!panorama || !panorama.src || totalSlides < 1) return null;
+  const n = Math.max(1, totalSlides);
+  if (panorama.mode === "manual") {
+    const v = (panorama.viewports || [])[slideIdx] || { ox: 50, oy: 50, scale: 1 };
+    const scale = Math.max(1, v.scale || 1);
+    const imgW = CANVAS.w * scale;
+    const imgH = CANVAS.h * scale;
+    const left = -(imgW - CANVAS.w) * ((v.ox ?? 50) / 100);
+    const top = -(imgH - CANVAS.h) * ((v.oy ?? 50) / 100);
+    return { position: "absolute", left, top, width: imgW, height: imgH, objectFit: "cover" };
+  }
+  // auto-split: total image is (n * CANVAS.w) wide, this slide shows slice at -i*CANVAS.w
+  const imgW = n * CANVAS.w;
+  return {
+    position: "absolute", left: -slideIdx * CANVAS.w, top: 0,
+    width: imgW, height: CANVAS.h, objectFit: "cover",
+  };
+}
+
+/** React overlay for panorama — renders one <img> sized/positioned to show the current slice. */
+function PanoramaLayer({ panorama, slideIdx, totalSlides }) {
+  const style = panoramaSliceStyle(panorama, slideIdx, totalSlides);
+  if (!style) return null;
+  return (
+    <img
+      src={panorama.src}
+      alt=""
+      crossOrigin="anonymous"
+      style={{ ...style, pointerEvents: "none", userSelect: "none" }}
+      draggable={false}
+    />
+  );
+}
+
+/** Static HTML snippet for panorama slice in PDF export (safe: returns "" when none). */
+function panoramaSliceHtml(panorama, slideIdx, totalSlides) {
+  const style = panoramaSliceStyle(panorama, slideIdx, totalSlides);
+  if (!style) return "";
+  const css = Object.entries(style)
+    .map(([k, v]) => `${k.replace(/([A-Z])/g, "-$1").toLowerCase()}:${typeof v === "number" ? v + "px" : v}`)
+    .join(";");
+  const src = safeUrl(panorama.src);
+  return `<img src="${escapeAttr(src)}" style="${css};pointer-events:none" />`;
+}
+
+/* --------------------------- Board view ---------------------------------- */
+
+function BoardView({ proj, palette, onFocus }) {
+  const n = proj.slides.length;
+  // Fit whole strip roughly to 1200px of viewport width, but cap slide width so text stays readable.
+  const targetStripW = Math.max(900, Math.min(1800, 300 * n));
+  const zoom = targetStripW / (n * CANVAS.w);
+  return (
+    <div className="min-h-[calc(100vh-90px)] bg-neutral-100 overflow-x-auto" data-testid="board-view">
+      <div className="p-8 flex gap-0 items-start" style={{ minWidth: n * CANVAS.w * zoom + 80 }}>
+        {proj.slides.map((s, i) => (
+          <div key={s._k} className="relative flex-shrink-0" style={{ width: CANVAS.w * zoom, height: CANVAS.h * zoom }}>
+            <div
+              onClick={() => onFocus(i)}
+              data-testid={`board-slide-${i}`}
+              className="absolute inset-0 origin-top-left overflow-hidden ring-1 ring-line hover:ring-ink transition-all cursor-pointer"
+              style={{
+                width: CANVAS.w, height: CANVAS.h,
+                transform: `scale(${zoom})`, transformOrigin: "top left",
+                background: renderBackground(s.bg, palette),
+              }}
+            >
+              <PanoramaLayer panorama={proj.panorama} slideIdx={i} totalSlides={n} />
+              <div style={{ pointerEvents: "none", width: "100%", height: "100%", position: "absolute", inset: 0 }}>
+                {s.elements.map((el) => (
+                  <ElementRender key={el.id} el={el} palette={palette} selected={false}
+                    onPointerDown={() => {}} onEdit={() => {}} />
+                ))}
+              </div>
+            </div>
+            <div className="absolute -top-6 left-0 text-[11px] font-mono text-neutral-500">Slide {i + 1}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* --------------------------- Panorama Drawer ----------------------------- */
+
+function PanoramaDrawer({ onClose, panorama, slideCount, onApply }) {
+  const [src, setSrc] = useState(panorama?.src || "");
+  const [mode, setMode] = useState(panorama?.mode || "auto");
+  const [busy, setBusy] = useState(false);
+  const [prompt, setPrompt] = useState("");
+  const fileRef = useRef(null);
+
+  const onFile = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!f.type.startsWith("image/")) { toast.error("Please pick an image file"); return; }
+    if (f.size > 12 * 1024 * 1024) { toast.error("Image too large (max ~12 MB)"); return; }
+    const reader = new FileReader();
+    reader.onload = () => setSrc(String(reader.result || ""));
+    reader.readAsDataURL(f);
+  };
+
+  const generateWide = async () => {
+    if (!prompt.trim()) { toast.error("Describe the panorama"); return; }
+    setBusy(true);
+    try {
+      const { data } = await api.post("/carousel/ai-image", {
+        prompt: `${prompt}. Wide panoramic composition, seamless left-to-right flow, no visible seams.`,
+        provider: "nano-banana",
+        size: `${slideCount * 1080}x1350`,
+        aspect: "story",
+      });
+      setSrc(`data:${data.mime_type || "image/png"};base64,${data.image_base64}`);
+      toast.success("Panorama generated");
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Generation failed");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-ink/40 z-50 flex justify-end" onClick={onClose}>
+      <div className="w-full max-w-md bg-white h-full overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="panorama-drawer">
+        <div className="sticky top-0 bg-white border-b border-line px-5 py-4 flex items-center gap-3 z-10">
+          <Mountain size={16} />
+          <div className="font-display font-bold">Panorama background</div>
+          <button onClick={onClose} className="ml-auto btn-ghost text-xs">Close</button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          <div className="text-xs text-neutral-600 leading-relaxed bg-neutral-50 rounded-lg p-3 border border-line">
+            One image that flows across all {slideCount} slides — perfect for LinkedIn swipe carousels.
+          </div>
+
+          <div>
+            <div className="ui-label mb-1.5">Mode</div>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setMode("auto")} data-testid="pano-mode-auto"
+                className={`text-left p-3 rounded-lg border ${mode === "auto" ? "border-ink bg-neutral-50" : "border-line hover:border-ink"}`}>
+                <div className="text-xs font-medium">Auto-split</div>
+                <div className="text-[10px] text-neutral-500 mt-0.5 leading-tight">Splits one wide image into equal slices</div>
+              </button>
+              <button onClick={() => setMode("manual")} data-testid="pano-mode-manual"
+                className={`text-left p-3 rounded-lg border ${mode === "manual" ? "border-ink bg-neutral-50" : "border-line hover:border-ink"}`}>
+                <div className="text-xs font-medium">Manual pan</div>
+                <div className="text-[10px] text-neutral-500 mt-0.5 leading-tight">Position + zoom per slide</div>
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div className="ui-label mb-1.5">Upload wide image</div>
+            <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" data-testid="pano-file-input" />
+            <button onClick={() => fileRef.current?.click()} data-testid="pano-file-pick"
+              className="w-full py-4 border border-dashed border-line rounded-lg text-sm text-neutral-600 hover:border-ink hover:bg-neutral-50">
+              Click to upload · JPG, PNG, WebP
+            </button>
+          </div>
+
+          <div>
+            <div className="ui-label mb-1.5">…or paste an image URL</div>
+            <input value={src.startsWith("data:") ? "(uploaded image)" : src}
+              onChange={(e) => setSrc(e.target.value)}
+              disabled={src.startsWith("data:")}
+              placeholder="https://…"
+              data-testid="pano-src"
+              className="w-full border border-line rounded-full px-3 py-2 text-sm font-mono disabled:bg-neutral-50 disabled:text-neutral-500" />
+          </div>
+
+          <div className="border-t border-line pt-4">
+            <div className="ui-label mb-1.5">…or generate with AI</div>
+            <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3}
+              placeholder="e.g. Cinematic mountain range at golden hour, ultra-wide, seamless"
+              data-testid="pano-prompt"
+              className="w-full border border-line rounded-lg p-2 text-sm focus:outline-none focus:border-ink" />
+            <button onClick={generateWide} disabled={busy} data-testid="pano-generate"
+              className="mt-2 w-full btn-secondary justify-center">
+              {busy ? <><Loader2 size={14} className="animate-spin" /> Generating (~60s)…</> : <><Wand2 size={14} /> Generate wide image</>}
+            </button>
+          </div>
+
+          {src && (
+            <div className="border-t border-line pt-4">
+              <div className="ui-label mb-1.5">Preview</div>
+              <div className="rounded-lg overflow-hidden border border-line bg-neutral-100">
+                <img src={src} alt="pano" className="w-full block" data-testid="pano-preview" />
+              </div>
+            </div>
+          )}
+
+          <div className="border-t border-line pt-4 grid grid-cols-2 gap-2">
+            <button onClick={() => onApply(null)} data-testid="pano-remove"
+              className="text-xs py-2 rounded-full border border-line hover:border-red-600 text-red-600 justify-center">
+              Remove panorama
+            </button>
+            <button onClick={() => onApply({ src, mode, viewports: panorama?.viewports || [] })}
+              disabled={!src}
+              data-testid="pano-apply"
+              className="btn-primary text-xs justify-center disabled:opacity-40">
+              Apply to deck
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/* --------------------------- PDF Export Dialog --------------------------- */
+
+function PdfExportDialog({ proj, palette, onClose, busy, onExport }) {
+  const total = proj.slides.length;
+  const [picked, setPicked] = useState(() => proj.slides.map((_, i) => i));
+
+  const toggle = (i) => setPicked((cur) => cur.includes(i) ? cur.filter((x) => x !== i) : [...cur, i].sort((a, b) => a - b));
+  const selectAll = () => setPicked(proj.slides.map((_, i) => i));
+  const selectNone = () => setPicked([]);
+
+  return (
+    <div className="fixed inset-0 bg-ink/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()} data-testid="pdf-picker-dialog">
+        <div className="px-6 py-4 border-b border-line flex items-center gap-3">
+          <FileText size={16} />
+          <div className="font-display font-bold">Export PDF</div>
+          <div className="text-xs text-neutral-500 ml-2">Choose which slides to include in a single PDF file.</div>
+          <button onClick={onClose} className="ml-auto btn-ghost text-xs">Close</button>
+        </div>
+
+        <div className="px-6 py-3 flex items-center gap-2 border-b border-line bg-neutral-50">
+          <button onClick={selectAll} data-testid="pdf-pick-all" className="btn-ghost text-xs">Select all ({total})</button>
+          <button onClick={selectNone} data-testid="pdf-pick-none" className="btn-ghost text-xs">Clear</button>
+          <div className="ml-auto text-xs font-mono text-neutral-500">
+            {picked.length} of {total} selected
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {proj.slides.map((s, i) => {
+              const on = picked.includes(i);
+              const bg = renderBackground(s.bg, palette);
+              return (
+                <button key={s._k} onClick={() => toggle(i)} data-testid={`pdf-pick-${i}`}
+                  className={`text-left rounded-xl overflow-hidden border-2 transition-all ${on ? "border-ink shadow-md" : "border-line hover:border-neutral-400"}`}>
+                  <div className="relative w-full aspect-[4/5] overflow-hidden" style={{ background: bg }}>
+                    <PanoramaLayer panorama={proj.panorama} slideIdx={i} totalSlides={total} />
+                    <div style={{ position: "absolute", inset: 0, transform: `scale(${0.2})`, transformOrigin: "top left", width: CANVAS.w, height: CANVAS.h, pointerEvents: "none" }}>
+                      {s.elements.map((el) => (
+                        <ElementRender key={el.id} el={el} palette={palette} selected={false}
+                          onPointerDown={() => {}} onEdit={() => {}} />
+                      ))}
+                    </div>
+                    <div className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold ${on ? "bg-ink text-white border-ink" : "bg-white border-neutral-300 text-transparent"}`}>
+                      ✓
+                    </div>
+                  </div>
+                  <div className="p-2 text-[11px] font-mono flex items-center justify-between bg-white">
+                    <span>Slide {i + 1}</span>
+                    <span className="text-neutral-500">{s.elements.length} el</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-line flex items-center justify-end gap-2">
+          <button onClick={onClose} className="btn-secondary text-sm">Cancel</button>
+          <button onClick={() => onExport(picked)} disabled={busy || !picked.length}
+            data-testid="pdf-export-btn"
+            className="btn-primary disabled:opacity-40">
+            {busy ? <><Loader2 size={14} className="animate-spin" /> Rendering…</> : <><Download size={14} /> Export {picked.length} slide{picked.length === 1 ? "" : "s"}</>}
+          </button>
         </div>
       </div>
     </div>
