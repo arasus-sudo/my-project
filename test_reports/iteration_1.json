@@ -1,0 +1,37 @@
+{
+  "summary": "Full backend + frontend testing of new AI Image generation (Nano Banana + GPT Image 1) in Create EQ. All 10 pytest cases PASS. UI end-to-end works: login, editor loads existing project, drawer opens, both provider tiles / aspect pills / prompt / generate present, nano-banana generates a real image (~50-90s), Add-as-element places image and closes drawer, Set-as-background works, Brand Kit still opens, Save persists. PitchEQ regression endpoints (dashboard, campaigns, leads, inbox, deals) all 200.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/carousel/platforms", "issue": "Route unreachable due to declaration order — GET /api/carousel/{pid} at server.py:1447 is registered before GET /api/carousel/platforms at server.py:1594, so FastAPI matches {pid}='platforms' first and returns 404. Move the /carousel/platforms route above /carousel/{pid}."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "CreateEQEditor palette swatches", "issues": ["React 'Encountered two children with the same key #000000' warning fires repeatedly. Source: /app/frontend/src/pages/CreateEQEditor.jsx line ~541 uses key={c} on palette swatch <span> where c is a color hex; palettes with duplicate hex values (e.g., two blacks in Midnight) collide. Also lines 560 and 570 use raw color hex as key. Use index-composite key like `${c}-${i}` similar to line 936 for BrandKit."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ai_image.py",
+    "/app/test_reports/pytest/ai_image_results.xml"
+  ],
+  "action_items": [
+    "Move @api.get('/carousel/platforms') above @api.get('/carousel/{pid}') in /app/backend/server.py to fix 404 on /api/carousel/platforms.",
+    "Fix React duplicate-key warning in CreateEQEditor.jsx palette swatch map (line ~541, 560, 570) — use composite key like `${c}-${i}` to prevent duplicate hex collisions."
+  ],
+  "critical_code_review_comments": [
+    "server.py: FastAPI route ordering bug on /carousel/{pid} vs /carousel/platforms — dynamic route registered first swallows static path.",
+    "CreateEQEditor.jsx (~1965 lines) exceeds the 700-line guideline; consider splitting drawers (BrandKitDrawer, AiImageDrawer) and sidebar panels into separate files.",
+    "carousel_ai_image: nano-banana branch uses img.get('mime_type', 'image/png') but doesn't wrap the potentially non-dict return in a type check — if emergentintegrations returns a bytes object instead of dict this will 500. Not observed in tests, but worth a guard."
+  ],
+  "updated_files": ["/app/backend/tests/test_ai_image.py"],
+  "success_rate": {"backend": "100% (10/10 including 4 core-regression + 4 AI-image cases)", "frontend": "100% of AI Image drawer flows"},
+  "test_credentials": "demo@innoira.ai / Demo@1234",
+  "seed_data_creation": "None — used existing demo workspace's 8 seeded Create EQ projects (opened project id 9be3b08d-cfda-4d1f-b228-288d9e7a9c15).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "AI Image feature is fully working end-to-end with real EMERGENT_LLM_KEY for both providers. GPT Image 1 takes ~30-60s, nano-banana ~30-90s. Base64 responses are ~200KB-2MB. Two follow-ups remain for main agent: (1) FastAPI route order bug for /api/carousel/platforms, (2) React duplicate-key warning at CreateEQEditor.jsx palette swatch map.",
+  "rca of the issue": "N/A — no blocking bugs. See action_items for two minor follow-ups."
+}

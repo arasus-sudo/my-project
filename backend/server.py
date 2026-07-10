@@ -1523,6 +1523,74 @@ async def brand_from_url(body: BrandFromUrlIn, user=Depends(current_user)):
     return {"bg": "#0F1010", "accent": "#E85D3A", "text": "#FFFFFF", "font": "Inter", "logo_text": ""}
 
 
+# ----------------------------- Create EQ: AI Image Generation ----------------
+class AiImageIn(BaseModel):
+    prompt: str
+    provider: str = "nano-banana"  # "nano-banana" (Gemini) | "gpt-image-1" (OpenAI)
+    size: Optional[str] = "1080x1350"
+    aspect: Optional[str] = "portrait"  # informational hint for the model
+
+
+@api.post("/carousel/ai-image")
+async def carousel_ai_image(body: AiImageIn, user=Depends(current_user)):
+    """Generate an AI image and return it as base64. The frontend embeds this as a
+    `data:image/png;base64,...` URL directly on the canvas — no external storage needed."""
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(500, "EMERGENT_LLM_KEY not configured")
+    prompt = (body.prompt or "").strip()
+    if not prompt:
+        raise HTTPException(400, "prompt is required")
+    if not await _rate_ok(user):
+        raise HTTPException(429, "daily LLM quota exceeded")
+
+    provider = (body.provider or "nano-banana").lower()
+
+    if provider == "gpt-image-1":
+        try:
+            import base64
+            from emergentintegrations.llm.openai.image_generation import OpenAIImageGeneration
+            gen = OpenAIImageGeneration(api_key=EMERGENT_LLM_KEY)
+            images = await gen.generate_images(
+                prompt=prompt, model="gpt-image-1", number_of_images=1
+            )
+            if not images:
+                raise HTTPException(502, "gpt-image-1 returned no image")
+            b64 = base64.b64encode(images[0]).decode("utf-8")
+            await _audit(user, "ai_image.generate", {"provider": "gpt-image-1", "prompt": prompt[:120]})
+            return {"image_base64": b64, "mime_type": "image/png", "provider": "gpt-image-1"}
+        except HTTPException:
+            raise
+        except Exception as ex:
+            logging.warning("gpt-image-1 gen error: %s", ex)
+            raise HTTPException(502, f"gpt-image-1 failed: {ex}")
+
+    # default: Gemini Nano Banana
+    try:
+        style_hint = f"Composition: {body.size} {body.aspect}, high quality, suitable for a social media carousel."
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"nano-{user['id']}-{new_id()[:6]}",
+            system_message="You are an image generation model producing polished social media carousel imagery.",
+        ).with_model("gemini", "gemini-3.1-flash-image-preview").with_params(modalities=["image", "text"])
+        text, images = await chat.send_message_multimodal_response(
+            UserMessage(text=f"{prompt}\n\n{style_hint}")
+        )
+        if not images:
+            raise HTTPException(502, "nano-banana returned no image")
+        img = images[0]
+        await _audit(user, "ai_image.generate", {"provider": "nano-banana", "prompt": prompt[:120]})
+        return {
+            "image_base64": img["data"],
+            "mime_type": img.get("mime_type", "image/png"),
+            "provider": "nano-banana",
+        }
+    except HTTPException:
+        raise
+    except Exception as ex:
+        logging.warning("nano-banana gen error: %s", ex)
+        raise HTTPException(502, f"nano-banana failed: {ex}")
+
+
 @api.get("/carousel/platforms")
 async def carousel_platforms():
     return PLATFORM_DIMS

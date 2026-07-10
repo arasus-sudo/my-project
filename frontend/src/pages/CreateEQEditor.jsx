@@ -59,6 +59,7 @@ export default function CreateEQEditor() {
   const [zoom, setZoom] = useState(0.38);
   const [brandKits, setBrandKits] = useState([]);
   const [showBrandKit, setShowBrandKit] = useState(false);
+  const [showAiImage, setShowAiImage] = useState(false);
   const canvasRef = useRef(null);
   const dragState = useRef(null);
   const historyRef = useRef({ past: [], future: [] });
@@ -198,7 +199,7 @@ export default function CreateEQEditor() {
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [selectedId, undo, redo]); // eslint-disable-line
+  }, [selectedId, undo, redo]);
 
   const save = async () => {
     setBusy(true);
@@ -243,17 +244,14 @@ export default function CreateEQEditor() {
   };
 
   const renderSlideToDataUrl = (slideIdx) => new Promise((resolve, reject) => {
-    // Temporarily mount an off-screen node with the target slide, then rasterise.
-    const container = document.createElement("div");
-    container.style.cssText = `position:fixed;left:-99999px;top:0;width:${CANVAS.w}px;height:${CANVAS.h}px;background:${renderBackground(proj.slides[slideIdx].bg, palette)};`;
-    document.body.appendChild(container);
+    // Build the SVG foreignObject payload directly from escaped element HTML — no live
+    // DOM mount required, which also removes an XSS surface via innerHTML.
     const elsHtml = proj.slides[slideIdx].elements.map((el) => elementToStaticHtml(el, palette)).join("");
-    container.innerHTML = elsHtml;
+    const bg = renderBackground(proj.slides[slideIdx].bg, palette);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CANVAS.w}" height="${CANVAS.h}">
       <foreignObject width="100%" height="100%">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="width:${CANVAS.w}px;height:${CANVAS.h}px;background:${renderBackground(proj.slides[slideIdx].bg, palette)}">${container.innerHTML}</div>
+        <div xmlns="http://www.w3.org/1999/xhtml" style="width:${CANVAS.w}px;height:${CANVAS.h}px;background:${bg}">${elsHtml}</div>
       </foreignObject></svg>`;
-    document.body.removeChild(container);
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
@@ -345,6 +343,7 @@ export default function CreateEQEditor() {
             <button onClick={() => nav("/app/create-eq")} className="btn-ghost"><ChevronLeft size={14} /> Projects</button>
             <button onClick={undo} title="Undo (Ctrl+Z)" data-testid="undo-btn" className="btn-ghost"><Undo2 size={14} /></button>
             <button onClick={redo} title="Redo (Ctrl+Shift+Z)" data-testid="redo-btn" className="btn-ghost"><Redo2 size={14} /></button>
+            <button onClick={() => setShowAiImage(true)} data-testid="ai-image-open" className="btn-secondary"><Wand2 size={14} /> AI Image</button>
             <button onClick={() => setShowBrandKit(true)} data-testid="brand-kit-open" className="btn-secondary"><Sparkles size={14} /> Brand kit</button>
             <button onClick={exportSlidePng} data-testid="export-png-btn" className="btn-secondary"><Download size={14} /> PNG</button>
             <button onClick={exportPdf} disabled={busy} data-testid="export-pdf-btn" className="btn-secondary"><FileText size={14} /> PDF</button>
@@ -427,6 +426,35 @@ export default function CreateEQEditor() {
           onSaved={(kit) => { setBrandKits((k) => [kit, ...k]); }}
           onDeleted={(bid) => setBrandKits((k) => k.filter((x) => x.id !== bid))}
           onApply={(kit) => { applyBrandKit(kit); setShowBrandKit(false); }}
+        />
+      )}
+
+      {showAiImage && (
+        <AiImageDrawer
+          onClose={() => setShowAiImage(false)}
+          onAddAsElement={(dataUrl) => {
+            addElement({
+              type: "image", src: dataUrl,
+              x: 120, y: 240, w: 840, h: 840,
+              fit: "cover", radius: 24,
+            });
+            setShowAiImage(false);
+            toast.success("Image added to slide");
+          }}
+          onAddAsBackground={(dataUrl) => {
+            mutate((n) => {
+              const s = n.slides[activeSlide];
+              // Remove any existing bg-image element role
+              s.elements = (s.elements || []).filter((el) => !(el.type === "image" && el.role === "background"));
+              s.elements.unshift({
+                id: newId(), type: "image", role: "background",
+                src: dataUrl, x: 0, y: 0, w: CANVAS.w, h: CANVAS.h,
+                fit: "cover", radius: 0,
+              });
+            });
+            setShowAiImage(false);
+            toast.success("Background applied");
+          }}
         />
       )}
     </div>
@@ -757,7 +785,9 @@ function elementToStaticHtml(el, palette) {
   }
   if (el.type === "image") {
     const s = { ...base, "border-radius": `${el.radius || 0}px`, overflow: "hidden" };
-    return `<div style="${style(s)}"><img src="${el.src || ""}" style="width:100%;height:100%;object-fit:${el.fit || "cover"};display:block" /></div>`;
+    const safeSrc = safeUrl(el.src);
+    const fit = /^(cover|contain|fill|none|scale-down)$/.test(el.fit || "") ? el.fit : "cover";
+    return `<div style="${style(s)}"><img src="${escapeAttr(safeSrc)}" style="width:100%;height:100%;object-fit:${fit};display:block" /></div>`;
   }
   if (el.type === "shape") {
     const s = { ...base, background: resolveColor(el.fill, palette), opacity: el.opacity ?? 1, "border-radius": `${el.shape === "circle" ? 9999 : (el.radius ?? 0)}px` };
@@ -779,20 +809,54 @@ function escapeHtml(s) {
   return String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
+/** Escape a value for use inside a double-quoted HTML attribute. */
+function escapeAttr(s) {
+  return String(s || "").replace(/[&"<>]/g, (c) => ({ "&": "&amp;", '"': "&quot;", "<": "&lt;", ">": "&gt;" })[c]);
+}
+
+/** Restrict user-provided image URLs to safe protocols (blocks javascript:, data:text/html, etc). */
+function safeUrl(u) {
+  const v = String(u || "").trim();
+  if (!v) return "";
+  if (/^(https?:|data:image\/(png|jpe?g|gif|webp|svg\+xml);)/i.test(v)) return v;
+  return "";
+}
+
 /* --------------------------- Brand Kit Drawer ---------------------------- */
 
 function BrandKitDrawer({ onClose, kits, onSaved, onDeleted, onApply }) {
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ name: "", logo_url: "", colors: ["#212025", "#E85D3A", "#FDFDF9"], fonts: ["Inter"], palette_id: "midnight" });
+  const [form, setForm] = useState({
+    name: "",
+    logo_url: "",
+    colors: [
+      { id: newId(), hex: "#212025" },
+      { id: newId(), hex: "#E85D3A" },
+      { id: newId(), hex: "#FDFDF9" },
+    ],
+    fonts: ["Inter"],
+    palette_id: "midnight",
+  });
 
   const save = async (e) => {
     e.preventDefault();
     try {
-      const { data } = await api.post("/brandkits", form);
+      const payload = { ...form, colors: form.colors.map((c) => c.hex) };
+      const { data } = await api.post("/brandkits", payload);
       toast.success(`Brand kit saved: ${data.name}`);
       onSaved(data);
       setCreating(false);
-      setForm({ name: "", logo_url: "", colors: ["#212025", "#E85D3A", "#FDFDF9"], fonts: ["Inter"], palette_id: "midnight" });
+      setForm({
+        name: "",
+        logo_url: "",
+        colors: [
+          { id: newId(), hex: "#212025" },
+          { id: newId(), hex: "#E85D3A" },
+          { id: newId(), hex: "#FDFDF9" },
+        ],
+        fonts: ["Inter"],
+        palette_id: "midnight",
+      });
     } catch { toast.error("Save failed"); }
   };
   const del = async (bid) => {
@@ -817,11 +881,24 @@ function BrandKitDrawer({ onClose, kits, onSaved, onDeleted, onApply }) {
             <div>
               <div className="ui-label mb-1">Brand colors</div>
               <div className="grid grid-cols-6 gap-1">
-                {form.colors.map((c, i) => (
-                  <input key={i} type="color" value={c} onChange={(e) => setForm({ ...form, colors: form.colors.map((x, xi) => xi === i ? e.target.value : x) })} className="w-full h-10 border border-line rounded" />
+                {form.colors.map((c) => (
+                  <input
+                    key={c.id}
+                    type="color"
+                    value={c.hex}
+                    onChange={(e) => setForm({
+                      ...form,
+                      colors: form.colors.map((x) => x.id === c.id ? { ...x, hex: e.target.value } : x),
+                    })}
+                    className="w-full h-10 border border-line rounded"
+                  />
                 ))}
                 {form.colors.length < 8 && (
-                  <button type="button" onClick={() => setForm({ ...form, colors: [...form.colors, "#000000"] })} className="border border-dashed border-line rounded text-neutral-500 text-lg">+</button>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, colors: [...form.colors, { id: newId(), hex: "#000000" }] })}
+                    className="border border-dashed border-line rounded text-neutral-500 text-lg"
+                  >+</button>
                 )}
               </div>
             </div>
@@ -856,7 +933,7 @@ function BrandKitDrawer({ onClose, kits, onSaved, onDeleted, onApply }) {
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="font-medium">{k.name}</div>
-                  <div className="flex gap-1 mt-1">{(k.colors || []).slice(0, 8).map((c, i) => <span key={i} className="w-4 h-4 rounded-full border border-line" style={{ background: c }} />)}</div>
+                  <div className="flex gap-1 mt-1">{(k.colors || []).slice(0, 8).map((c, i) => <span key={`${c}-${i}`} className="w-4 h-4 rounded-full border border-line" style={{ background: c }} />)}</div>
                   <div className="text-[11px] text-neutral-500 mt-1 font-mono">Palette: {PALETTES.find(p => p.id === k.palette_id)?.name || "—"} · Font: {(k.fonts || [])[0] || "—"}</div>
                 </div>
               </div>
@@ -958,4 +1035,149 @@ function ElementRender({ el, palette, selected, onPointerDown, onEdit }) {
     );
   }
   return null;
+}
+
+
+/* --------------------------- AI Image Drawer ----------------------------- */
+
+const IMAGE_PROVIDERS = [
+  { id: "nano-banana", label: "Gemini Nano Banana", hint: "Stylized, artistic, painterly" },
+  { id: "gpt-image-1", label: "GPT Image 1", hint: "Photorealistic, clean, product" },
+];
+
+const PROMPT_PRESETS = [
+  "Abstract flowing waves in deep blue and coral, minimalist editorial style, high contrast",
+  "Soft cream paper texture with subtle grain, warm off-white background for text overlay",
+  "Bold geometric shapes overlapping — magenta, mustard, black — Bauhaus poster energy",
+  "Moody dark studio backdrop with a single warm rim light, cinematic",
+  "Dreamy pastel gradient — peach into lavender — soft blurred bokeh",
+  "Iso-3D floating platforms, mint and violet, gentle drop shadows, product-launch vibe",
+];
+
+function AiImageDrawer({ onClose, onAddAsElement, onAddAsBackground }) {
+  const [prompt, setPrompt] = useState("");
+  const [provider, setProvider] = useState("nano-banana");
+  const [aspect, setAspect] = useState("portrait");
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState(null); // { dataUrl, provider }
+
+  const size = aspect === "square" ? "1080x1080" : aspect === "story" ? "1080x1920" : "1080x1350";
+
+  const generate = async () => {
+    if (!prompt.trim()) { toast.error("Describe the image you want"); return; }
+    setBusy(true);
+    setPreview(null);
+    try {
+      const { data } = await api.post("/carousel/ai-image", {
+        prompt: prompt.trim(), provider, size, aspect,
+      });
+      if (!data?.image_base64) throw new Error("no image");
+      const dataUrl = `data:${data.mime_type || "image/png"};base64,${data.image_base64}`;
+      setPreview({ dataUrl, provider: data.provider });
+      toast.success(`Generated with ${data.provider}`);
+    } catch (err) {
+      const msg = err?.response?.data?.detail || err?.message || "Generation failed";
+      toast.error(String(msg).slice(0, 200));
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-ink/40 z-50 flex justify-end" onClick={onClose}>
+      <div className="w-full max-w-md bg-white h-full overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="ai-image-drawer">
+        <div className="sticky top-0 bg-white border-b border-line px-5 py-4 flex items-center gap-3 z-10">
+          <Wand2 size={16} />
+          <div className="font-display font-bold">AI Image</div>
+          <button onClick={onClose} className="ml-auto btn-ghost text-xs">Close</button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          <div>
+            <div className="ui-label mb-1.5">Provider</div>
+            <div className="grid grid-cols-2 gap-2">
+              {IMAGE_PROVIDERS.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setProvider(p.id)}
+                  data-testid={`ai-image-provider-${p.id}`}
+                  className={`text-left p-3 rounded-lg border transition-colors ${provider === p.id ? "border-ink bg-neutral-50" : "border-line hover:border-ink"}`}
+                >
+                  <div className="text-xs font-medium">{p.label}</div>
+                  <div className="text-[10px] text-neutral-500 mt-0.5 leading-tight">{p.hint}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="ui-label mb-1.5">Aspect</div>
+            <div className="flex gap-1">
+              {[
+                ["portrait", "4:5 · 1080×1350"],
+                ["square", "1:1 · 1080×1080"],
+                ["story", "9:16 · 1080×1920"],
+              ].map(([k, l]) => (
+                <button
+                  key={k}
+                  onClick={() => setAspect(k)}
+                  data-testid={`ai-image-aspect-${k}`}
+                  className={`flex-1 py-1.5 rounded-full text-[11px] border ${aspect === k ? "border-ink bg-ink text-white" : "border-line hover:border-ink"}`}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="ui-label mb-1.5">Describe the image</div>
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              rows={4}
+              placeholder="e.g. Soft cream paper texture with subtle grain and coral confetti"
+              data-testid="ai-image-prompt"
+              className="w-full border border-line rounded-lg p-2 text-sm focus:outline-none focus:border-ink"
+            />
+            <div className="mt-2 flex flex-wrap gap-1">
+              {PROMPT_PRESETS.slice(0, 4).map((p, i) => (
+                <button
+                  key={i}
+                  onClick={() => setPrompt(p)}
+                  className="text-[10px] px-2 py-1 rounded-full border border-line hover:border-ink text-neutral-600"
+                >
+                  {p.split(",")[0].slice(0, 32)}…
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            onClick={generate}
+            disabled={busy}
+            data-testid="ai-image-generate"
+            className="w-full btn-primary justify-center"
+          >
+            {busy ? <><Loader2 size={14} className="animate-spin" /> Generating (~30–60s)…</> : <><Wand2 size={14} /> Generate</>}
+          </button>
+
+          {preview && (
+            <div className="pt-4 border-t border-line space-y-3">
+              <div className="ui-label">Preview · {preview.provider}</div>
+              <div className="rounded-lg overflow-hidden border border-line bg-neutral-100" style={{ aspectRatio: aspect === "square" ? "1 / 1" : aspect === "story" ? "9 / 16" : "4 / 5" }}>
+                <img src={preview.dataUrl} alt="preview" className="w-full h-full object-cover" data-testid="ai-image-preview" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => onAddAsElement(preview.dataUrl)} data-testid="ai-image-add-element" className="btn-secondary text-xs justify-center">Add as element</button>
+                <button onClick={() => onAddAsBackground(preview.dataUrl)} data-testid="ai-image-add-background" className="btn-primary text-xs justify-center">Set as background</button>
+              </div>
+            </div>
+          )}
+
+          <div className="text-[11px] text-neutral-500 pt-3 border-t border-line">
+            Images are generated on-demand and embedded directly in your slide — nothing is uploaded anywhere.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
