@@ -1,12 +1,17 @@
-import { Square as SquareIcon, Circle as CircleIcon, Image as ImageIcon, MessageSquare, User as UserIcon } from "lucide-react";
+import { memo, useState } from "react";
+import { ChevronDown, Square as SquareIcon, Circle as CircleIcon, Minus as LineIcon, Image as ImageIcon, MessageSquare, User as UserIcon } from "lucide-react";
 import { TEMPLATES } from "../../lib/creqTemplates";
 import { ICONS } from "./ElementRender";
 
-export default function LeftPanel({ onTemplate, onAddText, onAddShape, onAddBadge, onAddIcon, onAddImage, onAddImageUrl, onAddHeadshot, hasHeadshot }) {
+function LeftPanel({ onTemplate, onAddText, onAddShape, onAddLine, onAddBadge, onAddIcon, onAddImage, onAddImageUrl, onAddHeadshot, onAddAuthorBar, hasHeadshot }) {
+  // Accordion, one section open at a time — keeps the panel's total height
+  // bounded instead of stacking every section's full content at once.
+  const [open, setOpen] = useState(null);
+  const toggle = (key) => setOpen((cur) => (cur === key ? null : key));
+
   return (
-    <div className="p-3 space-y-4">
-      <div>
-        <div className="ui-label mb-2 px-1">Templates</div>
+    <div className="divide-y divide-line">
+      <Section title="Templates" isOpen={open === "templates"} onToggle={() => toggle("templates")}>
         <div className="grid grid-cols-2 gap-2">
           {TEMPLATES.map((t) => (
             <button key={t.id} onClick={() => onTemplate(t)} data-testid={`tpl-${t.id}`}
@@ -19,10 +24,9 @@ export default function LeftPanel({ onTemplate, onAddText, onAddShape, onAddBadg
             </button>
           ))}
         </div>
-      </div>
+      </Section>
 
-      <div>
-        <div className="ui-label mb-2 px-1">Add text</div>
+      <Section title="Add text" isOpen={open === "text"} onToggle={() => toggle("text")}>
         <div className="space-y-1">
           <TextPreset label="Headline" onClick={() => onAddText({ type: "text", x: 80, y: 400, w: 920, h: 240, text: "Big idea here",
             font: "Archivo Black", size: 128, weight: 900, color: "text", line_height: 1, align: "left" })} sample="Aa" style={{ fontFamily: "Archivo Black", fontSize: 26 }} />
@@ -35,23 +39,22 @@ export default function LeftPanel({ onTemplate, onAddText, onAddShape, onAddBadg
           <TextPreset label="Caption" onClick={() => onAddText({ type: "text", x: 80, y: 400, w: 920, h: 60, text: "SMALL CAPS",
             font: "JetBrains Mono", size: 20, weight: 500, uppercase: true, letter_spacing: 0.24, color: "muted" })} sample="AA" style={{ fontFamily: "JetBrains Mono", fontSize: 14 }} />
         </div>
-      </div>
+      </Section>
 
-      <div>
-        <div className="ui-label mb-2 px-1">Elements</div>
-        <div className="grid grid-cols-3 gap-1">
+      <Section title="Elements" isOpen={open === "elements"} onToggle={() => toggle("elements")}>
+        <div className="grid grid-cols-4 gap-1">
           <ElementBtn onClick={() => onAddShape("rect")} title="Rectangle"><SquareIcon size={16} /></ElementBtn>
           <ElementBtn onClick={() => onAddShape("circle")} title="Circle"><CircleIcon size={16} /></ElementBtn>
           <ElementBtn onClick={onAddBadge} title="Badge">Bdg</ElementBtn>
+          <ElementBtn onClick={onAddLine} title="Line / divider"><LineIcon size={16} /></ElementBtn>
           {Object.keys(ICONS).map((n) => {
             const IC = ICONS[n];
             return <ElementBtn key={n} onClick={() => onAddIcon(n)} title={n}><IC size={16} /></ElementBtn>;
           })}
         </div>
-      </div>
+      </Section>
 
-      <div>
-        <div className="ui-label mb-2 px-1">Image</div>
+      <Section title="Image" isOpen={open === "image"} onToggle={() => toggle("image")}>
         <div className="space-y-1.5">
           <button onClick={onAddImage} data-testid="upload-image-btn"
             className="w-full text-left p-3 rounded-lg border border-dashed border-line hover:border-ink hover:bg-neutral-50 flex items-center gap-2 text-xs">
@@ -73,8 +76,37 @@ export default function LeftPanel({ onTemplate, onAddText, onAddShape, onAddBadg
             <span className="text-neutral-700">Your headshot</span>
             {!hasHeadshot && <span className="ml-auto text-[9px] font-mono text-neutral-400">setup</span>}
           </button>
+          <button onClick={onAddAuthorBar} data-testid="add-author-bar-btn"
+            className={`w-full text-left p-2 rounded-md border flex items-center gap-2 text-xs ${hasHeadshot ? "border-line hover:border-ink" : "border-line hover:border-ink opacity-70"}`}
+            title={hasHeadshot ? "Headshot + name + handle, ready to post" : "Upload a headshot in Settings → Profile first"}>
+            <UserIcon size={12} />
+            <span className="text-neutral-700">Author bar</span>
+            {!hasHeadshot && <span className="ml-auto text-[9px] font-mono text-neutral-400">setup</span>}
+          </button>
         </div>
-      </div>
+      </Section>
+    </div>
+  );
+}
+
+export default memo(LeftPanel);
+
+/** One collapsible accordion row — header always visible, content bounded
+ * to a max height with its own scroll so no single section can push the
+ * panel taller than the viewport. */
+function Section({ title, isOpen, onToggle, children }) {
+  return (
+    <div>
+      <button onClick={onToggle} data-testid={`leftpanel-section-${title.toLowerCase().replace(/\s+/g, "-")}`}
+        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-surfacehover transition-colors">
+        <span className="ui-label">{title}</span>
+        <ChevronDown size={14} className={`text-neutral-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+      {isOpen && (
+        <div className="px-3 pb-3 max-h-[360px] overflow-y-auto">
+          {children}
+        </div>
+      )}
     </div>
   );
 }

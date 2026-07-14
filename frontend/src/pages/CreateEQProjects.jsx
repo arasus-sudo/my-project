@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { formatDistanceToNow } from "date-fns";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import {
-  Plus, Trash2, ImageIcon, Sparkles, ChevronLeft, ChevronRight, Wand2, Loader2, Check,
+  Plus, Trash2, ImageIcon, Sparkles, ChevronLeft, ChevronRight, Wand2, Loader2, Check, ArrowRight, History, X,
 } from "lucide-react";
-import { TEMPLATES, PALETTES, slideFromTemplate, blankSlide } from "../lib/creqTemplates";
+import { TEMPLATES, PALETTES, blankSlide } from "../lib/creqTemplates";
 
 const AUDIENCES = [
   { id: "founders", label: "Founders & CEOs", tone: "confident, punchy" },
@@ -35,26 +36,15 @@ const TOPIC_STARTERS = [
 export default function CreateEQProjects() {
   const nav = useNavigate();
   const [items, setItems] = useState([]);
-  const [wizard, setWizard] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [wizard, setWizard] = useState(null); // null | { topic, step }
   const [busy, setBusy] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [pendingTemplate, setPendingTemplate] = useState(null);
+  const [heroTopic, setHeroTopic] = useState("");
 
-  const load = () => api.get("/carousel").then((r) => setItems(r.data));
+  const load = () => api.get("/carousel").then((r) => setItems(r.data)).finally(() => setLoaded(true));
   useEffect(() => { load(); }, []);
-
-  const startFromTemplate = async (tpl) => {
-    setBusy(true);
-    try {
-      const { data } = await api.post("/carousel/generate", {
-        topic: tpl.name, platform: "linkedin", slide_count: 1, tone: "editorial",
-      });
-      const slide = slideFromTemplate(tpl);
-      await api.put(`/carousel/${data.id}`, {
-        slides: [slide], palette_id: tpl.palette, platform: "linkedin", topic: tpl.name,
-      });
-      nav(`/app/create-eq/${data.id}`);
-    } catch { toast.error("Could not start template"); }
-    finally { setBusy(false); }
-  };
 
   const startBlank = async () => {
     setBusy(true);
@@ -70,6 +60,14 @@ export default function CreateEQProjects() {
     finally { setBusy(false); }
   };
 
+  // Single AI entry point: whatever's typed in the hero is carried straight
+  // into the wizard. A real sentence skips the topic step; an empty box opens
+  // the wizard at step 1 so it still works as a plain "Create with AI" button.
+  const launchWizard = () => {
+    const topic = heroTopic.trim();
+    setWizard({ topic, step: topic.length > 3 ? 2 : 1 });
+  };
+
   const del = async (id) => {
     if (!confirm("Delete carousel?")) return;
     await api.delete(`/carousel/${id}`); load();
@@ -78,87 +76,87 @@ export default function CreateEQProjects() {
   return (
     <div>
       <PageHeader
-        title="Create EQ · Projects"
-        subtitle="AI-drafted carousels or Canva-style editing from a template."
-        badge="Beta"
+        title="Create EQ"
+        subtitle="Design scroll-stopping carousels and decks."
         right={
-          <div className="flex gap-2">
-            <button onClick={startBlank} disabled={busy} data-testid="start-blank-btn" className="btn-secondary">Blank</button>
-            <button onClick={() => setWizard(true)} data-testid="new-carousel-btn" className="btn-primary">
-              <Wand2 size={14} /> Create with AI
-            </button>
-          </div>
+          <button onClick={() => setShowHistory(true)} data-testid="history-open-btn" className="btn-secondary">
+            <History size={14} /> Your projects{items.length > 0 ? ` · ${items.length}` : ""}
+          </button>
         }
       />
 
-      <div className="p-6 space-y-8">
-        {/* Hero — Gamma-style CTA */}
-        {items.length === 0 && (
-          <section className="rounded-2xl border border-line bg-gradient-to-br from-neutral-50 to-white p-8 text-center">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Get started</div>
-            <h2 className="font-display font-bold text-3xl mb-2">Describe your idea. We&apos;ll design the carousel.</h2>
-            <p className="text-sm text-neutral-600 max-w-lg mx-auto mb-4">
-              Type a topic in one sentence, pick your audience &amp; theme, and we&apos;ll draft a scroll-stopping deck in under 30 seconds.
-            </p>
-            <button onClick={() => setWizard(true)} data-testid="hero-start" className="btn-primary">
-              <Wand2 size={14} /> Start with AI
-            </button>
-          </section>
-        )}
-
-        {/* Templates gallery */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <div className="ui-label">Start from a template</div>
-              <div className="text-xs text-neutral-500 mt-0.5">Pre-designed slides — fully editable once opened.</div>
+      <div className="p-6 space-y-10 max-w-5xl">
+        {/* Hero — the ONE AI entry point: type an idea, hit generate. */}
+        <section
+          className="relative overflow-hidden rounded-3xl border border-line p-8 sm:p-10"
+          style={{ background: "radial-gradient(120% 140% at 0% 0%, rgba(232,93,58,0.10), transparent 55%), linear-gradient(180deg, #fafafa, #ffffff)" }}
+        >
+          <div className="relative">
+            <div className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-sanguine mb-3">
+              <Sparkles size={12} /> Create with AI
             </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {TEMPLATES.map((t) => {
-              const pal = PALETTES.find((p) => p.id === t.palette) || PALETTES[0];
-              return (
-                <button key={t.id} onClick={() => startFromTemplate(t)} disabled={busy} data-testid={`start-tpl-${t.id}`}
-                  className="text-left group disabled:opacity-60">
-                  <div className="aspect-[4/5] rounded-2xl overflow-hidden border border-line group-hover:border-ink transition-colors">
-                    <div className="w-full h-full p-4 flex flex-col justify-between"
-                      style={{ background: pal.bg, color: pal.text, fontFamily: "Inter" }}>
-                      <div className="text-[9px] font-mono uppercase tracking-widest opacity-60">{t.tag}</div>
-                      <div className="font-bold text-lg leading-tight" style={{ color: pal.accent }}>{t.name}</div>
-                      <div className="flex gap-1">
-                        {[pal.bg2, pal.accent, pal.text].map((c, i) => <span key={`${c}-${i}`} className="w-3 h-3 rounded-full" style={{ background: c }} />)}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2 text-xs font-medium">{t.name}</div>
-                  <div className="text-[10px] text-neutral-500">{t.tag}</div>
+            <h2 className="font-display font-bold text-3xl sm:text-4xl leading-[1.05] tracking-tight max-w-xl">
+              Describe your idea.<br />We&apos;ll design the deck.
+            </h2>
+            <p className="text-sm text-neutral-500 mt-3 max-w-md">
+              One sentence is enough. Pick an audience and theme next — a finished, editable carousel in under a minute.
+            </p>
+
+            <div className="mt-6 flex flex-col sm:flex-row gap-2 max-w-2xl">
+              <textarea
+                value={heroTopic}
+                onChange={(e) => setHeroTopic(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); launchWizard(); } }}
+                data-testid="hero-topic-input"
+                rows={2}
+                placeholder='e.g. "Why cold outreach fails in 2026 — and the 3-step fix"'
+                className="flex-1 resize-none border border-line rounded-2xl px-4 py-3 text-base bg-white focus:outline-none focus:border-ink shadow-sm"
+              />
+              <button onClick={launchWizard} data-testid="hero-generate" className="btn-primary shrink-0 self-stretch sm:self-start sm:h-[52px] px-5">
+                <Wand2 size={16} /> Generate
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5 mt-4">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mr-1">Try</span>
+              {TOPIC_STARTERS.slice(0, 4).map((t, i) => (
+                <button key={i} onClick={() => setHeroTopic(t)} data-testid={`hero-starter-${i}`}
+                  className="text-xs px-3 py-1.5 rounded-full border border-line bg-white/70 hover:border-ink hover:bg-white text-neutral-600 transition-colors">
+                  {t}
                 </button>
-              );
-            })}
+              ))}
+            </div>
+
+            <div className="text-xs text-neutral-400 mt-5">
+              or <button onClick={startBlank} disabled={busy} data-testid="start-blank-btn" className="underline underline-offset-2 hover:text-ink disabled:opacity-50">start from a blank canvas</button>
+            </div>
           </div>
         </section>
 
-        {/* Your projects */}
+        {/* Templates gallery */}
         <section>
-          <div className="ui-label mb-3">Your projects</div>
-          {items.length === 0 && <div className="text-neutral-500 text-sm">No carousels yet. Pick a template above or click Create with AI.</div>}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {items.map((p) => {
-              const pal = PALETTES.find((pp) => pp.id === p.palette_id) || PALETTES[0];
+          <div className="flex items-baseline justify-between mb-4">
+            <div>
+              <div className="font-display font-bold text-lg">Start from a template</div>
+              <div className="text-xs text-neutral-500 mt-0.5">Pre-designed layouts — add your topic, edit anything.</div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {TEMPLATES.map((t) => {
+              const pal = PALETTES.find((p) => p.id === t.palette) || PALETTES[0];
               return (
-                <div key={p.id} className="bg-white border border-line rounded-2xl overflow-hidden">
-                  <Link to={`/app/create-eq/${p.id}`} data-testid={`carousel-open-${p.id}`}
-                    className="block aspect-[4/5] p-6 flex flex-col justify-between"
-                    style={{ background: pal.bg, color: pal.text }}>
-                    <div className="text-[10px] opacity-70 font-mono uppercase tracking-wider">{p.platform}</div>
-                    <div className="font-bold text-xl leading-tight" style={{ color: pal.accent }}>{p.topic}</div>
-                    <div className="text-xs opacity-70 font-mono">{p.slides?.length || 0} slides</div>
-                  </Link>
-                  <div className="p-3 flex items-center justify-between border-t border-line">
-                    <div className="text-xs text-neutral-500 truncate">{p.topic}</div>
-                    <button onClick={() => del(p.id)} data-testid={`carousel-delete-${p.id}`} className="text-neutral-400 hover:text-red-600"><Trash2 size={12} /></button>
+                <button key={t.id} onClick={() => setPendingTemplate(t)} data-testid={`start-tpl-${t.id}`}
+                  className="group rounded-2xl overflow-hidden border border-line hover:border-ink hover:shadow-lg hover:-translate-y-0.5 transition-all text-left">
+                  <div className="aspect-[4/5] p-4 flex flex-col justify-between relative"
+                    style={{ background: pal.bg, color: pal.text, fontFamily: "Inter" }}>
+                    <div className="text-[9px] font-mono uppercase tracking-widest opacity-60">{t.tag}</div>
+                    <div className="font-bold text-base leading-tight" style={{ color: pal.accent }}>{t.name}</div>
+                    <div className="absolute inset-x-0 bottom-0 h-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[11px] font-medium"
+                      style={{ background: `linear-gradient(transparent, ${pal.bg})`, color: pal.text }}>
+                      Use this template →
+                    </div>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -167,20 +165,170 @@ export default function CreateEQProjects() {
 
       {wizard && (
         <NewCarouselWizard
-          onClose={() => setWizard(false)}
+          initialTopic={wizard.topic}
+          initialStep={wizard.step}
+          onClose={() => setWizard(null)}
           onCreated={(id) => nav(`/app/create-eq/${id}`)}
+        />
+      )}
+
+      {showHistory && (
+        <HistoryDrawer items={items} onClose={() => setShowHistory(false)} onDelete={del} />
+      )}
+
+      {pendingTemplate && (
+        <TemplateStartDialog
+          template={pendingTemplate}
+          onClose={() => setPendingTemplate(null)}
+          onCreated={(id) => { setPendingTemplate(null); nav(`/app/create-eq/${id}`); }}
         />
       )}
     </div>
   );
 }
 
+/** Asks for a topic before creating a carousel from a template — the
+ * template's own hand-authored slide is a fixed layout with placeholder
+ * text; instead of using that verbatim (or silently discarding a wasted AI
+ * call the way this used to work), we generate a real multi-slide deck for
+ * the given topic and carry over just the template's palette. */
+function TemplateStartDialog({ template, onClose, onCreated }) {
+  const [topic, setTopic] = useState("");
+  const [slideCount, setSlideCount] = useState(6);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (!topic.trim()) { toast.error("Describe what this deck is about"); return; }
+    setBusy(true);
+    try {
+      const { data } = await api.post("/carousel/generate", {
+        topic: topic.trim(), platform: "linkedin", slide_count: slideCount, tone: "confident, punchy",
+      });
+      if (template.palette) {
+        try { await api.put(`/carousel/${data.id}`, { palette_id: template.palette }); } catch { /* not fatal */ }
+      }
+      toast.success("Draft ready — customise anything you want");
+      onCreated(data.id);
+    } catch { toast.error("Generation failed — try again"); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-ink/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()} data-testid="template-start-dialog">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="w-5 h-5 rounded-md shrink-0" style={{ background: template.thumb_bg }} />
+          <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">{template.tag} · {template.name}</div>
+        </div>
+        <h2 className="font-display font-bold text-2xl mt-2 mb-1">What&apos;s this deck about?</h2>
+        <p className="text-sm text-neutral-600 mb-4">We&apos;ll draft real content in this template&apos;s theme — one sentence is enough.</p>
+        <textarea
+          autoFocus
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          rows={3}
+          placeholder='e.g. "Why cold outreach fails in 2026 and how to fix it"'
+          data-testid="template-topic-input"
+          className="w-full border border-line rounded-lg px-4 py-3 text-base focus:outline-none focus:border-ink"
+        />
+        <div className="flex items-center gap-2 mt-3">
+          <span className="text-xs text-neutral-500">Slides:</span>
+          {[3, 5, 6, 8].map((n) => (
+            <button key={n} onClick={() => setSlideCount(n)} data-testid={`template-count-${n}`}
+              className={`px-3 py-1 rounded-full text-xs font-mono ${slideCount === n ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
+              {n}
+            </button>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose} className="btn-ghost">Cancel</button>
+          <button onClick={submit} disabled={busy} data-testid="template-start-generate" className="btn-primary disabled:opacity-60">
+            {busy ? <><Loader2 size={14} className="animate-spin" /> Drafting…</> : <><Wand2 size={14} /> Generate carousel</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Collapsible side panel holding "continue where you left off" + the full
+ * projects list, so the main page stays focused on the header and templates
+ * instead of a wall of project cards. Opened via the "Your projects" button
+ * in the page header. */
+function HistoryDrawer({ items, onClose, onDelete }) {
+  return (
+    <div className="fixed inset-0 bg-ink/40 z-50 flex justify-end" onClick={onClose}>
+      <div className="w-full max-w-md bg-white h-full overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="history-drawer">
+        <div className="sticky top-0 bg-white border-b border-line px-5 py-4 flex items-center gap-3 z-10">
+          <History size={16} />
+          <div className="font-display font-bold">Your projects</div>
+          <button onClick={onClose} data-testid="history-close-btn" className="ml-auto btn-ghost text-xs"><X size={14} /></button>
+        </div>
+
+        <div className="p-4 space-y-6">
+          {items.length === 0 ? (
+            <div className="text-neutral-500 text-sm">No carousels yet. Pick a template or click Create with AI.</div>
+          ) : (
+            <>
+              <div>
+                <div className="ui-label mb-2">Continue where you left off</div>
+                <ContinueCard project={items[0]} onNavigate={onClose} />
+              </div>
+
+              <div>
+                <div className="ui-label mb-1">All projects</div>
+                <div className="divide-y divide-line border-t border-line">
+                  {items.map((p) => {
+                    const pal = PALETTES.find((pp) => pp.id === p.palette_id) || PALETTES[0];
+                    return (
+                      <div key={p.id} className="group flex items-center gap-2.5 py-2.5">
+                        <Link to={`/app/create-eq/${p.id}`} onClick={onClose} data-testid={`carousel-open-${p.id}`}
+                          className="flex-1 flex items-center gap-2.5 min-w-0">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: pal.bg }} />
+                          <span className="text-sm font-medium truncate">{p.topic}</span>
+                          <span className="text-xs text-neutral-400 shrink-0 ml-auto pl-2">
+                            {p.updated_at ? formatDistanceToNow(new Date(p.updated_at), { addSuffix: true }) : `${p.slides?.length || 0} slides`}
+                          </span>
+                        </Link>
+                        <button onClick={() => onDelete(p.id)} data-testid={`carousel-delete-${p.id}`}
+                          className="text-neutral-300 hover:text-red-600 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={13} /></button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Prominent "resume where you left off" card for the single most recently
+ * edited project — `items` is already sorted by updated_at desc by the API. */
+function ContinueCard({ project: p, onNavigate }) {
+  const pal = PALETTES.find((pp) => pp.id === p.palette_id) || PALETTES[0];
+  const edited = p.updated_at ? formatDistanceToNow(new Date(p.updated_at), { addSuffix: true }) : null;
+  return (
+    <Link to={`/app/create-eq/${p.id}`} onClick={onNavigate} data-testid="continue-card"
+      className="group flex items-center gap-2.5 rounded-lg border border-line bg-white px-3 py-2.5 hover:border-ink transition-colors">
+      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: pal.bg }} />
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium truncate">{p.topic}</div>
+        {edited && <div className="text-xs text-neutral-500">{edited} · {p.slides?.length || 0} slides</div>}
+      </div>
+      <ArrowRight size={14} className="shrink-0 text-neutral-400 group-hover:text-ink" />
+    </Link>
+  );
+}
+
 /* --------------------------- Gamma-style wizard --------------------------- */
 
-function NewCarouselWizard({ onClose, onCreated }) {
-  const [step, setStep] = useState(1); // 1 = topic, 2 = audience, 3 = platform+palette, 4 = review
+function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep = 1 }) {
+  const [step, setStep] = useState(initialStep); // 1 = topic, 2 = audience, 3 = platform+palette, 4 = review
   const [form, setForm] = useState({
-    topic: "",
+    topic: initialTopic,
     audience: "generic",
     platform: "linkedin",
     palette_id: "midnight",

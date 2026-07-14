@@ -1,0 +1,112 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Inter", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-ink: #212025;
+  --color-bone: #e8e9eb;
+  --color-surface: #ffffff;
+  --color-surfacehover: #f1f2f4;
+  --color-line: #d6d7da;
+  --color-sanguine: #212025;
+  --color-sanguine-hover: #0f0e12;
+  --color-sanguine-soft: #f1f2f4;
+
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-sm: calc(var(--radius) - 8px);
+}
+
+:root {
+  --background: 220 5% 91%;
+  --foreground: 260 6% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 260 6% 14%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 260 6% 14%;
+  --primary: 260 6% 14%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 5% 85%;
+  --secondary-foreground: 260 6% 14%;
+  --muted: 220 5% 88%;
+  --muted-foreground: 240 4% 38%;
+  --accent: 260 6% 14%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 78% 54%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 6% 82%;
+  --input: 220 6% 82%;
+  --ring: 260 6% 14%;
+  --radius: 0.875rem;
+}
+
+html,
+body {
+  background-color: #e8e9eb;
+  color: #212025;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.005em;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: "Inter", system-ui, sans-serif;
+  letter-spacing: -0.03em;
+  font-weight: 700;
+}
+
+::selection {
+  background: #212025;
+  color: #e8e9eb;
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-ink text-white text-sm font-medium rounded-full hover:bg-ink/90 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ink;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-ink text-sm font-medium rounded-full border border-line hover:border-ink transition-colors;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-neutral-600 hover:text-ink hover:bg-white/60 rounded-full transition-colors text-sm;
+  }
+  .ui-label {
+    @apply text-[11px] font-medium tracking-wider uppercase text-neutral-500;
+  }
+  .card-flat {
+    @apply bg-white border border-line rounded-2xl;
+  }
+  .kbd {
+    @apply font-mono text-xs px-1.5 py-0.5 border border-line rounded-md bg-neutral-50;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-white border border-line text-neutral-600;
+  }
+}

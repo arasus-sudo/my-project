@@ -56,7 +56,7 @@ export default function Onboarding() {
     try {
       if (chosen.length) await api.post("/onboarding/accept", { campaigns: chosen });
       toast.success(`${chosen.length} campaign${chosen.length === 1 ? "" : "s"} saved`);
-      nav("/app");
+      nav("/suite");
     } catch { toast.error("Save failed"); }
     finally { setBusy(false); }
   };

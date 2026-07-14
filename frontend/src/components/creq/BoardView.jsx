@@ -1,9 +1,11 @@
+import { memo } from "react";
 import { CANVAS } from "../../lib/creqTemplates";
 import { renderBackground } from "./utils";
 import ElementRender from "./ElementRender";
 import PanoramaLayer from "./PanoramaLayer";
+import DeckOverlay from "./DeckOverlay";
 
-export default function BoardView({ proj, palette, onFocus }) {
+function BoardView({ proj, palette, onFocus }) {
   const n = proj.slides.length;
   const targetStripW = Math.max(900, Math.min(1800, 300 * n));
   const zoom = targetStripW / (n * CANVAS.w);
@@ -28,6 +30,7 @@ export default function BoardView({ proj, palette, onFocus }) {
                   <ElementRender key={el.id} el={el} palette={palette} selected={false} onPointerDown={() => {}} />
                 ))}
               </div>
+              <DeckOverlay proj={proj} slideIdx={i} palette={palette} />
             </div>
             <div className="absolute -top-6 left-0 text-[11px] font-mono text-neutral-500">Slide {i + 1}</div>
           </div>
@@ -36,3 +39,5 @@ export default function BoardView({ proj, palette, onFocus }) {
     </div>
   );
 }
+
+export default memo(BoardView);

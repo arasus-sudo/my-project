@@ -1,0 +1,19 @@
+{"level":30,"time":1783762718454,"pid":26240,"hostname":"DESKTOP-FMAG1BM","msg":"Server listening at http://127.0.0.1:8001"}
+{"level":30,"time":1783762726168,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-1","req":{"method":"POST","url":"/api/auth/signup","host":"127.0.0.1:8001","remoteAddress":"127.0.0.1","remotePort":62131},"msg":"incoming request"}
+{"level":30,"time":1783762726436,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-1","res":{"statusCode":200},"responseTime":267.65560000000005,"msg":"request completed"}
+{"level":30,"time":1783762732474,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-2","req":{"method":"POST","url":"/api/auth/login","host":"127.0.0.1:8001","remoteAddress":"127.0.0.1","remotePort":62134},"msg":"incoming request"}
+{"level":30,"time":1783762732537,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-2","res":{"statusCode":200},"responseTime":62.313100000001214,"msg":"request completed"}
+{"level":30,"time":1783762732618,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-3","req":{"method":"GET","url":"/api/auth/me","host":"127.0.0.1:8001","remoteAddress":"127.0.0.1","remotePort":62135},"msg":"incoming request"}
+{"level":30,"time":1783762732623,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-3","res":{"statusCode":200},"responseTime":4.243099999999686,"msg":"request completed"}
+{"level":30,"time":1783762739715,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-4","req":{"method":"POST","url":"/api/auth/login","host":"127.0.0.1:8001","remoteAddress":"127.0.0.1","remotePort":62136},"msg":"incoming request"}
+{"level":30,"time":1783762739775,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-4","res":{"statusCode":401},"responseTime":60.15259999999762,"msg":"request completed"}
+{"level":30,"time":1783763163682,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-5","req":{"method":"OPTIONS","url":"/api/auth/signup","host":"localhost:8001","remoteAddress":"127.0.0.1","remotePort":63181},"msg":"incoming request"}
+{"level":30,"time":1783763163684,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-5","res":{"statusCode":204},"responseTime":0.9755000000004657,"msg":"request completed"}
+{"level":30,"time":1783763163686,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-6","req":{"method":"POST","url":"/api/auth/signup","host":"localhost:8001","remoteAddress":"127.0.0.1","remotePort":63181},"msg":"incoming request"}
+{"level":30,"time":1783763163795,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-6","res":{"statusCode":200},"responseTime":109.74769999994896,"msg":"request completed"}
+{"level":30,"time":1783763164349,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-7","req":{"method":"OPTIONS","url":"/api/auth/me","host":"localhost:8001","remoteAddress":"127.0.0.1","remotePort":63181},"msg":"incoming request"}
+{"level":30,"time":1783763164350,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-7","res":{"statusCode":204},"responseTime":0.4773000000277534,"msg":"request completed"}
+{"level":30,"time":1783763164352,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-8","req":{"method":"GET","url":"/api/auth/me","host":"localhost:8001","remoteAddress":"127.0.0.1","remotePort":63181},"msg":"incoming request"}
+{"level":30,"time":1783763164356,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-8","res":{"statusCode":200},"responseTime":4.097500000032596,"msg":"request completed"}
+{"level":30,"time":1783763235679,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-9","req":{"method":"GET","url":"/health","host":"127.0.0.1:8001","remoteAddress":"127.0.0.1","remotePort":53049},"msg":"incoming request"}
+{"level":30,"time":1783763235680,"pid":26240,"hostname":"DESKTOP-FMAG1BM","reqId":"req-9","res":{"statusCode":200},"responseTime":0.4928999999538064,"msg":"request completed"}

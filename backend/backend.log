@@ -1,0 +1,157 @@
+INFO:     Started server process [13256]
+INFO:     Waiting for application startup.
+2026-07-14 10:45:44,760 INFO indexes ensured
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
+D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\jwt\api_jwt.py:368: InsecureKeyLengthWarning: The HMAC key is 28 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+2026-07-14 10:45:46,371 INFO HTTP Request: POST https://api.retellai.com/create-retell-llm "HTTP/1.1 201 Created"
+2026-07-14 10:45:47,185 INFO HTTP Request: POST https://api.retellai.com/create-agent "HTTP/1.1 201 Created"
+INFO:     127.0.0.1:57861 - "POST /api/voice-eq/agents/c6a5c1e8-7d8f-4300-bc3d-804159e228f7/sync HTTP/1.1" 200 OK
+2026-07-14 10:46:28,515 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-07-14 10:46:40,478 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:52580 - "POST /api/hooks/voice/2vIgPyIyOofqX-VPrnNg5zzrRzBp8ZdK HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64294 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50255 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50255 - "GET /api/auth/me HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:64294 - "GET /api/auth/me HTTP/1.1" 401 Unauthorized
+D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\jwt\api_jwt.py:147: InsecureKeyLengthWarning: The HMAC key is 28 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  return self._jws.encode(
+INFO:     127.0.0.1:54741 - "POST /api/auth/signup HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54743 - "POST /api/leads/bulk HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54745 - "GET /api/leads HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54747 - "POST /api/campaigns HTTP/1.1" 200 OK
+2026-07-14 10:48:53,757 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-07-14 10:48:55,842 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:54749 - "POST /api/campaigns/3efe55ed-40b4-4200-80b9-d1e89f4991c2/launch HTTP/1.1" 200 OK
+2026-07-14 10:49:01,509 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:65298 - "POST /api/social-eq/posts/generate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/inbox HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/carousel HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/voice-eq/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/voice-eq/calls HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/voice-eq/calls/active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/schedule-eq/event-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/schedule-eq/bookings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/proposal-eq/proposals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/social-eq/posts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/activities?limit=40 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/activities/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/inbox HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/carousel HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/voice-eq/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/voice-eq/calls HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/voice-eq/calls/active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/schedule-eq/event-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/schedule-eq/bookings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/proposal-eq/proposals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/social-eq/posts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/activities?limit=40 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "OPTIONS /api/activities/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/inbox HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/carousel HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/voice-eq/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/voice-eq/calls HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/voice-eq/calls/active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/schedule-eq/event-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/schedule-eq/bookings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/proposal-eq/proposals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/social-eq/posts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/activities?limit=40 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/activities/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/inbox HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/carousel HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/voice-eq/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/voice-eq/calls HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/voice-eq/calls/active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/schedule-eq/event-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/schedule-eq/bookings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/proposal-eq/proposals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/social-eq/posts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/activities?limit=40 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54739 - "GET /api/activities/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58049 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50371 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65238 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53600 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53600 - "GET /api/voice-eq/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65238 - "GET /api/voice-eq/calls HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53880 - "GET /api/voice-eq/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53600 - "GET /api/voice-eq/calls HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "OPTIONS /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "OPTIONS /api/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "OPTIONS /api/inbox HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "OPTIONS /api/carousel HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "OPTIONS /api/voice-eq/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "OPTIONS /api/voice-eq/calls HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "OPTIONS /api/voice-eq/calls/active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "OPTIONS /api/schedule-eq/event-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "OPTIONS /api/schedule-eq/bookings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "OPTIONS /api/proposal-eq/proposals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "OPTIONS /api/social-eq/posts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "OPTIONS /api/activities?limit=40 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "OPTIONS /api/activities/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "OPTIONS /api/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "OPTIONS /api/inbox HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "OPTIONS /api/carousel HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "OPTIONS /api/voice-eq/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "OPTIONS /api/voice-eq/calls HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "OPTIONS /api/voice-eq/calls/active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "OPTIONS /api/schedule-eq/event-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "OPTIONS /api/schedule-eq/bookings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "OPTIONS /api/proposal-eq/proposals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "OPTIONS /api/social-eq/posts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "OPTIONS /api/activities?limit=40 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "OPTIONS /api/activities/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /api/inbox HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /api/voice-eq/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "GET /api/carousel HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /api/voice-eq/calls HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /api/voice-eq/calls/active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /api/schedule-eq/event-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "GET /api/schedule-eq/bookings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /api/proposal-eq/proposals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "GET /api/social-eq/posts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /api/activities?limit=40 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "GET /api/activities/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /api/voice-eq/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /api/carousel HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "GET /api/inbox HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /api/voice-eq/calls HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "GET /api/voice-eq/calls/active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /api/schedule-eq/event-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "GET /api/schedule-eq/bookings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /api/proposal-eq/proposals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "GET /api/social-eq/posts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /api/activities?limit=40 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "GET /api/activities/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54174 - "GET /api/carousel HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62920 - "GET /api/carousel HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55350 - "OPTIONS /api/carousel/generate HTTP/1.1" 200 OK
+2026-07-14 11:21:27,449 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:55350 - "POST /api/carousel/generate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55350 - "OPTIONS /api/carousel/48d6e2b4-31b1-4596-8dda-c383cc7c9fbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55350 - "PUT /api/carousel/48d6e2b4-31b1-4596-8dda-c383cc7c9fbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54447 - "OPTIONS /api/brandkits HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54447 - "OPTIONS /api/brandkits HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55350 - "GET /api/carousel/48d6e2b4-31b1-4596-8dda-c383cc7c9fbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55350 - "GET /api/carousel/48d6e2b4-31b1-4596-8dda-c383cc7c9fbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54447 - "GET /api/brandkits HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55350 - "GET /api/brandkits HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64567 - "GET /api/social-eq/posts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64567 - "GET /api/social-eq/posts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59699 - "GET /api/social-eq/posts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50839 - "GET /api/social-eq/posts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55846 - "GET /api/social-eq/posts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55846 - "GET /api/social-eq/posts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55846 - "GET /api/social-eq/posts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62941 - "GET /api/social-eq/posts HTTP/1.1" 200 OK

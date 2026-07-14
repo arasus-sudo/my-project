@@ -20,7 +20,7 @@ export default function HubSpotSettings() {
     try {
       const { data } = await api.post("/hubspot/connect", { portal_id: portalIdInput.trim() || null });
       setStatus(data);
-      toast.success("HubSpot connected (mocked)");
+      toast.success("HubSpot connected");
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Connect failed");
     } finally { setConnecting(false); }
@@ -59,16 +59,15 @@ export default function HubSpotSettings() {
       <PageHeader
         title="HubSpot"
         subtitle="Two-way sync between Pitch EQ leads / deals and your HubSpot CRM."
-        badge="Mocked"
       />
 
       <div className="p-6 space-y-6 max-w-3xl">
-        {/* MOCKED banner */}
+        {/* Connection-state banner */}
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
           <AlertTriangle size={16} className="text-amber-700 flex-shrink-0 mt-0.5" />
           <div className="text-xs text-amber-900 leading-relaxed">
-            <div className="font-medium mb-0.5">This integration is currently MOCKED.</div>
-            All actions simulate HubSpot writes / reads without contacting HubSpot. To enable live sync,
+            <div className="font-medium mb-0.5">Running in test mode.</div>
+            Sync actions are simulated until you connect your HubSpot account. To enable live sync,
             provide your HubSpot developer <span className="font-mono">Client ID</span>, <span className="font-mono">Client Secret</span>, and a <span className="font-mono">Private App token</span>.
             Get them at <a href="https://developers.hubspot.com/" target="_blank" rel="noreferrer" className="underline">developers.hubspot.com</a>.
           </div>

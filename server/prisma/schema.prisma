@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  org_admin
+  campaign_manager
+  sdr
+  viewer
+}
+
+model Workspace {
+  id         String   @id @default(uuid())
+  name       String
+  ownerId    String   @map("owner_id")
+  brandVoice Json     @default("{}") @map("brand_voice")
+  plan       String   @default("trial")
+  blocked    Boolean  @default(false)
+  onboarded  Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  users User[]
+
+  @@map("workspaces")
+}
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  name              String
+  passwordHash      String    @map("password_hash")
+  workspaceId       String    @map("workspace_id")
+  role              Role      @default(org_admin)
+  blocked           Boolean   @default(false)
+  headline          String?
+  avatarUrl         String?   @map("avatar_url")
+  invitedBy         String?   @map("invited_by")
+  passwordChangedAt DateTime? @map("password_changed_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@map("users")
+}

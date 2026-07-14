@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  User as UserIcon, KeyRound, Building2, Loader2, Camera, Trash2, Sparkles,
+  User as UserIcon, KeyRound, Building2, Loader2, Camera, Trash2, Sparkles, ArrowLeft, LogOut,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { PageHeader } from "../components/AppLayout";
 
 export default function Settings() {
-  const { user, workspace, refresh } = useAuth();
+  const { user, workspace, refresh, logout } = useAuth();
   const [profile, setProfile] = useState(null);
   const [tab, setTab] = useState("profile");
 
@@ -17,7 +18,23 @@ export default function Settings() {
   }, []);
 
   return (
-    <div>
+    <div className="min-h-screen bg-bone">
+      <div className="border-b border-line bg-white">
+        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
+          <Link to="/suite" data-testid="settings-back" className="flex items-center gap-2 text-sm text-neutral-600 hover:text-ink">
+            <ArrowLeft size={15} /> Command center
+          </Link>
+          <div className="flex items-center gap-3">
+            <div className="text-right leading-tight">
+              <div className="text-xs font-medium">{user?.name}</div>
+              <div className="text-[10px] text-neutral-500">{user?.email}</div>
+            </div>
+            <button onClick={logout} data-testid="settings-logout" className="p-1.5 text-neutral-500 hover:text-ink hover:bg-surfacehover rounded-full">
+              <LogOut size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
       <PageHeader
         title="Settings"
         subtitle="Your profile, workspace, security & brand voice."

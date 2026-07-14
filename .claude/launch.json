@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd /d D:\\SUITEOFAGETNS\\frontend && npm start"],
+      "port": 3000
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd /d D:\\SUITEOFAGETNS\\web && npm run dev -- -p 3001"],
+      "port": 3001
+    }
+  ]
+}

@@ -13,6 +13,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import re
 import json
+import base64
 import logging
 import uuid
 import bcrypt
@@ -21,7 +22,10 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+import anthropic
+import openai
+from google import genai
+from google.genai import types as genai_types
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -102,6 +106,7 @@ class LeadIn(BaseModel):
     company: Optional[str] = ""
     title: Optional[str] = ""
     linkedin: Optional[str] = ""
+    phone: Optional[str] = None
     tags: List[str] = []
 
 
@@ -353,11 +358,14 @@ async def create_lead(body: LeadIn, user=Depends(current_user)):
     lead["status"] = "new"
     lead["icp_score"] = 60 + (len(lead.get("company", "")) % 40)
     lead["verified"] = "@" in lead["email"] and "." in lead["email"].split("@")[-1]
+    lead["phone_verified"] = False
+    lead["dnc"] = False
     lead["created_at"] = now_iso()
     # dedup by email in workspace
     if await db.leads.find_one({"workspace_id": user["workspace_id"], "email": lead["email"]}):
         raise HTTPException(400, "Lead with this email already exists")
     await db.leads.insert_one(lead)
+    lead.pop("_id", None)
     return lead
 
 
@@ -376,6 +384,8 @@ async def bulk_leads(body: LeadBulk, user=Depends(current_user)):
             "status": "new",
             "icp_score": 55 + (len(d.get("company", "")) % 45),
             "verified": True,
+            "phone_verified": False,
+            "dnc": False,
             "created_at": now_iso(),
         })
         await db.leads.insert_one(d)
@@ -430,6 +440,7 @@ async def create_mailbox(body: MailboxIn, user=Depends(current_user)):
         "spam_rate": 0.05,
     })
     await db.mailboxes.insert_one(m)
+    m.pop("_id", None)
     return m
 
 
@@ -485,6 +496,7 @@ async def create_campaign(body: CampaignIn, user=Depends(current_user)):
         "owner_id": user["id"],
     })
     await db.campaigns.insert_one(c)
+    c.pop("_id", None)
     return c
 
 
@@ -578,10 +590,12 @@ async def launch_campaign(cid: str, user=Depends(current_user)):
                         {"from": "them", "body": reply_body, "at": now_iso()},
                     ],
                 })
+                await _log_activity(user["workspace_id"], lid, "pitch", "email_replied",
+                                     f"Replied ({classification}): “{reply_body[:80]}”", {"conversation_id": convo_id})
                 if classification == "interested":
                     # auto-create deal with persona hypothesis
                     persona = ""
-                    if EMERGENT_LLM_KEY:
+                    if ANTHROPIC_API_KEY:
                         try:
                             resp = await _llm_chat(
                                 "Given a lead and their positive reply, produce a STRICT JSON: {\"persona_hypothesis\": one-sentence hypothesis about what they care about}",
@@ -605,6 +619,8 @@ async def launch_campaign(cid: str, user=Depends(current_user)):
                         "id": new_id(), "workspace_id": user["workspace_id"], "campaign_id": cid,
                         "lead_id": lid, "type": "meeting_booked", "at": now_iso(),
                     })
+                    await _log_activity(user["workspace_id"], lid, "pitch", "deal_created",
+                                         f"Deal created from inbound reply: {persona}", {"campaign_id": cid})
                 break
     return {"ok": True, "status": "active"}
 
@@ -666,11 +682,15 @@ async def inbox_detail(cid: str, user=Depends(current_user)):
 
 @api.post("/inbox/{cid}/reply")
 async def reply(cid: str, body: ReplyIn, user=Depends(current_user)):
+    convo = await db.conversations.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
     await db.conversations.update_one(
         {"id": cid, "workspace_id": user["workspace_id"]},
         {"$push": {"messages": {"from": "me", "body": body.body, "at": now_iso()}},
          "$set": {"updated_at": now_iso(), "status": "responded"}},
     )
+    if convo:
+        await _log_activity(user["workspace_id"], convo["lead_id"], "pitch", "email_replied",
+                             f"You replied: “{body.body[:80]}”", {"conversation_id": cid})
     return {"ok": True}
 
 
@@ -693,6 +713,7 @@ async def create_deal(body: DealIn, user=Depends(current_user)):
     if d["stage"] not in STAGES:
         d["stage"] = "new"
     await db.deals.insert_one(d)
+    d.pop("_id", None)
     return d
 
 
@@ -709,8 +730,10 @@ async def update_deal(did: str, body: Dict[str, Any], user=Depends(current_user)
 
 
 # ----------------------------- AI --------------------------------------------
-EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
-OPENAI_MODEL = "gpt-5.4"
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+ANTHROPIC_MODEL = "claude-sonnet-5"
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 
 def _extract_json(text: str) -> Optional[Dict[str, Any]]:
@@ -727,22 +750,23 @@ def _extract_json(text: str) -> Optional[Dict[str, Any]]:
 
 
 async def _llm_chat(system: str, user_text: str, session_id: str, user: Optional[Dict[str, Any]] = None) -> str:
-    if not EMERGENT_LLM_KEY:
-        raise RuntimeError("EMERGENT_LLM_KEY not configured")
+    if not ANTHROPIC_API_KEY:
+        raise RuntimeError("ANTHROPIC_API_KEY not configured")
     if user and not await _rate_ok(user):
         raise RuntimeError("daily LLM quota exceeded")
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=session_id,
-        system_message=system,
-    ).with_model("openai", OPENAI_MODEL)
-    return await chat.send_message(UserMessage(text=user_text))
+    resp = await anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY).messages.create(
+        model=ANTHROPIC_MODEL,
+        max_tokens=2048,
+        system=system,
+        messages=[{"role": "user", "content": user_text}],
+    )
+    return "".join(block.text for block in resp.content if block.type == "text")
 
 
 @api.post("/ai/score")
 async def ai_score(body: AIScoreIn, user=Depends(current_user)):
     heuristic = compute_eq(body.subject, body.body)
-    if not EMERGENT_LLM_KEY:
+    if not ANTHROPIC_API_KEY:
         return heuristic
     system = (
         "You are the EQ Score engine for a cold-email tool. "
@@ -771,7 +795,7 @@ async def ai_personalize(body: AIPersonalizeIn, user=Depends(current_user)):
         lead = await db.leads.find_one({"id": body.lead_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
     lead = lead or {}
 
-    if EMERGENT_LLM_KEY:
+    if ANTHROPIC_API_KEY:
         system = (
             "You are Pitch EQ — an outbound copywriter for B2B cold email. "
             "Write ONE email tailored to the lead. Be warm, specific, and human. "
@@ -995,7 +1019,7 @@ async def onb_analyze(body: OnbAnalyzeIn, user=Depends(current_user)):
     combined = "\n\n".join(f"URL: {u}\n{t[:3500]}" for u, t in pages.items())[:14000]
     if not combined:
         return {"summary": "", "services": [], "questions": DEFAULT_QUESTIONS, "raw": "", "crawled": []}
-    if EMERGENT_LLM_KEY:
+    if ANTHROPIC_API_KEY:
         system = (
             "You are a B2B outbound strategist analysing a company website. "
             "Read the crawled pages and return STRICT JSON only: "
@@ -1021,7 +1045,7 @@ async def onb_analyze(body: OnbAnalyzeIn, user=Depends(current_user)):
 @api.post("/onboarding/generate")
 async def onb_generate(body: OnbGenerateIn, user=Depends(current_user)):
     services = [s for s in (body.services or []) if s][:3] or ["Core offering"]
-    if EMERGENT_LLM_KEY:
+    if ANTHROPIC_API_KEY:
         system = (
             f"You are Pitch EQ's campaign designer. Return EXACTLY {len(services)} campaigns "
             f"— one per service in the input list, in the same order. Each campaign has 3 steps (day 0, 3, 7). "
@@ -1308,7 +1332,7 @@ async def prospect_import(body: ProspectImportIn, user=Depends(current_user)):
             skipped += 1
             continue
         icebreaker = ""
-        if body.generate_icebreaker and EMERGENT_LLM_KEY:
+        if body.generate_icebreaker and ANTHROPIC_API_KEY:
             try:
                 system = (
                     "You are Pitch EQ's icebreaker writer. Write ONE 2-sentence cold-email opener for the given prospect. "
@@ -1451,7 +1475,7 @@ async def carousel_generate(body: CarouselGenIn, user=Depends(current_user)):
     if body.platform not in PLATFORM_DIMS:
         raise HTTPException(400, "invalid platform")
     slides: List[Dict[str, Any]] = []
-    if EMERGENT_LLM_KEY:
+    if ANTHROPIC_API_KEY:
         system = (
             f"You are Create EQ, a carousel narrative designer. From a single topic, produce a "
             f"multi-slide carousel with narrative arc Hook → Body → CTA. Return EXACTLY {body.slide_count} slides. "
@@ -1506,7 +1530,10 @@ async def carousel_get(pid: str, user=Depends(current_user)):
 
 @api.put("/carousel/{pid}")
 async def carousel_update(pid: str, body: Dict[str, Any], user=Depends(current_user)):
-    allowed = {k: v for k, v in body.items() if k in {"slides", "brand", "platform", "topic", "palette_id", "panorama"}}
+    allowed = {k: v for k, v in body.items() if k in {
+        "slides", "brand", "platform", "topic", "palette_id", "panorama",
+        "show_slide_numbers", "show_progress_dots", "show_swipe_hint", "show_branding",
+    }}
     allowed["updated_at"] = now_iso()
     await db.carousels.update_one(
         {"id": pid, "workspace_id": user["workspace_id"]}, {"$set": allowed}
@@ -1531,7 +1558,7 @@ async def carousel_edit(body: CarouselEditIn, user=Depends(current_user)):
     if body.slide_index < 0 or body.slide_index >= len(slides):
         raise HTTPException(400, "invalid slide index")
     current = slides[body.slide_index]
-    if EMERGENT_LLM_KEY:
+    if ANTHROPIC_API_KEY:
         system = (
             "You are Create EQ's touch-edit interface. Rewrite the ONE slide provided per the user's "
             "instruction, preserving its kind. Keep title <=8 words, body <=45 words. STRICT JSON only: "
@@ -1559,7 +1586,7 @@ async def carousel_edit(body: CarouselEditIn, user=Depends(current_user)):
 @api.post("/carousel/brand-from-url")
 async def brand_from_url(body: BrandFromUrlIn, user=Depends(current_user)):
     text = _fetch_url(body.url)[:4000]
-    if EMERGENT_LLM_KEY and text:
+    if ANTHROPIC_API_KEY and text:
         system = (
             "Extract a brand kit from a company's website snippet. Guess primary background hex, "
             "accent hex, text hex, and a font family (choose from Inter, Manrope, Poppins, IBM Plex Sans, "
@@ -1583,31 +1610,46 @@ class AiImageIn(BaseModel):
     aspect: Optional[str] = "portrait"  # informational hint for the model
 
 
+# Gemini image generation only accepts these discrete aspect ratios (no arbitrary
+# width:height) — pick whichever is closest to what was actually requested so a
+# "wide panorama" request returns a genuinely wide image instead of a square one.
+_GEMINI_ASPECT_RATIOS = {
+    "1:1": 1 / 1, "2:3": 2 / 3, "3:2": 3 / 2, "3:4": 3 / 4, "4:3": 4 / 3,
+    "9:16": 9 / 16, "16:9": 16 / 9, "21:9": 21 / 9,
+}
+
+
+def _closest_gemini_aspect(width: int, height: int) -> str:
+    target = width / height if height else 1.0
+    return min(_GEMINI_ASPECT_RATIOS.items(), key=lambda kv: abs(kv[1] - target))[0]
+
+
 @api.post("/carousel/ai-image")
 async def carousel_ai_image(body: AiImageIn, user=Depends(current_user)):
     """Generate an AI image and return it as base64. The frontend embeds this as a
     `data:image/png;base64,...` URL directly on the canvas — no external storage needed."""
-    if not EMERGENT_LLM_KEY:
-        raise HTTPException(500, "EMERGENT_LLM_KEY not configured")
     prompt = (body.prompt or "").strip()
     if not prompt:
         raise HTTPException(400, "prompt is required")
-    if not await _rate_ok(user):
-        raise HTTPException(429, "daily LLM quota exceeded")
 
     provider = (body.provider or "nano-banana").lower()
 
     if provider == "gpt-image-1":
+        if not OPENAI_API_KEY:
+            raise HTTPException(500, "OPENAI_API_KEY not configured")
+    elif not GEMINI_API_KEY:
+        raise HTTPException(500, "GEMINI_API_KEY not configured")
+
+    if not await _rate_ok(user):
+        raise HTTPException(429, "daily LLM quota exceeded")
+
+    if provider == "gpt-image-1":
         try:
-            import base64
-            from emergentintegrations.llm.openai.image_generation import OpenAIImageGeneration
-            gen = OpenAIImageGeneration(api_key=EMERGENT_LLM_KEY)
-            images = await gen.generate_images(
-                prompt=prompt, model="gpt-image-1", number_of_images=1
-            )
-            if not images:
+            client = openai.AsyncOpenAI(api_key=OPENAI_API_KEY)
+            resp = await client.images.generate(model="gpt-image-1", prompt=prompt, n=1)
+            if not resp.data:
                 raise HTTPException(502, "gpt-image-1 returned no image")
-            b64 = base64.b64encode(images[0]).decode("utf-8")
+            b64 = resp.data[0].b64_json
             await _audit(user, "ai_image.generate", {"provider": "gpt-image-1", "prompt": prompt[:120]})
             return {"image_base64": b64, "mime_type": "image/png", "provider": "gpt-image-1"}
         except HTTPException:
@@ -1618,22 +1660,35 @@ async def carousel_ai_image(body: AiImageIn, user=Depends(current_user)):
 
     # default: Gemini Nano Banana
     try:
+        req_w, req_h = 1080, 1350
+        if body.size and "x" in body.size:
+            try:
+                w_str, h_str = body.size.lower().split("x", 1)
+                req_w, req_h = int(w_str), int(h_str)
+            except ValueError:
+                pass
+        aspect_ratio = _closest_gemini_aspect(req_w, req_h)
         style_hint = f"Composition: {body.size} {body.aspect}, high quality, suitable for a social media carousel."
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"nano-{user['id']}-{new_id()[:6]}",
-            system_message="You are an image generation model producing polished social media carousel imagery.",
-        ).with_model("gemini", "gemini-3.1-flash-image-preview").with_params(modalities=["image", "text"])
-        text, images = await chat.send_message_multimodal_response(
-            UserMessage(text=f"{prompt}\n\n{style_hint}")
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        resp = await client.aio.models.generate_content(
+            model="gemini-3.1-flash-image-preview",
+            contents=[f"{prompt}\n\n{style_hint}"],
+            config=genai_types.GenerateContentConfig(
+                response_modalities=["Image", "Text"],
+                image_config=genai_types.ImageConfig(aspect_ratio=aspect_ratio),
+            ),
         )
-        if not images:
+        parts = resp.candidates[0].content.parts if resp.candidates else []
+        image_part = next((p for p in parts if getattr(p, "inline_data", None)), None)
+        if not image_part:
             raise HTTPException(502, "nano-banana returned no image")
-        img = images[0]
+        img_bytes = image_part.inline_data.data
+        mime_type = image_part.inline_data.mime_type or "image/png"
+        b64 = base64.b64encode(img_bytes).decode("utf-8") if isinstance(img_bytes, (bytes, bytearray)) else img_bytes
         await _audit(user, "ai_image.generate", {"provider": "nano-banana", "prompt": prompt[:120]})
         return {
-            "image_base64": img["data"],
-            "mime_type": img.get("mime_type", "image/png"),
+            "image_base64": b64,
+            "mime_type": mime_type,
             "provider": "nano-banana",
         }
     except HTTPException:
@@ -1751,7 +1806,7 @@ async def webhook_carousel(token: str, payload: Dict[str, Any]):
     topic = topic.strip()
 
     slides: List[Dict[str, Any]] = []
-    if EMERGENT_LLM_KEY:
+    if ANTHROPIC_API_KEY:
         system = (
             f"You are Create EQ. Produce EXACTLY {slide_count} slides for a "
             f"{platform} carousel from a topic. Narrative arc: Hook → Body → CTA. "
@@ -1946,7 +2001,7 @@ async def lead_research(lead_id: str, user=Depends(current_user)):
     site_text = _fetch_url(f"https://{domain}") if domain else ""
     triggers: List[str] = []
     persona = ""
-    if EMERGENT_LLM_KEY and site_text:
+    if ANTHROPIC_API_KEY and site_text:
         system = (
             "You are Pitch EQ's research agent. Given a lead and a snippet of their company website, "
             "return STRICT JSON only: "
@@ -2127,6 +2182,76 @@ async def _audit(user: Dict[str, Any], action: str, meta: Dict[str, Any] = None)
         pass
 
 
+# ----------------------------- Centralized activity timeline -----------------
+async def _log_activity(workspace_id: str, lead_id: str, agent: str, type_: str,
+                         summary: str, meta: Dict[str, Any] = None):
+    """Append-only, per-lead activity feed shared across every agent (Pitch/Voice/
+    Schedule/Proposal/Social). Never raises — a logging failure must not break the
+    caller's primary action."""
+    try:
+        await db.activities.insert_one({
+            "id": new_id(),
+            "workspace_id": workspace_id,
+            "lead_id": lead_id,
+            "agent": agent,
+            "type": type_,
+            "summary": summary,
+            "meta": meta or {},
+            "at": now_iso(),
+        })
+    except Exception:
+        pass
+
+
+@api.get("/leads/{lead_id}")
+async def get_lead(lead_id: str, user=Depends(current_user)):
+    lead = await db.leads.find_one({"id": lead_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not lead:
+        raise HTTPException(404, "not found")
+    lead["deal"] = await db.deals.find_one({"lead_id": lead_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    return lead
+
+
+@api.get("/leads/{lead_id}/timeline")
+async def lead_timeline(lead_id: str, user=Depends(current_user)):
+    return await db.activities.find(
+        {"lead_id": lead_id, "workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).sort("at", -1).to_list(500)
+
+
+# ----------------------------- Suite command center --------------------------
+@api.get("/activities")
+async def list_activities(limit: int = 60, agent: Optional[str] = None, user=Depends(current_user)):
+    """Workspace-wide, cross-agent activity feed for the command center."""
+    q = {"workspace_id": user["workspace_id"]}
+    if agent:
+        q["agent"] = agent
+    items = await db.activities.find(q, {"_id": 0}).sort("at", -1).to_list(min(limit, 200))
+    lead_ids = list({a["lead_id"] for a in items if a.get("lead_id")})
+    leads = {}
+    if lead_ids:
+        async for l in db.leads.find(
+            {"id": {"$in": lead_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "company": 1}
+        ):
+            leads[l["id"]] = l
+    for a in items:
+        a["lead"] = leads.get(a.get("lead_id"))
+    return items
+
+
+@api.get("/activities/summary")
+async def activities_summary(user=Depends(current_user)):
+    """Per-agent activity totals + today's count, for command-center stat tiles."""
+    wid = user["workspace_id"]
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    by_agent = {}
+    for a in ("pitch", "voice", "scheduler", "proposal", "social"):
+        by_agent[a] = await db.activities.count_documents({"workspace_id": wid, "agent": a})
+    today_count = await db.activities.count_documents({"workspace_id": wid, "at": {"$gte": today}})
+    total = await db.activities.count_documents({"workspace_id": wid})
+    return {"by_agent": by_agent, "today": today_count, "total": total}
+
+
 @api.get("/audit-log")
 async def audit_log(limit: int = 200, user=Depends(current_user)):
     q = {"workspace_id": user["workspace_id"]}
@@ -2263,6 +2388,16 @@ async def impersonate(uid: str, admin=Depends(require_admin)):
 
 
 # ----------------------------- Mount -----------------------------------------
+from voice_eq import voice_router, voice_public_router
+from schedule_eq import schedule_router, schedule_public_router
+from proposal_eq import proposal_router
+from social_eq import social_router
+api.include_router(voice_router)
+api.include_router(voice_public_router)
+api.include_router(schedule_router)
+api.include_router(schedule_public_router)
+api.include_router(proposal_router)
+api.include_router(social_router)
 app.include_router(api)
 
 
@@ -2273,12 +2408,27 @@ async def _create_indexes():
         await db.users.create_index("email", unique=True)
         await db.users.create_index("id", unique=True)
         await db.workspaces.create_index("id", unique=True)
-        for col in ("leads", "campaigns", "mailboxes", "conversations", "deals", "events", "suppressions"):
+        for col in ("leads", "campaigns", "mailboxes", "conversations", "deals", "events", "suppressions",
+                    "voice_agents", "voice_campaigns", "calls", "voice_numbers",
+                    "event_types", "bookings", "calendar_integrations",
+                    "proposals", "pricing_catalog", "social_posts", "social_integrations"):
             await db[col].create_index([("workspace_id", 1), ("id", 1)])
+        await db.proposals.create_index([("workspace_id", 1), ("lead_id", 1)])
+        await db.social_integrations.create_index([("workspace_id", 1), ("provider", 1)], unique=True)
+        await db.social_posts.create_index([("workspace_id", 1), ("platform", 1), ("status", 1)])
+        await db.event_types.create_index([("workspace_id", 1), ("slug", 1)], unique=True)
+        await db.bookings.create_index([("workspace_id", 1), ("event_type_id", 1), ("status", 1)])
+        await db.bookings.create_index([("workspace_id", 1), ("lead_id", 1)])
+        await db.oauth_states.create_index("state", unique=True)
         await db.leads.create_index([("workspace_id", 1), ("email", 1)], unique=False)
         await db.events.create_index([("workspace_id", 1), ("type", 1)])
         await db.events.create_index([("workspace_id", 1), ("at", -1)])
         await db.suppressions.create_index([("workspace_id", 1), ("email", 1)], unique=True)
+        await db.calls.create_index([("workspace_id", 1), ("created_at", -1)])
+        await db.calls.create_index([("workspace_id", 1), ("lead_id", 1)])
+        await db.calls.create_index([("workspace_id", 1), ("campaign_id", 1)])
+        await db.calls.create_index("retell_call_id")
+        await db.activities.create_index([("workspace_id", 1), ("lead_id", 1), ("at", -1)])
         logger.info("indexes ensured")
     except Exception as ex:
         logger.warning("index setup: %s", ex)

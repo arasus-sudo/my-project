@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
+import { Phone } from "lucide-react";
 
 const STAGES = [
   { k: "new", t: "New" },
@@ -62,7 +64,16 @@ export default function CRM() {
                       <span className="font-mono text-sm font-bold text-sanguine">
                         ${Number(d.value || 0).toLocaleString()}
                       </span>
-                      <span className="ui-label text-[9px]">{s.t}</span>
+                      <div className="flex items-center gap-2">
+                        {d.lead?.id && (
+                          <Link to={`/app/voice-eq/calls?lead_id=${d.lead.id}`} onClick={(e) => e.stopPropagation()}
+                            data-testid={`deal-call-history-${d.id}`} title="Call history"
+                            className="text-neutral-400 hover:text-ink">
+                            <Phone size={12} />
+                          </Link>
+                        )}
+                        <span className="ui-label text-[9px]">{s.t}</span>
+                      </div>
                     </div>
                   </div>
                 ))}

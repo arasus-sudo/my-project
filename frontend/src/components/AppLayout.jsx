@@ -4,6 +4,8 @@ import { useAuth } from "../lib/auth";
 import {
   LayoutDashboard, Send, Users, Inbox as InboxIcon, Kanban, Mail, Settings as SettingsIcon, LogOut, Sparkles, Shield,
   FileText, BarChart3, UsersRound, ShieldCheck, Image as ImageIcon, ChevronDown, Layers, Webhook, Link2,
+  Bot, PhoneCall, History, Radio, CalendarClock, CalendarCheck, CalendarRange, FileBarChart, Tags,
+  Share2, PenSquare, ListChecks, LayoutGrid,
 } from "lucide-react";
 
 const PITCH_NAV = [
@@ -18,7 +20,6 @@ const PITCH_NAV = [
   { to: "/app/hubspot", label: "HubSpot", icon: Link2, tid: "nav-hubspot" },
   { to: "/app/team", label: "Team", icon: UsersRound, tid: "nav-team" },
   { to: "/app/audit-log", label: "Audit log", icon: ShieldCheck, tid: "nav-audit" },
-  { to: "/app/settings", label: "Settings", icon: SettingsIcon, tid: "nav-settings" },
 ];
 
 const CREATE_NAV = [
@@ -26,16 +27,57 @@ const CREATE_NAV = [
   { to: "/app/webhooks", label: "Webhooks", icon: Webhook, tid: "creq-nav-webhooks" },
 ];
 
-const AGENTS = [
-  { k: "pitch", label: "Pitch EQ", tag: "Outbound", root: "/app", nav: PITCH_NAV, tid: "agent-pitch" },
-  { k: "create", label: "Create EQ", tag: "Carousel", root: "/app/create-eq", nav: CREATE_NAV, tid: "agent-create" },
+const VOICE_NAV = [
+  { to: "/app/voice-eq", label: "Overview", icon: LayoutDashboard, end: true, tid: "veq-nav-overview" },
+  { to: "/app/voice-eq/agents", label: "Agents", icon: Bot, tid: "veq-nav-agents" },
+  { to: "/app/voice-eq/campaigns", label: "Campaigns", icon: PhoneCall, tid: "veq-nav-campaigns" },
+  { to: "/app/voice-eq/calls", label: "Call Logs", icon: History, tid: "veq-nav-calls" },
+  { to: "/app/voice-eq/live", label: "Live", icon: Radio, tid: "veq-nav-live" },
+  { to: "/app/voice-eq/settings", label: "Settings", icon: SettingsIcon, tid: "veq-nav-settings" },
 ];
+
+const SCHEDULE_NAV = [
+  { to: "/app/schedule-eq", label: "Overview", icon: LayoutDashboard, end: true, tid: "seq-nav-overview" },
+  { to: "/app/schedule-eq/event-types", label: "Event Types", icon: CalendarRange, tid: "seq-nav-event-types" },
+  { to: "/app/schedule-eq/bookings", label: "Bookings", icon: CalendarCheck, tid: "seq-nav-bookings" },
+  { to: "/app/schedule-eq/settings", label: "Settings", icon: SettingsIcon, tid: "seq-nav-settings" },
+];
+
+const PROPOSAL_NAV = [
+  { to: "/app/proposal-eq", label: "Proposals", icon: FileBarChart, end: true, tid: "prop-nav-proposals" },
+  { to: "/app/proposal-eq/pricing", label: "Pricing Catalog", icon: Tags, tid: "prop-nav-pricing" },
+];
+
+const SOCIAL_NAV = [
+  { to: "/app/social-eq", label: "Overview", icon: LayoutDashboard, end: true, tid: "soc-nav-overview" },
+  { to: "/app/social-eq/compose", label: "Compose", icon: PenSquare, tid: "soc-nav-compose" },
+  { to: "/app/social-eq/queue", label: "Queue", icon: ListChecks, tid: "soc-nav-queue" },
+  { to: "/app/social-eq/settings", label: "Settings", icon: SettingsIcon, tid: "soc-nav-settings" },
+];
+
+export const AGENTS = [
+  { k: "pitch", label: "Pitch EQ", tag: "Outbound", root: "/app", nav: PITCH_NAV, tid: "agent-pitch", icon: Send,
+    blurb: "AI cold email — sequences, unified inbox, and EQ-scored outreach." },
+  { k: "create", label: "Create EQ", tag: "Carousel", root: "/app/create-eq", nav: CREATE_NAV, tid: "agent-create", icon: Layers,
+    blurb: "AI-drafted carousels and decks, Canva-style editing." },
+  { k: "voice", label: "Voice EQ", tag: "Calling", root: "/app/voice-eq", nav: VOICE_NAV, tid: "agent-voice", icon: PhoneCall,
+    blurb: "Autonomous AI calling agent — dials leads, qualifies, updates the CRM." },
+  { k: "schedule", label: "Schedule EQ", tag: "Booking", root: "/app/schedule-eq", nav: SCHEDULE_NAV, tid: "agent-schedule", icon: CalendarRange,
+    blurb: "Calendly-style booking with real availability and AI qualifying." },
+  { k: "proposal", label: "Proposal EQ", tag: "Proposals", root: "/app/proposal-eq", nav: PROPOSAL_NAV, tid: "agent-proposal", icon: FileBarChart,
+    blurb: "Researches leads and drafts proposals — export to PDF or PPTX." },
+  { k: "social", label: "Social EQ", tag: "Social", root: "/app/social-eq", nav: SOCIAL_NAV, tid: "agent-social", icon: Share2,
+    blurb: "Drafts and schedules posts — publishing always needs your approval." },
+];
+
+export const AGENT_BADGE = { pitch: "P", create: "C", voice: "V", schedule: "S", proposal: "R", social: "O" };
 
 export default function AppLayout() {
   const { user, workspace, logout } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
-  const currentAgent = loc.pathname.startsWith("/app/create-eq") ? AGENTS[1] : AGENTS[0];
+  const currentAgent =
+    AGENTS.find((a) => a.root !== "/app" && loc.pathname.startsWith(a.root)) || AGENTS[0];
   const [open, setOpen] = useState(false);
 
   return (
@@ -57,7 +99,7 @@ export default function AppLayout() {
                 <button key={a.k} onClick={() => { setOpen(false); nav(a.root); }} data-testid={a.tid}
                   className={`w-full text-left p-3 hover:bg-surfacehover flex items-center gap-2 ${a.k === currentAgent.k ? "bg-neutral-50" : ""}`}>
                   <div className="w-6 h-6 bg-ink/10 rounded-md flex items-center justify-center text-[10px] font-mono">
-                    {a.k === "pitch" ? "P" : "C"}
+                    {AGENT_BADGE[a.k]}
                   </div>
                   <div className="flex-1">
                     <div className="text-sm font-medium">{a.label}</div>
@@ -66,6 +108,11 @@ export default function AppLayout() {
                   {a.k === currentAgent.k && <span className="w-1.5 h-1.5 bg-ink rounded-full" />}
                 </button>
               ))}
+              <button onClick={() => { setOpen(false); nav("/suite"); }} data-testid="suite-home-link"
+                className="w-full text-left p-3 hover:bg-surfacehover flex items-center gap-2 border-t border-line text-neutral-600">
+                <div className="w-6 h-6 flex items-center justify-center"><LayoutGrid size={14} /></div>
+                <div className="text-sm font-medium">Command center</div>
+              </button>
             </div>
           )}
         </div>

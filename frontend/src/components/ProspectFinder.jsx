@@ -7,7 +7,8 @@ import { Loader2, Sparkles, X, Plus } from "lucide-react";
 export default function ProspectFinder({ open, onClose, onDone }) {
   const [icps, setIcps] = useState([]);
   const [icpModalOpen, setIcpModalOpen] = useState(false);
-  const [providers, setProviders] = useState({ prospeo: "MOCKED", icypeas: "MOCKED" });
+  const [providers, setProviders] = useState({ prospeo: "test", icypeas: "test" });
+  const provLabel = (v) => (v === "live" ? "live" : "test mode");
   const [form, setForm] = useState({
     icp_id: "", domain: "", titles: "", industries: "", locations: "", limit: 8,
   });
@@ -84,15 +85,15 @@ export default function ProspectFinder({ open, onClose, onDone }) {
             <Sparkles size={16} />
             <div className="font-display font-bold text-lg">Prospect Finder</div>
           </div>
-          <span className={`ui-label px-2 py-0.5 rounded-full border ${providers.prospeo === "live" ? "text-green-700 border-green-600" : "text-amber-700 border-amber-500"}`}>Prospeo: {providers.prospeo}</span>
-          <span className={`ui-label px-2 py-0.5 rounded-full border ${providers.icypeas === "live" ? "text-green-700 border-green-600" : "text-amber-700 border-amber-500"}`}>Icypeas: {providers.icypeas}</span>
+          <span className={`ui-label px-2 py-0.5 rounded-full border ${providers.prospeo === "live" ? "text-green-700 border-green-600" : "text-amber-700 border-amber-500"}`}>Prospeo: {provLabel(providers.prospeo)}</span>
+          <span className={`ui-label px-2 py-0.5 rounded-full border ${providers.icypeas === "live" ? "text-green-700 border-green-600" : "text-amber-700 border-amber-500"}`}>Icypeas: {provLabel(providers.icypeas)}</span>
           <button onClick={onClose} data-testid="pf-close" className="ml-auto btn-ghost"><X size={14} /></button>
         </div>
 
         <div className="p-6 space-y-5">
-          {(providers.prospeo === "MOCKED" || providers.icypeas === "MOCKED") && (
+          {(providers.prospeo !== "live" || providers.icypeas !== "live") && (
             <div className="bg-white border border-amber-300 rounded-2xl p-4 text-sm text-amber-900">
-              <span className="font-mono uppercase text-[10px] tracking-widest">MOCKED providers</span> — set <code className="kbd">PROSPEO_API_KEY</code> and <code className="kbd">ICYPEAS_API_KEY</code> + <code className="kbd">ICYPEAS_USER_ID</code> in <code className="kbd">/app/backend/.env</code> to go live. The API contract shipped is the real one; no code change needed later.
+              <span className="font-mono uppercase text-[10px] tracking-widest">Test mode</span> — enrichment returns sample prospects until you connect a data provider. Add your Prospeo or Icypeas account to search live contact data.
             </div>
           )}
 

@@ -33,7 +33,7 @@ export default function PanoramaDrawer({ onClose, panorama, slideCount, onApply 
           : prompt,
         provider: "nano-banana",
         size: isSplit ? `${slideCount * 1080}x1350` : "1080x1350",
-        aspect: isSplit ? "story" : "portrait",
+        aspect: isSplit ? "landscape" : "portrait",
       });
       setSrc(`data:${data.mime_type || "image/png"};base64,${data.image_base64}`);
       toast.success("Panorama generated");
@@ -42,7 +42,7 @@ export default function PanoramaDrawer({ onClose, panorama, slideCount, onApply 
     } finally { setBusy(false); }
   };
 
-  const preview = { src, mode, viewports: panorama?.viewports || [] };
+  const preview = { src, mode, viewports: panorama?.viewports || [], baked_count: slideCount };
 
   return (
     <div className="fixed inset-0 bg-ink/40 z-50 flex justify-end" onClick={onClose}>
@@ -122,7 +122,7 @@ export default function PanoramaDrawer({ onClose, panorama, slideCount, onApply 
               className="text-xs py-2 rounded-full border border-line hover:border-red-600 text-red-600 justify-center">
               Remove background
             </button>
-            <button onClick={() => onApply({ src, mode, viewports: panorama?.viewports || [] })}
+            <button onClick={() => onApply({ src, mode, viewports: panorama?.viewports || [], baked_count: slideCount })}
               disabled={!src}
               data-testid="pano-apply"
               className="btn-primary text-xs justify-center disabled:opacity-40">

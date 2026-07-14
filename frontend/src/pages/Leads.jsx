@@ -1,19 +1,44 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import ProspectFinder from "../components/ProspectFinder";
 import { toast } from "sonner";
-import { Plus, Upload, Sparkles } from "lucide-react";
+import { Plus, Upload, Sparkles, Phone } from "lucide-react";
 
 export default function Leads() {
   const [leads, setLeads] = useState([]);
+  const [voiceAgents, setVoiceAgents] = useState([]);
   const [q, setQ] = useState("");
   const [modal, setModal] = useState(false);
   const [finder, setFinder] = useState(false);
-  const [form, setForm] = useState({ first_name: "", last_name: "", email: "", company: "", title: "" });
+  const [callLead, setCallLead] = useState(null);
+  const [callAgentId, setCallAgentId] = useState("");
+  const [calling, setCalling] = useState(false);
+  const [form, setForm] = useState({ first_name: "", last_name: "", email: "", company: "", title: "", phone: "" });
 
   const load = () => api.get("/leads").then((r) => setLeads(r.data));
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    api.get("/voice-eq/agents").then((r) => setVoiceAgents(r.data)).catch(() => {});
+  }, []);
+
+  const openCall = (lead) => {
+    setCallLead(lead);
+    setCallAgentId(voiceAgents[0]?.id || "");
+  };
+
+  const placeCall = async () => {
+    if (!callAgentId) { toast.error("Pick a voice agent first"); return; }
+    setCalling(true);
+    try {
+      await api.post("/voice-eq/calls/click-to-call", { lead_id: callLead.id, agent_id: callAgentId });
+      toast.success(`Calling ${callLead.first_name}…`);
+      setCallLead(null);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Call failed");
+    } finally { setCalling(false); }
+  };
 
   const add = async (e) => {
     e.preventDefault();
@@ -21,7 +46,7 @@ export default function Leads() {
       await api.post("/leads", form);
       toast.success("Lead added");
       setModal(false);
-      setForm({ first_name: "", last_name: "", email: "", company: "", title: "" });
+      setForm({ first_name: "", last_name: "", email: "", company: "", title: "", phone: "" });
       load();
     } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
   };
@@ -148,6 +173,7 @@ export default function Leads() {
                   <th className="ui-label text-left p-3">Email</th>
                   <th className="ui-label text-left p-3">Company</th>
                   <th className="ui-label text-left p-3">Title</th>
+                  <th className="ui-label text-left p-3">Phone</th>
                   <th className="ui-label text-right p-3">ICP</th>
                   <th className="ui-label text-center p-3">Verified</th>
                   <th className="p-3"></th>
@@ -156,13 +182,27 @@ export default function Leads() {
               <tbody>
                 {filtered.map((l) => (
                   <tr key={l.id} className="border-b border-line hover:bg-surfacehover">
-                    <td className="p-3 font-medium">{l.first_name} {l.last_name}</td>
+                    <td className="p-3 font-medium">
+                      <Link to={`/app/leads/${l.id}`} data-testid={`lead-row-${l.id}`} className="hover:text-sanguine">
+                        {l.first_name} {l.last_name}
+                      </Link>
+                    </td>
                     <td className="p-3 font-mono text-xs text-neutral-700">{l.email}</td>
                     <td className="p-3">{l.company}</td>
                     <td className="p-3 text-neutral-600">{l.title}</td>
+                    <td className="p-3 font-mono text-xs text-neutral-600">{l.phone || "—"}</td>
                     <td className="p-3 text-right font-mono">{l.icp_score}</td>
                     <td className="p-3 text-center">{l.verified ? <span className="text-green-700">✓</span> : "—"}</td>
-                    <td className="p-3 text-right space-x-2">
+                    <td className="p-3 text-right space-x-2 whitespace-nowrap">
+                      <button
+                        onClick={() => l.phone && openCall(l)}
+                        disabled={!l.phone}
+                        title={l.phone ? "Call with Voice EQ" : "Add a phone number to call this lead"}
+                        data-testid={`call-${l.id}`}
+                        className={`inline-flex items-center gap-1 text-xs ${l.phone ? "text-neutral-500 hover:text-ink" : "text-neutral-300 cursor-not-allowed"}`}
+                      >
+                        <Phone size={12} /> call
+                      </button>
                       <button onClick={() => suppress(l.email)} data-testid={`suppress-${l.id}`} className="text-xs text-neutral-500 hover:text-ink">suppress</button>
                       <button onClick={() => remove(l.id)} data-testid={`delete-${l.id}`} className="text-xs text-red-600 hover:underline">delete</button>
                     </td>
@@ -185,6 +225,7 @@ export default function Leads() {
             <input required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="new-lead-email" className="w-full border border-line px-3 py-2 rounded-sm" />
             <input placeholder="Company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} data-testid="new-lead-company" className="w-full border border-line px-3 py-2 rounded-sm" />
             <input placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} data-testid="new-lead-title" className="w-full border border-line px-3 py-2 rounded-sm" />
+            <input placeholder="Phone (E.164, e.g. +14155551234)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="new-lead-phone" className="w-full border border-line px-3 py-2 rounded-sm" />
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>
               <button type="submit" data-testid="save-new-lead" className="btn-primary">Add lead</button>
@@ -194,6 +235,40 @@ export default function Leads() {
       )}
 
       <ProspectFinder open={finder} onClose={() => setFinder(false)} onDone={load} />
+
+      {callLead && (
+        <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50">
+          <div className="bg-white border border-line p-6 rounded-sm w-full max-w-sm space-y-3">
+            <div className="font-display font-bold text-xl">Call {callLead.first_name}</div>
+            <p className="text-sm text-neutral-500">{callLead.phone} · {callLead.company || "—"}</p>
+            {voiceAgents.length === 0 ? (
+              <p className="text-sm text-neutral-500">No Voice EQ agents yet — create one in Voice EQ first.</p>
+            ) : (
+              <select
+                value={callAgentId}
+                onChange={(e) => setCallAgentId(e.target.value)}
+                data-testid="call-agent-select"
+                className="w-full border border-line px-3 py-2 rounded-sm"
+              >
+                {voiceAgents.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name} {a.status !== "synced" ? "(unsynced)" : ""}</option>
+                ))}
+              </select>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setCallLead(null)} className="btn-secondary">Cancel</button>
+              <button
+                onClick={placeCall}
+                disabled={calling || !voiceAgents.length}
+                data-testid="confirm-call-btn"
+                className="btn-primary disabled:opacity-50"
+              >
+                {calling ? "Calling…" : "Call now"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
