@@ -16,31 +16,32 @@ export default function Analytics() {
   return (
     <div>
       <PageHeader title="Analytics" subtitle="Step performance, mailbox health, and LLM quota." />
-      <div className="p-6 space-y-6">
+      <div className="animate-fade-in px-6 sm:px-8 space-y-6">
         {quota && (
-          <div className="bg-white border border-line rounded-2xl p-5 flex items-center gap-6">
+          <div className="bg-white border border-line rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
             <div>
               <div className="ui-label">LLM calls today</div>
-              <div className="font-mono text-3xl font-bold mt-1">{quota.used} <span className="text-neutral-400 text-lg">/ {quota.limit}</span></div>
+              <div className="font-mono text-2xl sm:text-3xl font-bold mt-1">{quota.used} <span className="text-neutral-400 text-lg">/ {quota.limit}</span></div>
             </div>
             <div className="flex-1 h-2 bg-neutral-100 rounded-full overflow-hidden">
               <div className="h-full bg-ink" style={{ width: `${Math.min(100, (quota.used / quota.limit) * 100)}%` }} />
             </div>
-            <div className="ui-label text-neutral-500">{quota.remaining} remaining</div>
+            <div className="ui-label text-neutral-400">{quota.remaining} remaining</div>
           </div>
         )}
 
         <div>
           <div className="ui-label mb-2">Campaign step performance</div>
-          {campaigns.length === 0 && <div className="text-sm text-neutral-500">No campaigns yet.</div>}
+          {campaigns.length === 0 && <div className="text-sm text-neutral-400">No campaigns yet.</div>}
           <div className="space-y-4">
             {campaigns.map((c) => (
-              <div key={c.id} className="bg-white border border-line rounded-2xl overflow-hidden">
+              <div key={c.id} className="bg-white border border-line rounded-2xl overflow-hidden card-floating">
                 <div className="px-5 py-3 border-b border-line flex items-center justify-between">
                   <div className="font-display font-semibold">{c.name}</div>
                   <span className="ui-label">{c.status}</span>
                 </div>
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[600px]">
                   <thead>
                     <tr className="border-b border-line">
                       {["Step", "Subject", "Sent", "Open %", "Reply %", "Clicked", "Replied"].map((h) => (
@@ -63,6 +64,7 @@ export default function Analytics() {
                   </tbody>
                 </table>
               </div>
+              </div>
             ))}
           </div>
         </div>
@@ -76,7 +78,7 @@ export default function Analytics() {
                   <div className="font-display font-semibold">{m.email}</div>
                   <span className="ui-label px-2 py-1 rounded-full border">{m.provider}</span>
                 </div>
-                <div className="grid grid-cols-4 gap-3 mt-4 text-center">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-center">
                   {[
                     ["Warmup", `${m.warmup_day}/${m.warmup_target}`],
                     ["Sent/day", `${m.sent_today}/${m.daily_cap}`],

@@ -15,6 +15,20 @@ export function renderBackground(bg, palette) {
   return resolveColor(bg.color || "bg", palette);
 }
 
+/** The on-canvas bounding box of an element, in canvas px. Two types don't
+ * follow their stored w/h: icons render square from `w` alone, and badges
+ * auto-size to their text (width/height:auto) so their stored w/h are stale —
+ * callers that have live measurements (ResizeObserver, see ElementRender's
+ * badge branch) pass them via `measured` keyed by element id. */
+export function elementBounds(el, measured) {
+  if (el.type === "icon") return { x: el.x, y: el.y, w: el.w, h: el.w };
+  if (el.type === "badge") {
+    const m = measured?.[el.id];
+    if (m) return { x: el.x, y: el.y, w: m.w, h: m.h };
+  }
+  return { x: el.x, y: el.y, w: el.w || 0, h: el.h || 0 };
+}
+
 /** Deep-strip local-only keys before persisting the project. */
 export function stripLocalKeys(project) {
   return {

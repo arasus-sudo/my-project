@@ -1,16 +1,30 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { createRoot } from "react-dom/client";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
-import { api } from "../lib/api";
+import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
+import RichEmailEditor, { sanitizeEmailHtml } from "../components/RichEmailEditor";
 import { toast } from "sonner";
-import { Sparkles, Download, FileDown, Send } from "lucide-react";
-import BoardView from "../components/creq/BoardView";
-import ElementRender from "../components/creq/ElementRender";
-import { PALETTES, CANVAS } from "../lib/creqTemplates";
-import { renderBackground } from "../components/creq/utils";
+import {
+  Sparkles, FileText, FileDown, Send, Save, Loader2, Check, AlertTriangle,
+  Plus, Trash2,
+} from "lucide-react";
+
+const CHAIN_STEPS = [
+  { key: "solution", label: "Solution" },
+  { key: "scope", label: "Scope" },
+  { key: "pricing", label: "Pricing" },
+  { key: "risks", label: "Risks" },
+  { key: "exec", label: "Summary" },
+];
+
+const CUR = { USD: "$", EUR: "€", GBP: "£", INR: "₹" };
+const money = (n, cur = "USD") => {
+  const s = CUR[cur] || "";
+  const v = Number(n || 0);
+  const body = Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const out = s ? `${s}${body}` : `${body} ${cur}`;
+  return v < 0 ? `-${out}` : out;
+};
 
 export default function ProposalBuilder() {
   const { id } = useParams();
@@ -18,154 +32,337 @@ export default function ProposalBuilder() {
   const nav = useNavigate();
   const isNew = !id || id === "new";
 
+  // ---- New-proposal form ----
   const [leads, setLeads] = useState([]);
+  const [templates, setTemplates] = useState([]);
   const [leadId, setLeadId] = useState(params.get("lead_id") || "");
-  const [topic, setTopic] = useState("");
-  const [includePricing, setIncludePricing] = useState(true);
-  const [proposal, setProposal] = useState(null);
+  const [templateId, setTemplateId] = useState("");
   const [busy, setBusy] = useState(false);
+  const [chainStep, setChainStep] = useState(null);
+
+  // ---- Editor state ----
+  const [proposal, setProposal] = useState(null);
+  const [sections, setSections] = useState([]);
+  const [pricing, setPricing] = useState(null);
+  const [catalog, setCatalog] = useState([]);
+  const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
-    if (isNew) api.get("/leads").then((r) => setLeads(r.data));
-    else api.get(`/proposal-eq/proposals/${id}`).then((r) => setProposal(r.data));
+    if (isNew) {
+      api.get("/leads").then((r) => setLeads(r.data));
+      api.get("/proposal-eq/templates").then((r) => {
+        setTemplates(r.data);
+        if (r.data.length) setTemplateId(r.data.find((t) => t.service === "custom")?.id || r.data[0].id);
+      });
+    } else {
+      api.get(`/proposal-eq/proposals/${id}`).then((r) => {
+        setProposal(r.data);
+        setSections(r.data.sections || []);
+        setPricing(r.data.pricing || null);
+      });
+      api.get("/proposal-eq/pricing-catalog").then((r) => setCatalog(r.data));
+    }
   }, [id, isNew]);
+
+  const template = useMemo(() => templates.find((t) => t.id === templateId), [templates, templateId]);
 
   const generate = async () => {
     if (!leadId) { toast.error("Pick a lead"); return; }
     setBusy(true);
+    setChainStep("solution");
+    const timers = CHAIN_STEPS.slice(1).map((s, i) =>
+      setTimeout(() => setChainStep(s.key), (i + 1) * 6000));
     try {
-      const { data } = await api.post("/proposal-eq/generate", { lead_id: leadId, topic, include_pricing: includePricing });
-      toast.success("Proposal generated");
+      const { data } = await api.post("/proposal-eq/generate", {
+        lead_id: leadId, template_id: templateId, service: template?.service || "custom",
+      });
+      toast.success("Proposal drafted");
       nav(`/app/proposal-eq/${data.id}`, { replace: true });
-    } catch (err) { toast.error(err?.response?.data?.detail || "Generation failed"); }
+    } catch (err) {
+      if (!isCreditError(err)) toast.error(err?.response?.data?.detail || "Generation failed");
+    } finally {
+      timers.forEach(clearTimeout);
+      setChainStep(null);
+      setBusy(false);
+    }
+  };
+
+  // ---- Editing ----
+  const setSectionHtml = useCallback((key, html) => {
+    setSections((prev) => prev.map((s) => (s.key === key ? { ...s, html } : s)));
+    setDirty(true);
+  }, []);
+
+  const recomputeLocal = (p) => {
+    const subtotal = (p.line_items || []).reduce((a, li) => a + Number(li.qty || 0) * Number(li.unit_price || 0), 0);
+    const discount = subtotal * (Number(p.discount_pct || 0) / 100);
+    return { ...p, subtotal, discount, total: subtotal - discount };
+  };
+  const patchPricing = (patch) => {
+    setPricing((prev) => recomputeLocal({
+      ...prev, ...patch,
+      line_items: (patch.line_items || prev.line_items).map((li) => ({
+        ...li, line_total: Number(li.qty || 0) * Number(li.unit_price || 0),
+      })),
+    }));
+    setDirty(true);
+  };
+  const addLine = (catId) => {
+    const item = catalog.find((c) => c.id === catId);
+    if (!item) return;
+    patchPricing({
+      line_items: [...(pricing.line_items || []), {
+        catalog_id: item.id, name: item.name, description: item.description || "",
+        unit: item.unit || "", qty: 1, unit_price: item.unit_price, line_total: item.unit_price,
+      }],
+    });
+  };
+  const removeLine = (idx) =>
+    patchPricing({ line_items: pricing.line_items.filter((_, i) => i !== idx) });
+  const setQty = (idx, qty) =>
+    patchPricing({ line_items: pricing.line_items.map((li, i) => (i === idx ? { ...li, qty: Math.max(1, qty) } : li)) });
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.put(`/proposal-eq/proposals/${id}`, {
+        sections: sections.map((s) => ({ ...s, html: sanitizeEmailHtml(s.html) })),
+        pricing,
+      });
+      setProposal(data);
+      setSections(data.sections);
+      setPricing(data.pricing);   // server is the source of truth for totals
+      setDirty(false);
+      toast.success("Saved");
+    } catch { toast.error("Save failed"); }
+    finally { setBusy(false); }
+  };
+
+  const download = async (fmt) => {
+    if (dirty) await save();
+    setBusy(true);
+    try {
+      const { data } = await api.get(`/proposal-eq/proposals/${id}/export.${fmt}`, { responseType: "blob" });
+      const url = URL.createObjectURL(data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(proposal.topic || "proposal").slice(0, 50).replace(/[^\w-]+/g, "-")}.${fmt}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`${fmt.toUpperCase()} downloaded`);
+    } catch { toast.error(`${fmt.toUpperCase()} export failed`); }
     finally { setBusy(false); }
   };
 
   const markSent = async () => {
     await api.post(`/proposal-eq/proposals/${id}/mark-sent`);
-    toast.success("Marked as sent");
-    setProposal({ ...proposal, status: "sent" });
+    toast.success("Marked as sent — deal advanced to Proposal");
+    setProposal((p) => ({ ...p, status: "sent" }));
   };
 
-  const exportPptx = async () => {
-    setBusy(true);
-    try {
-      const { data } = await api.get(`/proposal-eq/proposals/${id}/export.pptx`, { responseType: "blob" });
-      const url = URL.createObjectURL(data);
-      const a = document.createElement("a");
-      a.href = url; a.download = `${(proposal.topic || "proposal").slice(0, 40).replace(/\W+/g, "-")}.pptx`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("PPTX downloaded");
-    } catch { toast.error("PPTX export failed"); }
-    finally { setBusy(false); }
-  };
-
-  const palette = PALETTES.find((p) => p.id === proposal?.palette_id) || PALETTES[0];
-
-  const renderSlideToDataUrl = (slideIdx) => new Promise((resolve, reject) => {
-    const slide = proposal.slides[slideIdx];
-    const host = document.createElement("div");
-    host.style.cssText = [
-      "position:fixed", "left:-99999px", "top:0",
-      `width:${CANVAS.w}px`, `height:${CANVAS.h}px`,
-      `background:${renderBackground(slide.bg, palette)}`,
-      "overflow:hidden", "pointer-events:none",
-    ].join(";");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-    const cleanup = () => { try { root.unmount(); } catch {} try { host.remove(); } catch {} };
-    (async () => {
-      try {
-        root.render(<>{slide.elements.map((el) => (
-          <ElementRender key={el.id} el={el} palette={palette} selected={false} onPointerDown={() => {}} />
-        ))}</>);
-        await new Promise((r) => setTimeout(r, 150));
-        const canvas = await html2canvas(host, {
-          width: CANVAS.w, height: CANVAS.h, windowWidth: CANVAS.w, windowHeight: CANVAS.h,
-          scale: 2, useCORS: true, allowTaint: true, backgroundColor: null, logging: false,
-        });
-        const dataUrl = canvas.toDataURL("image/png", 0.92);
-        cleanup(); resolve(dataUrl);
-      } catch (err) { cleanup(); reject(err); }
-    })();
-  });
-
-  const exportPdf = async () => {
-    setBusy(true);
-    try {
-      const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [CANVAS.w, CANVAS.h], compress: true });
-      for (let i = 0; i < proposal.slides.length; i++) {
-        const dataUrl = await renderSlideToDataUrl(i);
-        if (i > 0) pdf.addPage([CANVAS.w, CANVAS.h], "portrait");
-        pdf.addImage(dataUrl, "PNG", 0, 0, CANVAS.w, CANVAS.h);
-      }
-      pdf.save(`${(proposal.topic || "proposal").slice(0, 40).replace(/\W+/g, "-")}.pdf`);
-      toast.success("PDF exported");
-    } catch (err) { console.error(err); toast.error("PDF export failed"); }
-    finally { setBusy(false); }
-  };
-
+  // ---- New-proposal view ----
   if (isNew) {
     return (
       <div>
-        <PageHeader title="New proposal" subtitle="Proposal EQ researches the lead and drafts a deck from your CRM data." />
-        <div className="p-6 max-w-xl">
-          <div className="card-flat p-5 space-y-4">
+        <PageHeader title="New proposal"
+          subtitle="Proposal EQ assembles everything known about the deal, then drafts a document you can edit." />
+        <div className="animate-fade-in px-6 sm:px-8 max-w-xl">
+          <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-4">
             <div>
-              <label className="ui-label block mb-1">Lead</label>
+              <label className="ui-label block mb-1">Lead / deal</label>
               <select value={leadId} onChange={(e) => setLeadId(e.target.value)} data-testid="proposal-lead-select"
-                className="w-full border border-line px-3 py-2 rounded-sm">
+                className="w-full border border-line px-3 py-2 rounded-full">
                 <option value="">Select a lead…</option>
-                {leads.map((l) => <option key={l.id} value={l.id}>{l.first_name} {l.last_name} — {l.company || l.email}</option>)}
+                {leads.map((l) => (
+                  <option key={l.id} value={l.id}>{l.first_name} {l.last_name} — {l.company || l.email}</option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="ui-label block mb-1">Topic / context (optional)</label>
-              <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Q3 partnership proposal"
-                data-testid="proposal-topic" className="w-full border border-line px-3 py-2 rounded-sm" />
+              <label className="ui-label block mb-1">Proposal type</label>
+              <select value={templateId} onChange={(e) => setTemplateId(e.target.value)} data-testid="proposal-template-select"
+                className="w-full border border-line px-3 py-2 rounded-full">
+                {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+              {template?.blurb && <p className="text-xs text-neutral-400 mt-1">{template.blurb}</p>}
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={includePricing} onChange={(e) => setIncludePricing(e.target.checked)} data-testid="proposal-include-pricing" />
-              Include pricing slide from your catalog
-            </label>
-            <button onClick={generate} disabled={busy} data-testid="generate-proposal-btn" className="btn-primary w-full justify-center">
-              <Sparkles size={14} /> {busy ? "Researching & drafting…" : "Generate proposal"}
+
+            <button onClick={generate} disabled={busy} data-testid="generate-proposal-btn"
+              className="btn-primary w-full justify-center">
+              {chainStep ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              {chainStep ? "Drafting…" : "Generate proposal"}
             </button>
+
+            {chainStep && (
+              <div className="flex items-center gap-1.5 pt-1" data-testid="chain-progress">
+                {CHAIN_STEPS.map((s, i) => {
+                  const idx = CHAIN_STEPS.findIndex((x) => x.key === chainStep);
+                  const done = i < idx, active = s.key === chainStep;
+                  return (
+                    <div key={s.key} className="flex items-center gap-1.5 flex-1">
+                      <span className={`text-[11px] font-mono uppercase tracking-wider flex items-center gap-1 ${
+                        active ? "text-ink font-semibold" : done ? "text-neutral-400" : "text-neutral-300"}`}>
+                        {done ? <Check size={10} /> : active ? <Loader2 size={10} className="animate-spin" /> : <span className="w-2.5" />}
+                        {s.label}
+                      </span>
+                      {i < CHAIN_STEPS.length - 1 && <div className="flex-1 h-px bg-line" />}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
     );
   }
 
-  if (!proposal) return <div className="p-10 text-neutral-500 text-sm">Loading…</div>;
-
-  const proj = { slides: proposal.slides, panorama: null };
+  if (!proposal) return <div className="p-10 text-neutral-400 text-sm">Loading…</div>;
 
   return (
     <div>
       <PageHeader
         title={proposal.topic}
-        subtitle={proposal.research_notes ? "Researched and drafted by Proposal EQ." : "Drafted by Proposal EQ."}
+        subtitle={`${proposal.template_name || "Proposal"}${proposal.status === "sent" ? " · sent" : ""}`}
         right={
-          <div className="flex gap-2">
-            <button onClick={exportPdf} disabled={busy} data-testid="export-pdf-btn" className="btn-secondary"><FileDown size={14} /> PDF</button>
-            <button onClick={exportPptx} disabled={busy} data-testid="export-pptx-btn" className="btn-secondary"><Download size={14} /> PPTX</button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={save} disabled={busy || !dirty} data-testid="save-proposal-btn"
+              className="btn-secondary disabled:opacity-40">
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
+            </button>
+            <button onClick={() => download("docx")} disabled={busy} data-testid="export-docx-btn" className="btn-secondary">
+              <FileText size={14} /> DOCX
+            </button>
+            <button onClick={() => download("pdf")} disabled={busy} data-testid="export-pdf-btn" className="btn-secondary">
+              <FileDown size={14} /> PDF
+            </button>
             {proposal.status === "draft" && (
               <button onClick={markSent} data-testid="mark-sent-btn" className="btn-primary"><Send size={14} /> Mark sent</button>
             )}
           </div>
         }
       />
-      {proposal.research_notes && (
-        <div className="px-6 pt-4">
-          <div className="card-flat p-4 text-sm text-neutral-600">
-            <span className="ui-label text-neutral-400 mr-2">Research</span>
-            {proposal.research_notes}
+
+      <div className="animate-fade-in px-6 sm:px-8 max-w-3xl mx-auto space-y-5">
+        {!!(proposal.missing || []).length && (
+          <div className="shadow-card rounded-2xl p-4 border-amber-200 bg-amber-50" data-testid="missing-banner">
+            <div className="flex items-start gap-2 text-sm text-amber-900">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+              <div>
+                <div className="font-medium">Some inputs are missing.</div>
+                <div className="text-xs mt-0.5">
+                  The draft left these blank rather than inventing them — fill them in:
+                  {" "}{proposal.missing.join("; ")}.
+                </div>
+              </div>
+            </div>
           </div>
+        )}
+
+        {sections.map((s) => (
+          <div key={s.key} className="shadow-card rounded-2xl p-6 sm:p-8" data-testid={`section-${s.key}`}>
+            <div className="ui-label mb-2">{s.heading}</div>
+            {s.slot === "pricing_table" ? (
+              <PricingEditor
+                pricing={pricing} catalog={catalog}
+                onAdd={addLine} onRemove={removeLine} onQty={setQty}
+                onDiscount={(pct) => patchPricing({ discount_pct: pct })}
+              />
+            ) : (
+              <RichEmailEditor value={s.html || ""} onChange={(html) => setSectionHtml(s.key, html)}
+                placeholder="Write this section, or leave the AI's draft as-is." />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PricingEditor({ pricing, catalog, onAdd, onRemove, onQty, onDiscount }) {
+  const [pick, setPick] = useState("");
+  if (!pricing) return null;
+  const cur = pricing.currency || "USD";
+  const unused = catalog.filter((c) => !(pricing.line_items || []).some((li) => li.catalog_id === c.id));
+
+  return (
+    <div data-testid="pricing-editor">
+      <p className="text-xs text-neutral-400 mb-3">
+        Prices come from your catalog and totals are computed server-side — the AI never sets a number.
+      </p>
+
+      {(pricing.line_items || []).length === 0 ? (
+        <p className="text-sm text-neutral-400 py-3">No line items yet — add from your catalog below.</p>
+      ) : (
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm" data-testid="pricing-table">
+          <thead>
+            <tr className="text-left text-neutral-400 border-b border-line">
+              <th className="py-1.5 font-medium">Item</th>
+              <th className="py-1.5 font-medium w-16 text-center">Qty</th>
+              <th className="py-1.5 font-medium w-28 text-right">Unit</th>
+              <th className="py-1.5 font-medium w-28 text-right">Amount</th>
+              <th className="w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {pricing.line_items.map((li, i) => (
+              <tr key={i} className="border-b border-line/60">
+                <td className="py-1.5">
+                  {li.name}{li.unit ? <span className="text-neutral-400"> /{li.unit}</span> : ""}
+                </td>
+                <td className="py-1.5 text-center">
+                  <input type="number" min={1} value={li.qty}
+                    onChange={(e) => onQty(i, parseInt(e.target.value, 10) || 1)}
+                    data-testid={`qty-${i}`}
+                    className="w-14 border border-line rounded px-1 py-0.5 text-center" />
+                </td>
+                <td className="py-1.5 text-right tabular-nums text-neutral-400">{money(li.unit_price, cur)}</td>
+                <td className="py-1.5 text-right tabular-nums font-medium">{money(li.line_total, cur)}</td>
+                <td className="py-1.5 text-right">
+                  <button onClick={() => onRemove(i)} data-testid={`remove-line-${i}`}
+                    className="text-neutral-400 hover:text-sanguine"><Trash2 size={13} /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={3} className="py-1.5 text-right text-neutral-400">Subtotal</td>
+              <td className="py-1.5 text-right tabular-nums">{money(pricing.subtotal, cur)}</td><td></td>
+            </tr>
+            <tr>
+              <td colSpan={3} className="py-1 text-right text-neutral-400">
+                Discount
+                <input type="number" min={0} max={100} value={pricing.discount_pct || 0}
+                  onChange={(e) => onDiscount(Math.max(0, Math.min(100, Number(e.target.value))))}
+                  data-testid="discount-pct"
+                  className="w-14 border border-line rounded px-1 py-0.5 text-center mx-1" />%
+              </td>
+              <td className="py-1 text-right tabular-nums">{pricing.discount ? `-${money(pricing.discount, cur)}` : money(0, cur)}</td><td></td>
+            </tr>
+            <tr className="border-t border-line">
+              <td colSpan={3} className="py-1.5 text-right font-semibold">Total</td>
+              <td className="py-1.5 text-right tabular-nums font-semibold" data-testid="pricing-total">{money(pricing.total, cur)}</td><td></td>
+            </tr>
+          </tfoot>
+        </table>
         </div>
       )}
-      <BoardView proj={proj} palette={palette} onFocus={() => {}} />
+
+      {unused.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-3">
+          <select value={pick} onChange={(e) => setPick(e.target.value)} data-testid="add-line-select"
+            className="border border-line rounded-full px-3 py-1.5 text-xs flex-1">
+            <option value="">Add a line from your catalog…</option>
+            {unused.map((c) => <option key={c.id} value={c.id}>{c.name} — {money(c.unit_price, c.currency)}{c.unit ? `/${c.unit}` : ""}</option>)}
+          </select>
+          <button onClick={() => { if (pick) { onAdd(pick); setPick(""); } }} disabled={!pick}
+            data-testid="add-line-btn" className="btn-secondary text-xs disabled:opacity-40"><Plus size={13} /> Add</button>
+        </div>
+      )}
+
+      {pricing.notes && <p className="text-xs text-neutral-400 mt-3 italic">{pricing.notes}</p>}
     </div>
   );
 }

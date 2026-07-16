@@ -5,9 +5,21 @@ import { renderBackground } from "../utils";
 import ElementRender from "../ElementRender";
 import PanoramaLayer from "../PanoramaLayer";
 
-export default function PdfExportDialog({ proj, palette, onClose, busy, onExport }) {
+// scale = the html2canvas rasterization multiplier. Standard (2x) is today's
+// existing behavior, kept as the default so nothing changes for anyone who
+// doesn't touch this control. Print isn't literally 300 DPI (that depends on
+// physical print size, which a social carousel doesn't have) — it's "as sharp
+// as this pipeline can reasonably produce" for anyone printing or zooming in.
+export const EXPORT_QUALITIES = [
+  { id: "draft", label: "Draft", detail: "Fast, smaller file", scale: 1 },
+  { id: "standard", label: "Standard", detail: "Recommended for social", scale: 2 },
+  { id: "print", label: "Print", detail: "Maximum sharpness, slower", scale: 3 },
+];
+
+export default function PdfExportDialog({ proj, palette, onClose, busy, progress, onExport }) {
   const total = proj.slides.length;
   const [picked, setPicked] = useState(() => proj.slides.map((_, i) => i));
+  const [quality, setQuality] = useState("standard");
 
   const toggle = (i) => setPicked((cur) => cur.includes(i) ? cur.filter((x) => x !== i) : [...cur, i].sort((a, b) => a - b));
   const selectAll = () => setPicked(proj.slides.map((_, i) => i));
@@ -60,13 +72,32 @@ export default function PdfExportDialog({ proj, palette, onClose, busy, onExport
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-line flex items-center justify-end gap-2">
-          <button onClick={onClose} className="btn-secondary text-sm">Cancel</button>
-          <button onClick={() => onExport(picked)} disabled={busy || !picked.length}
-            data-testid="pdf-export-btn"
-            className="btn-primary disabled:opacity-40">
-            {busy ? <><Loader2 size={14} className="animate-spin" /> Rendering…</> : <><Download size={14} /> Export {picked.length} slide{picked.length === 1 ? "" : "s"}</>}
-          </button>
+        <div className="px-6 py-4 border-t border-line flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1" data-testid="pdf-quality-picker">
+            {EXPORT_QUALITIES.map((q) => (
+              <button key={q.id} type="button" onClick={() => setQuality(q.id)}
+                disabled={busy} title={q.detail} data-testid={`pdf-quality-${q.id}`}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-colors disabled:opacity-50 ${
+                  quality === q.id ? "bg-ink text-white border-ink" : "border-line text-neutral-600 hover:border-ink"
+                }`}>
+                {q.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3">
+            {busy && progress && (
+              <span className="text-xs font-mono text-neutral-500" data-testid="pdf-export-progress">
+                Rendering slide {progress.done} of {progress.total}…
+              </span>
+            )}
+            <button onClick={onClose} className="btn-secondary text-sm">Cancel</button>
+            <button onClick={() => onExport(picked, quality)} disabled={busy || !picked.length}
+              data-testid="pdf-export-btn"
+              className="btn-primary disabled:opacity-40">
+              {busy ? <><Loader2 size={14} className="animate-spin" /> Rendering…</> : <><Download size={14} /> Export {picked.length} slide{picked.length === 1 ? "" : "s"}</>}
+            </button>
+          </div>
         </div>
       </div>
     </div>

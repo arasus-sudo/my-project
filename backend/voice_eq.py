@@ -14,6 +14,8 @@ import secrets
 
 from server import db, current_user, now_iso, new_id, _audit, _rate_ok, STAGES, _llm_chat, _extract_json, ANTHROPIC_API_KEY, _log_activity
 from retell_client import retell_client, RETELL_MOCKED
+from twilio_client import twilio_client, TWILIO_MOCKED, TWILIO_FROM_NUMBER
+from openai_realtime_client import OPENAI_MOCKED, TELEPHONY_SAFE_VOICES
 
 voice_router = APIRouter(prefix="/voice-eq")
 voice_public_router = APIRouter()
@@ -31,6 +33,7 @@ class QualificationField(BaseModel):
 class VoiceAgentIn(BaseModel):
     name: str
     purpose: str = "outbound"  # outbound | inbound
+    provider: str = "retell"  # retell | twilio_openai
     persona_prompt: str
     voice_id: str = "11labs-Adrian"
     language: str = "en-US"
@@ -157,6 +160,20 @@ async def sync_voice_agent(aid: str, user=Depends(current_user)):
     a = await db.voice_agents.find_one({"id": aid, "workspace_id": user["workspace_id"]}, {"_id": 0})
     if not a:
         raise HTTPException(404, "not found")
+    if a.get("provider", "retell") == "twilio_openai":
+        # No persistent "agent" resource to provision — OpenAI Realtime sessions
+        # are created fresh per call (see openai_realtime_client.py), and Twilio
+        # just points a call at a TwiML URL at call time. Sync here is config
+        # validation only, no external API call.
+        if not (a.get("persona_prompt") or "").strip():
+            await db.voice_agents.update_one({"id": aid}, {"$set": {"status": "sync_error", "sync_error": "persona_prompt is required"}})
+            raise HTTPException(400, "persona_prompt is required")
+        patch = {"status": "synced", "sync_error": None, "updated_at": now_iso()}
+        if a.get("voice_id") not in TELEPHONY_SAFE_VOICES:
+            patch["voice_id"] = TELEPHONY_SAFE_VOICES[0]
+        await db.voice_agents.update_one({"id": aid}, {"$set": patch})
+        await _audit(user, "voice_eq.agent.sync", {"id": aid, "provider": "twilio_openai", "mocked": TWILIO_MOCKED})
+        return await get_voice_agent(aid, user)
     try:
         # Fold the knowledge base into the agent's prompt so it can answer from it.
         prompt = a["persona_prompt"]
@@ -199,13 +216,22 @@ async def sync_voice_agent(aid: str, user=Depends(current_user)):
 
 # ----------------------------- Calls -------------------------------------------
 def _blank_call_doc(*, workspace_id: str, lead: Dict[str, Any], agent_id: str, campaign_id: Optional[str],
-                     from_number: str, to_number: str, retell_result: Dict[str, Any]) -> Dict[str, Any]:
-    return {
-        "id": new_id(), "workspace_id": workspace_id,
+                     from_number: str, to_number: str, provider: str = "retell",
+                     call_id: Optional[str] = None, call_result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """`call_result` is the {"call_id","call_status",...} shape both
+    retell_client.create_phone_call and twilio_client.create_phone_call return.
+    `call_id` lets a caller pin the doc's own `id` ahead of time (the Twilio
+    flow needs this — the TwiML URL has to contain the call id before Twilio is
+    ever dialed, so the doc is inserted before the provider call, not after)."""
+    call_result = call_result or {}
+    doc = {
+        "id": call_id or new_id(), "workspace_id": workspace_id,
         "lead_id": lead["id"], "agent_id": agent_id, "campaign_id": campaign_id,
-        "retell_call_id": retell_result.get("call_id"),
+        "provider": provider,
+        "retell_call_id": call_result.get("call_id") if provider == "retell" else None,
+        "twilio_call_sid": call_result.get("call_id") if provider == "twilio_openai" else None,
         "direction": "outbound", "from_number": from_number, "to_number": to_number,
-        "status": retell_result.get("call_status", "registered"),
+        "status": call_result.get("call_status", "registered"),
         "disconnection_reason": None, "started_at": now_iso(), "ended_at": None, "duration_seconds": None,
         "recording_url": None, "transcript": None, "transcript_object": None,
         "sentiment": None, "call_successful": None, "summary": None, "qualification": None,
@@ -214,16 +240,156 @@ def _blank_call_doc(*, workspace_id: str, lead: Dict[str, Any], agent_id: str, c
         "deal_id": None, "retell_events_seen": [],
         "created_at": now_iso(), "updated_at": now_iso(),
     }
+    return doc
 
 
 RETELL_FROM_NUMBER = os.environ.get("RETELL_FROM_NUMBER", "")
 
 
-async def _pick_from_number(workspace_id: str) -> str:
-    numbers = await db.voice_numbers.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(50)
+async def _pick_from_number(workspace_id: str, provider: str = "retell") -> str:
+    numbers = await db.voice_numbers.find(
+        {"workspace_id": workspace_id, "provider": provider}, {"_id": 0}
+    ).to_list(50)
     if numbers:
         return numbers[0]["phone_number"]
-    return RETELL_FROM_NUMBER or "+10000000000"
+    return (TWILIO_FROM_NUMBER if provider == "twilio_openai" else RETELL_FROM_NUMBER) or "+10000000000"
+
+
+async def _get_or_create_voice_ws_token(workspace_id: str) -> Dict[str, Any]:
+    """Twilio's media-stream WebSocket can't carry a JWT — same reasoning as the
+    Retell webhook's token-in-path design, just a second token/kind so the two
+    providers' public routes stay fully independent."""
+    hook = await db.webhooks.find_one({"workspace_id": workspace_id, "kind": "voice_ws"}, {"_id": 0})
+    if hook:
+        return hook
+    hook = {
+        "id": new_id(), "workspace_id": workspace_id, "kind": "voice_ws",
+        "name": "Voice EQ Twilio media stream", "source": "twilio_openai",
+        "token": secrets.token_urlsafe(24), "active": True,
+        "created_at": now_iso(), "call_count": 0, "last_called_at": None,
+    }
+    await db.webhooks.insert_one(hook)
+    hook.pop("_id", None)
+    return hook
+
+
+async def _settle_call_billing(workspace_id: str, call_id: str, duration_seconds: Optional[int]) -> int:
+    """Charge credits for a finished call now that its real duration is known
+    (billed per started minute, minimum one). Shared by the Retell webhook's
+    call_ended handler and voice_ws_bridge.py's finalizer so the billing rule
+    lives in exactly one place regardless of provider."""
+    from billing import charge_credits, minutes_for_call, CREDIT_COSTS
+    mins = minutes_for_call(duration_seconds)
+    await charge_credits(
+        workspace_id, "voice_call_minute", units=mins,
+        meta={"call_id": call_id, "duration_seconds": duration_seconds},
+        allow_overdraft=True,
+    )
+    return mins * CREDIT_COSTS["voice_call_minute"]
+
+
+# A canned outcome for twilio_openai's mock mode. A live bidirectional
+# WebSocket session can't be faked the way a REST response can (there's no
+# real Twilio account to fire a real media stream at us) — so instead of
+# leaving the call stuck "registered" forever the way an under-mocked path
+# would, this gives mock mode a complete, demoable call: same shape a real
+# call produces once _cascade_call_analyzed runs, just synthetic.
+_MOCK_TRANSCRIPT_TURNS = [
+    ("agent", "Hi, this is calling on behalf of the team — got a quick minute?"),
+    ("caller", "Sure, what's this about?"),
+    ("agent", "We help teams automate outbound calling end to end. Curious how you're handling that today."),
+    ("caller", "That's actually something we've been looking at. Can you send more info?"),
+    ("agent", "Absolutely, I'll have that sent over. Thanks for your time!"),
+]
+
+
+def _mock_twilio_openai_outcome(lead: Dict[str, Any]) -> Dict[str, Any]:
+    transcript = "\n".join(f"{role}: {text}" for role, text in _MOCK_TRANSCRIPT_TURNS)
+    return {
+        "status": "ended", "duration_seconds": 47,
+        "transcript": transcript,
+        "transcript_object": [{"role": role, "content": text} for role, text in _MOCK_TRANSCRIPT_TURNS],
+        "sentiment": "positive", "call_successful": True,
+        "summary": f"Reached {lead.get('first_name') or 'the lead'}, introduced the offering — asked for more info, good engagement.",
+        "qualification": {"interest_level": "warm", "requested_follow_up": "send more info"},
+    }
+
+
+async def _place_provider_call(*, workspace_id: str, agent: Dict[str, Any], lead: Dict[str, Any],
+                                campaign_id: Optional[str] = None, variant: Optional[str] = None) -> Dict[str, Any]:
+    """Places a call via whichever provider `agent` is configured for and
+    returns the inserted call doc (plus a "mocked" flag). DNC/credit/rate-limit
+    checks stay in the calling route — this only owns "which provider API, how
+    is the call doc built," the part that was already duplicated inline for
+    Retell in both click_to_call and launch_voice_campaign."""
+    provider = agent.get("provider", "retell")
+    to_number = lead["phone"]
+
+    if provider == "twilio_openai":
+        from_number = await _pick_from_number(workspace_id, "twilio_openai")
+
+        if TWILIO_MOCKED or OPENAI_MOCKED:
+            call_doc = _blank_call_doc(
+                workspace_id=workspace_id, lead=lead, agent_id=agent["id"], campaign_id=campaign_id,
+                from_number=from_number, to_number=to_number, provider="twilio_openai",
+                call_result={"call_id": f"mock-call-{new_id()[:10]}", "call_status": "registered"},
+            )
+            if variant:
+                call_doc["metadata"]["agent_variant"] = variant
+            outcome = _mock_twilio_openai_outcome(lead)
+            call_doc.update(outcome)
+            call_doc["ended_at"] = now_iso()
+            await db.calls.insert_one(call_doc)
+            call_doc.pop("_id", None)
+            await _settle_call_billing(workspace_id, call_doc["id"], outcome["duration_seconds"])
+            await _cascade_call_analyzed(workspace_id, call_doc["id"], call_doc)
+            return {**call_doc, "mocked": True}
+
+        # Two-phase: the TwiML URL Twilio fetches on answer needs call_id baked
+        # in, so the placeholder doc is inserted before Twilio is ever dialed,
+        # then patched with twilio_call_sid once the REST call returns.
+        ws_hook = await _get_or_create_voice_ws_token(workspace_id)
+        call_doc = _blank_call_doc(
+            workspace_id=workspace_id, lead=lead, agent_id=agent["id"], campaign_id=campaign_id,
+            from_number=from_number, to_number=to_number, provider="twilio_openai", call_id=new_id(),
+        )
+        if variant:
+            call_doc["metadata"]["agent_variant"] = variant
+        await db.calls.insert_one(call_doc)
+        call_doc.pop("_id", None)
+        twiml_url = f"{PUBLIC_BASE_URL}/api/hooks/voice-twiml/{ws_hook['token']}/{call_doc['id']}"
+        status_callback_url = f"{PUBLIC_BASE_URL}/api/hooks/voice-status/{ws_hook['token']}/{call_doc['id']}"
+        result = await twilio_client.create_phone_call(
+            from_number=from_number, to_number=to_number, twiml_url=twiml_url,
+            status_callback_url=status_callback_url,
+            voicemail_detection=agent.get("voicemail_detection", True),
+        )
+        patch = {"twilio_call_sid": result.get("call_id"),
+                 "status": result.get("call_status", call_doc["status"]), "updated_at": now_iso()}
+        await db.calls.update_one({"id": call_doc["id"]}, {"$set": patch})
+        return {**call_doc, **patch, "mocked": result.get("mocked", TWILIO_MOCKED)}
+
+    # retell (default)
+    from_number = await _pick_from_number(workspace_id, "retell")
+    metadata = {"lead_id": lead["id"], "workspace_id": workspace_id}
+    if campaign_id:
+        metadata["campaign_id"] = campaign_id
+    if variant:
+        metadata["agent_variant"] = variant
+    result = await retell_client.create_phone_call(
+        from_number=from_number, to_number=to_number, agent_id=agent.get("retell_agent_id"),
+        metadata=metadata,
+        dynamic_variables={"first_name": lead.get("first_name", ""), "company": lead.get("company", "")},
+    )
+    call_doc = _blank_call_doc(
+        workspace_id=workspace_id, lead=lead, agent_id=agent["id"], campaign_id=campaign_id,
+        from_number=from_number, to_number=to_number, provider="retell", call_result=result,
+    )
+    if variant:
+        call_doc["metadata"]["agent_variant"] = variant
+    await db.calls.insert_one(call_doc)
+    call_doc.pop("_id", None)
+    return {**call_doc, "mocked": result.get("mocked", RETELL_MOCKED)}
 
 
 @voice_router.get("/numbers")
@@ -236,15 +402,29 @@ async def import_voice_number(body: Dict[str, str], user=Depends(current_user)):
     phone_number = (body.get("phone_number") or "").strip()
     if not phone_number:
         raise HTTPException(400, "phone_number required")
+    provider = body.get("provider", "retell")
+    if provider == "twilio_openai":
+        # No import API call needed — a Twilio number is already owned by the
+        # account's TWILIO_ACCOUNT_SID; this just registers it for
+        # _pick_from_number to find.
+        doc = {
+            "id": new_id(), "workspace_id": user["workspace_id"], "phone_number": phone_number,
+            "provider": "twilio_openai", "retell_phone_number_id": None,
+            "nickname": body.get("nickname", ""), "capabilities": ["outbound"], "imported_at": now_iso(),
+        }
+        await db.voice_numbers.insert_one(doc)
+        doc.pop("_id", None)
+        await _audit(user, "voice_eq.number.import", {"phone_number": phone_number, "provider": provider})
+        return {**doc, "mocked": TWILIO_MOCKED}
     result = await retell_client.import_phone_number(phone_number, nickname=body.get("nickname", ""))
     doc = {
         "id": new_id(), "workspace_id": user["workspace_id"], "phone_number": phone_number,
-        "retell_phone_number_id": result.get("phone_number_id"), "nickname": body.get("nickname", ""),
+        "provider": "retell", "retell_phone_number_id": result.get("phone_number_id"), "nickname": body.get("nickname", ""),
         "capabilities": ["outbound", "inbound"], "imported_at": now_iso(),
     }
     await db.voice_numbers.insert_one(doc)
     doc.pop("_id", None)
-    await _audit(user, "voice_eq.number.import", {"phone_number": phone_number})
+    await _audit(user, "voice_eq.number.import", {"phone_number": phone_number, "provider": provider})
     return {**doc, "mocked": result.get("mocked", RETELL_MOCKED)}
 
 
@@ -287,24 +467,16 @@ async def click_to_call(body: ClickToCallIn, user=Depends(current_user)):
         raise HTTPException(404, "agent not found")
     if not await _rate_ok(user):
         raise HTTPException(429, "daily quota exceeded")
+    # Gate on one minute's worth of credits; the real duration is charged when
+    # the call_ended webhook tells us how long it actually ran.
+    from billing import check_credits
+    await check_credits(user["workspace_id"], "voice_call_minute")
 
-    from_number = await _pick_from_number(user["workspace_id"])
-    result = await retell_client.create_phone_call(
-        from_number=from_number, to_number=phone,
-        agent_id=agent.get("retell_agent_id"),
-        metadata={"lead_id": lead["id"], "workspace_id": user["workspace_id"]},
-        dynamic_variables={"first_name": lead.get("first_name", ""), "company": lead.get("company", "")},
-    )
-    call_doc = _blank_call_doc(
-        workspace_id=user["workspace_id"], lead=lead, agent_id=agent["id"], campaign_id=None,
-        from_number=from_number, to_number=phone, retell_result=result,
-    )
-    await db.calls.insert_one(call_doc)
-    call_doc.pop("_id", None)
-    await _audit(user, "voice_eq.call.click_to_call", {"call_id": call_doc["id"], "lead_id": lead["id"]})
+    call_doc = await _place_provider_call(workspace_id=user["workspace_id"], agent=agent, lead=lead)
+    await _audit(user, "voice_eq.call.click_to_call", {"call_id": call_doc["id"], "lead_id": lead["id"], "provider": agent.get("provider", "retell")})
     await _log_activity(user["workspace_id"], lead["id"], "voice", "call_placed",
                          f"Called {lead.get('first_name', 'lead')} via {agent['name']}", {"call_id": call_doc["id"]})
-    return {**call_doc, "mocked": result.get("mocked", RETELL_MOCKED)}
+    return call_doc
 
 
 @voice_router.get("/calls")
@@ -351,7 +523,10 @@ async def voice_usage_analytics(user=Depends(current_user)):
         "total_minutes": total_minutes,
         "total_cost_cents": total_cost_cents,
         "by_day": sorted(by_day.values(), key=lambda x: x["day"], reverse=True)[:14],
-        "mocked": RETELL_MOCKED,
+        "mocked": RETELL_MOCKED,  # kept for backward compat with existing UI reads
+        "retell_mocked": RETELL_MOCKED,
+        "twilio_mocked": TWILIO_MOCKED,
+        "openai_mocked": OPENAI_MOCKED,
     }
 
 
@@ -429,12 +604,50 @@ async def launch_voice_campaign(cid: str, user=Depends(current_user)):
     agent_b = None
     if c.get("agent_id_b") and c.get("ab_split", 0) > 0:
         agent_b = await db.voice_agents.find_one({"id": c["agent_id_b"], "workspace_id": user["workspace_id"]}, {"_id": 0})
+        # Mixed-provider A/B is out of scope for v1 — the two providers place
+        # calls through structurally different flows (single-phase Retell vs.
+        # two-phase Twilio+OpenAI, different from-number pools), and silently
+        # letting them mix would leave _pick_from_number's single-number
+        # assumption to misbehave unpredictably rather than failing loudly.
+        if agent_b and agent_b.get("provider", "retell") != agent.get("provider", "retell"):
+            raise HTTPException(400, "A/B agents must use the same provider")
+
+    # Refuse to launch a campaign we can't place a single call on; then stop
+    # dialing the moment the balance can no longer cover another minute, rather
+    # than burning through the list and failing every call.
+    from billing import check_credits, get_balance, CREDIT_COSTS
+    await check_credits(user["workspace_id"], "voice_call_minute")
+
     await db.voice_campaigns.update_one({"id": cid}, {"$set": {"status": "active", "launched_at": now_iso()}})
     await _audit(user, "voice_eq.campaign.launch", {"campaign_id": cid})
 
-    from_number = await _pick_from_number(user["workspace_id"])
-    placed, skipped = 0, 0
+    # Concurrency cap — only meaningful for twilio_openai. Retell is
+    # fire-and-forget from this app's perspective (its own infra absorbs call
+    # concurrency); a twilio_openai call instead pins two live WebSocket
+    # connections plus an OpenAI Realtime session on OUR process for its whole
+    # duration, so an uncapped campaign launch risks blowing through real
+    # per-account concurrency limits on both Twilio's and OpenAI's side. This
+    # is a hard safety cap, not a scheduler — calls beyond it are held back for
+    # a later launch (the campaign can be relaunched once earlier calls finish),
+    # not queued/retried automatically.
+    provider = agent.get("provider", "retell")
+    concurrency_cap = None
+    if provider == "twilio_openai":
+        cap = max(1, int(c.get("max_concurrent_calls") or 5))
+        ongoing = await db.calls.count_documents({
+            "workspace_id": user["workspace_id"], "provider": "twilio_openai",
+            "status": {"$in": ["registered", "ongoing"]},
+        })
+        concurrency_cap = max(0, cap - ongoing)
+
+    placed, skipped, skipped_capacity, halted_no_credits = 0, 0, 0, False
     for lid in c.get("lead_ids", []):
+        if await get_balance(user["workspace_id"]) < CREDIT_COSTS["voice_call_minute"] * (placed + 1):
+            halted_no_credits = True
+            break
+        if concurrency_cap is not None and placed >= concurrency_cap:
+            skipped_capacity += 1
+            continue
         lead = await db.leads.find_one({"id": lid, "workspace_id": user["workspace_id"]}, {"_id": 0})
         if not lead or not lead.get("phone") or await _is_dnc(user["workspace_id"], lead):
             skipped += 1
@@ -444,21 +657,14 @@ async def launch_voice_campaign(cid: str, user=Depends(current_user)):
         if agent_b and (hash(lid) % 100) < c["ab_split"]:
             variant = "B"
             active_agent = agent_b
-        result = await retell_client.create_phone_call(
-            from_number=from_number, to_number=lead["phone"], agent_id=active_agent.get("retell_agent_id"),
-            metadata={"lead_id": lead["id"], "campaign_id": cid, "workspace_id": user["workspace_id"], "agent_variant": variant},
-            dynamic_variables={"first_name": lead.get("first_name", ""), "company": lead.get("company", "")},
+        call_doc = await _place_provider_call(
+            workspace_id=user["workspace_id"], agent=active_agent, lead=lead, campaign_id=cid, variant=variant,
         )
-        call_doc = _blank_call_doc(
-            workspace_id=user["workspace_id"], lead=lead, agent_id=active_agent["id"], campaign_id=cid,
-            from_number=from_number, to_number=lead["phone"], retell_result=result,
-        )
-        call_doc["metadata"]["agent_variant"] = variant
-        await db.calls.insert_one(call_doc)
         await _log_activity(user["workspace_id"], lead["id"], "voice", "call_placed",
                              f"Called {lead.get('first_name', 'lead')} via campaign “{c['name']}”", {"call_id": call_doc["id"], "campaign_id": cid})
         placed += 1
-    return {"ok": True, "status": "active", "calls_placed": placed, "skipped": skipped}
+    return {"ok": True, "status": "active", "calls_placed": placed, "skipped": skipped,
+            "skipped_capacity": skipped_capacity, "halted_no_credits": halted_no_credits}
 
 
 @voice_router.post("/campaigns/{cid}/pause")
@@ -523,6 +729,7 @@ async def voice_webhook(token: str, request: Request):
         patch["transcript"] = call.get("transcript")
         patch["transcript_object"] = call.get("transcript_object")
         patch["cost_cents"] = (call.get("call_cost") or {}).get("combined_cost")
+        patch["credits_charged"] = await _settle_call_billing(hook["workspace_id"], existing["id"], patch["duration_seconds"])
     elif event == "call_analyzed":
         analysis = call.get("call_analysis") or {}
         patch["sentiment"] = analysis.get("user_sentiment")
@@ -602,7 +809,12 @@ async def _cascade_call_analyzed(workspace_id: str, call_id: str, call_doc: Dict
             "lead_id": lead["id"], "type": "meeting_booked", "at": now_iso(), "source": "voice_eq",
         })
 
-    next_action = await _generate_next_best_action(lead, call_doc.get("summary", ""), call_doc.get("qualification") or {})
+    from billing import charge_credits
+    try:
+        await charge_credits(workspace_id, "next_best_action", meta={"call_id": call_id}, allow_overdraft=True)
+        next_action = await _generate_next_best_action(lead, call_doc.get("summary", ""), call_doc.get("qualification") or {})
+    except HTTPException:
+        next_action = ""  # out of credits — the CRM cascade still completes
     await db.calls.update_one({"id": call_id}, {"$set": {"next_best_action": next_action}})
 
     outcome = "qualified" if successful else ("not interested" if new_status == "not_interested" else "inconclusive")
@@ -637,6 +849,9 @@ async def _run_post_call_action(workspace_id: str, lead: Dict[str, Any], action:
     if action == "draft_proposal":
         # Hand off to Proposal EQ — research + draft a deck for this lead.
         from proposal_eq import _research_and_draft, _build_deck  # lazy to avoid load-order coupling
+        from billing import charge_credits
+        await charge_credits(workspace_id, "proposal_generate",
+                              meta={"lead_id": lead["id"], "call_id": call_id, "via": "voice_handoff"})
         deal = await db.deals.find_one({"lead_id": lead["id"], "workspace_id": workspace_id}, {"_id": 0})
         timeline_raw = await db.activities.find(
             {"lead_id": lead["id"], "workspace_id": workspace_id}, {"_id": 0}

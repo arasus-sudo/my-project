@@ -28,22 +28,22 @@ export default function SocialSettings() {
     load();
   };
 
-  if (loading) return <div className="p-10 text-neutral-500 text-sm">Loading…</div>;
+  if (loading) return <div className="animate-fade-in p-6 sm:p-8 text-neutral-400 text-sm">Loading…</div>;
 
   return (
     <div>
       <PageHeader title="Social EQ Settings" subtitle="Connect the platforms you publish to. Posts run in test mode until a platform is connected." />
-      <div className="p-6 max-w-2xl space-y-4">
+      <div className="animate-fade-in px-6 sm:px-8 max-w-2xl space-y-4">
         {integrations.map((i) => {
           const meta = PLATFORM_META[i.provider];
           const Icon = meta.icon;
           return (
-            <div key={i.provider} className="card-flat p-5 flex items-center justify-between">
+            <div key={i.provider} className="shadow-card p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl">
               <div className="flex items-center gap-3">
                 <Icon size={20} />
                 <div>
                   <div className="font-display font-semibold">{meta.label}</div>
-                  <p className="text-xs text-neutral-500 mt-0.5">
+                  <p className="text-xs text-neutral-400 mt-0.5">
                     {i.connected ? `Connected as ${i.account_name}. Approved posts publish to this account.` : "Not connected."}
                   </p>
                 </div>

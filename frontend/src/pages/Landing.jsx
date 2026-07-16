@@ -1,241 +1,292 @@
 import { Link } from "react-router-dom";
-import { ArrowUpRight, ArrowRight, Zap, Inbox, Kanban, ShieldCheck, Gauge, Sparkles } from "lucide-react";
+import { useState } from "react";
+import {
+  ArrowUpRight, ArrowRight, Sparkles, Mail, PhoneCall, CalendarClock,
+  FileText, Images, Share2, Database, Coins, ShieldCheck, GitBranch, Menu, X,
+} from "lucide-react";
+import InnoiraLogo from "../components/InnoiraLogo";
+
+const AGENTS = [
+  { icon: Mail, name: "Pitch EQ", tag: "Outbound email",
+    d: "Finds verified prospects, researches them, and writes cold email that reads human — every draft gated by an EQ Score before send." },
+  { icon: PhoneCall, name: "Voice EQ", tag: "AI calling",
+    d: "Places real phone calls with a natural AI voice, qualifies conversationally, and writes the outcome straight into your pipeline." },
+  { icon: CalendarClock, name: "Schedule EQ", tag: "Scheduling",
+    d: "Booking pages, availability, reminders and reschedules — meetings appear on the calendar without a single back-and-forth." },
+  { icon: FileText, name: "Proposal EQ", tag: "Proposals",
+    d: "Turns a deal's CRM context into a researched, priced, on-brand proposal — as an editable document, PDF or deck." },
+  { icon: Images, name: "Create EQ", tag: "Content studio",
+    d: "A full carousel and creative editor — real Google Fonts, brand kits, AI copy and image assist, PDF/PNG export." },
+  { icon: Share2, name: "Social EQ", tag: "Social posting",
+    d: "Drafts, schedules and queues social posts across platforms — nothing publishes without your explicit approval." },
+];
+
+const RELAY = [
+  { agent: "Voice EQ", event: "Call ended — lead qualified", detail: "sentiment: positive · budget: yes" },
+  { agent: "Proposal EQ", event: "Proposal auto-drafted", detail: "researched, priced, ready to review" },
+  { agent: "Schedule EQ", event: "Booking link queued", detail: "30-min demo · next available slots" },
+];
 
 export default function Landing() {
+  const [mobileNav, setMobileNav] = useState(false);
+
   return (
-    <div className="min-h-screen bg-bone text-ink">
+    <div className="min-h-screen bg-bone text-ink animate-fade-in">
       {/* Nav */}
-      <header className="pt-6 px-6">
-        <div className="max-w-7xl mx-auto bg-white/70 backdrop-blur border border-line rounded-full px-3 py-2 flex items-center justify-between">
-          <div className="flex items-center gap-2 pl-3">
-            <div className="w-7 h-7 bg-ink text-white flex items-center justify-center rounded-full font-display font-bold text-sm">i</div>
-            <span className="font-display font-semibold tracking-tight text-[15px]">Innoira</span>
-            <span className="text-neutral-400 text-sm mx-1">/</span>
-            <span className="font-display font-semibold tracking-tight text-[15px] text-neutral-600">Pitch EQ</span>
+      <header className="fixed top-0 left-0 right-0 z-50 px-6 sm:px-8 pt-4">
+        <div className="nav-floating max-w-7xl mx-auto bg-white/70 backdrop-blur border border-line rounded-xl px-4 py-3 flex items-center justify-between">
+          <div className="pl-2 flex items-center">
+            <InnoiraLogo size="sm" />
           </div>
-          <nav className="hidden md:flex items-center gap-8 text-sm text-neutral-600">
-            <a href="#suite" className="hover:text-ink">The Suite</a>
-            <a href="#eq" className="hover:text-ink">EQ Score</a>
-            <a href="#lifecycle" className="hover:text-ink">Lifecycle</a>
+          <nav className="hidden md:flex items-center gap-8 text-sm text-neutral-500">
+            <a href="#agents" className="hover:text-ink">The Agents</a>
+            <a href="#relay" className="hover:text-ink">How it works</a>
             <a href="#suite-pricing" className="hover:text-ink">Pricing</a>
           </nav>
           <div className="flex items-center gap-1">
-            <Link to="/login" data-testid="nav-login" className="btn-ghost">Sign in</Link>
-            <Link to="/signup" data-testid="nav-signup" className="btn-primary py-2 px-5">Start free <ArrowUpRight size={14} /></Link>
+            <Link to="/login" data-testid="nav-login" className="btn-ghost hidden sm:inline-flex">Sign in</Link>
+            <Link to="/signup" data-testid="nav-signup" className="btn-primary py-2 px-4 sm:px-5 text-sm">Start free <ArrowUpRight size={14} /></Link>
+            <button onClick={() => setMobileNav(!mobileNav)} className="md:hidden p-2 text-neutral-500 hover:text-ink rounded-xl">
+              {mobileNav ? <X size={18} /> : <Menu size={18} />}
+            </button>
           </div>
         </div>
+        {mobileNav && (
+          <div className="md:hidden max-w-7xl mx-auto mt-2 bg-white border border-line rounded-2xl p-4 space-y-3 shadow-card">
+            <a href="#agents" onClick={() => setMobileNav(false)} className="block text-sm text-neutral-500 hover:text-ink py-2 rounded-xl">The Agents</a>
+            <a href="#relay" onClick={() => setMobileNav(false)} className="block text-sm text-neutral-500 hover:text-ink py-2 rounded-xl">How it works</a>
+            <a href="#suite-pricing" onClick={() => setMobileNav(false)} className="block text-sm text-neutral-500 hover:text-ink py-2 rounded-xl">Pricing</a>
+            <Link to="/login" onClick={() => setMobileNav(false)} className="block text-sm text-neutral-500 hover:text-ink py-2 rounded-xl">Sign in</Link>
+          </div>
+        )}
       </header>
 
       {/* Hero */}
-      <section className="px-6 pt-20 pb-24 md:pt-28 md:pb-32">
+      <section className="px-6 sm:px-8 pt-24 sm:pt-32 pb-20 sm:pb-28 animate-fade-up">
         <div className="max-w-6xl mx-auto text-center">
-          <div className="pill mx-auto mb-8"><Sparkles size={12} /> Part of the Innoira Agentic Suite</div>
-          <h1 className="font-display font-bold text-5xl sm:text-6xl lg:text-7xl leading-[1.02] tracking-tighter max-w-4xl mx-auto">
-            Cold email that reads like it was written by a human who cares.
+          <div className="pill mx-auto mb-6 sm:mb-8"><Sparkles size={12} /> Six agents live · more on the way</div>
+          <h1 className="font-display font-bold text-4xl sm:text-6xl lg:text-8xl leading-[1.05] sm:leading-[1.02] tracking-tighter max-w-5xl mx-auto">
+            Your AI revenue team, under one login.
           </h1>
-          <p className="mt-8 text-lg text-neutral-600 max-w-2xl mx-auto leading-relaxed">
-            Pitch EQ is the outbound agent in your Innoira suite. It scores every draft for tone, empathy, clarity and spam risk — before you hit send.
+          <p className="mt-6 sm:mt-8 text-base sm:text-lg text-neutral-500 max-w-2xl mx-auto leading-relaxed px-2">
+            The Innoira Agentic Suite is six specialist agents — outbound email, AI calling, scheduling,
+            proposals, content and social — working one shared pipeline. Not six tools taped together.
           </p>
-          <div className="mt-10 flex items-center justify-center gap-3">
+          <div className="mt-8 sm:mt-10 flex items-center justify-center gap-3 flex-wrap">
             <Link to="/signup" data-testid="hero-cta-start" className="btn-primary">Start free <ArrowRight size={14} /></Link>
-            <a href="#eq" className="btn-secondary">See the EQ Score</a>
+            <a href="#agents" className="btn-secondary bg-white border-line hover:bg-ash">Meet the agents</a>
           </div>
 
-          {/* Hero visual — abstract score card */}
-          <div className="mt-20 max-w-5xl mx-auto">
-            <div className="bg-white border border-line rounded-3xl p-8 md:p-12 grid md:grid-cols-3 gap-8 items-center shadow-[0_20px_80px_-40px_rgba(33,32,37,0.25)]">
-              <div className="text-left md:col-span-1">
-                <div className="ui-label mb-3">EQ Score</div>
-                <div className="font-mono text-7xl font-bold tracking-tighter">82</div>
-                <div className="pill mt-4"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Ready to send</div>
-              </div>
-              <div className="md:col-span-2 text-left">
-                <div className="grid grid-cols-5 gap-3 mb-6">
-                  {[
-                    { label: "REL", v: 92 },
-                    { label: "EMP", v: 78 },
-                    { label: "CLR", v: 88 },
-                    { label: "CTA", v: 84 },
-                    { label: "SPM", v: 91 },
-                  ].map((b) => (
-                    <div key={b.label}>
-                      <div className="h-16 bg-neutral-100 rounded-lg relative overflow-hidden">
-                        <div className="absolute bottom-0 left-0 right-0 bg-ink rounded-lg" style={{ height: `${b.v}%` }} />
+          {/* Hero visual — the cross-agent relay */}
+          <div className="mt-14 sm:mt-20 max-w-3xl mx-auto">
+            <div className="bg-white border border-line rounded-2xl p-6 sm:p-8 md:p-10 text-left shadow-card">
+              <div className="ui-label mb-4 sm:mb-6">One qualified call, zero manual follow-up</div>
+              <div className="space-y-0">
+                {RELAY.map((s, i) => (
+                  <div key={s.agent} className="flex gap-3 sm:gap-4">
+                    <div className="flex flex-col items-center">
+                      <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[10px] font-mono font-bold shrink-0 ${i === 0 ? "bg-ink text-white" : "bg-ink/5 text-ink"}`}>
+                        {i + 1}
                       </div>
-                      <div className="text-[10px] font-mono text-neutral-500 mt-1.5 text-center">{b.label}</div>
+                      {i < RELAY.length - 1 && <div className="w-px flex-1 bg-line my-1" />}
                     </div>
-                  ))}
-                </div>
-                <div className="border-l-2 border-ink pl-4 text-sm text-neutral-700 leading-relaxed">
-                  "Hi Marcus — noticed Obsidian Labs is scaling fast. Worth 15 minutes to compare notes on reply rates?"
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Suite section */}
-      <section id="suite" className="px-6 py-24">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center max-w-2xl mx-auto mb-14">
-            <div className="ui-label mb-3">The Innoira Agentic Suite</div>
-            <h2 className="text-4xl sm:text-5xl font-display font-bold tracking-tight">
-              One suite. Every revenue agent.
-            </h2>
-            <p className="mt-4 text-neutral-600">Pitch EQ handles outbound. Other agents handle inbound, research, and pipeline hygiene — all under one login.</p>
-          </div>
-          <div className="grid md:grid-cols-4 gap-4">
-            {[
-              { t: "Pitch EQ", d: "AI cold email agent with EQ Score", live: true },
-              { t: "Signal", d: "Buying-intent research agent", live: false },
-              { t: "Inbound", d: "Website & form triage agent", live: false },
-              { t: "Hygiene", d: "CRM cleanup & enrichment agent", live: false },
-            ].map((a) => (
-              <div key={a.t} className={`bg-white border rounded-2xl p-6 ${a.live ? "border-ink" : "border-line"}`}>
-                <div className="flex items-center justify-between">
-                  <div className="w-9 h-9 bg-ink/5 rounded-full flex items-center justify-center">
-                    <div className="w-2 h-2 bg-ink rounded-full" />
-                  </div>
-                  {a.live ? <span className="pill">Live</span> : <span className="pill text-neutral-400">Soon</span>}
-                </div>
-                <div className="mt-5 font-display font-semibold text-lg">{a.t}</div>
-                <div className="text-sm text-neutral-600 mt-1">{a.d}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* EQ Score */}
-      <section id="eq" className="px-6 py-24">
-        <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-center">
-          <div>
-            <div className="ui-label mb-4">The EQ Score</div>
-            <h2 className="text-4xl sm:text-5xl font-display font-bold tracking-tight leading-tight">
-              An emotional intelligence rating for every cold email.
-            </h2>
-            <p className="mt-6 text-neutral-600 leading-relaxed">
-              Five signals — relevance, empathy, clarity, CTA strength, and spam risk — combine into a single score from 0 to 100. Low score? Get plain-English hints and regenerate in one click.
-            </p>
-            <ul className="mt-8 space-y-3 text-sm">
-              {[
-                ["Relevance", "Does it feel written for this specific person?"],
-                ["Empathy", "Does the tone acknowledge their world before pitching?"],
-                ["Clarity", "Is it short, structured, easy to scan?"],
-                ["CTA", "One clear, low-friction ask?"],
-                ["Spam Safety", "Free of triggers, ALL-CAPS and !!!"],
-              ].map(([k, v]) => (
-                <li key={k} className="flex gap-6 border-b border-line pb-3">
-                  <span className="ui-label w-24 pt-0.5">{k}</span>
-                  <span className="text-neutral-700 flex-1">{v}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="bg-white border border-line rounded-3xl p-8">
-            <div className="ui-label mb-3">Live preview</div>
-            <div className="font-mono text-xs text-neutral-500">Subject</div>
-            <div className="font-display font-semibold text-lg mt-1">Quick idea for Northloop</div>
-            <div className="mt-4 text-sm leading-relaxed text-neutral-800 border-l-2 border-ink pl-4">
-              Hi Alex,<br /><br />
-              Noticed Northloop has been scaling — teams your size often struggle with reply rates on cold outreach. We help by writing emails that feel human, with an EQ Score to catch anything spammy or robotic before you hit send.<br /><br />
-              Worth a 15-minute look next week?
-            </div>
-            <div className="mt-6 flex items-center gap-4">
-              <div>
-                <div className="font-mono text-4xl font-bold">86</div>
-                <div className="ui-label">EQ Score</div>
-              </div>
-              <div className="flex-1 grid grid-cols-5 gap-2">
-                {[{ k: "REL", v: 92 }, { k: "EMP", v: 78 }, { k: "CLR", v: 88 }, { k: "CTA", v: 84 }, { k: "SPM", v: 91 }].map((x) => (
-                  <div key={x.k} className="text-center">
-                    <div className="h-10 bg-neutral-100 rounded-md relative overflow-hidden">
-                      <div className="absolute bottom-0 left-0 right-0 bg-ink" style={{ height: `${x.v}%` }} />
+                    <div className={i < RELAY.length - 1 ? "pb-5 sm:pb-6" : ""}>
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="font-display font-semibold text-sm sm:text-base">{s.agent}</span>
+                        <span className="text-xs sm:text-sm text-neutral-700">{s.event}</span>
+                      </div>
+                      <div className="text-[10px] sm:text-xs font-mono text-neutral-400 mt-1">{s.detail}</div>
                     </div>
-                    <div className="text-[9px] font-mono text-neutral-500 mt-1">{x.k}</div>
                   </div>
                 ))}
               </div>
+              <p className="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-line text-xs sm:text-sm text-neutral-400">
+                Agents hand off to each other automatically — a "yes" on the phone becomes a drafted
+                proposal and a booking link before your rep has hung up.
+              </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Lifecycle */}
-      <section id="lifecycle" className="px-6 py-24">
+      {/* Agents grid */}
+      <section id="agents" className="px-6 sm:px-8 py-16 sm:py-24 animate-fade-up animate-delay-1">
         <div className="max-w-6xl mx-auto">
-          <div className="max-w-2xl mb-14">
-            <div className="ui-label mb-4">The whole outbound lifecycle</div>
-            <h2 className="text-4xl sm:text-5xl font-display font-bold tracking-tight">
-              One agent from first hello to booked meeting.
+          <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-14">
+            <div className="ui-label mb-3">The Innoira Agentic Suite</div>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold tracking-tight">
+              Six specialists. One pipeline.
+            </h2>
+            <p className="mt-4 text-neutral-500 text-sm sm:text-base">
+              Every agent reads from and writes back to the same CRM, timeline and credit pool — no exports, no Zapier, no copy-paste.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {AGENTS.map((a) => (
+              <div key={a.name} data-testid={`landing-agent-${a.name.toLowerCase().replace(/\s+/g, "-")}`}
+                className="bg-white border border-line rounded-2xl p-6 sm:p-8 hover:border-ink hover:shadow-card-hover transition-all shadow-card">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 bg-ink/5 rounded-full flex items-center justify-center">
+                    <a.icon size={18} strokeWidth={1.75} />
+                  </div>
+                  <span className="pill"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Live</span>
+                </div>
+                <div className="mt-4 sm:mt-5 flex items-baseline gap-2">
+                  <span className="font-display font-semibold text-base sm:text-lg">{a.name}</span>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">{a.tag}</span>
+                </div>
+                <div className="text-xs sm:text-sm text-neutral-500 mt-2 leading-relaxed">{a.d}</div>
+              </div>
+            ))}
+          </div>
+          <p className="text-center text-xs sm:text-sm text-neutral-400 mt-8">
+            10+ more agents on the roadmap — every new one plugs into the same workspace, CRM and credits.
+          </p>
+        </div>
+      </section>
+
+      {/* Shared foundation */}
+      <section id="relay" className="px-6 sm:px-8 py-16 sm:py-24 animate-fade-up animate-delay-2">
+        <div className="max-w-6xl mx-auto">
+          <div className="max-w-2xl mb-10 sm:mb-14">
+            <div className="ui-label mb-4">Why a suite beats six point tools</div>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold tracking-tight">
+              The agents share a brain.
             </h2>
           </div>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { icon: Zap, t: "Deliverability core", d: "Warmup engine, DNS auth (SPF/DKIM/DMARC), mailbox rotation, daily caps and bounce handling." },
-              { icon: Gauge, t: "AI Personalization", d: "Per-lead first-lines and bodies, tuned to your brand voice, with an EQ Score gate before send." },
-              { icon: Inbox, t: "Unified Inbox", d: "Every reply across mailboxes in one place, auto-classified as interested, referral, OOO, unsubscribe." },
-              { icon: Kanban, t: "Built-in CRM", d: "Kanban pipeline, activity timeline, and auto-created deals for interested replies." },
-              { icon: ShieldCheck, t: "Compliance", d: "One-click unsubscribe, physical address, GDPR/PECR toolkit, right-to-erasure workflow." },
-              { icon: ArrowUpRight, t: "Reporting", d: "Funnel, step performance, mailbox health and team leaderboard — no spreadsheets." },
+              { icon: Database, t: "One CRM & timeline", d: "Leads, deals and every touchpoint — an email opened, a call analyzed, a proposal viewed — live on one shared record." },
+              { icon: GitBranch, t: "Cross-agent handoffs", d: "A qualified call can auto-draft the proposal, queue the follow-up email and send the booking link. Configured per agent, no glue code." },
+              { icon: Coins, t: "One credit pool", d: "Every plan unlocks all agents drawing from one balance — a call costs more than an email because it costs more to run." },
+              { icon: ShieldCheck, t: "Human approval gates", d: "Social posts, outbound sends and live calls all respect explicit approval and do-not-contact rules. The agents work for you, not around you." },
             ].map((f) => (
-              <div key={f.t} className="bg-white border border-line rounded-2xl p-6">
+              <div key={f.t} className="bg-white border border-line rounded-2xl p-6 sm:p-8 shadow-card">
                 <div className="w-10 h-10 bg-ink/5 rounded-full flex items-center justify-center">
                   <f.icon size={18} strokeWidth={1.75} />
                 </div>
-                <div className="mt-5 font-display font-semibold text-lg">{f.t}</div>
-                <div className="mt-2 text-sm text-neutral-600 leading-relaxed">{f.d}</div>
+                <div className="mt-4 sm:mt-5 font-display font-semibold text-base sm:text-lg">{f.t}</div>
+                <div className="mt-2 text-xs sm:text-sm text-neutral-500 leading-relaxed">{f.d}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Suite pricing (no standalone Pitch EQ cost) */}
-      <section id="suite-pricing" className="px-6 py-24">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="ui-label mb-4">One price for the whole suite</div>
-          <h2 className="text-4xl sm:text-5xl font-display font-bold tracking-tight">Pitch EQ is included with Innoira.</h2>
-          <p className="mt-4 text-neutral-600 max-w-xl mx-auto">No per-agent fees. Every agent — outbound, research, inbound, hygiene — comes together in one subscription.</p>
-          <div className="mt-12 bg-white border border-line rounded-3xl p-10 text-left grid md:grid-cols-2 gap-10 items-center">
-            <div>
-              <div className="ui-label mb-2">Innoira Agentic Suite</div>
-              <div className="flex items-baseline gap-2">
-                <span className="font-mono text-6xl font-bold">$249</span>
-                <span className="text-neutral-500">/ workspace / month</span>
-              </div>
-              <p className="mt-3 text-sm text-neutral-600">Billed annually · unlimited mailboxes · every agent included.</p>
-              <Link to="/signup" data-testid="pricing-cta-suite" className="btn-primary mt-6">Start free 14-day trial <ArrowRight size={14} /></Link>
-            </div>
-            <ul className="space-y-2 text-sm text-neutral-700">
-              {[
-                "Every agent in the Innoira suite",
-                "Unlimited mailboxes + built-in warmup",
-                "EQ Score on every draft",
-                "Unified inbox + built-in CRM",
-                "HubSpot / Salesforce / Zoho sync",
-                "Priority deliverability guardrails",
-                "Dedicated onboarding & CSM",
-              ].map((x) => (
-                <li key={x} className="flex gap-3">
-                  <span className="w-5 h-5 bg-ink text-white rounded-full flex items-center justify-center text-[10px]">✓</span>
-                  <span>{x}</span>
-                </li>
-              ))}
-            </ul>
+      {/* Suite pricing */}
+      <section id="suite-pricing" className="px-6 sm:px-8 py-16 sm:py-24 bg-white border-y border-line animate-fade-up animate-delay-3">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center">
+            <div className="ui-label mb-4">One plan, every agent</div>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold tracking-tight">Pay for what the agents do.</h2>
+            <p className="mt-4 text-neutral-500 max-w-2xl mx-auto text-sm sm:text-base">
+              No per-agent fees and no per-seat surprises. Every plan unlocks all six agents and a pool of
+              credits they draw from — a call costs more than an email because it costs us more to run.
+            </p>
           </div>
+
+          <div className="mt-10 sm:mt-14 grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+            {[
+              { id: "starter", name: "Starter", price: 79, annual: 65, credits: "8,000", seats: "3 seats",
+                blurb: "A founder or small team getting outbound running." },
+              { id: "growth", name: "Growth", price: 249, annual: 199, credits: "30,000", seats: "10 seats",
+                blurb: "The full suite at production volume.", popular: true },
+              { id: "scale", name: "Scale", price: 749, annual: 599, credits: "120,000", seats: "Unlimited seats",
+                blurb: "High-volume calling across a whole revenue org." },
+              { id: "enterprise", name: "Enterprise", price: null, credits: "Custom", seats: "Unlimited seats",
+                blurb: "SSO, private deployment, custom agents." },
+            ].map((p) => (
+              <div key={p.id} data-testid={`landing-plan-${p.id}`}
+                className={`border rounded-2xl p-6 sm:p-8 flex flex-col text-left relative shadow-card ${p.popular ? "border-ink ring-1 ring-ink" : "border-line"}`}>
+                {p.popular && (
+                  <div className="absolute -top-3 left-5 sm:left-7 bg-ink text-white text-[10px] font-mono uppercase tracking-widest px-3 py-1 rounded-xl badge-info">
+                    Most popular
+                  </div>
+                )}
+                <div className="font-display font-semibold text-lg">{p.name}</div>
+                <div className="mt-3 flex items-baseline gap-1.5">
+                  {p.price ? (
+                    <>
+                      <span className="font-mono text-3xl sm:text-4xl font-bold">${p.price}</span>
+                      <span className="text-sm text-neutral-400">/mo</span>
+                    </>
+                  ) : (
+                    <span className="font-mono text-3xl sm:text-4xl font-bold">Let's talk</span>
+                  )}
+                </div>
+                {p.annual && (
+                  <div className="text-xs text-neutral-400 mt-1">${p.annual}/mo billed annually</div>
+                )}
+                <p className="text-xs sm:text-sm text-neutral-500 mt-3 sm:mt-4 min-h-[36px] sm:min-h-[40px]">{p.blurb}</p>
+                <ul className="mt-4 sm:mt-5 space-y-2 text-xs sm:text-sm text-neutral-700 flex-1">
+                  {[`${p.credits} credits / month`, p.seats, "All six agents included", "Shared CRM & activity timeline"].map((x) => (
+                    <li key={x} className="flex gap-2.5 items-start">
+                      <span className="w-4 h-4 mt-0.5 bg-ink text-white rounded-full flex items-center justify-center text-[9px] shrink-0">✓</span>
+                      <span>{x}</span>
+                    </li>
+                  ))}
+                </ul>
+                {p.id === "enterprise" ? (
+                  <a href="mailto:hello@innoira.com" data-testid="pricing-cta-enterprise"
+                    className="btn-ghost mt-5 sm:mt-6 justify-center border border-line rounded-xl py-2 text-sm">Contact sales</a>
+                ) : (
+                  <Link to="/signup" data-testid={`pricing-cta-${p.id}`}
+                    className={`mt-5 sm:mt-6 justify-center rounded-xl py-2 text-sm font-medium flex items-center gap-1.5 ${
+                      p.popular ? "btn-primary" : "border border-line bg-white hover:bg-ash"
+                    }`}>
+                    Start free trial <ArrowRight size={14} />
+                  </Link>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 sm:mt-10 border border-line rounded-2xl p-6 sm:p-8 shadow-card">
+            <div className="ui-label">What a credit buys</div>
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 text-sm">
+              {[
+                { n: "20", l: "per minute of an AI phone call" },
+                { n: "60", l: "per researched proposal deck" },
+                { n: "40", l: "per AI-generated carousel" },
+                { n: "25", l: "per AI image" },
+                { n: "5", l: "per enriched contact" },
+                { n: "1", l: "per AI email + EQ Score" },
+              ].map((c) => (
+                <div key={c.l}>
+                  <div className="font-mono text-xl sm:text-2xl font-bold">{c.n}</div>
+                  <div className="text-[10px] sm:text-xs text-neutral-400 mt-1 leading-snug">{c.l}</div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] sm:text-xs text-neutral-400 mt-5 sm:mt-6">
+              Exports, CRM writes and bookings are free — you're never charged to read your own data.
+              Every plan starts with a 14-day trial and 500 credits, no card required.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Closing CTA */}
+      <section className="px-6 sm:px-8 py-20 sm:py-28 animate-fade-up">
+        <div className="max-w-3xl mx-auto text-center">
+          <InnoiraLogo size="lg" className="mx-auto" />
+          <p className="mt-6 text-neutral-500 text-sm sm:text-base">
+            Put six agents on your pipeline this afternoon. Free for 14 days, no card.
+          </p>
+          <Link to="/signup" data-testid="footer-cta-start" className="btn-primary mt-8 inline-flex">
+            Start free <ArrowRight size={14} />
+          </Link>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-line py-10 px-6 mt-10">
-        <div className="max-w-6xl mx-auto flex items-center justify-between text-xs text-neutral-500 font-mono uppercase tracking-widest">
-          <div>© Innoira · Pitch EQ · Sent with high EQ.</div>
-          <div className="flex gap-6">
-            <a href="#">Privacy</a>
-            <a href="#">Terms</a>
-            <a href="#">Contact</a>
+      <footer className="border-t border-line py-8 sm:py-10 px-6 sm:px-8 animate-fade-up">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] sm:text-xs text-neutral-400 font-mono uppercase tracking-widest">
+          <div>© Innoira Consulting Services · Agentic Suite</div>
+          <div className="flex gap-6 text-neutral-400">
+            <a href="#" className="hover:text-ink transition-colors">Privacy</a>
+            <a href="#" className="hover:text-ink transition-colors">Terms</a>
+            <a href="mailto:hello@innoira.com" className="hover:text-ink transition-colors">Contact</a>
           </div>
         </div>
       </footer>

@@ -76,12 +76,12 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="min-h-screen bg-bone p-6">
+    <div className="min-h-screen bg-bone p-6 sm:p-8 animate-fade-in">
       <div className="max-w-3xl mx-auto pt-12 pb-16">
         <div className="flex items-center gap-3 mb-8">
           <div className="w-8 h-8 bg-ink text-white flex items-center justify-center rounded-full font-display font-bold text-sm">i</div>
-          <div className="font-display font-semibold">Innoira <span className="text-neutral-400">/</span> <span className="text-neutral-600">Setup</span></div>
-          <button onClick={skip} data-testid="onboarding-skip" className="ml-auto text-sm text-neutral-500 hover:text-ink">Skip for now</button>
+          <div className="font-display font-semibold">Innoira <span className="text-neutral-400">/</span> <span className="text-neutral-500">Setup</span></div>
+          <button onClick={skip} data-testid="onboarding-skip" className="ml-auto text-sm text-neutral-400 hover:text-ink">Skip for now</button>
         </div>
 
         <div className="flex items-center gap-2 mb-10">
@@ -91,15 +91,15 @@ export default function Onboarding() {
         </div>
 
         {step === 1 && (
-          <div className="bg-white border border-line rounded-3xl p-10 animate-fade-in">
+          <div className="shadow-card bg-white border border-line rounded-3xl p-6 sm:p-10 animate-fade-in">
             <div className="ui-label mb-3"><Globe size={12} className="inline mr-1" /> Step 1 of 3</div>
-            <h1 className="font-display text-4xl font-bold tracking-tight">Teach the agent about your business.</h1>
-            <p className="mt-3 text-neutral-600">Paste your website. Pitch EQ will crawl the homepage plus a few relevant pages, understand your services and ICP, then draft campaigns you can review.</p>
+            <h1 className="font-display text-2xl sm:text-4xl font-bold tracking-tight">Teach the agent about your business.</h1>
+            <p className="mt-3 text-neutral-500">Paste your website. Pitch EQ will crawl the homepage plus a few relevant pages, understand your services and ICP, then draft campaigns you can review.</p>
             <div className="mt-8">
               <label className="ui-label">Website URL</label>
               <input value={url} onChange={(e) => setUrl(e.target.value)} data-testid="onboarding-url"
                 placeholder="https://yourcompany.com"
-                className="mt-2 w-full border border-line px-4 py-3 rounded-full focus:outline-none focus:border-ink" />
+                className="mt-2 w-full input-premium" />
             </div>
             <button onClick={analyze} disabled={busy} data-testid="onboarding-analyze"
               className="btn-primary mt-6 disabled:opacity-60">
@@ -109,14 +109,14 @@ export default function Onboarding() {
         )}
 
         {step === 2 && (
-          <div className="bg-white border border-line rounded-3xl p-10 animate-fade-in">
+          <div className="shadow-card bg-white border border-line rounded-3xl p-6 sm:p-10 animate-fade-in">
             <div className="ui-label mb-3"><Sparkles size={12} className="inline mr-1" /> Step 2 of 3</div>
-            <h1 className="font-display text-4xl font-bold tracking-tight">Here's what I understood.</h1>
+            <h1 className="font-display text-2xl sm:text-4xl font-bold tracking-tight">Here's what I understood.</h1>
             <div className="mt-5 border-l-2 border-ink pl-4 text-neutral-700 text-sm">
               {summary || <span className="text-neutral-400">Couldn't extract much — help me by answering below.</span>}
             </div>
             {crawled.length > 0 && (
-              <div className="mt-3 text-xs text-neutral-500 font-mono">Pages read: {crawled.length}</div>
+              <div className="mt-3 text-xs text-neutral-400 font-mono">Pages read: {crawled.length}</div>
             )}
             {services.length > 0 && (
               <div className="mt-6">
@@ -132,7 +132,7 @@ export default function Onboarding() {
                       className="pill hover:border-ink" data-testid="onboarding-add-service">+ add</button>
                   )}
                 </div>
-                <p className="text-xs text-neutral-500 mt-2">We'll create one campaign per service (max 3).</p>
+                <p className="text-xs text-neutral-400 mt-2">We'll create one campaign per service (max 3).</p>
               </div>
             )}
             <div className="mt-8 space-y-5">
@@ -142,7 +142,7 @@ export default function Onboarding() {
                   <textarea rows={2}
                     value={answers[q] || ""} onChange={(e) => setAnswers({ ...answers, [q]: e.target.value })}
                     data-testid={`onboarding-answer-${i}`}
-                    className="mt-2 w-full border border-line px-4 py-2 rounded-2xl focus:outline-none focus:border-ink text-sm" />
+                    className="mt-2 w-full input-premium text-sm" />
                 </div>
               ))}
             </div>
@@ -157,14 +157,14 @@ export default function Onboarding() {
 
         {step === 3 && (
           <div className="animate-fade-in">
-            <div className="bg-white border border-line rounded-3xl p-8 mb-4">
+            <div className="shadow-card bg-white border border-line rounded-3xl p-5 sm:p-8 mb-4">
               <div className="ui-label mb-3"><Check size={12} className="inline mr-1" /> Step 3 of 3 · Review & edit</div>
-              <h1 className="font-display text-3xl font-bold tracking-tight">Here are your campaigns — please verify.</h1>
-              <p className="mt-2 text-neutral-600 text-sm">Edit anything, uncheck to drop, then save. You can also change everything later in Campaigns.</p>
+              <h1 className="font-display text-xl sm:text-3xl font-bold tracking-tight">Here are your campaigns — please verify.</h1>
+              <p className="mt-2 text-neutral-500 text-sm">Edit anything, uncheck to drop, then save. You can also change everything later in Campaigns.</p>
             </div>
             <div className="space-y-4">
               {campaigns.map((c, ci) => (
-                <div key={c._k || ci} className={`bg-white border rounded-2xl p-6 ${accept[ci] ? "border-ink" : "border-line"}`}>
+                <div key={c._k || ci} className={`shadow-card bg-white border rounded-2xl p-4 sm:p-6 ${accept[ci] ? "border-ink" : "border-line"}`}>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       {c.service && <div className="ui-label mb-1">Service: {c.service}</div>}
@@ -172,7 +172,7 @@ export default function Onboarding() {
                         data-testid={`onboarding-campaign-name-${ci}`}
                         className="font-display font-semibold text-xl bg-transparent border-0 border-b border-transparent hover:border-line focus:border-ink focus:outline-none w-full" />
                       <input value={c.goal || ""} onChange={(e) => updateCampaignField(ci, "goal", e.target.value)}
-                        className="mt-1 text-xs text-neutral-500 bg-transparent border-0 focus:outline-none w-full" />
+                        className="mt-1 text-xs text-neutral-400 bg-transparent border-0 focus:outline-none w-full" />
                     </div>
                     <label className="flex items-center gap-2 text-sm cursor-pointer" data-testid={`onboarding-accept-${ci}`}>
                       <input type="checkbox" checked={!!accept[ci]} onChange={(e) => setAccept({ ...accept, [ci]: e.target.checked })} />
@@ -194,15 +194,15 @@ export default function Onboarding() {
                             <div className="mt-2 space-y-2">
                               <input value={s.subject} onChange={(e) => updateStep(ci, si, { subject: e.target.value })}
                                 data-testid={`onboarding-step-subject-${ci}-${si}`}
-                                className="w-full font-medium text-sm border border-line rounded-xl px-3 py-2 focus:outline-none focus:border-ink" />
+                                className="input-premium w-full font-medium text-sm" />
                               <textarea value={s.body} onChange={(e) => updateStep(ci, si, { body: e.target.value })}
                                 rows={6} data-testid={`onboarding-step-body-${ci}-${si}`}
-                                className="w-full text-xs font-mono text-neutral-700 border border-line rounded-xl px-3 py-2 focus:outline-none focus:border-ink" />
+                                className="input-premium w-full text-xs font-mono text-neutral-500" />
                             </div>
                           ) : (
                             <>
                               <div className="font-medium text-sm mt-1">{s.subject}</div>
-                              <div className="text-xs text-neutral-600 mt-1 whitespace-pre-wrap line-clamp-5">{s.body}</div>
+                              <div className="text-xs text-neutral-500 mt-1 whitespace-pre-wrap line-clamp-5">{s.body}</div>
                             </>
                           )}
                         </div>

@@ -103,6 +103,8 @@ async def _draft_post(platform: str, topic: str, tone: str, lead_context: Option
 async def generate_post(body: PostGenIn, user=Depends(current_user)):
     if body.platform not in PROVIDERS:
         raise HTTPException(400, "unknown platform")
+    from billing import charge_credits
+    await charge_credits(user["workspace_id"], "social_draft", meta={"platform": body.platform})
     lead_context = None
     lead_id = body.lead_id
     if lead_id:
@@ -187,6 +189,9 @@ async def publish_post(pid: str, user=Depends(current_user)):
         raise HTTPException(404, "not found")
     if p["status"] != "approved":
         raise HTTPException(400, "post must be approved before it can be published")
+
+    from billing import charge_credits
+    await charge_credits(user["workspace_id"], "social_publish", meta={"post_id": pid, "platform": p["platform"]})
 
     integration = await db.social_integrations.find_one(
         {"workspace_id": user["workspace_id"], "provider": p["platform"]}, {"_id": 0})

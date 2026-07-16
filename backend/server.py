@@ -6,6 +6,7 @@ heuristic EQ Score engine (real LLM to be plugged in later).
 """
 
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response, RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -37,6 +38,11 @@ db = client[os.environ["DB_NAME"]]
 JWT_SECRET = os.environ.get("JWT_SECRET", "pitcheq-dev-secret-change-me")
 JWT_ALG = "HS256"
 JWT_TTL_HOURS = 24 * 7
+
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+# Where the recipient's mail client reaches the open pixel / click redirect. Must
+# be publicly reachable for tracking to work at all — on localhost it won't be.
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "")
 
 app = FastAPI(title="Pitch EQ API")
 api = APIRouter(prefix="/api")
@@ -266,6 +272,9 @@ async def signup(body: SignupIn):
         "role": "org_admin",
         "created_at": now_iso(),
     })
+    # Open the workspace's credit account (Trial plan + starter credits).
+    from billing import ensure_account
+    await ensure_account(workspace_id)
     token = make_token(user_id, workspace_id)
     return {"token": token, "user": {"id": user_id, "email": body.email.lower(), "name": body.name},
             "workspace": {"id": workspace_id, "name": body.workspace_name}}
@@ -284,6 +293,77 @@ async def login(body: LoginIn):
     token = make_token(user["id"], user["workspace_id"])
     ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0})
     return {"token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"], "is_admin": _is_admin(user)},
+            "workspace": {"id": ws["id"], "name": ws["name"]}}
+
+
+class GoogleAuthIn(BaseModel):
+    credential: str  # the ID-token JWT Google Identity Services hands the browser
+
+
+@api.post("/auth/google")
+async def google_auth(body: GoogleAuthIn):
+    """Sign in / sign up with Google. The browser gets an ID token from Google
+    Identity Services (client ID only — no secret involved in this flow) and
+    posts it here; we verify the JWT's signature and audience against our
+    GOOGLE_CLIENT_ID, then log in the matching account or create a fresh
+    workspace for a first-time user. Password login keeps working side by side
+    for accounts that have one."""
+    google_client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
+    if not google_client_id:
+        raise HTTPException(503, "Google sign-in is not configured")
+    try:
+        from google.oauth2 import id_token as google_id_token
+        from google.auth.transport import requests as google_requests
+        info = google_id_token.verify_oauth2_token(
+            body.credential, google_requests.Request(), google_client_id
+        )
+    except Exception:
+        raise HTTPException(401, "Invalid Google credential")
+
+    email = (info.get("email") or "").lower()
+    if not email or not info.get("email_verified", False):
+        raise HTTPException(401, "Google account has no verified email")
+    name = info.get("name") or email.split("@")[0]
+
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    created = False
+    if user:
+        if user.get("blocked"):
+            raise HTTPException(403, "Account has been suspended. Contact your admin.")
+        ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0})
+        if ws and ws.get("blocked"):
+            raise HTTPException(403, "Workspace has been suspended. Contact your admin.")
+        patch = {"google_sub": info.get("sub")}
+        if not user.get("avatar_url") and info.get("picture"):
+            patch["avatar_url"] = info["picture"]
+        await db.users.update_one({"id": user["id"]}, {"$set": patch})
+    else:
+        created = True
+        workspace_id = new_id()
+        user_id = new_id()
+        workspace_name = f"{name.split(' ')[0]}'s Workspace"
+        await db.workspaces.insert_one({
+            "id": workspace_id, "name": workspace_name, "owner_id": user_id,
+            "created_at": now_iso(),
+            "brand_voice": {"tone": "warm", "banned_phrases": [], "sample": ""},
+            "plan": "trial",
+        })
+        await db.users.insert_one({
+            "id": user_id, "email": email, "name": name,
+            # No password chosen — store an unusable random hash so the
+            # password-login path can never match until they set one.
+            "password_hash": hash_pw(secrets.token_urlsafe(32)),
+            "google_sub": info.get("sub"), "avatar_url": info.get("picture"),
+            "workspace_id": workspace_id, "role": "org_admin", "created_at": now_iso(),
+        })
+        from billing import ensure_account
+        await ensure_account(workspace_id)
+        user = await db.users.find_one({"email": email}, {"_id": 0})
+
+    ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0})
+    token = make_token(user["id"], user["workspace_id"])
+    return {"token": token, "created": created,
+            "user": {"id": user["id"], "email": user["email"], "name": user["name"], "is_admin": _is_admin(user)},
             "workspace": {"id": ws["id"], "name": ws["name"]}}
 
 
@@ -425,34 +505,74 @@ async def list_mailboxes(user=Depends(current_user)):
 
 @api.post("/mailboxes")
 async def create_mailbox(body: MailboxIn, user=Depends(current_user)):
+    """Register a mailbox. It starts DISCONNECTED — it can't send until OAuth
+    completes.
+
+    The old version stamped `status: "connected"` immediately with no handshake at
+    all, and invented a bounce rate and a spam rate to display. A mailbox that
+    claims to be connected but cannot send is the single most misleading thing
+    this product could show.
+    """
+    import mailbox_client
+
     m = body.model_dump()
     m.update({
         "id": new_id(),
         "workspace_id": user["workspace_id"],
         "created_at": now_iso(),
-        "status": "connected",
+        "status": "disconnected",
         "warmup_enabled": True,
         "warmup_day": 1,
         "warmup_target": 30,
-        "dns": {"spf": True, "dkim": True, "dmarc": False, "tracking_domain": False},
+        # Unknown until we actually resolve it — not True by default.
+        "dns": {"spf": False, "dkim": False, "dmarc": False, "checked": False},
         "sent_today": 0,
-        "bounce_rate": 0.8,
-        "spam_rate": 0.05,
+        "sent_date": None,
+        "access_token_enc": None,
+        "refresh_token_enc": None,
     })
     await db.mailboxes.insert_one(m)
     m.pop("_id", None)
-    return m
+    return {**m, "providers": mailbox_client.provider_status()}
+
+
+@api.get("/mailboxes/{mid}/oauth-url")
+async def mailbox_oauth_url(mid: str, user=Depends(current_user)):
+    import mailbox_client
+    m = await db.mailboxes.find_one({"id": mid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not m:
+        raise HTTPException(404, "not found")
+
+    import secrets as _secrets
+    state = _secrets.token_urlsafe(24)
+    await db.oauth_states.insert_one({
+        "state": state, "kind": "mailbox", "mailbox_id": mid,
+        "workspace_id": user["workspace_id"], "user_id": user["id"], "at": now_iso(),
+    })
+
+    url = (mailbox_client.gmail_auth_url(state) if m.get("provider") == "gmail"
+           else mailbox_client.ms_auth_url(state))
+    if not url:
+        # Test mode: no OAuth app configured. Connect it so the flow is demoable,
+        # but record honestly that nothing will actually leave the box.
+        await db.mailboxes.update_one({"id": mid}, {"$set": {"status": "connected", "mocked": True}})
+        return {"url": None, "mocked": True, "connected": True}
+    return {"url": url, "mocked": False}
 
 
 @api.post("/mailboxes/{mid}/dns-check")
 async def dns_check(mid: str, user=Depends(current_user)):
+    """Actually resolve SPF/DKIM/DMARC. The old route set all three to True
+    unconditionally, telling users their deliverability was fine when it wasn't."""
+    import mailbox_client
+
     m = await db.mailboxes.find_one({"id": mid, "workspace_id": user["workspace_id"]}, {"_id": 0})
     if not m:
         raise HTTPException(404, "not found")
-    dns = {"spf": True, "dkim": True, "dmarc": True, "tracking_domain": True}
+    domain = (m.get("email") or "").split("@")[-1]
+    dns = await mailbox_client.check_dns(domain)
     await db.mailboxes.update_one({"id": mid}, {"$set": {"dns": dns}})
-    m["dns"] = dns
-    return m
+    return {**m, "dns": dns}
 
 
 @api.post("/mailboxes/{mid}/warmup")
@@ -463,6 +583,15 @@ async def toggle_warmup(mid: str, user=Depends(current_user)):
     enabled = not m.get("warmup_enabled", False)
     await db.mailboxes.update_one({"id": mid}, {"$set": {"warmup_enabled": enabled}})
     return {"warmup_enabled": enabled}
+
+
+@api.delete("/mailboxes/{mid}")
+async def delete_mailbox(mid: str, user=Depends(current_user)):
+    m = await db.mailboxes.find_one({"id": mid, "workspace_id": user["workspace_id"]})
+    if not m:
+        raise HTTPException(404, "not found")
+    await db.mailboxes.delete_one({"id": mid, "workspace_id": user["workspace_id"]})
+    return {"ok": True}
 
 
 # ----------------------------- Campaigns -------------------------------------
@@ -520,109 +649,80 @@ async def update_campaign(cid: str, body: CampaignIn, user=Depends(current_user)
 
 @api.post("/campaigns/{cid}/launch")
 async def launch_campaign(cid: str, user=Depends(current_user)):
+    """Enqueue a campaign for real sending.
+
+    This used to fabricate its own metrics: it invented sent/opened/clicked/replied
+    events from `seed = (i*31 + step_idx*7) % 100` and never sent an email. It now
+    schedules real sends, and refuses to launch at all if there's no mailbox to
+    send from — a launch that silently sends nothing is worse than an error.
+    """
+    from sender import enqueue_campaign
+
     c = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
     if not c:
         raise HTTPException(404, "not found")
+
+    try:
+        result = await enqueue_campaign(user["workspace_id"], c)
+    except ValueError as ex:
+        raise HTTPException(400, str(ex))
+
     await db.campaigns.update_one({"id": cid}, {"$set": {"status": "active", "launched_at": now_iso()}})
-    await _audit(user, "campaign.launch", {"campaign_id": cid})
+    await _audit(user, "campaign.launch", {"campaign_id": cid, **result})
+    return {"ok": True, "status": "active", **result}
 
-    # Simulate sending events for each lead and step
-    lead_ids = c.get("lead_ids") or []
-    if not lead_ids:
-        # fall back to all leads
-        leads = await db.leads.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(200)
-        lead_ids = [x["id"] for x in leads]
 
-    # Hard-coded verification gate: check syntax + suppression list; quarantine failures.
-    suppressed = {s["email"] async for s in db.suppressions.find(
-        {"workspace_id": user["workspace_id"]}, {"_id": 0, "email": 1}
-    )}
-    verified_ids: List[str] = []
-    for lid in lead_ids:
-        lead = await db.leads.find_one({"id": lid, "workspace_id": user["workspace_id"]}, {"_id": 0})
-        if not lead:
-            continue
-        if not _verify_email_syntax(lead.get("email", "")):
-            await _quarantine_lead(user["workspace_id"], lead, "invalid_syntax")
-            continue
-        if lead.get("email", "").lower() in suppressed:
-            await _quarantine_lead(user["workspace_id"], lead, "on_suppression_list")
-            continue
-        verified_ids.append(lid)
-    lead_ids = verified_ids
+@api.get("/campaigns/{cid}/queue")
+async def campaign_queue(cid: str, user=Depends(current_user)):
+    """What is actually scheduled to go out, and what already has."""
+    rows = await db.send_queue.find(
+        {"campaign_id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).sort("send_at", 1).to_list(500)
+    counts: Dict[str, int] = {}
+    for r in rows:
+        counts[r["status"]] = counts.get(r["status"], 0) + 1
+    return {"counts": counts, "rows": rows[:100]}
 
-    steps = c.get("steps", [])
-    for i, lid in enumerate(lead_ids):
-        lead = await db.leads.find_one({"id": lid, "workspace_id": user["workspace_id"]}, {"_id": 0})
-        if not lead:
-            continue
-        for step_idx, step in enumerate(steps):
-            # deterministic simulation
-            seed = (i * 31 + step_idx * 7) % 100
+
+# ---- Open / click tracking (PUBLIC — called by the recipient's mail client) ----
+_PIXEL = base64.b64decode(
+    b"R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+)
+
+
+@api.get("/t/o/{queue_id}")
+async def track_open(queue_id: str):
+    """1x1 beacon. An 'opened' event now means the recipient's client actually
+    loaded this image — it is no longer a coin flip on a hash of the row index."""
+    row = await db.send_queue.find_one({"id": queue_id}, {"_id": 0})
+    if row:
+        already = await db.events.count_documents({
+            "workspace_id": row["workspace_id"], "lead_id": row["lead_id"],
+            "campaign_id": row["campaign_id"], "step": row["step"], "type": "opened",
+        })
+        if not already:   # count a unique open, not every image reload
             await db.events.insert_one({
-                "id": new_id(), "workspace_id": user["workspace_id"], "campaign_id": cid,
-                "lead_id": lid, "step": step_idx, "type": "sent", "at": now_iso(),
+                "id": new_id(), "workspace_id": row["workspace_id"],
+                "campaign_id": row["campaign_id"], "lead_id": row["lead_id"],
+                "step": row["step"], "type": "opened", "at": now_iso(),
             })
-            if seed < 55:
-                await db.events.insert_one({
-                    "id": new_id(), "workspace_id": user["workspace_id"], "campaign_id": cid,
-                    "lead_id": lid, "step": step_idx, "type": "opened", "at": now_iso(),
-                })
-            if seed < 18:
-                await db.events.insert_one({
-                    "id": new_id(), "workspace_id": user["workspace_id"], "campaign_id": cid,
-                    "lead_id": lid, "step": step_idx, "type": "clicked", "at": now_iso(),
-                })
-            if seed < 12 and step_idx == len(steps) - 1:
-                # Reply → hard stop, create conversation
-                reply_body = _sample_reply(seed, lead)
-                classification = _classify_reply(reply_body)
-                convo_id = new_id()
-                await db.events.insert_one({
-                    "id": new_id(), "workspace_id": user["workspace_id"], "campaign_id": cid,
-                    "lead_id": lid, "step": step_idx, "type": "replied", "at": now_iso(),
-                })
-                await db.conversations.insert_one({
-                    "id": convo_id, "workspace_id": user["workspace_id"], "campaign_id": cid,
-                    "lead_id": lid, "classification": classification, "status": "open",
-                    "snippet": reply_body[:120], "updated_at": now_iso(),
-                    "messages": [
-                        {"from": "them", "body": reply_body, "at": now_iso()},
-                    ],
-                })
-                await _log_activity(user["workspace_id"], lid, "pitch", "email_replied",
-                                     f"Replied ({classification}): “{reply_body[:80]}”", {"conversation_id": convo_id})
-                if classification == "interested":
-                    # auto-create deal with persona hypothesis
-                    persona = ""
-                    if ANTHROPIC_API_KEY:
-                        try:
-                            resp = await _llm_chat(
-                                "Given a lead and their positive reply, produce a STRICT JSON: {\"persona_hypothesis\": one-sentence hypothesis about what they care about}",
-                                f"Lead: {json.dumps({k: lead.get(k) for k in ('first_name','last_name','title','company')})}\nReply: {reply_body}",
-                                f"persona-{user['id']}", user=user,
-                            )
-                            parsed = _extract_json(resp)
-                            if parsed:
-                                persona = parsed.get("persona_hypothesis", "")
-                        except Exception:
-                            pass
-                    if not persona:
-                        persona = f"{lead.get('title','Leader')} at {lead.get('company','their org')} is exploring options."
-                    await db.deals.insert_one({
-                        "id": new_id(), "workspace_id": user["workspace_id"], "lead_id": lid,
-                        "title": f"{lead.get('company') or lead['first_name']} — inbound reply",
-                        "value": 5000, "stage": "qualified", "created_at": now_iso(),
-                        "source_campaign_id": cid, "persona_hypothesis": persona,
-                    })
-                    await db.events.insert_one({
-                        "id": new_id(), "workspace_id": user["workspace_id"], "campaign_id": cid,
-                        "lead_id": lid, "type": "meeting_booked", "at": now_iso(),
-                    })
-                    await _log_activity(user["workspace_id"], lid, "pitch", "deal_created",
-                                         f"Deal created from inbound reply: {persona}", {"campaign_id": cid})
-                break
-    return {"ok": True, "status": "active"}
+    return Response(content=_PIXEL, media_type="image/gif",
+                    headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
+
+
+@api.get("/t/c/{queue_id}")
+async def track_click(queue_id: str, u: str = ""):
+    row = await db.send_queue.find_one({"id": queue_id}, {"_id": 0})
+    if row and u:
+        await db.events.insert_one({
+            "id": new_id(), "workspace_id": row["workspace_id"],
+            "campaign_id": row["campaign_id"], "lead_id": row["lead_id"],
+            "step": row["step"], "type": "clicked", "at": now_iso(), "url": u[:400],
+        })
+    # Only ever bounce to an absolute http(s) URL — an open redirect that accepts
+    # anything is a phishing vector.
+    target = u if u.startswith("http://") or u.startswith("https://") else FRONTEND_URL
+    return RedirectResponse(target, status_code=302)
 
 
 @api.post("/campaigns/{cid}/pause")
@@ -634,18 +734,10 @@ async def pause_campaign(cid: str, user=Depends(current_user)):
     return {"ok": True}
 
 
-def _sample_reply(seed: int, lead: Dict[str, Any]) -> str:
-    bank = [
-        "Thanks for reaching out. Timing is actually pretty good — could you send some times next week for a 15 min call?",
-        "Not the right person here, but you should talk to our head of ops.",
-        "Out of office until Monday, will circle back then.",
-        "Please remove me from your list.",
-        "We already use a tool for this, but curious how you're different — send a one-pager?",
-    ]
-    return bank[seed % len(bank)]
-
-
 def _classify_reply(body: str) -> str:
+    """Classify a REAL inbound reply (polled from the mailbox thread by
+    sender.run_reply_tick). The five-string bank of invented replies that used to
+    feed this is gone — the inbox now only ever shows mail a human actually sent."""
     b = body.lower()
     if any(x in b for x in ["remove", "unsubscribe", "stop"]):
         return "unsubscribe"
@@ -704,6 +796,15 @@ async def list_deals(user=Depends(current_user)):
     for d in deals:
         d["lead"] = await db.leads.find_one({"id": d["lead_id"]}, {"_id": 0})
     return deals
+
+
+@api.get("/deals/{did}")
+async def get_deal(did: str, user=Depends(current_user)):
+    d = await db.deals.find_one({"id": did, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not d:
+        raise HTTPException(404, "not found")
+    d["lead"] = await db.leads.find_one({"id": d["lead_id"]}, {"_id": 0})
+    return d
 
 
 @api.post("/deals")
@@ -767,7 +868,9 @@ async def _llm_chat(system: str, user_text: str, session_id: str, user: Optional
 async def ai_score(body: AIScoreIn, user=Depends(current_user)):
     heuristic = compute_eq(body.subject, body.body)
     if not ANTHROPIC_API_KEY:
-        return heuristic
+        return heuristic  # heuristic-only scoring is free — no model call, no charge
+    from billing import charge_credits
+    await charge_credits(user["workspace_id"], "email_ai", meta={"kind": "eq_score"})
     system = (
         "You are the EQ Score engine for a cold-email tool. "
         "Given a cold email (subject + body), rate it on 5 axes 0-100: "
@@ -796,6 +899,8 @@ async def ai_personalize(body: AIPersonalizeIn, user=Depends(current_user)):
     lead = lead or {}
 
     if ANTHROPIC_API_KEY:
+        from billing import charge_credits
+        await charge_credits(user["workspace_id"], "email_ai", meta={"kind": "personalize"})
         system = (
             "You are Pitch EQ — an outbound copywriter for B2B cold email. "
             "Write ONE email tailored to the lead. Be warm, specific, and human. "
@@ -1000,8 +1105,14 @@ def _crawl_site(root: str, max_pages: int = 4) -> Dict[str, str]:
 
 
 def _html_to_text(raw: str) -> str:
-    raw = re.sub(r"<(script|style)[\s\S]*?</\1>", " ", raw, flags=re.I)
+    # The `|$` matters: we read at most 200KB of a page, which routinely cuts a
+    # <style> or <script> block in half. Without it the opening tag is stripped as
+    # a tag but its contents survive, and a wall of minified CSS gets handed to the
+    # LLM as if it were the company's description.
+    raw = re.sub(r"<(script|style)\b[^>]*>[\s\S]*?(?:</\1\s*>|$)", " ", raw, flags=re.I)
+    raw = re.sub(r"<!--[\s\S]*?(?:-->|$)", " ", raw)
     text = re.sub(r"<[^>]+>", " ", raw)
+    text = re.sub(r"&[a-z]+;|&#\d+;", " ", text, flags=re.I)
     return re.sub(r"\s+", " ", text)[:8000].strip()
 
 
@@ -1101,13 +1212,7 @@ async def onb_accept(body: OnbAcceptIn, user=Depends(current_user)):
 
 # ----------------------------- Prospeo + Icypeas + ICP ----------------------
 import httpx
-
-PROSPEO_API_KEY = os.environ.get("PROSPEO_API_KEY", "")
-ICYPEAS_API_KEY = os.environ.get("ICYPEAS_API_KEY", "")
-ICYPEAS_USER_ID = os.environ.get("ICYPEAS_USER_ID", "")
-
-PROSPEO_BASE = "https://api.prospeo.io"
-ICYPEAS_BASE = "https://app.icypeas.com/api"
+import lead_sources
 
 
 class IcpIn(BaseModel):
@@ -1166,111 +1271,15 @@ async def delete_icp(icp_id: str, user=Depends(current_user)):
 
 
 # ---- Prospeo + Icypeas wrappers -----
-async def prospeo_domain_search(domain: str, limit: int = 20) -> List[Dict[str, Any]]:
-    """POST /domain-search — returns emails at a company domain.
-    Docs: https://prospeo.io/api/domain-search — header X-KEY."""
-    if not PROSPEO_API_KEY:
-        return _mock_prospeo_domain(domain, limit)
-    try:
-        async with httpx.AsyncClient(timeout=12) as client:
-            r = await client.post(
-                f"{PROSPEO_BASE}/domain-search",
-                headers={"X-KEY": PROSPEO_API_KEY, "Content-Type": "application/json"},
-                json={"company": domain, "limit": limit},
-            )
-            r.raise_for_status()
-            data = r.json()
-            hits = (data.get("response") or {}).get("email_list") or data.get("emails") or []
-            return [_normalize_prospeo(h, domain) for h in hits][:limit]
-    except Exception as ex:
-        logging.warning("prospeo domain search error: %s", ex)
-        return _mock_prospeo_domain(domain, limit)
-
-
-async def prospeo_email_finder(first_name: str, last_name: str, domain: str) -> Optional[str]:
-    """POST /email-finder — returns { email }."""
-    if not PROSPEO_API_KEY:
-        return f"{first_name.lower()}.{last_name.lower()}@{domain}"
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.post(
-                f"{PROSPEO_BASE}/email-finder",
-                headers={"X-KEY": PROSPEO_API_KEY, "Content-Type": "application/json"},
-                json={"first_name": first_name, "last_name": last_name, "company": domain},
-            )
-            r.raise_for_status()
-            data = r.json()
-            return (data.get("response") or {}).get("email") or data.get("email")
-    except Exception as ex:
-        logging.warning("prospeo email finder error: %s", ex)
-        return None
-
-
-async def icypeas_verify(email: str) -> Dict[str, Any]:
-    """POST /email-verification — returns {status:'valid'|'risky'|'invalid', ...}.
-    Headers: Authorization + Account-Id per Icypeas docs."""
-    if not ICYPEAS_API_KEY or not ICYPEAS_USER_ID:
-        # Basic MOCKED verification: syntax + common typo screen
-        ok = _verify_email_syntax(email) and not any(x in email for x in (" ", ",", ";"))
-        return {"status": "valid" if ok else "invalid", "score": 0.9 if ok else 0.0, "provider": "mock"}
-    try:
-        async with httpx.AsyncClient(timeout=12) as client:
-            r = await client.post(
-                f"{ICYPEAS_BASE}/email-verification",
-                headers={
-                    "Authorization": f"Bearer {ICYPEAS_API_KEY}",
-                    "Account-Id": ICYPEAS_USER_ID,
-                    "Content-Type": "application/json",
-                },
-                json={"email": email},
-            )
-            r.raise_for_status()
-            data = r.json()
-            status = (data.get("status") or data.get("data", {}).get("status") or "risky").lower()
-            return {
-                "status": "valid" if status in {"valid", "deliverable"} else ("invalid" if status in {"invalid", "undeliverable"} else "risky"),
-                "score": data.get("score", 0.5),
-                "provider": "icypeas",
-                "raw": data,
-            }
-    except Exception as ex:
-        logging.warning("icypeas verify error: %s", ex)
-        return {"status": "risky", "score": 0.5, "provider": "icypeas_error", "error": str(ex)}
-
-
-# ---- Mock fallbacks so the UI works without keys -----
-_MOCK_NAMES = [
-    ("Alex", "Rivera", "VP Sales"), ("Priya", "Shah", "Head of Growth"),
-    ("Marcus", "Chen", "Founder"), ("Sofia", "Nunez", "Director of RevOps"),
-    ("Daniel", "Okafor", "CTO"), ("Emma", "Whitfield", "Marketing Lead"),
-    ("Ravi", "Menon", "COO"), ("Jules", "Beaumont", "Head of Sales"),
-    ("Kenji", "Tanaka", "VP Product"), ("Ines", "Costa", "Head of Marketing"),
-]
-
-
-def _mock_prospeo_domain(domain: str, limit: int) -> List[Dict[str, Any]]:
-    d = (domain or "example.com").replace("http://", "").replace("https://", "").rstrip("/")
-    company = d.split(".")[0].title()
-    out = []
-    for fn, ln, title in _MOCK_NAMES[:limit]:
-        out.append({
-            "first_name": fn, "last_name": ln, "title": title,
-            "email": f"{fn.lower()}.{ln.lower()}@{d}",
-            "company": company, "domain": d, "linkedin": "",
-        })
-    return out
-
-
-def _normalize_prospeo(h: Dict[str, Any], domain: str) -> Dict[str, Any]:
-    return {
-        "first_name": h.get("first_name") or (h.get("name", "").split(" ", 1)[0] if h.get("name") else ""),
-        "last_name": h.get("last_name") or (h.get("name", "").split(" ", 1)[-1] if h.get("name") else ""),
-        "email": h.get("email"),
-        "title": h.get("job_title") or h.get("title") or "",
-        "company": h.get("company") or h.get("organization") or domain.split(".")[0].title(),
-        "domain": h.get("domain") or domain,
-        "linkedin": h.get("linkedin") or h.get("linkedin_url") or "",
-    }
+# The real domain_search/email_finder/verify_email/provider_status live in
+# lead_sources.py — retry+backoff, the current (non-deprecated) Prospeo
+# search-person/bulk-enrich-person flow, correct Icypeas auth, and a mocked
+# flag that only trips when there's truly no key (never silently faking
+# people on a real provider failure). This route used to have its own inline
+# copy of that same logic against Prospeo's now-deprecated endpoints and
+# Icypeas' wrong auth header — it silently fell back to fictional prospects
+# on any error, which is exactly the failure mode lead_sources.py exists to
+# prevent. Wired to the shared client instead of fixing it twice.
 
 
 # ---- Prospect Search + Import -----
@@ -1285,6 +1294,8 @@ def _resolve_domain_from_keywords(keywords: List[str], override: Optional[str]) 
 
 @api.post("/prospect/search")
 async def prospect_search(body: ProspectSearchIn, user=Depends(current_user)):
+    from billing import check_credits, charge_credits
+    await check_credits(user["workspace_id"], "lead_enrichment")
     # Merge ICP + free-form filters
     filters = body.model_dump()
     if body.icp_id:
@@ -1294,27 +1305,44 @@ async def prospect_search(body: ProspectSearchIn, user=Depends(current_user)):
                 filters[k] = list({*(filters.get(k) or []), *(icp.get(k) or [])})
 
     domain = _resolve_domain_from_keywords(filters["keywords"], body.domain)
-    prospects = await prospeo_domain_search(domain, limit=body.limit)
+    try:
+        prospects = await lead_sources.domain_search(domain, limit=body.limit)
+    except lead_sources.ProviderError as ex:
+        raise HTTPException(502, f"Prospeo search failed: {ex}")
+
+    # normalize_prospect() returns linkedin_url; the rest of this route (and
+    # prospect_import below) has always used the shorter "linkedin" key.
+    for p in prospects:
+        p["linkedin"] = p.pop("linkedin_url", "")
 
     # Apply title/seniority filter locally when Prospeo returns broader lists
     wanted_titles = [t.lower() for t in filters.get("titles", [])]
     if wanted_titles:
         prospects = [p for p in prospects if not p.get("title") or any(t in p.get("title", "").lower() for t in wanted_titles)]
 
-    # Verify in-flight
+    # Verify in-flight. A single provider hiccup here shouldn't discard an
+    # otherwise-real, already-found list of prospects — mark that one contact
+    # "risky" (unverified) rather than failing the whole search.
     for p in prospects:
-        v = await icypeas_verify(p.get("email", ""))
+        try:
+            v = await lead_sources.verify_email(p.get("email", ""))
+        except lead_sources.ProviderError as ex:
+            v = {"status": "risky", "score": 0.5, "provider": "icypeas", "error": str(ex)}
         p["verification"] = v
         p["verified"] = v.get("status") == "valid"
+
+    # Enrichment is billed per contact actually returned — the third-party lookup
+    # cost is already incurred by this point, so it settles even if it overdraws.
+    if prospects:
+        await charge_credits(user["workspace_id"], "lead_enrichment", units=len(prospects),
+                              meta={"domain": domain, "contacts": len(prospects)},
+                              allow_overdraft=True)
 
     return {
         "filters": filters,
         "domain": domain,
         "prospects": prospects,
-        "providers": {
-            "prospeo": "live" if PROSPEO_API_KEY else "MOCKED",
-            "icypeas": "live" if (ICYPEAS_API_KEY and ICYPEAS_USER_ID) else "MOCKED",
-        },
+        "providers": lead_sources.provider_status(),
     }
 
 
@@ -1378,10 +1406,23 @@ async def prospect_import(body: ProspectImportIn, user=Depends(current_user)):
 
 @api.get("/prospect/providers")
 async def prospect_providers(user=Depends(current_user)):
-    return {
-        "prospeo": "live" if PROSPEO_API_KEY else "MOCKED",
-        "icypeas": "live" if (ICYPEAS_API_KEY and ICYPEAS_USER_ID) else "MOCKED",
-    }
+    return lead_sources.provider_status()
+
+
+# ----------------------------- Create EQ: Google Fonts ------------------------
+@api.get("/fonts")
+async def search_fonts(q: str = "", category: str = "", limit: int = 60,
+                       user=Depends(current_user)):
+    """Real Google Fonts, searched server-side — see fonts_catalog.py for why
+    this needs no API key."""
+    import fonts_catalog
+    return await fonts_catalog.search(q=q, category=category, limit=limit)
+
+
+@api.get("/fonts/categories")
+async def font_categories(user=Depends(current_user)):
+    import fonts_catalog
+    return fonts_catalog.categories()
 
 
 # ----------------------------- Brand Kits ------------------------------------
@@ -1476,6 +1517,9 @@ async def carousel_generate(body: CarouselGenIn, user=Depends(current_user)):
         raise HTTPException(400, "invalid platform")
     slides: List[Dict[str, Any]] = []
     if ANTHROPIC_API_KEY:
+        from billing import charge_credits
+        await charge_credits(user["workspace_id"], "carousel_generate",
+                              meta={"platform": body.platform, "slides": body.slide_count})
         system = (
             f"You are Create EQ, a carousel narrative designer. From a single topic, produce a "
             f"multi-slide carousel with narrative arc Hook → Body → CTA. Return EXACTLY {body.slide_count} slides. "
@@ -1639,6 +1683,9 @@ async def carousel_ai_image(body: AiImageIn, user=Depends(current_user)):
             raise HTTPException(500, "OPENAI_API_KEY not configured")
     elif not GEMINI_API_KEY:
         raise HTTPException(500, "GEMINI_API_KEY not configured")
+
+    from billing import charge_credits
+    await charge_credits(user["workspace_id"], "ai_image", meta={"provider": provider})
 
     if not await _rate_ok(user):
         raise HTTPException(429, "daily LLM quota exceeded")
@@ -1844,40 +1891,47 @@ async def webhook_carousel(token: str, payload: Dict[str, Any]):
     return {"ok": True, "project_id": proj_id, "topic": topic, "slides": len(slides)}
 
 
-# ----------------------------- HubSpot (MOCKED until keys provided) ----------
+# ----------------------------- HubSpot (real OAuth, mocked-first) -------------
+# The old routes were pure theatre: "sync" stamped `hs-<id>` on our own records and
+# never contacted HubSpot. These do the real OAuth dance and read real
+# contacts/deals/engagements when credentials are configured; with none, they run
+# in an honest test mode (labelled `mocked: True`) that still returns sample data
+# so the flow — including the Context-Pack engagement merge — is demoable.
 class HubspotConnectIn(BaseModel):
     portal_id: Optional[str] = None
 
 
 @api.get("/hubspot/status")
 async def hubspot_status(user=Depends(current_user)):
-    doc = await db.hubspot_integrations.find_one(
-        {"workspace_id": user["workspace_id"]}, {"_id": 0}
-    )
+    import hubspot_client
+    doc = await db.hubspot_integrations.find_one({"workspace_id": user["workspace_id"]}, {"_id": 0})
     if not doc:
-        return {"connected": False, "mocked": True}
-    doc["mocked"] = True
+        return {"connected": False, "mocked": hubspot_client.HUBSPOT_MOCKED}
+    doc["mocked"] = hubspot_client.HUBSPOT_MOCKED
     return doc
 
 
 @api.post("/hubspot/connect")
 async def hubspot_connect(body: HubspotConnectIn, user=Depends(current_user)):
-    doc = {
-        "id": new_id(),
-        "workspace_id": user["workspace_id"],
-        "connected": True,
-        "portal_id": body.portal_id or f"mock-{new_id()[:6]}",
-        "connected_at": now_iso(),
-        "last_sync_at": None,
-        "pushed_count": 0,
-        "pulled_count": 0,
-    }
-    await db.hubspot_integrations.replace_one(
-        {"workspace_id": user["workspace_id"]}, doc, upsert=True
-    )
-    await _audit(user, "hubspot.connect", {"portal_id": doc["portal_id"], "mocked": True})
-    doc["mocked"] = True
-    return doc
+    """Start OAuth. In test mode (no app configured) there's nothing to authorise,
+    so connect immediately but flag it honestly."""
+    import hubspot_client
+    if hubspot_client.HUBSPOT_MOCKED:
+        doc = {
+            "id": new_id(), "workspace_id": user["workspace_id"], "connected": True,
+            "portal_id": body.portal_id or "test-mode", "mocked": True,
+            "connected_at": now_iso(), "last_sync_at": None, "pushed_count": 0, "pulled_count": 0,
+        }
+        await db.hubspot_integrations.replace_one(
+            {"workspace_id": user["workspace_id"]}, doc, upsert=True)
+        await _audit(user, "hubspot.connect", {"mocked": True})
+        return {**doc, "url": None}
+
+    state = secrets.token_urlsafe(24)
+    await db.oauth_states.insert_one({
+        "state": state, "kind": "hubspot",
+        "workspace_id": user["workspace_id"], "user_id": user["id"], "at": now_iso()})
+    return {"url": hubspot_client.auth_url(state), "mocked": False}
 
 
 @api.post("/hubspot/disconnect")
@@ -1887,103 +1941,63 @@ async def hubspot_disconnect(user=Depends(current_user)):
     return {"ok": True}
 
 
-@api.post("/hubspot/sync")
-async def hubspot_sync(user=Depends(current_user)):
-    conn = await db.hubspot_integrations.find_one(
-        {"workspace_id": user["workspace_id"]}, {"_id": 0}
-    )
-    if not conn or not conn.get("connected"):
-        raise HTTPException(400, "HubSpot not connected")
-    leads = await db.leads.find(
-        {"workspace_id": user["workspace_id"]}, {"_id": 0}
-    ).to_list(1000)
-    pushed = 0
-    for lead in leads:
-        await db.leads.update_one(
-            {"id": lead["id"]},
-            {"$set": {
-                "hubspot_id": lead.get("hubspot_id") or f"hs-{lead['id'][:8]}",
-                "hubspot_synced_at": now_iso(),
-            }},
-        )
-        pushed += 1
-    await db.hubspot_integrations.update_one(
-        {"workspace_id": user["workspace_id"]},
-        {"$set": {"last_sync_at": now_iso()}, "$inc": {"pushed_count": pushed}},
-    )
-    await _audit(user, "hubspot.sync", {"pushed": pushed, "mocked": True})
-    return {"pushed": pushed, "pulled": 0, "mocked": True}
-
-
-_HUBSPOT_MOCK_PULL = [
-    {"first_name": "Owen", "last_name": "Bright", "company": "Acme Corp", "title": "VP RevOps"},
-    {"first_name": "Nina", "last_name": "Kaur", "company": "Laser Analytics", "title": "Head of Marketing"},
-    {"first_name": "Theo", "last_name": "Marchetti", "company": "Bright Labs", "title": "CTO"},
-    {"first_name": "Aisha", "last_name": "Nkomo", "company": "Northwind", "title": "Director of Sales"},
-    {"first_name": "Leo", "last_name": "Girard", "company": "Volt Studios", "title": "Founder"},
-]
-
-
 @api.post("/hubspot/pull")
 async def hubspot_pull(user=Depends(current_user)):
-    conn = await db.hubspot_integrations.find_one(
-        {"workspace_id": user["workspace_id"]}, {"_id": 0}
-    )
+    """Import real HubSpot contacts (and their deals) as leads. Dedupe on email,
+    and stamp `hubspot_id` so proposals can later pull that contact's engagements."""
+    import hubspot_client
+    conn = await db.hubspot_integrations.find_one({"workspace_id": user["workspace_id"]}, {"_id": 0})
     if not conn or not conn.get("connected"):
         raise HTTPException(400, "HubSpot not connected")
+
+    contacts = await hubspot_client.pull_contacts(conn)
     pulled = 0
-    for c in _HUBSPOT_MOCK_PULL:
-        email = f"{c['first_name'].lower()}.{c['last_name'].lower()}.{new_id()[:6]}@{c['company'].split()[0].lower()}.co"
-        if await db.leads.find_one({"workspace_id": user["workspace_id"], "email": email}):
+    for c in contacts:
+        email = (c.get("email") or "").lower()
+        if not email or await db.leads.find_one({"workspace_id": user["workspace_id"], "email": email}):
             continue
         await db.leads.insert_one({
-            **c,
-            "id": new_id(),
-            "workspace_id": user["workspace_id"],
-            "email": email,
-            "status": "new",
-            "icp_score": 65,
-            "verified": True,
-            "source": "hubspot",
-            "hubspot_id": f"hs-import-{new_id()[:8]}",
-            "hubspot_synced_at": now_iso(),
-            "created_at": now_iso(),
+            "id": new_id(), "workspace_id": user["workspace_id"],
+            "first_name": c.get("first_name", ""), "last_name": c.get("last_name", ""),
+            "email": email, "company": c.get("company", ""), "title": c.get("title", ""),
+            "status": "new", "source": "hubspot", "hubspot_id": c.get("hubspot_id"),
+            "hubspot_synced_at": now_iso(), "verified": True, "intent": None,
+            "enrichment_status": "pending", "created_at": now_iso(),
         })
         pulled += 1
     await db.hubspot_integrations.update_one(
         {"workspace_id": user["workspace_id"]},
-        {"$set": {"last_sync_at": now_iso()}, "$inc": {"pulled_count": pulled}},
-    )
-    await _audit(user, "hubspot.pull", {"pulled": pulled, "mocked": True})
-    return {"pushed": 0, "pulled": pulled, "mocked": True}
+        {"$set": {"last_sync_at": now_iso()}, "$inc": {"pulled_count": pulled}})
+    await _audit(user, "hubspot.pull", {"pulled": pulled, "mocked": hubspot_client.HUBSPOT_MOCKED})
+    return {"pulled": pulled, "mocked": hubspot_client.HUBSPOT_MOCKED}
 
 
-@api.post("/hubspot/deals/sync")
-async def hubspot_deals_sync(user=Depends(current_user)):
-    conn = await db.hubspot_integrations.find_one(
-        {"workspace_id": user["workspace_id"]}, {"_id": 0}
-    )
-    if not conn or not conn.get("connected"):
-        raise HTTPException(400, "HubSpot not connected")
-    deals = await db.deals.find(
-        {"workspace_id": user["workspace_id"]}, {"_id": 0}
-    ).to_list(1000)
-    synced = 0
-    for d in deals:
-        await db.deals.update_one(
-            {"id": d["id"]},
-            {"$set": {
-                "hubspot_deal_id": d.get("hubspot_deal_id") or f"hsd-{d['id'][:8]}",
-                "hubspot_synced_at": now_iso(),
-            }},
-        )
-        synced += 1
-    await db.hubspot_integrations.update_one(
-        {"workspace_id": user["workspace_id"]},
-        {"$set": {"last_sync_at": now_iso()}},
-    )
-    await _audit(user, "hubspot.deals_sync", {"synced": synced, "mocked": True})
-    return {"synced": synced, "mocked": True}
+@api.get("/hubspot/oauth/callback")
+async def hubspot_oauth_callback(code: str, state: str):
+    """PUBLIC. HubSpot redirects the browser here after the user grants access."""
+    import hubspot_client
+    from google_calendar_client import encrypt_token
+
+    pending = await db.oauth_states.find_one({"state": state, "kind": "hubspot"}, {"_id": 0})
+    if not pending:
+        raise HTTPException(400, "invalid or expired oauth state")
+    await db.oauth_states.delete_one({"state": state})
+
+    try:
+        tokens = await hubspot_client.exchange_code(code)
+    except Exception as ex:
+        logger.warning("hubspot oauth exchange failed: %s", ex)
+        return RedirectResponse(f"{FRONTEND_URL}/app/hubspot?error=oauth_failed")
+
+    await db.hubspot_integrations.replace_one(
+        {"workspace_id": pending["workspace_id"]},
+        {"id": new_id(), "workspace_id": pending["workspace_id"], "connected": True,
+         "mocked": False, "portal_id": str(tokens.get("hub_id") or ""),
+         "access_token_enc": encrypt_token(tokens.get("access_token")),
+         "refresh_token_enc": encrypt_token(tokens.get("refresh_token")),
+         "connected_at": now_iso(), "last_sync_at": None, "pushed_count": 0, "pulled_count": 0},
+        upsert=True)
+    return RedirectResponse(f"{FRONTEND_URL}/app/hubspot?connected=1")
 
 
 
@@ -2389,15 +2403,23 @@ async def impersonate(uid: str, admin=Depends(require_admin)):
 
 # ----------------------------- Mount -----------------------------------------
 from voice_eq import voice_router, voice_public_router
+from voice_ws_bridge import voice_ws_router
 from schedule_eq import schedule_router, schedule_public_router
 from proposal_eq import proposal_router
 from social_eq import social_router
+from billing import billing_router, billing_public_router
+from pitch_eq import pitch_router, pitch_public_router
+api.include_router(pitch_router)
+api.include_router(pitch_public_router)
 api.include_router(voice_router)
 api.include_router(voice_public_router)
+api.include_router(voice_ws_router)
 api.include_router(schedule_router)
 api.include_router(schedule_public_router)
 api.include_router(proposal_router)
 api.include_router(social_router)
+api.include_router(billing_router)
+api.include_router(billing_public_router)
 app.include_router(api)
 
 
@@ -2416,6 +2438,19 @@ async def _create_indexes():
         await db.proposals.create_index([("workspace_id", 1), ("lead_id", 1)])
         await db.social_integrations.create_index([("workspace_id", 1), ("provider", 1)], unique=True)
         await db.social_posts.create_index([("workspace_id", 1), ("platform", 1), ("status", 1)])
+        await db.credit_accounts.create_index("workspace_id", unique=True)
+        await db.credit_ledger.create_index([("workspace_id", 1), ("at", -1)])
+        await db.subscriptions.create_index("workspace_id", unique=True)
+        await db.bookings.create_index("manage_token", unique=True, sparse=True)
+        await db.sent_emails.create_index([("workspace_id", 1), ("booking_id", 1), ("at", -1)])
+        await db.lead_research.create_index([("workspace_id", 1), ("lead_id", 1)], unique=True)
+        await db.email_drafts.create_index([("workspace_id", 1), ("lead_id", 1), ("created_at", -1)])
+        await db.leads.create_index([("workspace_id", 1), ("linkedin_url", 1)], sparse=True)
+        await db.send_queue.create_index([("status", 1), ("send_at", 1)])
+        await db.send_queue.create_index([("workspace_id", 1), ("campaign_id", 1)])
+        await db.oauth_states.create_index("state", unique=True)
+        await db.deal_context.create_index([("workspace_id", 1), ("deal_id", 1)], unique=True)
+        await db.proposal_templates.create_index([("workspace_id", 1), ("service", 1)])
         await db.event_types.create_index([("workspace_id", 1), ("slug", 1)], unique=True)
         await db.bookings.create_index([("workspace_id", 1), ("event_type_id", 1), ("status", 1)])
         await db.bookings.create_index([("workspace_id", 1), ("lead_id", 1)])
@@ -2432,6 +2467,38 @@ async def _create_indexes():
         logger.info("indexes ensured")
     except Exception as ex:
         logger.warning("index setup: %s", ex)
+
+
+# Background jobs. In-process (APScheduler) rather than a separate queue — the only
+# recurring work today is the booking reminder, which doesn't justify running Redis.
+scheduler = None
+
+
+@app.on_event("startup")
+async def _start_scheduler():
+    global scheduler
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from schedule_eq import run_reminder_tick
+        from sender import run_send_tick, run_reply_tick
+
+        scheduler = AsyncIOScheduler(timezone="UTC")
+        # Every 15 min: any confirmed booking ~24h out gets one reminder. The job
+        # claims each booking before sending, so overlapping ticks can't double-send.
+        scheduler.add_job(run_reminder_tick, "interval", minutes=15,
+                          id="booking_reminders", max_instances=1, coalesce=True)
+        # Drain the outbound queue. Every 2 min, capped per tick — a trickle looks
+        # human; a burst looks like spam and gets the mailbox flagged.
+        scheduler.add_job(lambda: run_send_tick(PUBLIC_BASE_URL), "interval", minutes=2,
+                          id="outbound_sends", max_instances=1, coalesce=True)
+        # Poll sent threads for real replies (this is what feeds the unified inbox).
+        scheduler.add_job(run_reply_tick, "interval", minutes=10,
+                          id="reply_polling", max_instances=1, coalesce=True)
+        scheduler.start()
+        logger.info("scheduler started (reminders 15m, sends 2m, reply polling 10m)")
+    except Exception as ex:
+        logger.warning("scheduler failed to start: %s", ex)
+
 
 app.add_middleware(
     CORSMiddleware,

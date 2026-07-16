@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Save, Link2, Unlink } from "lucide-react";
+import { Save, Link2, Unlink, Mail } from "lucide-react";
 
 const DAYS = [
   { key: "mon", label: "Monday" }, { key: "tue", label: "Tuesday" }, { key: "wed", label: "Wednesday" },
@@ -14,11 +14,13 @@ export default function ScheduleSettings() {
   const [params] = useSearchParams();
   const [status, setStatus] = useState(null);
   const [availability, setAvailability] = useState(null);
+  const [emailStatus, setEmailStatus] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const load = () => {
     api.get("/schedule-eq/calendar-status").then((r) => setStatus(r.data));
     api.get("/schedule-eq/availability").then((r) => setAvailability(r.data));
+    api.get("/schedule-eq/email-status").then((r) => setEmailStatus(r.data)).catch(() => {});
   };
   useEffect(() => {
     load();
@@ -57,17 +59,45 @@ export default function ScheduleSettings() {
     } finally { setBusy(false); }
   };
 
-  if (!status || !availability) return <div className="p-10 text-neutral-500 text-sm">Loading…</div>;
+  if (!status || !availability) return <div className="p-10 text-neutral-400 text-sm">Loading…</div>;
 
   return (
     <div>
-      <PageHeader title="Schedule EQ Settings" subtitle="Calendar connection and working hours." />
-      <div className="p-6 max-w-2xl space-y-6">
-        <div className="card-flat p-5">
-          <div className="flex items-center justify-between">
+      <PageHeader title="Schedule EQ Settings" subtitle="Calendar connection, email notifications, and working hours." />
+      <div className="animate-fade-in px-6 sm:px-8 max-w-2xl space-y-6">
+        <div className="shadow-card rounded-2xl p-6 sm:p-8">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+              <div className="font-display font-semibold flex items-center gap-2">
+                <Mail size={15} /> Email notifications
+              </div>
+              <p className="text-xs text-neutral-400 mt-1">
+                {emailStatus?.mocked === false
+                  ? <>Live — confirmations, 24-hour reminders, reschedules and cancellations are sent from <span className="font-mono">{emailStatus.from}</span>, each with a calendar invite attached.</>
+                  : <>Test mode — every message is fully composed and recorded, but not delivered. Add a <span className="font-mono">RESEND_API_KEY</span> to send for real.</>}
+              </p>
+              {emailStatus && (
+                <p className="text-xs text-neutral-400 mt-1.5">
+                  {emailStatus.sent_count} message{emailStatus.sent_count === 1 ? "" : "s"} composed so far.
+                </p>
+              )}
+            </div>
+            <span data-testid="email-status-chip"
+              className={`shrink-0 text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded-full border ${
+                emailStatus?.mocked === false
+                  ? "border-green-300 bg-green-50 text-green-700"
+                  : "border-line bg-bone text-neutral-400"
+              }`}>
+              {emailStatus?.mocked === false ? "Live" : "Test mode"}
+            </span>
+          </div>
+        </div>
+
+        <div className="shadow-card rounded-2xl p-6 sm:p-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <div className="font-display font-semibold">Google Calendar</div>
-              <p className="text-xs text-neutral-500 mt-1">
+              <p className="text-xs text-neutral-400 mt-1">
                 {status.connected ? "Connected — real availability and calendar events are used." : status.mocked
                   ? "Test mode — availability is computed from your working hours only. Connect Google Calendar to sync real events."
                   : "Not connected."}
@@ -81,10 +111,10 @@ export default function ScheduleSettings() {
           </div>
         </div>
 
-        <div className="card-flat p-5 space-y-3">
-          <div className="flex items-center justify-between">
+        <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div className="font-display font-semibold">Working hours</div>
-            <button onClick={saveAvailability} disabled={busy} data-testid="save-availability-btn" className="btn-primary text-xs"><Save size={12} /> Save</button>
+            <button onClick={saveAvailability} disabled={busy} data-testid="save-availability-btn" className="btn-primary text-xs self-start"><Save size={12} /> Save</button>
           </div>
           <div>
             <label className="ui-label block mb-1">Timezone</label>
@@ -96,18 +126,19 @@ export default function ScheduleSettings() {
               const active = !!availability.working_hours[d.key];
               const window = availability.working_hours[d.key]?.[0] || { start: "09:00", end: "17:00" };
               return (
-                <div key={d.key} className="flex items-center gap-3">
-                  <label className="flex items-center gap-2 w-32 text-sm">
+                <div key={d.key} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                  <label className="flex items-center gap-2 sm:w-32 text-sm">
                     <input type="checkbox" checked={active} onChange={() => toggleDay(d.key)} data-testid={`day-toggle-${d.key}`} />
                     {d.label}
                   </label>
                   {active && (
                     <>
                       <input type="time" value={window.start} onChange={(e) => updateWindow(d.key, "start", e.target.value)}
-                        data-testid={`day-start-${d.key}`} className="border border-line px-2 py-1 rounded-sm text-sm" />
-                      <span className="text-neutral-400">to</span>
+                        data-testid={`day-start-${d.key}`} className="border border-line px-2 py-1 rounded-sm text-sm min-w-0" />
+                      <span className="text-neutral-400 hidden sm:inline">to</span>
+                      <span className="text-neutral-400 sm:hidden">—</span>
                       <input type="time" value={window.end} onChange={(e) => updateWindow(d.key, "end", e.target.value)}
-                        data-testid={`day-end-${d.key}`} className="border border-line px-2 py-1 rounded-sm text-sm" />
+                        data-testid={`day-end-${d.key}`} className="border border-line px-2 py-1 rounded-sm text-sm min-w-0" />
                     </>
                   )}
                 </div>

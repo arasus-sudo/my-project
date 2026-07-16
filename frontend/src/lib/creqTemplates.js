@@ -398,6 +398,569 @@ export const TEMPLATES = [
       ],
     }),
   },
+  {
+    id: "timeline",
+    name: "Timeline",
+    tag: "Timeline",
+    palette: "forest",
+    thumb_bg: "#14532D",
+    thumb_accent: "#FCD34D",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 100, w: 920, h: 100, text: "How we shipped it in 4 weeks",
+            font: "Space Grotesk", size: 68, weight: 700, color: "text", line_height: 1.05 }),
+        S({ x: 116, y: 280, w: 4, h: 900, fill: "accent", radius: 2, opacity: 0.5 }),
+        ...(["Week 1 — Discovery & scoping", "Week 2 — Build & internal review",
+             "Week 3 — Pilot with a real account", "Week 4 — Launch & measure"].flatMap((t, i) => {
+          const y = 280 + i * 220;
+          return [
+            S({ x: 96, y: y + 6, w: 44, h: 44, fill: "accent", radius: 999 }),
+            T({ x: 180, y, w: 780, h: 60, text: t, font: "Inter", size: 36, weight: 700, color: "text" }),
+          ];
+        })),
+      ],
+    }),
+  },
+  {
+    id: "testimonial",
+    name: "Testimonial",
+    tag: "Testimonial",
+    palette: "paper",
+    thumb_bg: "#F5F1E8",
+    thumb_accent: "#B45309",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        I({ x: 80, y: 120, w: 72, name: "Quote", color: "accent", stroke: 2 }),
+        T({ x: 80, y: 240, w: 920, h: 560, text: "We stopped guessing which draft would land. The score told us before we hit send — and reply rates followed.",
+            font: "Instrument Serif", size: 68, weight: 500, italic: true, color: "text", line_height: 1.15 }),
+        S({ x: 80, y: 900, w: 88, h: 88, fill: "muted", radius: 999, opacity: 0.25 }),
+        T({ x: 188, y: 912, w: 700, h: 40, text: "Dana Rowe", font: "Inter", size: 30, weight: 700, color: "text" }),
+        T({ x: 188, y: 954, w: 700, h: 40, text: "VP Sales, Northloop", font: "Inter", size: 24, weight: 400, color: "muted" }),
+      ],
+    }),
+  },
+  {
+    id: "roadmap",
+    name: "Roadmap",
+    tag: "Roadmap",
+    palette: "ocean",
+    thumb_bg: "#0A2540",
+    thumb_accent: "#22D3EE",
+    build: () => ({
+      bg: { type: "gradient", color: "bg", color2: "bg2", angle: 160 },
+      elements: [
+        T({ x: 80, y: 96, w: 920, h: 90, text: "What's next", font: "Archivo Black", size: 72, weight: 900, color: "text" }),
+        ...(["NOW", "NEXT", "LATER"].flatMap((label, i) => {
+          const y = 280 + i * 320;
+          const items = [
+            ["Live call transcripts", "Warm transfer to a human"],
+            ["Meeting-mid-call booking", "Real-time objection tracking"],
+            ["Timezone-aware compliance", "Multi-language agents"],
+          ][i];
+          return [
+            B({ x: 80, y, text: label }),
+            T({ x: 80, y: y + 60, w: 900, h: 60, text: items[0], font: "Inter", size: 38, weight: 700, color: "text" }),
+            T({ x: 80, y: y + 118, w: 900, h: 60, text: items[1], font: "Inter", size: 38, weight: 700, color: "muted" }),
+          ];
+        })),
+      ],
+    }),
+  },
+  {
+    id: "faq",
+    name: "FAQ",
+    tag: "FAQ",
+    palette: "bone",
+    thumb_bg: "#E8E9EB",
+    thumb_accent: "#212025",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 100, w: 920, h: 90, text: "Is this too good to be true?",
+            font: "Space Grotesk", size: 62, weight: 700, color: "text", line_height: 1.05 }),
+        S({ x: 80, y: 280, w: 920, h: 2, fill: "muted", opacity: 0.3 }),
+        T({ x: 80, y: 320, w: 920, h: 60, text: "“Does it actually improve reply rates?”",
+            font: "Inter", size: 34, weight: 700, color: "accent" }),
+        T({ x: 80, y: 390, w: 920, h: 140, text: "Teams see a 2–4× lift within the first two weeks — the score catches robotic phrasing before it ships.",
+            font: "Inter", size: 28, weight: 400, color: "muted", line_height: 1.4 }),
+        S({ x: 80, y: 580, w: 920, h: 2, fill: "muted", opacity: 0.3 }),
+        T({ x: 80, y: 620, w: 920, h: 60, text: "“Do I need a data team to set it up?”",
+            font: "Inter", size: 34, weight: 700, color: "accent" }),
+        T({ x: 80, y: 690, w: 920, h: 140, text: "No — connect a mailbox and you're drafting inside ten minutes.",
+            font: "Inter", size: 28, weight: 400, color: "muted", line_height: 1.4 }),
+        S({ x: 80, y: 880, w: 920, h: 2, fill: "muted", opacity: 0.3 }),
+        T({ x: 80, y: 920, w: 920, h: 60, text: "“What if my list is small?”",
+            font: "Inter", size: 34, weight: 700, color: "accent" }),
+        T({ x: 80, y: 990, w: 920, h: 140, text: "Quality beats volume here — a well-scored 50-send list often outperforms a cold 2,000.",
+            font: "Inter", size: 28, weight: 400, color: "muted", line_height: 1.4 }),
+      ],
+    }),
+  },
+  {
+    id: "bio-card",
+    name: "Bio Card",
+    tag: "Team",
+    palette: "rose",
+    thumb_bg: "#831843",
+    thumb_accent: "#F9A8D4",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        S({ x: 80, y: 120, w: 220, h: 220, fill: "accent", radius: 999, opacity: 0.3 }),
+        T({ x: 80, y: 400, w: 920, h: 140, text: "Meet the founder", font: "Playfair Display", size: 72, weight: 700, italic: true, color: "text" }),
+        T({ x: 80, y: 560, w: 920, h: 400, text: "Ten years building outbound systems for teams who were tired of guessing. Now doing it with agents instead of spreadsheets.",
+            font: "Inter", size: 34, weight: 400, color: "muted", line_height: 1.4 }),
+        B({ x: 80, y: 1040, text: "@founder · innoira.com" }),
+      ],
+    }),
+  },
+  {
+    id: "product-showcase",
+    name: "Product Showcase",
+    tag: "Product",
+    palette: "cyber",
+    thumb_bg: "#030712",
+    thumb_accent: "#34D399",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        B({ x: 80, y: 96, text: "NOW LIVE" }),
+        T({ x: 80, y: 220, w: 920, h: 260, text: "One suite.\nSix agents.",
+            font: "Archivo Black", size: 128, weight: 900, color: "accent", line_height: 0.95 }),
+        T({ x: 80, y: 560, w: 920, h: 140, text: "Outbound, calls, scheduling, proposals and social — sharing one CRM, one timeline.",
+            font: "Inter", size: 32, weight: 400, color: "muted", line_height: 1.4 }),
+        S({ x: 80, y: 780, w: 920, h: 320, fill: "muted", radius: 24, opacity: 0.08 }),
+        I({ x: 130, y: 830, w: 80, name: "Zap", color: "accent", stroke: 2 }),
+        T({ x: 130, y: 940, w: 820, h: 80, text: "Try it free — no card required", font: "Inter", size: 30, weight: 700, color: "text" }),
+      ],
+    }),
+  },
+  {
+    id: "pricing-tiers",
+    name: "Pricing Tiers",
+    tag: "Pricing",
+    palette: "mono",
+    thumb_bg: "#FFFFFF",
+    thumb_accent: "#000000",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 96, w: 920, h: 90, text: "Pick your plan", font: "Inter", size: 60, weight: 800, color: "text" }),
+        ...(["Starter", "Growth", "Scale"].flatMap((name, i) => {
+          const y = 260 + i * 320;
+          const price = ["$79", "$249", "$749"][i];
+          return [
+            S({ x: 80, y, w: 920, h: 280, fill: i === 1 ? "accent" : "muted", radius: 24, opacity: i === 1 ? 1 : 0.08 }),
+            T({ x: 120, y: y + 40, w: 400, h: 60, text: name, font: "Inter", size: 34, weight: 700, color: i === 1 ? "bg" : "text" }),
+            T({ x: 120, y: y + 110, w: 400, h: 100, text: price, font: "Archivo Black", size: 72, weight: 900, color: i === 1 ? "bg" : "accent" }),
+            I({ x: 800, y: y + 90, w: 60, name: "Check", color: i === 1 ? "bg" : "accent", stroke: 2 }),
+          ];
+        })),
+      ],
+    }),
+  },
+  {
+    id: "case-study-metric",
+    name: "Case Study Metric",
+    tag: "Data",
+    palette: "coral",
+    thumb_bg: "#FEE2E2",
+    thumb_accent: "#DC2626",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        B({ x: 80, y: 96, text: "CASE STUDY" }),
+        T({ x: 80, y: 220, w: 920, h: 80, text: "Northloop, 90 days in",
+            font: "Inter", size: 46, weight: 700, color: "text" }),
+        T({ x: 80, y: 360, w: 920, h: 480, text: "+184%",
+            font: "Archivo Black", size: 320, weight: 900, color: "accent", line_height: 0.9 }),
+        T({ x: 80, y: 900, w: 920, h: 60, text: "meetings booked, quarter over quarter",
+            font: "Inter", size: 34, weight: 500, color: "muted" }),
+      ],
+    }),
+  },
+  {
+    id: "myth-vs-fact",
+    name: "Myth vs Fact",
+    tag: "Framework",
+    palette: "sunset",
+    thumb_bg: "#FF6B4A",
+    thumb_accent: "#0F172A",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 100, w: 920, h: 90, text: "Myth vs. reality", font: "Archivo Black", size: 68, weight: 900, color: "text" }),
+        B({ x: 80, y: 280, text: "MYTH" }),
+        T({ x: 80, y: 340, w: 920, h: 140, text: "“AI outreach always sounds robotic.”",
+            font: "Inter", size: 38, weight: 700, color: "text", line_height: 1.25 }),
+        B({ x: 80, y: 560, text: "FACT" }),
+        T({ x: 80, y: 620, w: 920, h: 200, text: "Scored on empathy and clarity before it sends, most recipients can't tell — and reply rates prove it.",
+            font: "Inter", size: 38, weight: 700, color: "accent", line_height: 1.3 }),
+      ],
+    }),
+  },
+  {
+    id: "this-or-that",
+    name: "This or That",
+    tag: "Framework",
+    palette: "ocean",
+    thumb_bg: "#0A2540",
+    thumb_accent: "#22D3EE",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 120, w: 920, h: 100, text: "Which one is you?",
+            font: "Space Grotesk", size: 68, weight: 700, color: "text" }),
+        S({ x: 80, y: 320, w: 430, h: 500, fill: "muted", radius: 24, opacity: 0.1 }),
+        T({ x: 120, y: 360, w: 360, h: 200, text: "Sends 200 identical emails and hopes",
+            font: "Inter", size: 34, weight: 600, color: "muted", line_height: 1.3 }),
+        S({ x: 570, y: 320, w: 430, h: 500, fill: "accent", radius: 24 }),
+        T({ x: 610, y: 360, w: 360, h: 200, text: "Sends 50 researched ones and books calls",
+            font: "Inter", size: 34, weight: 700, color: "bg", line_height: 1.3 }),
+        T({ x: 80, y: 880, w: 920, h: 60, text: "There's only one right answer.", font: "Inter", size: 28, weight: 500, color: "muted" }),
+      ],
+    }),
+  },
+  {
+    id: "recap",
+    name: "Weekly Recap",
+    tag: "Announcement",
+    palette: "forest",
+    thumb_bg: "#14532D",
+    thumb_accent: "#FCD34D",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        B({ x: 80, y: 96, text: "WEEK 12 RECAP" }),
+        T({ x: 80, y: 220, w: 920, h: 100, text: "Three things that worked",
+            font: "Inter", size: 60, weight: 800, color: "text" }),
+        ...(["Personalised subject lines (+22% opens)", "Follow-up on day 3, not day 1",
+             "One clear ask, every time"].flatMap((t, i) => {
+          const y = 400 + i * 200;
+          return [
+            I({ x: 80, y, w: 56, name: "Check", color: "accent", stroke: 2.5 }),
+            T({ x: 160, y: y + 4, w: 840, h: 120, text: t, font: "Inter", size: 36, weight: 700, color: "text", line_height: 1.2 }),
+          ];
+        })),
+      ],
+    }),
+  },
+  {
+    id: "announcement",
+    name: "Announcement",
+    tag: "Announcement",
+    palette: "midnight",
+    thumb_bg: "#0F1010",
+    thumb_accent: "#E85D3A",
+    build: () => ({
+      bg: { type: "gradient", color: "bg", color2: "bg2", angle: 200 },
+      elements: [
+        B({ x: 80, y: 96, text: "JUST SHIPPED" }),
+        T({ x: 80, y: 380, w: 920, h: 420, text: "Voice EQ now calls, qualifies, and books — in one conversation.",
+            font: "Archivo Black", size: 100, weight: 900, color: "accent", line_height: 1 }),
+        T({ x: 80, y: 900, w: 920, h: 100, text: "Live in your workspace today. No setup required.",
+            font: "Inter", size: 32, weight: 400, color: "muted" }),
+      ],
+    }),
+  },
+  {
+    id: "milestone-countdown",
+    name: "Countdown",
+    tag: "Announcement",
+    palette: "rose",
+    thumb_bg: "#831843",
+    thumb_accent: "#F9A8D4",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 140, w: 920, h: 60, text: "DOORS CLOSE IN",
+            font: "JetBrains Mono", size: 26, weight: 600, uppercase: true, letter_spacing: 0.2, color: "muted" }),
+        T({ x: 80, y: 300, w: 920, h: 500, text: "3 DAYS",
+            font: "Archivo Black", size: 260, weight: 900, color: "accent", line_height: 0.95 }),
+        S({ x: 80, y: 900, w: 340, h: 84, fill: "accent", radius: 999 }),
+        T({ x: 80, y: 924, w: 340, h: 40, text: "Save your seat", font: "Inter", size: 26, weight: 700, color: "bg", align: "center" }),
+      ],
+    }),
+  },
+  {
+    id: "team-intro",
+    name: "Team Intro",
+    tag: "Team",
+    palette: "paper",
+    thumb_bg: "#F5F1E8",
+    thumb_accent: "#B45309",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 100, w: 920, h: 90, text: "Who's behind this",
+            font: "Playfair Display", size: 64, weight: 700, italic: true, color: "text" }),
+        ...(["Dana Rowe — Product", "Sam Patel — Engineering", "Owen Bright — Sales"].flatMap((t, i) => {
+          const y = 300 + i * 240;
+          return [
+            S({ x: 80, y, w: 140, h: 140, fill: "accent", radius: 999, opacity: 0.25 }),
+            T({ x: 250, y: y + 40, w: 700, h: 60, text: t, font: "Inter", size: 38, weight: 700, color: "text" }),
+          ];
+        })),
+      ],
+    }),
+  },
+  {
+    id: "problem-agitate",
+    name: "Problem / Agitate",
+    tag: "Framework",
+    palette: "coral",
+    thumb_bg: "#FEE2E2",
+    thumb_accent: "#DC2626",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        I({ x: 80, y: 100, w: 72, name: "Flame", color: "accent", stroke: 2 }),
+        T({ x: 80, y: 220, w: 920, h: 260, text: "Your pipeline isn't thin. Your outbound is invisible.",
+            font: "Archivo Black", size: 88, weight: 900, color: "text", line_height: 1.02 }),
+        T({ x: 80, y: 560, w: 920, h: 300, text: "Same template, every prospect, every time. They can tell. That's why open rates fall and nobody replies — not because the offer is bad.",
+            font: "Inter", size: 34, weight: 400, color: "muted", line_height: 1.4 }),
+      ],
+    }),
+  },
+  {
+    id: "checklist-2col",
+    name: "Do / Don't",
+    tag: "Framework",
+    palette: "bone",
+    thumb_bg: "#E8E9EB",
+    thumb_accent: "#212025",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 96, w: 920, h: 90, text: "Cold email: do / don't",
+            font: "Space Grotesk", size: 58, weight: 700, color: "text" }),
+        I({ x: 80, y: 260, w: 48, name: "Check", color: "accent", stroke: 2.5 }),
+        T({ x: 150, y: 264, w: 850, h: 60, text: "One specific reason you're reaching out", font: "Inter", size: 32, weight: 600, color: "text" }),
+        I({ x: 80, y: 360, w: 48, name: "Check", color: "accent", stroke: 2.5 }),
+        T({ x: 150, y: 364, w: 850, h: 60, text: "A question they can answer in one line", font: "Inter", size: 32, weight: 600, color: "text" }),
+        I({ x: 80, y: 460, w: 48, name: "Check", color: "accent", stroke: 2.5 }),
+        T({ x: 150, y: 464, w: 850, h: 60, text: "Proof that's relevant to their situation", font: "Inter", size: 32, weight: 600, color: "text" }),
+        I({ x: 80, y: 620, w: 48, name: "X", color: "muted", stroke: 2.5 }),
+        T({ x: 150, y: 624, w: 850, h: 60, text: "“Hope you're doing well”", font: "Inter", size: 32, weight: 500, color: "muted" }),
+        I({ x: 80, y: 720, w: 48, name: "X", color: "muted", stroke: 2.5 }),
+        T({ x: 150, y: 724, w: 850, h: 60, text: "Attaching a deck before they've replied once", font: "Inter", size: 32, weight: 500, color: "muted" }),
+        I({ x: 80, y: 820, w: 48, name: "X", color: "muted", stroke: 2.5 }),
+        T({ x: 150, y: 824, w: 850, h: 60, text: "Three asks in one email", font: "Inter", size: 32, weight: 500, color: "muted" }),
+      ],
+    }),
+  },
+  {
+    id: "quote-carousel-2",
+    name: "Two Quotes",
+    tag: "Testimonial",
+    palette: "mono",
+    thumb_bg: "#FFFFFF",
+    thumb_accent: "#000000",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        I({ x: 80, y: 100, w: 56, name: "Quote", color: "accent", stroke: 2 }),
+        T({ x: 80, y: 190, w: 920, h: 260, text: "“The research alone would've taken my team a full day per lead.”",
+            font: "Instrument Serif", size: 48, weight: 500, italic: true, color: "text", line_height: 1.2 }),
+        T({ x: 80, y: 470, w: 900, h: 40, text: "— Nina Kaur, Head of Marketing", font: "Inter", size: 22, weight: 600, color: "muted" }),
+        S({ x: 80, y: 580, w: 920, h: 2, fill: "muted", opacity: 0.3 }),
+        I({ x: 80, y: 640, w: 56, name: "Quote", color: "accent", stroke: 2 }),
+        T({ x: 80, y: 730, w: 920, h: 260, text: "“We finally know which draft to send before we send it.”",
+            font: "Instrument Serif", size: 48, weight: 500, italic: true, color: "text", line_height: 1.2 }),
+        T({ x: 80, y: 1010, w: 900, h: 40, text: "— Theo Marchetti, CTO", font: "Inter", size: 22, weight: 600, color: "muted" }),
+      ],
+    }),
+  },
+  {
+    id: "before-numbers",
+    name: "Before / After Numbers",
+    tag: "Data",
+    palette: "cyber",
+    thumb_bg: "#030712",
+    thumb_accent: "#34D399",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 100, w: 920, h: 90, text: "One quarter, one change",
+            font: "Inter", size: 54, weight: 800, color: "text" }),
+        T({ x: 80, y: 260, w: 440, h: 60, text: "BEFORE", font: "JetBrains Mono", size: 24, weight: 600, uppercase: true, letter_spacing: 0.2, color: "muted" }),
+        T({ x: 80, y: 320, w: 440, h: 200, text: "3%", font: "Archivo Black", size: 160, weight: 900, color: "muted", line_height: 0.9 }),
+        T({ x: 560, y: 260, w: 440, h: 60, text: "AFTER", font: "JetBrains Mono", size: 24, weight: 600, uppercase: true, letter_spacing: 0.2, color: "accent" }),
+        T({ x: 560, y: 320, w: 440, h: 200, text: "12%", font: "Archivo Black", size: 160, weight: 900, color: "accent", line_height: 0.9 }),
+        S({ x: 80, y: 620, w: 920, h: 2, fill: "muted", opacity: 0.3 }),
+        T({ x: 80, y: 660, w: 920, h: 200, text: "reply rate, after switching to EQ-scored, research-backed outreach.",
+            font: "Inter", size: 32, weight: 400, color: "muted", line_height: 1.4 }),
+      ],
+    }),
+  },
+  {
+    id: "hot-take",
+    name: "Hot Take",
+    tag: "Editorial",
+    palette: "sunset",
+    thumb_bg: "#FF6B4A",
+    thumb_accent: "#0F172A",
+    build: () => ({
+      bg: { type: "gradient", color: "bg", color2: "bg2", angle: 130 },
+      elements: [
+        B({ x: 80, y: 96, text: "UNPOPULAR OPINION" }),
+        T({ x: 80, y: 300, w: 920, h: 500, text: "Personalisation isn't a merge field. It's proof you actually looked.",
+            font: "Archivo Black", size: 96, weight: 900, color: "text", line_height: 1 }),
+      ],
+    }),
+  },
+  {
+    id: "step-numbered-5",
+    name: "5-Step Framework",
+    tag: "Framework",
+    palette: "ocean",
+    thumb_bg: "#0A2540",
+    thumb_accent: "#22D3EE",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 96, w: 920, h: 90, text: "The 5-step send checklist",
+            font: "Space Grotesk", size: 56, weight: 700, color: "text" }),
+        ...(["Research the trigger", "Pick one angle", "Write under 120 words",
+             "Score for empathy & spam risk", "One ask, one CTA"].flatMap((t, i) => {
+          const y = 250 + i * 165;
+          return [
+            T({ x: 80, y, w: 90, h: 90, text: String(i + 1).padStart(2, "0"),
+                font: "JetBrains Mono", size: 40, weight: 700, color: "accent" }),
+            T({ x: 200, y: y + 12, w: 800, h: 60, text: t, font: "Inter", size: 38, weight: 700, color: "text" }),
+          ];
+        })),
+      ],
+    }),
+  },
+  {
+    id: "big-outcome",
+    name: "Big Outcome",
+    tag: "Cover",
+    palette: "forest",
+    thumb_bg: "#14532D",
+    thumb_accent: "#FCD34D",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 260, w: 920, h: 500, text: "From cold list\nto booked calendar.",
+            font: "DM Serif Display", size: 128, weight: 700, italic: true, color: "text", line_height: 1 }),
+        T({ x: 80, y: 840, w: 920, h: 140, text: "One agent, start to finish — sourcing, research, drafting, sending, and follow-up.",
+            font: "Inter", size: 32, weight: 400, color: "muted", line_height: 1.4 }),
+      ],
+    }),
+  },
+  {
+    id: "poll-either",
+    name: "Poll: Either/Or",
+    tag: "Framework",
+    palette: "coral",
+    thumb_bg: "#FEE2E2",
+    thumb_accent: "#DC2626",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 140, w: 920, h: 160, text: "Which mistake costs you more?",
+            font: "Inter", size: 60, weight: 800, color: "text", line_height: 1.1 }),
+        S({ x: 80, y: 400, w: 920, h: 180, fill: "accent", radius: 24 }),
+        T({ x: 120, y: 460, w: 840, h: 60, text: "A. Sending too generic", font: "Inter", size: 38, weight: 700, color: "bg" }),
+        S({ x: 80, y: 620, w: 920, h: 180, fill: "muted", radius: 24, opacity: 0.15 }),
+        T({ x: 120, y: 680, w: 840, h: 60, text: "B. Not following up at all", font: "Inter", size: 38, weight: 700, color: "text" }),
+        T({ x: 80, y: 860, w: 920, h: 60, text: "Vote below — we'll share the data next week.", font: "Inter", size: 26, weight: 400, color: "muted" }),
+      ],
+    }),
+  },
+  {
+    id: "resource-list",
+    name: "Resource List",
+    tag: "Framework",
+    palette: "paper",
+    thumb_bg: "#F5F1E8",
+    thumb_accent: "#B45309",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 100, w: 920, h: 90, text: "Bookmark these",
+            font: "Playfair Display", size: 64, weight: 700, italic: true, color: "text" }),
+        ...(["The EQ Score rubric", "Subject line swipe file", "Follow-up cadence template", "Objection-handling scripts"]
+          .flatMap((t, i) => {
+            const y = 280 + i * 190;
+            return [
+              I({ x: 80, y, w: 44, name: "ArrowUpRight", color: "accent", stroke: 2.5 }),
+              T({ x: 150, y: y + 2, w: 850, h: 60, text: t, font: "Inter", size: 36, weight: 600, color: "text" }),
+            ];
+          })),
+      ],
+    }),
+  },
+  {
+    id: "single-cta-minimal",
+    name: "Minimal CTA",
+    tag: "Cover",
+    palette: "mono",
+    thumb_bg: "#FFFFFF",
+    thumb_accent: "#000000",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 500, w: 920, h: 300, text: "Worth 15 minutes?",
+            font: "Archivo Black", size: 140, weight: 900, color: "text", line_height: 0.95, align: "center" }),
+        S({ x: 380, y: 880, w: 320, h: 84, fill: "accent", radius: 999 }),
+        T({ x: 380, y: 904, w: 320, h: 40, text: "Book a call", font: "Inter", size: 26, weight: 700, color: "bg", align: "center" }),
+      ],
+    }),
+  },
+  {
+    id: "day-in-life",
+    name: "Day in the Life",
+    tag: "Editorial",
+    palette: "rose",
+    thumb_bg: "#831843",
+    thumb_accent: "#F9A8D4",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 100, w: 920, h: 90, text: "A rep's morning, automated",
+            font: "Space Grotesk", size: 58, weight: 700, color: "text" }),
+        ...([["9:00", "Agent sourced 40 verified leads overnight"], ["9:15", "Research packs ready, no manual digging"],
+             ["9:30", "First 12 drafts scored and queued"], ["9:45", "Rep is on the phone, not in a spreadsheet"]]
+          .flatMap((row, i) => {
+            const y = 280 + i * 200;
+            return [
+              T({ x: 80, y, w: 140, h: 60, text: row[0], font: "JetBrains Mono", size: 30, weight: 600, color: "accent" }),
+              T({ x: 240, y: y - 4, w: 760, h: 100, text: row[1], font: "Inter", size: 32, weight: 500, color: "text", line_height: 1.3 }),
+            ];
+          })),
+      ],
+    }),
+  },
+  {
+    id: "feature-grid-4",
+    name: "Feature Grid",
+    tag: "Product",
+    palette: "cyber",
+    thumb_bg: "#030712",
+    thumb_accent: "#34D399",
+    build: () => ({
+      bg: { type: "solid", color: "bg" },
+      elements: [
+        T({ x: 80, y: 96, w: 920, h: 90, text: "Everything included",
+            font: "Inter", size: 56, weight: 800, color: "text" }),
+        ...([["Zap", "Instant drafts"], ["ShieldCheck", "Spam-safe scoring"], ["Users", "Shared CRM"], ["TrendingUp", "Live analytics"]]
+          .flatMap(([icon, label], i) => {
+            const x = 80 + (i % 2) * 480;
+            const y = 260 + Math.floor(i / 2) * 340;
+            return [
+              S({ x, y, w: 420, h: 280, fill: "muted", radius: 24, opacity: 0.08 }),
+              I({ x: x + 40, y: y + 40, w: 56, name: icon, color: "accent", stroke: 2 }),
+              T({ x: x + 40, y: y + 180, w: 340, h: 60, text: label, font: "Inter", size: 30, weight: 700, color: "text" }),
+            ];
+          })),
+      ],
+    }),
+  },
 ];
 
 /** Resolve a semantic color name ('bg' | 'accent' | ...) against a palette hex.

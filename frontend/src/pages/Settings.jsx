@@ -18,18 +18,18 @@ export default function Settings() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-bone">
+    <div className="min-h-screen bg-bone animate-fade-in">
       <div className="border-b border-line bg-white">
-        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
-          <Link to="/suite" data-testid="settings-back" className="flex items-center gap-2 text-sm text-neutral-600 hover:text-ink">
+        <div className="max-w-6xl mx-auto px-6 sm:px-8 py-3 flex items-center justify-between">
+          <Link to="/suite" data-testid="settings-back" className="flex items-center gap-2 text-sm text-neutral-500 hover:text-ink">
             <ArrowLeft size={15} /> Command center
           </Link>
           <div className="flex items-center gap-3">
             <div className="text-right leading-tight">
               <div className="text-xs font-medium">{user?.name}</div>
-              <div className="text-[10px] text-neutral-500">{user?.email}</div>
+              <div className="text-[10px] text-neutral-400">{user?.email}</div>
             </div>
-            <button onClick={logout} data-testid="settings-logout" className="p-1.5 text-neutral-500 hover:text-ink hover:bg-surfacehover rounded-full">
+            <button onClick={logout} data-testid="settings-logout" className="p-1.5 text-neutral-400 hover:text-ink hover:bg-surfacehover rounded-xl">
               <LogOut size={14} />
             </button>
           </div>
@@ -40,7 +40,7 @@ export default function Settings() {
         subtitle="Your profile, workspace, security & brand voice."
       />
 
-      <div className="p-6 grid grid-cols-12 gap-6 max-w-6xl">
+      <div className="p-6 sm:p-8 grid grid-cols-12 gap-4 sm:gap-6 max-w-6xl">
         <aside className="col-span-12 md:col-span-3">
           <div className="space-y-1 sticky top-4">
             <TabBtn active={tab === "profile"} onClick={() => setTab("profile")} icon={<UserIcon size={14} />} label="Profile" testid="settings-tab-profile" />
@@ -64,7 +64,7 @@ export default function Settings() {
 function TabBtn({ active, onClick, icon, label, testid }) {
   return (
     <button onClick={onClick} data-testid={testid}
-      className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-full text-sm transition-colors ${active ? "bg-ink text-white" : "hover:bg-neutral-100 text-neutral-700"}`}>
+      className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-colors ${active ? "bg-ink text-white" : "hover:bg-neutral-100 text-neutral-700"}`}>
       {icon}
       {label}
     </button>
@@ -118,16 +118,16 @@ function ProfileSection({ profile, onProfileUpdated }) {
     } finally { setBusy(false); }
   };
 
-  if (!profile) return <div className="text-neutral-500 text-sm">Loading profile…</div>;
+  if (!profile) return <div className="text-neutral-400 text-sm">Loading profile…</div>;
 
   return (
-    <form onSubmit={submit} className="card-flat p-6 space-y-5" data-testid="profile-section">
+    <form onSubmit={submit} className="card-flat shadow-card p-6 space-y-5" data-testid="profile-section">
       <div>
-        <div className="font-display font-bold text-lg">Your profile</div>
-        <div className="text-xs text-neutral-500 mt-0.5">Your name and headshot appear on Create EQ carousels and in team invitations.</div>
+        <div className="font-display font-semibold text-lg">Your profile</div>
+        <div className="text-xs text-neutral-400 mt-0.5">Your name and headshot appear on Create EQ carousels and in team invitations.</div>
       </div>
 
-      <div className="flex items-start gap-4">
+      <div className="flex flex-col sm:flex-row items-start gap-4">
         <div className="relative">
           <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-line bg-neutral-100 flex items-center justify-center">
             {avatarUrl ? (
@@ -140,17 +140,17 @@ function ProfileSection({ profile, onProfileUpdated }) {
           <input ref={fileRef} type="file" accept="image/*" className="hidden" data-testid="profile-avatar-input" onChange={onFile} />
           <button type="button" onClick={() => fileRef.current?.click()}
             data-testid="profile-avatar-upload"
-            className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-ink text-white flex items-center justify-center shadow hover:bg-neutral-800">
+            className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-ink text-white flex items-center justify-center shadow hover:bg-neutral-800">
             <Camera size={14} />
           </button>
         </div>
         <div className="flex-1 space-y-2">
           <div className="text-sm font-medium">Headshot</div>
-          <div className="text-xs text-neutral-500">Upload a square photo of yourself (recommended 512×512). Used across Create EQ slides.</div>
+          <div className="text-xs text-neutral-400">Upload a square photo of yourself (recommended 512×512). Used across Create EQ slides.</div>
           {avatarUrl && (
             <button type="button" onClick={removeAvatar}
               data-testid="profile-avatar-remove"
-              className="text-[11px] text-neutral-500 hover:text-red-600 flex items-center gap-1">
+              className="text-[11px] text-neutral-400 hover:text-red-600 flex items-center gap-1">
               <Trash2 size={11} /> Remove headshot
             </button>
           )}
@@ -162,7 +162,7 @@ function ProfileSection({ profile, onProfileUpdated }) {
         <input value={name} onChange={(e) => setName(e.target.value)}
           data-testid="profile-name"
           placeholder="Your full name"
-          className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm" />
+          className="input-premium mt-1 w-full text-sm" />
       </label>
 
       <label className="block">
@@ -170,13 +170,13 @@ function ProfileSection({ profile, onProfileUpdated }) {
         <input value={headline} onChange={(e) => setHeadline(e.target.value)}
           data-testid="profile-headline"
           placeholder="e.g. Founder · Innoira Labs"
-          className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm" />
+          className="input-premium mt-1 w-full text-sm" />
       </label>
 
       <label className="block">
         <span className="ui-label">Email</span>
         <input value={profile.email} disabled
-          className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm font-mono bg-neutral-50 text-neutral-500" />
+          className="input-premium mt-1 w-full text-sm font-mono bg-ash text-neutral-400" />
       </label>
 
       <div className="flex justify-end pt-2 border-t border-line">
@@ -213,10 +213,10 @@ function SecuritySection() {
   };
 
   return (
-    <form onSubmit={submit} className="card-flat p-6 space-y-4" data-testid="security-section">
+    <form onSubmit={submit} className="card-flat shadow-card p-6 space-y-4" data-testid="security-section">
       <div>
-        <div className="font-display font-bold text-lg">Change password</div>
-        <div className="text-xs text-neutral-500 mt-0.5">Use at least 8 characters, mix of upper/lower + digits recommended.</div>
+        <div className="font-display font-semibold text-lg">Change password</div>
+        <div className="text-xs text-neutral-400 mt-0.5">Use at least 8 characters, mix of upper/lower + digits recommended.</div>
       </div>
 
       <label className="block">
@@ -224,16 +224,16 @@ function SecuritySection() {
         <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)}
           data-testid="password-current"
           autoComplete="current-password"
-          className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm" required />
+          className="input-premium mt-1 w-full text-sm" required />
       </label>
       <label className="block">
         <span className="ui-label">New password</span>
         <input type="password" value={next} onChange={(e) => setNext(e.target.value)}
           data-testid="password-new"
           autoComplete="new-password" minLength={8}
-          className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm" required />
+          className="input-premium mt-1 w-full text-sm" required />
         {next && (
-          <div className={`text-[10px] mt-1 font-mono ${strong ? "text-emerald-700" : "text-neutral-500"}`}>
+          <div className={`text-[10px] mt-1 font-mono ${strong ? "text-emerald-700" : "text-neutral-400"}`}>
             {strong ? "Strong ✓" : "Add an uppercase letter and a digit to strengthen"}
           </div>
         )}
@@ -243,7 +243,7 @@ function SecuritySection() {
         <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)}
           data-testid="password-confirm"
           autoComplete="new-password" minLength={8}
-          className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm" required />
+          className="input-premium mt-1 w-full text-sm" required />
         {confirm && confirm !== next && (
           <div className="text-[10px] mt-1 text-red-600">Passwords don&apos;t match</div>
         )}
@@ -264,10 +264,10 @@ function SecuritySection() {
 
 function WorkspaceSection({ user, workspace }) {
   return (
-    <div className="card-flat p-6 space-y-4" data-testid="workspace-section">
+    <div className="card-flat shadow-card p-6 space-y-4" data-testid="workspace-section">
       <div>
-        <div className="font-display font-bold text-lg">Workspace</div>
-        <div className="text-xs text-neutral-500 mt-0.5">Team-wide info. Contact your admin to change these values.</div>
+        <div className="font-display font-semibold text-lg">Workspace</div>
+        <div className="text-xs text-neutral-400 mt-0.5">Team-wide info. Contact your admin to change these values.</div>
       </div>
       <div className="grid md:grid-cols-2 gap-3 text-sm">
         <Row k="Workspace" v={workspace?.name} />
@@ -283,12 +283,12 @@ function WorkspaceSection({ user, workspace }) {
 
 function BrandVoiceSection() {
   return (
-    <div className="card-flat p-6 space-y-3" data-testid="brand-voice-section">
+    <div className="card-flat shadow-card p-6 space-y-3" data-testid="brand-voice-section">
       <div>
-        <div className="font-display font-bold text-lg">Brand voice</div>
-        <div className="text-xs text-neutral-500 mt-0.5">Tune the assistant&apos;s tone for cold emails and carousel copy.</div>
+        <div className="font-display font-semibold text-lg">Brand voice</div>
+        <div className="text-xs text-neutral-400 mt-0.5">Tune the assistant&apos;s tone for cold emails and carousel copy.</div>
       </div>
-      <div className="text-sm text-neutral-600">
+      <div className="text-sm text-neutral-500">
         Full brand-voice controls (warmth · directness · banned phrases · sample emails) will be surfaced here in the next release.
         For now, brand kits (logo + colors + font) applied inside Create EQ propagate to all slides automatically.
       </div>

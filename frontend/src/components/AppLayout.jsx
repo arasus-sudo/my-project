@@ -1,11 +1,13 @@
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../lib/auth";
+import { CreditPill } from "./Credits";
+import InnoiraLogo from "./InnoiraLogo";
 import {
   LayoutDashboard, Send, Users, Inbox as InboxIcon, Kanban, Mail, Settings as SettingsIcon, LogOut, Sparkles, Shield,
   FileText, BarChart3, UsersRound, ShieldCheck, Image as ImageIcon, ChevronDown, Layers, Webhook, Link2,
   Bot, PhoneCall, History, Radio, CalendarClock, CalendarCheck, CalendarRange, FileBarChart, Tags,
-  Share2, PenSquare, ListChecks, LayoutGrid,
+  Share2, PenSquare, ListChecks, LayoutGrid, Menu, X,
 } from "lucide-react";
 
 const PITCH_NAV = [
@@ -79,44 +81,60 @@ export default function AppLayout() {
   const currentAgent =
     AGENTS.find((a) => a.root !== "/app" && loc.pathname.startsWith(a.root)) || AGENTS[0];
   const [open, setOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+
+  useEffect(() => { closeSidebar(); }, [loc.pathname, closeSidebar]);
 
   return (
     <div className="min-h-screen flex bg-bone">
-      <aside className="w-60 border-r border-line bg-white flex flex-col">
-        <div className="p-4 border-b border-line relative">
+      <button onClick={() => setSidebarOpen(true)} data-testid="sidebar-open"
+        className="lg:hidden fixed top-4 left-4 z-50 p-2.5 bg-white/80 backdrop-blur-xl border border-line rounded-xl shadow-card hover:shadow-card-hover transition-all">
+        <Menu size={18} className="text-ink" />
+      </button>
+
+      {sidebarOpen && (
+        <div className="lg:hidden fixed inset-0 bg-black/20 backdrop-blur-sm z-40 animate-fade-in" onClick={closeSidebar} />
+      )}
+
+      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 border-r border-line bg-white flex flex-col transform transition-transform duration-300 ease-out ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
+        <div className="p-5 border-b border-line relative">
           <button onClick={() => setOpen(!open)} data-testid="suite-switcher"
-            className="w-full flex items-center gap-2 hover:bg-surfacehover rounded-lg p-1">
-            <div className="w-7 h-7 bg-ink text-white flex items-center justify-center rounded-full font-display font-bold text-sm">i</div>
-            <div className="leading-tight flex-1 text-left">
-              <div className="font-display font-semibold tracking-tight text-sm">Innoira <span className="text-neutral-400">/</span> {currentAgent.label}</div>
-              <div className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider truncate">{workspace?.name}</div>
+            className="w-full flex items-center gap-3 hover:bg-ash rounded-xl p-2 transition-colors">
+            <InnoiraLogo size="xs" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-display font-semibold text-sm text-neutral-500 truncate">/ {currentAgent.label}</span>
+              </div>
+              <div className="text-2xs text-neutral-400 font-mono uppercase tracking-wider truncate mt-0.5">{workspace?.name}</div>
             </div>
-            <ChevronDown size={14} className={`text-neutral-400 transition-transform ${open ? "rotate-180" : ""}`} />
+            <ChevronDown size={14} className={`text-neutral-400 transition-transform duration-200 shrink-0 ${open ? "rotate-180" : ""}`} />
           </button>
           {open && (
-            <div className="absolute left-4 right-4 top-full mt-1 bg-white border border-line rounded-xl shadow-lg z-30 overflow-hidden">
+            <div className="absolute left-4 right-4 top-full mt-2 bg-white border border-line rounded-2xl shadow-card-lg z-30 overflow-hidden animate-scale-in origin-top">
               {AGENTS.map((a) => (
                 <button key={a.k} onClick={() => { setOpen(false); nav(a.root); }} data-testid={a.tid}
-                  className={`w-full text-left p-3 hover:bg-surfacehover flex items-center gap-2 ${a.k === currentAgent.k ? "bg-neutral-50" : ""}`}>
-                  <div className="w-6 h-6 bg-ink/10 rounded-md flex items-center justify-center text-[10px] font-mono">
+                  className={`w-full text-left p-3 hover:bg-ash flex items-center gap-3 transition-colors ${a.k === currentAgent.k ? "bg-accent/5" : ""}`}>
+                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-mono font-medium ${a.k === currentAgent.k ? "bg-accent text-white" : "bg-ash text-neutral-500"}`}>
                     {AGENT_BADGE[a.k]}
                   </div>
                   <div className="flex-1">
                     <div className="text-sm font-medium">{a.label}</div>
-                    <div className="text-[10px] text-neutral-500 font-mono uppercase">{a.tag}</div>
+                    <div className="text-2xs text-neutral-400 font-mono uppercase">{a.tag}</div>
                   </div>
-                  {a.k === currentAgent.k && <span className="w-1.5 h-1.5 bg-ink rounded-full" />}
+                  {a.k === currentAgent.k && <span className="w-1.5 h-1.5 bg-accent rounded-full" />}
                 </button>
               ))}
               <button onClick={() => { setOpen(false); nav("/suite"); }} data-testid="suite-home-link"
-                className="w-full text-left p-3 hover:bg-surfacehover flex items-center gap-2 border-t border-line text-neutral-600">
-                <div className="w-6 h-6 flex items-center justify-center"><LayoutGrid size={14} /></div>
+                className="w-full text-left p-3 hover:bg-ash flex items-center gap-3 border-t border-line text-neutral-500 transition-colors">
+                <div className="w-7 h-7 rounded-xl bg-ash flex items-center justify-center"><LayoutGrid size={14} /></div>
                 <div className="text-sm font-medium">Command center</div>
               </button>
             </div>
           )}
         </div>
-        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-thin">
           {currentAgent.nav.map((n) => (
             <NavLink
               key={n.to}
@@ -124,39 +142,42 @@ export default function AppLayout() {
               end={n.end}
               data-testid={n.tid}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 text-sm rounded-full transition-colors ${
-                  isActive ? "bg-ink text-white" : "text-neutral-700 hover:bg-surfacehover"
+                `flex items-center gap-3 px-3 py-2.5 text-sm rounded-xl transition-all duration-200 ${
+                  isActive ? "bg-accent text-white shadow-sm" : "text-neutral-500 hover:text-ink hover:bg-ash"
                 }`
               }
             >
               <n.icon size={16} strokeWidth={1.75} />
-              {n.label}
+              <span className="truncate">{n.label}</span>
             </NavLink>
           ))}
         </nav>
-        <div className="p-3 border-t border-line">
-          <div className="flex items-center gap-2 px-2 py-2">
-            <div className="w-8 h-8 bg-ink/10 text-ink flex items-center justify-center rounded-full font-mono text-xs font-semibold">
+        <div className="p-4 border-t border-line">
+          <div className="px-1 pb-3">
+            <CreditPill />
+          </div>
+          <div className="flex items-center gap-3 pt-3 border-t border-line">
+            <div className="w-9 h-9 bg-ash text-ink flex items-center justify-center rounded-xl font-mono text-xs font-semibold shrink-0">
               {(user?.name || "U").slice(0, 2).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium truncate">{user?.name}</div>
-              <div className="text-[10px] text-neutral-500 truncate">{user?.email}</div>
+              <div className="text-sm font-medium truncate">{user?.name}</div>
+              <div className="text-2xs text-neutral-400 truncate">{user?.email}</div>
             </div>
             {user?.is_admin && (
               <button onClick={() => nav("/admin")} data-testid="admin-link" title="Suite Admin"
-                className="p-1.5 text-neutral-500 hover:text-ink hover:bg-surfacehover rounded-full">
+                className="p-2 text-neutral-400 hover:text-ink hover:bg-ash rounded-xl transition-all">
                 <Shield size={14} />
               </button>
             )}
-            <button data-testid="logout-btn" onClick={logout} className="p-1.5 text-neutral-500 hover:text-ink hover:bg-surfacehover rounded-full">
+            <button data-testid="logout-btn" onClick={logout} className="p-2 text-neutral-400 hover:text-ink hover:bg-ash rounded-xl transition-all">
               <LogOut size={14} />
             </button>
           </div>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto">
-        <div className="animate-fade-in">
+      <main className="flex-1 min-w-0">
+        <div className="min-h-screen animate-fade-in">
           <Outlet />
         </div>
       </main>
@@ -166,20 +187,20 @@ export default function AppLayout() {
 
 export function PageHeader({ title, subtitle, right, badge }) {
   return (
-    <div className="border-b border-line bg-white">
-      <div className="px-6 py-5 flex items-center gap-4">
+    <div className="border-b border-line bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+      <div className="px-6 sm:px-8 py-6 flex items-center gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-display font-bold truncate">{title}</h1>
+            <h1 className="text-2xl sm:text-3xl font-display font-semibold tracking-tight truncate">{title}</h1>
             {badge && (
-              <span className="ui-label text-ink border border-ink px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                <Sparkles size={11} /> {badge}
+              <span className="badge-info">
+                <Sparkles size={10} /> {badge}
               </span>
             )}
           </div>
-          {subtitle && <div className="text-sm text-neutral-500 mt-1">{subtitle}</div>}
+          {subtitle && <div className="text-sm text-neutral-400 mt-1">{subtitle}</div>}
         </div>
-        {right}
+        {right && <div className="flex items-center gap-3 shrink-0">{right}</div>}
       </div>
     </div>
   );

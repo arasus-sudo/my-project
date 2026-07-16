@@ -44,9 +44,9 @@ export default function Admin() {
   };
 
   return (
-    <div className="min-h-screen bg-bone">
+    <div className="min-h-screen bg-bone animate-fade-in">
       <header className="bg-white border-b border-line">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center gap-4">
+        <div className="max-w-7xl mx-auto px-6 sm:px-8 h-16 flex items-center gap-4">
           <button onClick={() => nav("/app")} className="btn-ghost" data-testid="admin-back-to-app">
             <ChevronLeft size={14} /> App
           </button>
@@ -54,7 +54,7 @@ export default function Admin() {
             <Shield size={16} />
             <span className="font-display font-semibold">Suite Admin</span>
           </div>
-          <div className="ml-auto flex items-center gap-3 text-sm text-neutral-600">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 text-sm text-neutral-500 min-w-0">
             <span className="font-mono text-xs">{user?.email}</span>
             <button onClick={load} className="btn-ghost" data-testid="admin-refresh"><RefreshCw size={12} /></button>
             <button onClick={logout} className="btn-ghost"><LogOut size={12} /></button>
@@ -62,7 +62,7 @@ export default function Admin() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto p-6">
+      <div className="max-w-7xl mx-auto p-6 sm:p-8">
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
           {summary && [
@@ -72,9 +72,9 @@ export default function Admin() {
             { k: "Sent", v: summary.sent_events },
             { k: "Replies", v: summary.replied_events },
           ].map((c) => (
-            <div key={c.k} className="bg-white border border-line rounded-2xl p-5">
+            <div key={c.k} className="bg-white border border-line rounded-2xl shadow-card p-5">
               <div className="ui-label">{c.k}</div>
-              <div className="font-mono text-3xl font-bold mt-1 tracking-tighter">{c.v}</div>
+              <div className="font-mono text-2xl sm:text-3xl font-bold mt-1 tracking-tighter">{c.v}</div>
             </div>
           ))}
         </div>
@@ -83,16 +83,16 @@ export default function Admin() {
         <div className="flex items-center gap-1 mb-4">
           {["workspaces", "users"].map((t) => (
             <button key={t} onClick={() => setTab(t)} data-testid={`admin-tab-${t}`}
-              className={`px-4 py-2 rounded-full text-sm ${tab === t ? "bg-ink text-white" : "hover:bg-white text-neutral-600"}`}>
+              className={`px-4 py-2 rounded-xl text-sm ${tab === t ? "bg-ink text-white" : "hover:bg-white text-neutral-500"}`}>
               {t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
           ))}
-          {busy && <span className="text-xs text-neutral-500 ml-3">Loading…</span>}
+          {busy && <span className="text-xs text-neutral-400 ml-3">Loading…</span>}
         </div>
 
         {tab === "workspaces" && (
-          <div className="bg-white border border-line rounded-2xl overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-white border border-line rounded-2xl overflow-hidden card-floating">
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="border-b border-line">
                   {["Workspace", "Users", "Campaigns", "Leads", "Sent", "Replied", "Status", ""].map((h) => (
@@ -102,10 +102,10 @@ export default function Admin() {
               </thead>
               <tbody>
                 {workspaces.map((w) => (
-                  <tr key={w.id} className="border-b border-line hover:bg-neutral-50">
+                  <tr key={w.id} className="border-b border-line hover:bg-ash">
                     <td className="p-3">
                       <div className="font-medium">{w.name}</div>
-                      <div className="text-xs text-neutral-500 font-mono">{w.plan || "trial"}</div>
+                      <div className="text-xs text-neutral-400 font-mono">{w.plan || "trial"}</div>
                     </td>
                     <td className="p-3 font-mono">{w.stats.users}</td>
                     <td className="p-3 font-mono">{w.stats.campaigns}</td>
@@ -131,8 +131,8 @@ export default function Admin() {
         )}
 
         {tab === "users" && (
-          <div className="bg-white border border-line rounded-2xl overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-white border border-line rounded-2xl overflow-hidden card-floating">
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="border-b border-line">
                   {["User", "Email", "Workspace", "Role", "Status", ""].map((h) => (
@@ -142,19 +142,19 @@ export default function Admin() {
               </thead>
               <tbody>
                 {users.map((u) => (
-                  <tr key={u.id} className="border-b border-line hover:bg-neutral-50">
+                  <tr key={u.id} className="border-b border-line hover:bg-ash">
                     <td className="p-3 font-medium">
                       {u.name} {u.is_admin && <span className="pill text-[9px] ml-1">Admin</span>}
                     </td>
                     <td className="p-3 font-mono text-xs">{u.email}</td>
-                    <td className="p-3 text-neutral-600">{u.workspace_name || "—"}</td>
+                    <td className="p-3 text-neutral-500">{u.workspace_name || "—"}</td>
                     <td className="p-3 text-xs">{u.role}</td>
                     <td className="p-3">
                       <span className={`ui-label px-2 py-1 border rounded-full ${u.blocked ? "text-red-700 border-red-500" : "text-green-700 border-green-600"}`}>
                         {u.blocked ? "blocked" : "active"}
                       </span>
                     </td>
-                    <td className="p-3 text-right space-x-1">
+                    <td className="p-3 text-right space-x-1 flex flex-wrap justify-end gap-1">
                       <button onClick={async () => {
                         try {
                           const { data } = await api.post(`/admin/impersonate/${u.id}`);

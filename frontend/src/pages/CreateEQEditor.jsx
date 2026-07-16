@@ -9,22 +9,24 @@ import {
   Sparkles, Undo2, Redo2, Wand2, FileText, LayoutGrid, Maximize2, Mountain,
 } from "lucide-react";
 
-import { api } from "../lib/api";
+import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { useAuth } from "../lib/auth";
 import { PALETTES, CANVAS, blankSlide, slideFromTemplate } from "../lib/creqTemplates";
+import { ensureProjectFontsLoaded, waitForProjectFonts } from "../lib/googleFonts";
 
 import LeftPanel from "../components/creq/LeftPanel";
 import RightPanel from "../components/creq/RightPanel";
 import BoardView from "../components/creq/BoardView";
 import ElementRender from "../components/creq/ElementRender";
+import SelectionChrome from "../components/creq/SelectionChrome";
 import PanoramaLayer from "../components/creq/PanoramaLayer";
 import DeckOverlay from "../components/creq/DeckOverlay";
 import BrandKitDrawer from "../components/creq/drawers/BrandKitDrawer";
 import AiImageDrawer from "../components/creq/drawers/AiImageDrawer";
 import PanoramaDrawer from "../components/creq/drawers/PanoramaDrawer";
-import PdfExportDialog from "../components/creq/drawers/PdfExportDialog";
-import { newId, renderBackground, stripLocalKeys } from "../components/creq/utils";
+import PdfExportDialog, { EXPORT_QUALITIES } from "../components/creq/drawers/PdfExportDialog";
+import { newId, renderBackground, stripLocalKeys, elementBounds } from "../components/creq/utils";
 
 /* ------------------------- Project load / hydrate ------------------------- */
 
@@ -165,7 +167,18 @@ export default function CreateEQEditor() {
   const canvasRef = useRef(null);
   const dragState = useRef(null);
   const resizeState = useRef(null);
+  const rotateState = useRef(null);
+  const groupResizeState = useRef(null);
   const panoDragState = useRef(null);
+  // Live manipulation readout for the HUD pill in SelectionChrome —
+  // { mode: "drag"|"resize"|"rotate", label } while a gesture is in flight.
+  const [interaction, setInteraction] = useState(null);
+  // Badges auto-size to their text, so the chrome can't trust their stored
+  // w/h — ElementRender reports real rendered bounds here (canvas px).
+  // Kept in a ref (the map identity changes rarely) with a tick to re-render
+  // the chrome when a measurement actually moves.
+  const measuredRef = useRef({});
+  const [, setMeasureTick] = useState(0);
   const historyRef = useRef({ past: [], future: [] });
   const clipboardRef = useRef(null); // { el } — copied element for paste
   const imageFileRef = useRef(null);
@@ -179,11 +192,36 @@ export default function CreateEQEditor() {
   const endGestureTimer = useRef(null);
 
   useEffect(() => {
-    api.get(`/carousel/${id}`).then((r) => setProj(hydrate(r.data)));
+    api.get(`/carousel/${id}`).then((r) => {
+      const hydrated = hydrate(r.data);
+      setProj(hydrated);
+      // A saved deck can reference any of the ~1900 Google Fonts, not just the
+      // 10 preloaded in index.html — without this, reopening a project would
+      // silently render text in the browser's fallback font until each text
+      // element happened to be selected (which re-triggers the picker's load).
+      ensureProjectFontsLoaded(hydrated.slides);
+    });
     api.get("/brandkits").then((r) => setBrandKits(r.data)).catch(() => {});
   }, [id]);
 
   useEffect(() => { projRef.current = proj; }, [proj]);
+
+  // Refs mirroring hot state, so pointer handlers can be created ONCE instead
+  // of on every zoom/selection/slide change — without this, every selection
+  // click re-renders all memo'd ElementRenders through new callback props.
+  const zoomRef = useRef(zoom);
+  const activeSlideRef = useRef(activeSlide);
+  const selectedIdsRef = useRef(selectedIds);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+  useEffect(() => { activeSlideRef.current = activeSlide; }, [activeSlide]);
+  useEffect(() => { selectedIdsRef.current = selectedIds; }, [selectedIds]);
+
+  const onElementMeasure = useCallback((elId, size) => {
+    const cur = measuredRef.current[elId];
+    if (cur && Math.abs(cur.w - size.w) < 0.5 && Math.abs(cur.h - size.h) < 0.5) return;
+    measuredRef.current = { ...measuredRef.current, [elId]: size };
+    setMeasureTick((t) => t + 1);
+  }, []);
 
   const palette = useMemo(
     () => PALETTES.find((p) => p.id === proj?.palette_id) || PALETTES[0],
@@ -447,6 +485,7 @@ export default function CreateEQEditor() {
    * selection with just that one, as usual. */
   const onPointerDown = useCallback((e, el) => {
     e.stopPropagation();
+    if (el.locked) return;
     if (e.shiftKey) {
       setSelectedIds((prev) => {
         const next = new Set(prev);
@@ -456,20 +495,23 @@ export default function CreateEQEditor() {
       setSelectedId(el.id);
       return;
     }
-    const ids = (selectedIds.has(el.id) && selectedIds.size > 1) ? selectedIds : new Set([el.id]);
-    if (ids !== selectedIds) selectSingle(el.id);
+    const prevIds = selectedIdsRef.current;
+    const ids = (prevIds.has(el.id) && prevIds.size > 1) ? prevIds : new Set([el.id]);
+    if (ids !== prevIds) selectSingle(el.id);
     else setSelectedId(el.id);
+    const slideNow = projRef.current?.slides?.[activeSlideRef.current];
+    if (!slideNow) return;
     beginGesture();
     const starts = {};
-    slide.elements.forEach((e2) => { if (ids.has(e2.id)) starts[e2.id] = { x: e2.x, y: e2.y }; });
+    slideNow.elements.forEach((e2) => { if (ids.has(e2.id)) starts[e2.id] = { x: e2.x, y: e2.y }; });
     // Snapping only applies to a single-element drag; the "others" it aligns to
     // are every element that isn't being dragged.
     const single = ids.size === 1 ? el : null;
-    const others = single ? slide.elements.filter((e2) => e2.id !== el.id) : [];
-    dragState.current = { ids, starts, startX: e.clientX, startY: e.clientY, scale: zoom, single, others };
+    const others = single ? slideNow.elements.filter((e2) => e2.id !== el.id) : [];
+    dragState.current = { ids, starts, startX: e.clientX, startY: e.clientY, scale: zoomRef.current, single, others };
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
-  }, [zoom, beginGesture, selectedIds, slide]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [beginGesture, selectSingle]); // eslint-disable-line react-hooks/exhaustive-deps
   const onPointerMove = useCallback((e) => {
     const ds = dragState.current;
     if (!ds) return;
@@ -480,6 +522,7 @@ export default function CreateEQEditor() {
       const snap = computeSnap(ds.single, start.x + dx, start.y + dy, ds.others);
       patchElement(ds.single.id, { x: snap.x, y: snap.y });
       setGuides(snap.guides);
+      setInteraction({ mode: "drag", label: `${snap.x}, ${snap.y}` });
       return;
     }
     ds.ids.forEach((id) => {
@@ -487,10 +530,12 @@ export default function CreateEQEditor() {
       if (!start) return;
       patchElement(id, { x: Math.round(start.x + dx), y: Math.round(start.y + dy) });
     });
+    setInteraction({ mode: "drag", label: `${dx >= 0 ? "+" : ""}${Math.round(dx)}, ${dy >= 0 ? "+" : ""}${Math.round(dy)}` });
   }, [patchElement]);
   const onPointerUp = useCallback(() => {
     dragState.current = null;
     setGuides([]);
+    setInteraction(null);
     endGesture();
     window.removeEventListener("pointermove", onPointerMove);
     window.removeEventListener("pointerup", onPointerUp);
@@ -500,25 +545,25 @@ export default function CreateEQEditor() {
   const onCanvasBgPointerDown = useCallback((e) => {
     if (e.target !== e.currentTarget || !canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    const startX = (e.clientX - rect.left) / zoom;
-    const startY = (e.clientY - rect.top) / zoom;
+    const startX = (e.clientX - rect.left) / zoomRef.current;
+    const startY = (e.clientY - rect.top) / zoomRef.current;
     if (!e.shiftKey) selectSingle(null);
     marqueeState.current = { startX, startY, x: startX, y: startY, w: 0, h: 0, shift: e.shiftKey };
     setMarqueeRect({ x: startX, y: startY, w: 0, h: 0 });
     window.addEventListener("pointermove", onMarqueeMove);
     window.addEventListener("pointerup", onMarqueeUp);
-  }, [zoom, selectSingle]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectSingle]); // eslint-disable-line react-hooks/exhaustive-deps
   const onMarqueeMove = useCallback((e) => {
     const ms = marqueeState.current;
     if (!ms || !canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    const curX = (e.clientX - rect.left) / zoom;
-    const curY = (e.clientY - rect.top) / zoom;
+    const curX = (e.clientX - rect.left) / zoomRef.current;
+    const curY = (e.clientY - rect.top) / zoomRef.current;
     const x = Math.min(ms.startX, curX), y = Math.min(ms.startY, curY);
     const w = Math.abs(curX - ms.startX), h = Math.abs(curY - ms.startY);
     ms.x = x; ms.y = y; ms.w = w; ms.h = h;
     setMarqueeRect({ x, y, w, h });
-  }, [zoom]);
+  }, []);
   const onMarqueeUp = useCallback(() => {
     const ms = marqueeState.current;
     marqueeState.current = null;
@@ -550,11 +595,11 @@ export default function CreateEQEditor() {
       startX: e.clientX, startY: e.clientY,
       ox: el.x, oy: el.y, ow: el.w, oh: el.h,
       keepAspect: el.type === "image" || el.type === "icon",
-      scale: zoom,
+      scale: zoomRef.current,
     };
     window.addEventListener("pointermove", onResizeMove);
     window.addEventListener("pointerup", onResizeEnd);
-  }, [zoom, beginGesture]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [beginGesture, selectSingle]); // eslint-disable-line react-hooks/exhaustive-deps
   const onResizeMove = useCallback((e) => {
     const rs = resizeState.current;
     if (!rs) return;
@@ -581,13 +626,117 @@ export default function CreateEQEditor() {
       x: Math.round(nx), y: Math.round(ny),
       w: Math.round(nw), h: Math.round(nh),
     });
+    setInteraction({ mode: "resize", label: `${Math.round(nw)} × ${Math.round(nh)}` });
   }, [patchElement]);
   const onResizeEnd = useCallback(() => {
     resizeState.current = null;
+    setInteraction(null);
     endGesture();
     window.removeEventListener("pointermove", onResizeMove);
     window.removeEventListener("pointerup", onResizeEnd);
   }, [endGesture]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* --- Rotation handle (on-canvas, Figma-style) ---
+   * Drags around the element's center; snaps to the eight 45° stops within 3°
+   * unless Shift is held (free rotation). The HUD shows the live angle. */
+  const onRotateMove = useCallback((e) => {
+    const rs = rotateState.current;
+    if (!rs) return;
+    const pointerDeg = Math.atan2(e.clientY - rs.cy, e.clientX - rs.cx) * 180 / Math.PI;
+    let next = rs.startRotate + (pointerDeg - rs.startPointerDeg);
+    next = ((next + 180) % 360 + 360) % 360 - 180; // normalize to (-180, 180]
+    if (!e.shiftKey) {
+      for (const s of [-180, -135, -90, -45, 0, 45, 90, 135, 180]) {
+        if (Math.abs(next - s) <= 3) { next = s; break; }
+      }
+    }
+    next = Math.round(next);
+    if (next === 180) next = -180;
+    patchElement(rs.id, { rotate: next === 0 ? 0 : next });
+    setInteraction({ mode: "rotate", label: `${next}°` });
+  }, [patchElement]);
+  const onRotateEnd = useCallback(() => {
+    rotateState.current = null;
+    setInteraction(null);
+    endGesture();
+    window.removeEventListener("pointermove", onRotateMove);
+    window.removeEventListener("pointerup", onRotateEnd);
+  }, [endGesture]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onRotateStart = useCallback((e, el) => {
+    e.stopPropagation();
+    if (!canvasRef.current) return;
+    selectSingle(el.id);
+    beginGesture();
+    const rect = canvasRef.current.getBoundingClientRect();
+    const zoomNow = zoomRef.current;
+    const b = elementBounds(el, measuredRef.current);
+    const cx = rect.left + (b.x + b.w / 2) * zoomNow;
+    const cy = rect.top + (b.y + b.h / 2) * zoomNow;
+    rotateState.current = {
+      id: el.id, cx, cy,
+      startPointerDeg: Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI,
+      startRotate: el.rotate || 0,
+    };
+    window.addEventListener("pointermove", onRotateMove);
+    window.addEventListener("pointerup", onRotateEnd);
+  }, [beginGesture, selectSingle]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* --- Group resize: uniform scale of a multi-selection from a corner of its
+   * union bbox — positions, sizes, and text/badge font sizes all scale
+   * together, anchored at the opposite corner (Canva behavior). --- */
+  const onGroupResizeMove = useCallback((e) => {
+    const gs = groupResizeState.current;
+    if (!gs) return;
+    const dx = (e.clientX - gs.startX) / gs.scale;
+    const dy = (e.clientY - gs.startY) / gs.scale;
+    const dirX = gs.pos.includes("e") ? 1 : -1;
+    const dirY = gs.pos.includes("s") ? 1 : -1;
+    const sW = (gs.bw + dirX * dx) / gs.bw;
+    const sH = (gs.bh + dirY * dy) / gs.bh;
+    // Dominant axis, normalized by bbox aspect so diagonal drags feel 1:1.
+    let s = Math.abs(dx) * gs.bh > Math.abs(dy) * gs.bw ? sW : sH;
+    s = Math.max(0.05, s);
+    gs.members.forEach((m) => {
+      const patch = {
+        x: Math.round(gs.ax + (m.x - gs.ax) * s),
+        y: Math.round(gs.ay + (m.y - gs.ay) * s),
+        w: Math.max(2, Math.round(m.w * s)),
+        h: Math.max(2, Math.round(m.h * s)),
+      };
+      if (m.size) patch.size = Math.max(6, Math.round(m.size * s));
+      patchElement(m.id, patch);
+    });
+    setInteraction({ mode: "resize", label: `${Math.round(gs.bw * s)} × ${Math.round(gs.bh * s)}` });
+  }, [patchElement]);
+  const onGroupResizeEnd = useCallback(() => {
+    groupResizeState.current = null;
+    setInteraction(null);
+    endGesture();
+    window.removeEventListener("pointermove", onGroupResizeMove);
+    window.removeEventListener("pointerup", onGroupResizeEnd);
+  }, [endGesture]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onGroupResizeStart = useCallback((e, pos) => {
+    e.stopPropagation();
+    const slideNow = projRef.current?.slides?.[activeSlideRef.current];
+    const ids = selectedIdsRef.current;
+    if (!slideNow || ids.size < 2) return;
+    const els = slideNow.elements.filter((el) => ids.has(el.id) && !el.locked);
+    if (!els.length) return;
+    beginGesture();
+    const bs = els.map((el) => elementBounds(el, measuredRef.current));
+    const minX = Math.min(...bs.map((b) => b.x)), minY = Math.min(...bs.map((b) => b.y));
+    const maxX = Math.max(...bs.map((b) => b.x + b.w)), maxY = Math.max(...bs.map((b) => b.y + b.h));
+    groupResizeState.current = {
+      pos, startX: e.clientX, startY: e.clientY, scale: zoomRef.current,
+      bw: Math.max(1, maxX - minX), bh: Math.max(1, maxY - minY),
+      // Anchor = the corner opposite the handle being dragged.
+      ax: pos.includes("w") ? maxX : minX,
+      ay: pos.includes("n") ? maxY : minY,
+      members: els.map((el, i) => ({ id: el.id, x: el.x, y: el.y, w: bs[i].w, h: bs[i].h, size: el.size })),
+    };
+    window.addEventListener("pointermove", onGroupResizeMove);
+    window.addEventListener("pointerup", onGroupResizeEnd);
+  }, [beginGesture]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* --- Panorama direct-drag overlay (manual mode) --- */
   const panoManual = proj?.panorama?.mode === "manual" && proj?.panorama?.src && !selected;
@@ -731,7 +880,7 @@ export default function CreateEQEditor() {
     finally { setBusy(false); }
   };
 
-  const renderSlideToDataUrl = (slideIdx) => new Promise((resolve, reject) => {
+  const renderSlideToDataUrl = (slideIdx, scale = 2) => new Promise((resolve, reject) => {
     // Live-render the slide off-screen via React, then rasterise with html2canvas.
     const host = document.createElement("div");
     host.style.cssText = [
@@ -752,7 +901,7 @@ export default function CreateEQEditor() {
           <>
             <PanoramaLayer panorama={proj.panorama} slideIdx={slideIdx} totalSlides={proj.slides.length} />
             {proj.slides[slideIdx].elements.map((el) => (
-              <ElementRender key={el.id} el={el} palette={palette} selected={false} onPointerDown={() => {}} />
+              <ElementRender key={el.id} el={el} palette={palette} onPointerDown={() => {}} />
             ))}
             <DeckOverlay proj={proj} slideIdx={slideIdx} palette={palette} />
           </>
@@ -768,7 +917,7 @@ export default function CreateEQEditor() {
         const canvas = await html2canvas(host, {
           width: CANVAS.w, height: CANVAS.h,
           windowWidth: CANVAS.w, windowHeight: CANVAS.h,
-          scale: 2, useCORS: true, allowTaint: true, backgroundColor: null, logging: false,
+          scale, useCORS: true, allowTaint: true, backgroundColor: null, logging: false,
         });
         const dataUrl = canvas.toDataURL("image/png", 0.92);
         cleanup(); resolve(dataUrl);
@@ -783,6 +932,10 @@ export default function CreateEQEditor() {
   const exportSlidePng = async () => {
     setBusy(true);
     try {
+      // A saved deck can use fonts beyond the 10 preloaded at app start; make
+      // sure they're actually fetched before html2canvas rasterizes, or it
+      // silently falls back to a system font for that text.
+      await waitForProjectFonts(proj.slides);
       const dataUrl = await renderSlideToDataUrl(activeSlide);
       const a = document.createElement("a");
       a.href = dataUrl;
@@ -793,29 +946,37 @@ export default function CreateEQEditor() {
     finally { setBusy(false); }
   };
 
-  const exportPdfSlides = async (indices) => {
+  const [exportProgress, setExportProgress] = useState(null);
+
+  const exportPdfSlides = async (indices, qualityId = "standard") => {
     if (!proj?.slides?.length) return;
     const chosen = (indices?.length ? indices : proj.slides.map((_, i) => i))
       .filter((i) => i >= 0 && i < proj.slides.length)
       .sort((a, b) => a - b);
     if (!chosen.length) { toast.error("Pick at least one slide"); return; }
+    const scale = EXPORT_QUALITIES.find((q) => q.id === qualityId)?.scale ?? 2;
     setBusy(true);
+    setExportProgress({ done: 0, total: chosen.length });
     try {
+      await waitForProjectFonts(proj.slides);
       const pdf = new jsPDF({
         orientation: CANVAS.h > CANVAS.w ? "portrait" : "landscape",
         unit: "px", format: [CANVAS.w, CANVAS.h], compress: true,
       });
       for (let k = 0; k < chosen.length; k++) {
-        const dataUrl = await renderSlideToDataUrl(chosen[k]);
+        const dataUrl = await renderSlideToDataUrl(chosen[k], scale);
         if (k > 0) pdf.addPage([CANVAS.w, CANVAS.h], CANVAS.h > CANVAS.w ? "portrait" : "landscape");
         pdf.addImage(dataUrl, "PNG", 0, 0, CANVAS.w, CANVAS.h);
+        // A silent multi-second wait reads as broken even when it isn't —
+        // this is most of the fix for "export feels slow."
+        setExportProgress({ done: k + 1, total: chosen.length });
       }
       pdf.save(`${(proj.topic || "carousel").slice(0, 40).replace(/\W+/g, "-")}-${chosen.length}-slides.pdf`);
       toast.success(`Exported ${chosen.length}-page PDF`);
     } catch (err) {
       console.error(err);
       toast.error("PDF export failed");
-    } finally { setBusy(false); }
+    } finally { setBusy(false); setExportProgress(null); }
   };
 
   /* --- Brand kit apply / AI copy assist --- */
@@ -856,7 +1017,7 @@ export default function CreateEQEditor() {
       } else {
         toast.error("No rewrite returned");
       }
-    } catch { toast.error("AI assist failed"); }
+    } catch (err) { if (!isCreditError(err)) toast.error("AI assist failed"); }
     finally { setBusy(false); }
   };
 
@@ -875,11 +1036,11 @@ export default function CreateEQEditor() {
       setActiveSlide(proj.slides.length);
       setShowGenerateContent(false);
       toast.success(`Added ${newSlides.length} AI-generated slide${newSlides.length === 1 ? "" : "s"}`);
-    } catch { toast.error("Generation failed — try again"); }
+    } catch (err) { if (!isCreditError(err)) toast.error("Generation failed — try again"); }
     finally { setBusy(false); }
   };
 
-  if (!proj) return <div className="p-10 text-neutral-500">Loading…</div>;
+  if (!proj) return <div className="p-6 sm:p-8 text-neutral-400">Loading…</div>;
 
   return (
     <div>
@@ -887,7 +1048,7 @@ export default function CreateEQEditor() {
         title={proj.topic}
         subtitle={`${proj.slides.length} slide${proj.slides.length === 1 ? "" : "s"} · ${palette.name} palette`}
         right={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button onClick={() => nav("/app/create-eq")} className="btn-ghost"><ChevronLeft size={14} /> Projects</button>
             <button onClick={undo} title="Undo (Ctrl+Z)" data-testid="undo-btn" className="btn-ghost"><Undo2 size={14} /></button>
             <button onClick={redo} title="Redo (Ctrl+Shift+Z)" data-testid="redo-btn" className="btn-ghost"><Redo2 size={14} /></button>
@@ -908,7 +1069,7 @@ export default function CreateEQEditor() {
       />
 
       {viewMode === "focus" ? (
-        <div className="grid grid-cols-12 min-h-[calc(100vh-90px)] bg-neutral-100">
+        <div className="grid grid-cols-12 min-h-[calc(100vh-90px)] bg-neutral-100 overflow-x-auto">
           <aside className="col-span-2 border-r border-line bg-white overflow-y-auto">
             <LeftPanel
               onTemplate={(tpl) => applyTemplateToSlide(tpl)}
@@ -935,13 +1096,13 @@ export default function CreateEQEditor() {
                 <div className="bg-ink text-white px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest">Drop image to add</div>
               </div>
             )}
-            <div className="p-6 flex items-start justify-center">
+              <div className="p-4 sm:p-6 flex items-start justify-center">
               <div className="relative" style={{ width: CANVAS.w * zoom, height: CANVAS.h * zoom }}>
                 <div
                   ref={canvasRef}
                   onPointerDown={onCanvasBgPointerDown}
-                  className={`absolute inset-0 origin-top-left overflow-hidden shadow-[0_20px_80px_-30px_rgba(0,0,0,0.35)] rounded-md ${dropHint ? "ring-2 ring-ink" : ""}`}
-                  style={{ width: CANVAS.w, height: CANVAS.h, transform: `scale(${zoom})`, transformOrigin: "top left", background: renderBackground(slide.bg, palette) }}
+                  className={`absolute inset-0 origin-top-left overflow-hidden shadow-[0_20px_80px_-30px_rgba(0,0,0,0.35)] rounded-md creq-canvas ${interaction || marqueeRect ? "creq-interacting" : ""} ${interaction?.mode === "drag" ? "creq-dragging" : ""} ${marqueeRect ? "creq-marqueeing" : ""} ${dropHint ? "ring-2 ring-ink" : ""}`}
+                  style={{ width: CANVAS.w, height: CANVAS.h, transform: `scale(${zoom})`, transformOrigin: "top left", background: renderBackground(slide.bg, palette), "--inv-zoom": 1 / zoom }}
                 >
                   <PanoramaLayer panorama={proj.panorama} slideIdx={activeSlide} totalSlides={proj.slides.length} />
                   {panoManual && (
@@ -955,39 +1116,52 @@ export default function CreateEQEditor() {
                   )}
                   {slide.elements.map((el) => (
                     <ElementRender key={el.id} el={el} palette={palette}
-                      selected={selectedIds.has(el.id)}
-                      showHandles={selectedId === el.id && selectedIds.size <= 1}
                       onPointerDown={onPointerDown}
-                      onResizeStart={onResizeStart} />
+                      onMeasure={onElementMeasure} />
                   ))}
                   <DeckOverlay proj={proj} slideIdx={activeSlide} palette={palette} />
+                  <SelectionChrome
+                    els={slide.elements.filter((e2) => selectedIds.has(e2.id))}
+                    zoom={zoom}
+                    measured={measuredRef.current}
+                    interaction={interaction}
+                    onResizeStart={onResizeStart}
+                    onRotateStart={onRotateStart}
+                    onGroupResizeStart={onGroupResizeStart}
+                  />
                   {marqueeRect && (
                     <div data-testid="marquee-select" style={{
                       position: "absolute", left: marqueeRect.x, top: marqueeRect.y,
                       width: marqueeRect.w, height: marqueeRect.h,
-                      border: "1px solid #E85D3A", background: "rgba(232,93,58,0.08)",
+                      border: `${1 / zoom}px solid #1D1D1F`, background: "rgba(29,29,31,0.06)",
                       pointerEvents: "none", zIndex: 30,
                     }} />
                   )}
                   {guides.map((g, i) => (
                     <div key={i} data-testid="snap-guide" style={{
-                      position: "absolute", background: "#F0308C", pointerEvents: "none", zIndex: 40,
+                      position: "absolute", background: "#FF2D8A", pointerEvents: "none", zIndex: 40,
                       ...(g.o === "v"
-                        ? { left: g.pos, top: 0, width: 1, height: CANVAS.h }
-                        : { top: g.pos, left: 0, height: 1, width: CANVAS.w }),
+                        ? { left: g.pos, top: 0, width: 1.5 / zoom, height: CANVAS.h }
+                        : { top: g.pos, left: 0, height: 1.5 / zoom, width: CANVAS.w }),
                     }} />
                   ))}
+                  {guides.some((g) => (g.o === "v" && g.pos === CANVAS.w / 2) || (g.o === "h" && g.pos === CANVAS.h / 2)) && (
+                    <div style={{ position: "absolute", left: CANVAS.w / 2, top: CANVAS.h / 2, pointerEvents: "none", zIndex: 41 }} data-testid="center-cross">
+                      <div style={{ position: "absolute", left: -9 / zoom, top: -1 / zoom, width: 18 / zoom, height: 2 / zoom, background: "#FF2D8A", borderRadius: 999 }} />
+                      <div style={{ position: "absolute", left: -1 / zoom, top: -9 / zoom, width: 2 / zoom, height: 18 / zoom, background: "#FF2D8A", borderRadius: 999 }} />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
             <div className="sticky bottom-0 left-0 right-0 bg-white/90 backdrop-blur border-t border-line px-4 py-2 flex items-center gap-2 text-xs">
               <span className="ui-label">Zoom</span>
               <input type="range" min={0.15} max={0.7} step={0.02} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} data-testid="zoom-slider" className="w-32" />
-              <span className="font-mono text-neutral-500">{Math.round(zoom * 100)}%</span>
+              <span className="font-mono text-neutral-400">{Math.round(zoom * 100)}%</span>
               <div className="ml-4 flex items-center gap-1 flex-wrap">
                 {proj.slides.map((s, i) => (
                   <button key={s._k} onClick={() => { setActiveSlide(i); selectSingle(null); }} data-testid={`slide-thumb-${i}`}
-                    className={`px-2.5 py-1 rounded-full text-xs font-mono ${i === activeSlide ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
+                    className={`px-2.5 py-1 rounded-xl text-xs font-mono ${i === activeSlide ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
                     {i + 1}
                   </button>
                 ))}
@@ -1072,9 +1246,16 @@ export default function CreateEQEditor() {
 
       {showPdfPicker && (
         <PdfExportDialog
-          proj={proj} palette={palette} busy={busy}
+          proj={proj} palette={palette} busy={busy} progress={exportProgress}
           onClose={() => setShowPdfPicker(false)}
-          onExport={async (indices) => { setShowPdfPicker(false); await exportPdfSlides(indices); }}
+          onExport={async (indices, quality) => {
+            // Stay open through the render so the progress indicator is
+            // actually visible — closing immediately (the old behavior) meant
+            // "Rendering slide X of N" could never be seen, since the dialog
+            // unmounted before the first slide even started.
+            await exportPdfSlides(indices, quality);
+            setShowPdfPicker(false);
+          }}
         />
       )}
 
@@ -1105,9 +1286,9 @@ function GenerateContentDialog({ busy, onClose, onGenerate }) {
 
   return (
     <div className="fixed inset-0 bg-ink/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()} data-testid="generate-content-dialog">
-        <h2 className="font-display font-bold text-2xl mb-1">Generate content</h2>
-        <p className="text-sm text-neutral-600 mb-4">Describe a topic — we&apos;ll draft new slides and add them to the end of this deck.</p>
+      <div className="bg-white rounded-2xl w-full max-w-lg p-4 sm:p-6" onClick={(e) => e.stopPropagation()} data-testid="generate-content-dialog">
+        <h2 className="font-display font-semibold text-2xl mb-1">Generate content</h2>
+        <p className="text-sm text-neutral-400 mb-4">Describe a topic — we&apos;ll draft new slides and add them to the end of this deck.</p>
         <textarea
           autoFocus
           value={topic}
@@ -1118,10 +1299,10 @@ function GenerateContentDialog({ busy, onClose, onGenerate }) {
           className="w-full border border-line rounded-lg px-4 py-3 text-base focus:outline-none focus:border-ink"
         />
         <div className="flex items-center gap-2 mt-3">
-          <span className="text-xs text-neutral-500">Slides to add:</span>
+          <span className="text-xs text-neutral-400">Slides to add:</span>
           {[1, 3, 5, 6].map((n) => (
             <button key={n} onClick={() => setSlideCount(n)} data-testid={`generate-content-count-${n}`}
-              className={`px-3 py-1 rounded-full text-xs font-mono ${slideCount === n ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
+              className={`px-3 py-1 rounded-xl text-xs font-mono ${slideCount === n ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
               {n}
             </button>
           ))}

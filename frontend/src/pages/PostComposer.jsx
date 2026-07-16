@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import { Sparkles } from "lucide-react";
@@ -25,21 +25,21 @@ export default function PostComposer() {
       const { data } = await api.post("/social-eq/posts/generate", { platform, topic, tone });
       toast.success("Draft generated");
       nav(`/app/social-eq/queue?post=${data.id}`);
-    } catch (err) { toast.error(err?.response?.data?.detail || "Generation failed"); }
+    } catch (err) { if (!isCreditError(err)) toast.error(err?.response?.data?.detail || "Generation failed"); }
     finally { setBusy(false); }
   };
 
   return (
     <div>
       <PageHeader title="Compose" subtitle="Draft a post — nothing publishes until you review and explicitly approve it in the Queue." />
-      <div className="p-6 max-w-xl">
-        <div className="card-flat p-5 space-y-4">
+      <div className="animate-fade-in px-6 sm:px-8 max-w-xl">
+        <div className="shadow-card p-6 sm:p-8 space-y-4 rounded-2xl">
           <div>
             <label className="ui-label block mb-1">Platform</label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {PLATFORMS.map((p) => (
                 <button key={p.id} type="button" onClick={() => setPlatform(p.id)} data-testid={`platform-${p.id}`}
-                  className={`px-3 py-1.5 rounded-full text-sm border ${platform === p.id ? "bg-ink text-white border-ink" : "border-line hover:bg-surfacehover"}`}>
+                  className={`px-3 py-1.5 rounded-xl text-sm border ${platform === p.id ? "bg-ink text-white border-ink" : "border-line hover:bg-surfacehover"}`}>
                   {p.label}
                 </button>
               ))}

@@ -1,25 +1,31 @@
-"""Proposal EQ — AI research + proposal generation agent.
+"""Proposal EQ — deep-research proposal generator.
 
-Fifth agent in the Innoira Agentic Suite: researches a lead (CRM activity
-timeline + live web search) and drafts a branded proposal deck in the same
-slide/element shape Create EQ uses, exportable to PDF (client-side, reusing
-Create EQ's render pipeline) and PPTX (server-side, python-pptx).
+Rewritten from the old single-call slide-deck generator into a document engine:
+
+  deal + service template
+    -> Context Pack (crm_adapters + research + HubSpot engagements, cached 24h)
+    -> 6-step chain (Solution Fit -> Scope -> Pricing -> Risks -> Exec Summary)
+    -> structured sections + a REAL priced table (money math in Python)
+    -> edit inline -> export DOCX / text-selectable PDF
+
+The deck/PPTX path is retired (Create EQ keeps its slide engine). Pricing is now
+numeric with quantities and totals — never LLM free-form.
 """
 
-import io
-import json
-import uuid
+import re
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 
-import anthropic
-
 from server import (
     db, current_user, now_iso, new_id, _audit, _log_activity,
-    _llm_chat, _extract_json, ANTHROPIC_API_KEY, ANTHROPIC_MODEL, STAGES,
 )
+import proposal_templates
+import context_pack
+import proposal_chain
+import proposal_docx
+import proposal_pdf
 
 proposal_router = APIRouter(prefix="/proposal-eq")
 
@@ -27,21 +33,48 @@ proposal_router = APIRouter(prefix="/proposal-eq")
 # ----------------------------- Models ------------------------------------------
 class PricingItemIn(BaseModel):
     name: str
-    price: str
+    unit_price: float
+    currency: str = "USD"
     unit: str = ""
     description: str = ""
 
 
 class ProposalGenIn(BaseModel):
-    lead_id: str
+    deal_id: Optional[str] = None
+    lead_id: Optional[str] = None      # convenience: resolve/create the deal
+    template_id: Optional[str] = None
+    service: str = "custom"
     topic: str = ""
-    include_pricing: bool = True
 
 
-# ----------------------------- Pricing catalog ----------------------------------
+# ----------------------------- Pricing catalog (structured) ---------------------
+def _migrate_price(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Old items stored `price` as a free-text string ("$1,499"). Parse the number
+    out on read so legacy catalogs keep working after the numeric switch."""
+    if "unit_price" in item and item["unit_price"] is not None:
+        return item
+    raw = str(item.get("price", "") or "")
+    num = re.sub(r"[^\d.]", "", raw)
+    item["unit_price"] = float(num) if num else 0.0
+    item["currency"] = item.get("currency", "USD")
+    return item
+
+
 @proposal_router.get("/pricing-catalog")
 async def list_pricing(user=Depends(current_user)):
-    return await db.pricing_catalog.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(200)
+    items = await db.pricing_catalog.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(200)
+    out = []
+    for it in items:
+        migrated = _migrate_price(it)
+        # Persist the migration so it happens once, not on every read.
+        if "price" in it:
+            await db.pricing_catalog.update_one(
+                {"id": it["id"]},
+                {"$set": {"unit_price": migrated["unit_price"], "currency": migrated["currency"]},
+                 "$unset": {"price": ""}})
+            migrated.pop("price", None)
+        out.append(migrated)
+    return out
 
 
 @proposal_router.post("/pricing-catalog")
@@ -53,135 +86,37 @@ async def create_pricing_item(body: PricingItemIn, user=Depends(current_user)):
     return doc
 
 
+@proposal_router.put("/pricing-catalog/{item_id}")
+async def update_pricing_item(item_id: str, body: PricingItemIn, user=Depends(current_user)):
+    patch = body.model_dump()
+    await db.pricing_catalog.update_one(
+        {"id": item_id, "workspace_id": user["workspace_id"]}, {"$set": patch})
+    doc = await db.pricing_catalog.find_one(
+        {"id": item_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "not found")
+    return doc
+
+
 @proposal_router.delete("/pricing-catalog/{item_id}")
 async def delete_pricing_item(item_id: str, user=Depends(current_user)):
     await db.pricing_catalog.delete_one({"id": item_id, "workspace_id": user["workspace_id"]})
     return {"ok": True}
 
 
-# ----------------------------- Research + draft ------------------------------------
-async def _research_and_draft(lead: Dict[str, Any], deal: Optional[Dict[str, Any]], topic: str,
-                               timeline: List[Dict[str, Any]]) -> tuple:
-    """Single Claude call that both researches the company (web_search tool, only
-    when a company name exists) and drafts the proposal JSON — merged into one
-    request instead of two back-to-back calls, since two heavy sequential calls
-    reliably tripped the same per-minute token rate limit in testing."""
-    company = lead.get("company", "")
-    if not ANTHROPIC_API_KEY:
-        return "", {}
-    system = (
-        "You are Proposal EQ. "
-        + ("If useful, briefly web-search the lead's company for 1-2 current, specific facts "
-           "(recent news, scale, focus) before answering. " if company else "")
-        + "Then respond with ONLY a STRICT JSON object (no other text, no markdown fences), schema: "
-        '{"research_summary": str, "proposal": {'
-        '"cover":{"title":str,"subtitle":str},'
-        '"problem":{"title":str,"body":str},'
-        '"solution":{"title":str,"body":str},'
-        '"case_study":{"title":str,"body":str},'
-        '"next_steps":{"title":str,"body":str,"cta":str}}} '
-        "research_summary: 3-4 plain sentences on the company + a plausible pain point, or \"\" if no company given. "
-        "proposal titles <=8 words, bodies <=55 words, plain text, no emojis. "
-        "Use the CRM history to personalize the problem/solution — reference specifics when relevant. "
-        "Omit case_study (empty strings) if there's nothing credible to say."
-    )
-    user_text = json.dumps({
-        "lead": {"name": f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip(),
-                 "company": company, "title": lead.get("title")},
-        "deal": {"title": deal.get("title"), "stage": deal.get("stage")} if deal else None,
-        "crm_history": timeline,
-        "context": topic,
-    })
-    try:
-        kwargs: Dict[str, Any] = dict(
-            model=ANTHROPIC_MODEL, max_tokens=1536, system=system,
-            messages=[{"role": "user", "content": user_text}],
-        )
-        if company:
-            kwargs["tools"] = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 2}]
-        client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
-        resp = await client.messages.create(**kwargs)
-        text = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text")
-        parsed = _extract_json(text) or {}
-        return parsed.get("research_summary", ""), parsed.get("proposal", {})
-    except Exception:
-        return "", {}
+# ----------------------------- Templates ----------------------------------------
+@proposal_router.get("/templates")
+async def list_templates(user=Depends(current_user)):
+    return await proposal_templates.list_templates(user["workspace_id"])
 
 
-# ----------------------------- Slide building (mirrors legacySlideToElements) ----
-def _elid() -> str:
-    return str(uuid.uuid4())
-
-
-def _text_el(x, y, w, h, text, font, size, weight, color, **extra) -> Dict[str, Any]:
-    return {"id": _elid(), "type": "text", "x": x, "y": y, "w": w, "h": h, "text": text,
-            "font": font, "size": size, "weight": weight, "color": color, **extra}
-
-
-def _badge_el(x, y, text, **extra) -> Dict[str, Any]:
-    return {"id": _elid(), "type": "badge", "x": x, "y": y, "text": text,
-            "bg": "accent", "color": "bg", "radius": 999, "size": 22, **extra}
-
-
-def _build_slide(subtitle: str, title: str, body: str, cta: Optional[str] = None) -> Dict[str, Any]:
-    els: List[Dict[str, Any]] = []
-    if subtitle:
-        els.append(_text_el(80, 120, 920, 60, subtitle, "JetBrains Mono", 22, 500, "muted",
-                             uppercase=True, letter_spacing=0.2, align="left"))
-    if title:
-        els.append(_text_el(80, 220, 920, 420, title, "Archivo Black", 84, 900, "accent",
-                             line_height=0.98, align="left"))
-    if body:
-        els.append(_text_el(80, 680, 920, 560, body, "Inter", 28, 400, "text",
-                             line_height=1.5, align="left"))
-    if cta:
-        els.append(_badge_el(80, 1220, cta))
-    return {"_k": new_id(), "bg": {"type": "solid", "color": "bg"}, "elements": els}
-
-
-def _fallback_content(lead: Dict[str, Any]) -> Dict[str, Any]:
-    company = lead.get("company") or lead.get("first_name") or "your team"
-    return {
-        "cover": {"title": f"Proposal for {company}", "subtitle": "Prepared by Innoira"},
-        "problem": {"title": "The Challenge", "body": "Add the prospect's core problem here."},
-        "solution": {"title": "Our Approach", "body": "Describe the proposed solution here."},
-        "case_study": {"title": "", "body": ""},
-        "next_steps": {"title": "Let's talk", "body": "Ready to move forward.", "cta": "Book a call"},
-    }
-
-
-def _build_deck(lead: Dict[str, Any], content: Dict[str, Any],
-                 pricing_items: List[Dict[str, Any]], include_pricing: bool) -> List[Dict[str, Any]]:
-    if not content:
-        content = _fallback_content(lead)
-
-    slides = []
-    cov = content.get("cover", {})
-    slides.append(_build_slide(cov.get("subtitle", "Proposal"),
-                                cov.get("title", f"For {lead.get('company') or lead.get('first_name')}"), ""))
-    prob = content.get("problem", {})
-    slides.append(_build_slide("The Challenge", prob.get("title", ""), prob.get("body", "")))
-    sol = content.get("solution", {})
-    slides.append(_build_slide("Our Approach", sol.get("title", ""), sol.get("body", "")))
-    if include_pricing and pricing_items:
-        lines = "\n".join(f"{p['name']} — {p['price']}{('/' + p['unit']) if p.get('unit') else ''}" for p in pricing_items)
-        slides.append(_build_slide("Investment", "Pricing", lines))
-    cs = content.get("case_study", {})
-    if cs.get("body"):
-        slides.append(_build_slide("Proof", cs.get("title") or "Case Study", cs.get("body", "")))
-    nxt = content.get("next_steps", {})
-    slides.append(_build_slide("Next Steps", nxt.get("title", "Let's talk"), nxt.get("body", ""),
-                                cta=nxt.get("cta", "Book a call")))
-    return slides
-
-
-# ----------------------------- Proposals ------------------------------------------
+# ----------------------------- Proposals ----------------------------------------
 @proposal_router.get("/proposals")
 async def list_proposals(user=Depends(current_user)):
     items = await db.proposals.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
     for p in items:
         p["lead"] = await db.leads.find_one(
-            {"id": p["lead_id"]}, {"_id": 0, "first_name": 1, "last_name": 1, "company": 1})
+            {"id": p.get("lead_id")}, {"_id": 0, "first_name": 1, "last_name": 1, "company": 1})
     return items
 
 
@@ -193,46 +128,121 @@ async def get_proposal(pid: str, user=Depends(current_user)):
     return p
 
 
-@proposal_router.post("/generate")
-async def generate_proposal(body: ProposalGenIn, user=Depends(current_user)):
-    lead = await db.leads.find_one({"id": body.lead_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
+async def _resolve_deal(workspace_id: str, body: ProposalGenIn) -> Dict[str, Any]:
+    """A proposal is written for a deal. Accept a deal_id directly, or a lead_id and
+    find/create that lead's deal — so the flow works from a lead too."""
+    if body.deal_id:
+        deal = await db.deals.find_one({"id": body.deal_id, "workspace_id": workspace_id}, {"_id": 0})
+        if not deal:
+            raise HTTPException(404, "deal not found")
+        return deal
+
+    if not body.lead_id:
+        raise HTTPException(400, "a deal_id or lead_id is required")
+    lead = await db.leads.find_one({"id": body.lead_id, "workspace_id": workspace_id}, {"_id": 0})
     if not lead:
         raise HTTPException(404, "lead not found")
-    deal = await db.deals.find_one({"lead_id": lead["id"], "workspace_id": user["workspace_id"]}, {"_id": 0})
-    timeline_raw = await db.activities.find(
-        {"lead_id": lead["id"], "workspace_id": user["workspace_id"]}, {"_id": 0}
-    ).sort("at", -1).to_list(20)
-    timeline = [{"type": a["type"], "summary": a["summary"]} for a in timeline_raw]
-    pricing_items = await db.pricing_catalog.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(50)
+    deal = await db.deals.find_one({"lead_id": lead["id"], "workspace_id": workspace_id}, {"_id": 0})
+    if deal:
+        return deal
+    deal = {
+        "id": new_id(), "workspace_id": workspace_id, "lead_id": lead["id"],
+        "title": body.topic or f"{lead.get('company') or lead.get('first_name')} — proposal",
+        "value": 0, "stage": "proposal", "currency": "USD", "created_at": now_iso(),
+    }
+    await db.deals.insert_one(dict(deal))
+    return deal
 
-    research_text, content = await _research_and_draft(lead, deal, body.topic, timeline)
-    slides = _build_deck(lead, content, pricing_items, body.include_pricing)
+
+@proposal_router.post("/generate")
+async def generate_proposal(body: ProposalGenIn, user=Depends(current_user)):
+    wid = user["workspace_id"]
+    deal = await _resolve_deal(wid, body)
+
+    from billing import charge_credits
+    await charge_credits(wid, "proposal_generate", meta={"deal_id": deal["id"]})
+
+    template = await proposal_templates.get_template(wid, body.template_id) \
+        if body.template_id else None
+    if not template:
+        templates = await proposal_templates.list_templates(wid)
+        template = next((t for t in templates if t["service"] == body.service), templates[-1])
+
+    pack = await context_pack.build(wid, deal["id"])
+    catalog = await list_pricing(user)   # migrated, numeric
+
+    ws = await db.workspaces.find_one({"id": wid}, {"_id": 0})
+    offer = (ws or {}).get("brand_voice", {}).get("offer") or \
+        "The Innoira Agentic Suite — AI agents for outbound, calls, scheduling and proposals."
+
+    try:
+        built = await proposal_chain.run(
+            pack, template, service=body.service, offer=offer, catalog=catalog)
+    except proposal_chain.ChainError as ex:
+        raise HTTPException(502, f"Proposal chain failed: {ex}")
+
+    lead = await db.leads.find_one({"id": deal["lead_id"]}, {"_id": 0}) or {}
+    topic = body.topic or f"{template['name']} — {lead.get('company') or lead.get('first_name') or 'Proposal'}"
 
     doc = {
-        "id": new_id(), "workspace_id": user["workspace_id"], "owner_id": user["id"],
-        "lead_id": lead["id"], "deal_id": deal["id"] if deal else None,
-        "topic": body.topic or f"Proposal for {lead.get('company') or lead.get('first_name')}",
-        "status": "draft", "slides": slides, "research_notes": research_text,
-        "palette_id": "midnight", "brand": {"logo_url": None, "colors": [], "fonts": []},
+        "id": new_id(), "workspace_id": wid, "owner_id": user["id"],
+        "lead_id": deal["lead_id"], "deal_id": deal["id"], "topic": topic,
+        "service": body.service, "template_id": template["id"], "template_name": template["name"],
+        "status": "draft",
+        "sections": built["sections"],
+        "pricing": built["pricing"],
+        "client_facts": pack.get("client_facts", {}),
+        "missing": built.get("missing", []),
         "created_at": now_iso(), "updated_at": now_iso(), "sent_at": None,
     }
     await db.proposals.insert_one(doc)
     doc.pop("_id", None)
-    await _audit(user, "proposal_eq.proposal.generate", {"id": doc["id"], "lead_id": lead["id"]})
-    await _log_activity(user["workspace_id"], lead["id"], "proposal", "proposal_generated",
-                         f"Generated proposal: {doc['topic']}", {"proposal_id": doc["id"]})
+    await _audit(user, "proposal_eq.proposal.generate", {"id": doc["id"], "deal_id": deal["id"]})
+    await _log_activity(wid, deal["lead_id"], "proposal", "proposal_generated",
+                        f"Generated proposal: {topic}", {"proposal_id": doc["id"]})
     return doc
 
 
 @proposal_router.put("/proposals/{pid}")
 async def update_proposal(pid: str, body: Dict[str, Any], user=Depends(current_user)):
-    allowed = {k: v for k, v in body.items() if k in {"slides", "status", "topic", "palette_id", "brand"}}
-    allowed["updated_at"] = now_iso()
-    await db.proposals.update_one({"id": pid, "workspace_id": user["workspace_id"]}, {"$set": allowed})
     p = await db.proposals.find_one({"id": pid, "workspace_id": user["workspace_id"]}, {"_id": 0})
     if not p:
         raise HTTPException(404, "not found")
-    return p
+
+    allowed = {k: v for k, v in body.items() if k in {"sections", "topic", "status"}}
+
+    # Pricing edits are re-priced server-side: the client can change quantities,
+    # add/remove lines and set a discount, but never the totals — money math stays
+    # in Python (draft chain's rule, applied to manual edits too).
+    if "pricing" in body and isinstance(body["pricing"], dict):
+        catalog = await list_pricing(user)
+        by_id = {c["id"]: c for c in catalog}
+        selections = []
+        for li in body["pricing"].get("line_items", []):
+            selections.append({"catalog_id": li.get("catalog_id"), "qty": li.get("qty", 1)})
+        # Allow ad-hoc lines not in the catalog (name + unit_price supplied inline).
+        ad_hoc = [li for li in body["pricing"].get("line_items", [])
+                  if li.get("catalog_id") not in by_id and li.get("name")]
+        priced = proposal_chain.compute_pricing(
+            catalog, selections, discount_pct=body["pricing"].get("discount_pct", 0),
+            currency=body["pricing"].get("currency", p.get("pricing", {}).get("currency", "USD")))
+        for li in ad_hoc:
+            qty = max(1, int(li.get("qty", 1) or 1))
+            up = round(float(li.get("unit_price", 0) or 0), 2)
+            priced["line_items"].append({
+                "catalog_id": None, "name": li["name"], "description": li.get("description", ""),
+                "unit": li.get("unit", ""), "qty": qty, "unit_price": up,
+                "line_total": round(qty * up, 2)})
+        # Recompute totals including ad-hoc lines.
+        priced["subtotal"] = round(sum(x["line_total"] for x in priced["line_items"]), 2)
+        priced["discount"] = round(priced["subtotal"] * priced["discount_pct"] / 100.0, 2)
+        priced["total"] = round(priced["subtotal"] - priced["discount"], 2)
+        priced["notes"] = body["pricing"].get("notes", p.get("pricing", {}).get("notes", ""))
+        allowed["pricing"] = priced
+
+    allowed["updated_at"] = now_iso()
+    await db.proposals.update_one({"id": pid}, {"$set": allowed})
+    return await db.proposals.find_one({"id": pid}, {"_id": 0})
 
 
 @proposal_router.post("/proposals/{pid}/mark-sent")
@@ -242,15 +252,17 @@ async def mark_proposal_sent(pid: str, user=Depends(current_user)):
         raise HTTPException(404, "not found")
     await db.proposals.update_one({"id": pid}, {"$set": {"status": "sent", "sent_at": now_iso()}})
     await _log_activity(user["workspace_id"], p["lead_id"], "proposal", "proposal_sent",
-                         f"Sent proposal “{p['topic']}”", {"proposal_id": pid})
-    existing_deal = await db.deals.find_one({"lead_id": p["lead_id"], "workspace_id": user["workspace_id"]}, {"_id": 0})
-    if existing_deal and existing_deal.get("stage") in ("new", "qualified", "meeting"):
-        await db.deals.update_one({"id": existing_deal["id"]}, {"$set": {"stage": "proposal"}})
-    elif not existing_deal:
+                        f"Sent proposal “{p['topic']}”", {"proposal_id": pid})
+    deal = await db.deals.find_one({"id": p.get("deal_id"), "workspace_id": user["workspace_id"]}, {"_id": 0}) \
+        or await db.deals.find_one({"lead_id": p["lead_id"], "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if deal and deal.get("stage") in ("new", "qualified", "meeting"):
+        await db.deals.update_one({"id": deal["id"]}, {"$set": {"stage": "proposal"}})
+    elif not deal:
         await db.deals.insert_one({
             "id": new_id(), "workspace_id": user["workspace_id"], "lead_id": p["lead_id"],
-            "title": p["topic"], "value": 5000, "stage": "proposal", "created_at": now_iso(),
-            "source_proposal_id": pid,
+            "title": p["topic"], "value": p.get("pricing", {}).get("total", 0) or 0,
+            "stage": "proposal", "currency": p.get("pricing", {}).get("currency", "USD"),
+            "created_at": now_iso(), "source_proposal_id": pid,
         })
     return {"ok": True}
 
@@ -261,67 +273,32 @@ async def delete_proposal(pid: str, user=Depends(current_user)):
     return {"ok": True}
 
 
-# ----------------------------- PPTX export ------------------------------------------
-_PALETTE_HEX = {
-    "midnight": {"bg": "0F1010", "accent": "E85D3A", "text": "FAFAFA", "muted": "9CA3AF"},
-    "bone":     {"bg": "E8E9EB", "accent": "212025", "text": "0F1010", "muted": "525252"},
-    "sunset":   {"bg": "FF6B4A", "accent": "0F172A", "text": "FFFFFF", "muted": "FCD34D"},
-    "ocean":    {"bg": "0A2540", "accent": "22D3EE", "text": "F0F9FF", "muted": "7DD3FC"},
-    "forest":   {"bg": "14532D", "accent": "FCD34D", "text": "F0FDF4", "muted": "86EFAC"},
-    "rose":     {"bg": "831843", "accent": "F9A8D4", "text": "FFF1F2", "muted": "FBCFE8"},
-    "paper":    {"bg": "F5F1E8", "accent": "B45309", "text": "1C1917", "muted": "78716C"},
-    "cyber":    {"bg": "030712", "accent": "34D399", "text": "F9FAFB", "muted": "4ADE80"},
-    "coral":    {"bg": "FEE2E2", "accent": "DC2626", "text": "7F1D1D", "muted": "F97316"},
-    "mono":     {"bg": "FFFFFF", "accent": "000000", "text": "000000", "muted": "71717A"},
-}
-_PX_TO_EMU = 9525  # 96 DPI: 914400 EMU per inch / 96 px per inch
+# ----------------------------- Exports ------------------------------------------
+def _filename(p: Dict[str, Any], ext: str) -> str:
+    base = re.sub(r"[^\w\-]+", "-", (p.get("topic") or "proposal")[:50]).strip("-")
+    return f"{base or 'proposal'}.{ext}"
 
 
-@proposal_router.get("/proposals/{pid}/export.pptx")
-async def export_pptx(pid: str, user=Depends(current_user)):
+@proposal_router.get("/proposals/{pid}/export.docx")
+async def export_docx(pid: str, user=Depends(current_user)):
     p = await db.proposals.find_one({"id": pid, "workspace_id": user["workspace_id"]}, {"_id": 0})
     if not p:
         raise HTTPException(404, "not found")
+    data = proposal_docx.build_docx(p)
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{_filename(p, "docx")}"'},
+    )
 
-    from pptx import Presentation
-    from pptx.util import Emu, Pt
-    from pptx.dml.color import RGBColor
 
-    pal = _PALETTE_HEX.get(p.get("palette_id", "midnight"), _PALETTE_HEX["midnight"])
-
-    def hexc(key: str) -> RGBColor:
-        return RGBColor.from_string(pal.get(key, pal["text"]))
-
-    prs = Presentation()
-    prs.slide_width = Emu(1080 * _PX_TO_EMU)
-    prs.slide_height = Emu(1350 * _PX_TO_EMU)
-    blank_layout = prs.slide_layouts[6]
-
-    for slide_data in p.get("slides", []):
-        slide = prs.slides.add_slide(blank_layout)
-        slide.background.fill.solid()
-        slide.background.fill.fore_color.rgb = hexc("bg")
-        for el in slide_data.get("elements", []):
-            if el.get("type") not in ("text", "badge"):
-                continue
-            x, y = el.get("x", 0), el.get("y", 0)
-            w, h = el.get("w", 800), el.get("h", 100)
-            box = slide.shapes.add_textbox(Emu(x * _PX_TO_EMU), Emu(y * _PX_TO_EMU),
-                                            Emu(w * _PX_TO_EMU), Emu(h * _PX_TO_EMU))
-            tf = box.text_frame
-            tf.word_wrap = True
-            para = tf.paragraphs[0]
-            run = para.add_run()
-            run.text = el.get("text", "")
-            run.font.size = Pt(max(8, int(el.get("size", 24) * 0.62)))
-            run.font.bold = el.get("weight", 400) >= 700
-            run.font.color.rgb = hexc(el.get("color", "text"))
-
-    buf = io.BytesIO()
-    prs.save(buf)
-    buf.seek(0)
-    filename = f"{(p.get('topic') or 'proposal')[:40].replace(' ', '-')}.pptx"
-    return StreamingResponse(
-        buf, media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+@proposal_router.get("/proposals/{pid}/export.pdf")
+async def export_pdf(pid: str, user=Depends(current_user)):
+    p = await db.proposals.find_one({"id": pid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "not found")
+    data = proposal_pdf.build_pdf(p)
+    return Response(
+        content=data, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{_filename(p, "pdf")}"'},
     )

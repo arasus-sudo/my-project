@@ -4,70 +4,116 @@
 
 @layer base {
   :root {
-    --background: 220 5% 91%;
-    --foreground: 260 6% 14%;
-    --card: 0 0% 100%;
-    --card-foreground: 260 6% 14%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 260 6% 14%;
-    --primary: 260 6% 14%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 5% 85%;
-    --secondary-foreground: 260 6% 14%;
-    --muted: 220 5% 88%;
-    --muted-foreground: 240 4% 38%;
-    --accent: 260 6% 14%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 78% 54%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 6% 82%;
-    --input: 220 6% 82%;
-    --ring: 260 6% 14%;
-    --radius: 0.875rem;
+    --radius: 1rem;
   }
-}
-
-@layer base {
-  * { @apply border-border; }
-  html, body {
-    background-color: #E8E9EB;
-    color: #212025;
+  * { @apply border-line; }
+  html { scroll-behavior: smooth; }
+  body {
+    background-color: #F5F5F7;
+    color: #1D1D1F;
     font-family: "Inter", system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    letter-spacing: -0.005em;
+    letter-spacing: -0.01em;
+    line-height: 1.6;
   }
-  h1, h2, h3, h4 {
+  h1, h2, h3, h4, h5 {
     font-family: "Inter", system-ui, sans-serif;
     letter-spacing: -0.03em;
-    font-weight: 700;
+    font-weight: 600;
   }
-  ::selection { background: #212025; color: #E8E9EB; }
+  ::selection { background: #1D1D1F; color: #FFFFFF; }
+  :focus-visible { outline: 2px solid #1D1D1F; outline-offset: 2px; border-radius: 6px; }
 }
 
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-ink text-white text-sm font-medium rounded-full hover:bg-ink/90 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ink;
+    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-accent text-white text-sm font-medium rounded-xl hover:bg-accent-hover active:scale-[0.97] transition-all duration-200 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-accent/20;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-ink text-sm font-medium rounded-full border border-line hover:border-ink transition-colors;
+    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-white text-ink text-sm font-medium rounded-xl border border-line hover:border-ink/20 hover:bg-ash active:scale-[0.97] transition-all duration-200 shadow-sm;
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-neutral-600 hover:text-ink hover:bg-white/60 rounded-full transition-colors text-sm;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-neutral-500 hover:text-ink hover:bg-ash rounded-xl transition-all duration-200 text-sm;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-danger text-white text-sm font-medium rounded-xl hover:opacity-90 active:scale-[0.97] transition-all duration-200;
+  }
+  .btn-sm {
+    @apply px-4 py-1.5 text-xs rounded-lg;
   }
   .ui-label {
-    @apply text-[11px] font-medium tracking-wider uppercase text-neutral-500;
+    @apply text-[11px] font-medium tracking-wider uppercase text-neutral-400;
   }
   .card-flat {
     @apply bg-white border border-line rounded-2xl;
   }
-  .kbd {
-    @apply font-mono text-xs px-1.5 py-0.5 border border-line rounded-md bg-neutral-50;
+  .card-floating {
+    @apply bg-white border border-line rounded-2xl shadow-card transition-all duration-200 hover:shadow-card-hover hover:-translate-y-0.5;
+  }
+  .input-premium {
+    @apply w-full px-4 py-2.5 bg-white border border-line rounded-xl text-sm text-ink placeholder:text-neutral-400 focus:outline-none focus:border-ink focus:ring-2 focus:ring-ink/10 transition-all duration-200;
   }
   .pill {
-    @apply inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-white border border-line text-neutral-600;
+    @apply inline-flex items-center gap-1.5 px-3 py-1 text-2xs rounded-full bg-ash border border-line text-neutral-500 font-medium uppercase tracking-wider;
   }
+  .kbd {
+    @apply font-mono text-xs px-1.5 py-0.5 border border-line rounded-lg bg-ash text-neutral-500;
+  }
+  .nav-floating {
+    @apply fixed top-3 left-1/2 -translate-x-1/2 z-50 bg-white/80 backdrop-blur-xl border border-line rounded-2xl shadow-nav transition-all duration-300;
+  }
+  .skeleton {
+    @apply bg-gradient-to-r from-ash via-white to-ash bg-[length:200%_100%] animate-shimmer rounded-lg;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 text-2xs font-medium rounded-full;
+  }
+  .badge-success { @apply badge bg-success/10 text-success; }
+  .badge-warning { @apply badge bg-warning/10 text-warning; }
+  .badge-danger { @apply badge bg-danger/10 text-danger; }
+  .badge-info { @apply badge bg-accent/10 text-accent; }
+  .badge-neutral { @apply badge bg-ash text-neutral-500; }
+  .divider { @apply h-px bg-line my-4; }
 }
 
-.recharts-cartesian-grid line { stroke: #D6D7DA; }
-.recharts-text { font-family: "JetBrains Mono", monospace; font-size: 11px; }
+.prose-email p { margin: 0 0 0.85em; }
+.prose-email p:last-child { margin-bottom: 0; }
+.prose-email ul { list-style: disc; padding-left: 1.35em; margin: 0 0 0.85em; }
+.prose-email ol { list-style: decimal; padding-left: 1.35em; margin: 0 0 0.85em; }
+.prose-email li { margin: 0.2em 0; }
+.prose-email a { color: #1D1D1F; text-decoration: underline; text-underline-offset: 2px; }
+.prose-email strong { font-weight: 600; }
+.prose-email .signature { color: #6E6E73; }
+
+.recharts-cartesian-grid line { stroke: #E5E5E7; }
+.recharts-text { font-family: "JetBrains Mono", monospace; font-size: 11px; fill: #A1A1A6; }
+
+/* ---------------- Create EQ canvas (selection / interaction chrome) ----------
+   The canvas is a fixed 1080×1350 div scaled by `transform: scale(zoom)`, so
+   anything styled in canvas px shrinks with zoom. --inv-zoom (set inline on
+   the canvas as 1/zoom) lets pure CSS draw screen-constant strokes — the hover
+   affordance below costs zero React re-renders. */
+.creq-canvas .creq-el { cursor: grab; }
+.creq-canvas:not(.creq-interacting) .creq-el:hover {
+  outline: calc(1.5px * var(--inv-zoom, 1)) solid rgba(29, 29, 31, 0.4);
+  outline-offset: 2px;
+}
+/* While any gesture is live (drag/resize/rotate/marquee), suppress hover and
+   force the grabbing cursor everywhere so it never flickers between targets. */
+.creq-interacting.creq-dragging, .creq-interacting.creq-dragging * { cursor: grabbing !important; }
+.creq-canvas.creq-marqueeing { cursor: crosshair; }
+/* Rotation handle cursor — a small circular-arrow glyph (Figma-style). */
+.creq-rotate-cursor {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="%231D1D1F" stroke-width="2.4" stroke-linecap="round"><path d="M20 11A8 8 0 1 0 12 20" /><path d="M20 6v5h-5" fill="none"/></svg>') 11 11, grab;
+}
+
+@layer utilities {
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #E5E5E7 transparent; }
+  .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #E5E5E7; border-radius: 8px; }
+  .animate-delay-100 { animation-delay: 0.1s; }
+  .animate-delay-200 { animation-delay: 0.2s; }
+  .animate-delay-300 { animation-delay: 0.3s; }
+}

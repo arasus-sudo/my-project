@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
-import { api } from "../lib/api";
+import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import {
@@ -85,7 +85,7 @@ export default function CreateEQProjects() {
         }
       />
 
-      <div className="p-6 space-y-10 max-w-5xl">
+      <div className="animate-fade-in px-6 sm:px-8 space-y-10 max-w-5xl">
         {/* Hero — the ONE AI entry point: type an idea, hit generate. */}
         <section
           className="relative overflow-hidden rounded-3xl border border-line p-8 sm:p-10"
@@ -98,7 +98,7 @@ export default function CreateEQProjects() {
             <h2 className="font-display font-bold text-3xl sm:text-4xl leading-[1.05] tracking-tight max-w-xl">
               Describe your idea.<br />We&apos;ll design the deck.
             </h2>
-            <p className="text-sm text-neutral-500 mt-3 max-w-md">
+            <p className="text-sm text-neutral-400 mt-3 max-w-md">
               One sentence is enough. Pick an audience and theme next — a finished, editable carousel in under a minute.
             </p>
 
@@ -121,7 +121,7 @@ export default function CreateEQProjects() {
               <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mr-1">Try</span>
               {TOPIC_STARTERS.slice(0, 4).map((t, i) => (
                 <button key={i} onClick={() => setHeroTopic(t)} data-testid={`hero-starter-${i}`}
-                  className="text-xs px-3 py-1.5 rounded-full border border-line bg-white/70 hover:border-ink hover:bg-white text-neutral-600 transition-colors">
+                  className="text-xs px-3 py-1.5 rounded-xl border border-line bg-white/70 hover:border-ink hover:bg-white text-neutral-400 transition-colors">
                   {t}
                 </button>
               ))}
@@ -137,8 +137,8 @@ export default function CreateEQProjects() {
         <section>
           <div className="flex items-baseline justify-between mb-4">
             <div>
-              <div className="font-display font-bold text-lg">Start from a template</div>
-              <div className="text-xs text-neutral-500 mt-0.5">Pre-designed layouts — add your topic, edit anything.</div>
+              <div className="font-display font-semibold text-lg">Start from a template</div>
+              <div className="text-xs text-neutral-400 mt-0.5">Pre-designed layouts — add your topic, edit anything.</div>
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -150,7 +150,7 @@ export default function CreateEQProjects() {
                   <div className="aspect-[4/5] p-4 flex flex-col justify-between relative"
                     style={{ background: pal.bg, color: pal.text, fontFamily: "Inter" }}>
                     <div className="text-[9px] font-mono uppercase tracking-widest opacity-60">{t.tag}</div>
-                    <div className="font-bold text-base leading-tight" style={{ color: pal.accent }}>{t.name}</div>
+                    <div className="font-semibold text-base leading-tight" style={{ color: pal.accent }}>{t.name}</div>
                     <div className="absolute inset-x-0 bottom-0 h-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[11px] font-medium"
                       style={{ background: `linear-gradient(transparent, ${pal.bg})`, color: pal.text }}>
                       Use this template →
@@ -209,19 +209,19 @@ function TemplateStartDialog({ template, onClose, onCreated }) {
       }
       toast.success("Draft ready — customise anything you want");
       onCreated(data.id);
-    } catch { toast.error("Generation failed — try again"); }
+    } catch (err) { if (!isCreditError(err)) toast.error("Generation failed — try again"); }
     finally { setBusy(false); }
   };
 
   return (
     <div className="fixed inset-0 bg-ink/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()} data-testid="template-start-dialog">
+        <div className="bg-white rounded-2xl w-full max-w-lg p-4 sm:p-6" onClick={(e) => e.stopPropagation()} data-testid="template-start-dialog">
         <div className="flex items-center gap-2 mb-1">
           <span className="w-5 h-5 rounded-md shrink-0" style={{ background: template.thumb_bg }} />
-          <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">{template.tag} · {template.name}</div>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">{template.tag} · {template.name}</div>
         </div>
-        <h2 className="font-display font-bold text-2xl mt-2 mb-1">What&apos;s this deck about?</h2>
-        <p className="text-sm text-neutral-600 mb-4">We&apos;ll draft real content in this template&apos;s theme — one sentence is enough.</p>
+        <h2 className="font-display font-semibold text-2xl mt-2 mb-1">What&apos;s this deck about?</h2>
+        <p className="text-sm text-neutral-400 mb-4">We&apos;ll draft real content in this template&apos;s theme — one sentence is enough.</p>
         <textarea
           autoFocus
           value={topic}
@@ -232,10 +232,10 @@ function TemplateStartDialog({ template, onClose, onCreated }) {
           className="w-full border border-line rounded-lg px-4 py-3 text-base focus:outline-none focus:border-ink"
         />
         <div className="flex items-center gap-2 mt-3">
-          <span className="text-xs text-neutral-500">Slides:</span>
+          <span className="text-xs text-neutral-400">Slides:</span>
           {[3, 5, 6, 8].map((n) => (
             <button key={n} onClick={() => setSlideCount(n)} data-testid={`template-count-${n}`}
-              className={`px-3 py-1 rounded-full text-xs font-mono ${slideCount === n ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
+              className={`px-3 py-1 rounded-xl text-xs font-mono ${slideCount === n ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
               {n}
             </button>
           ))}
@@ -261,13 +261,13 @@ function HistoryDrawer({ items, onClose, onDelete }) {
       <div className="w-full max-w-md bg-white h-full overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="history-drawer">
         <div className="sticky top-0 bg-white border-b border-line px-5 py-4 flex items-center gap-3 z-10">
           <History size={16} />
-          <div className="font-display font-bold">Your projects</div>
+          <div className="font-display font-semibold">Your projects</div>
           <button onClick={onClose} data-testid="history-close-btn" className="ml-auto btn-ghost text-xs"><X size={14} /></button>
         </div>
 
         <div className="p-4 space-y-6">
           {items.length === 0 ? (
-            <div className="text-neutral-500 text-sm">No carousels yet. Pick a template or click Create with AI.</div>
+            <div className="text-neutral-400 text-sm">No carousels yet. Pick a template or click Create with AI.</div>
           ) : (
             <>
               <div>
@@ -312,11 +312,11 @@ function ContinueCard({ project: p, onNavigate }) {
   const edited = p.updated_at ? formatDistanceToNow(new Date(p.updated_at), { addSuffix: true }) : null;
   return (
     <Link to={`/app/create-eq/${p.id}`} onClick={onNavigate} data-testid="continue-card"
-      className="group flex items-center gap-2.5 rounded-lg border border-line bg-white px-3 py-2.5 hover:border-ink transition-colors">
+      className="group flex items-center gap-2.5 rounded-2xl border border-line bg-white px-3 py-2.5 hover:shadow-card-hover hover:border-ink transition-colors">
       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: pal.bg }} />
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium truncate">{p.topic}</div>
-        {edited && <div className="text-xs text-neutral-500">{edited} · {p.slides?.length || 0} slides</div>}
+        {edited && <div className="text-xs text-neutral-400">{edited} · {p.slides?.length || 0} slides</div>}
       </div>
       <ArrowRight size={14} className="shrink-0 text-neutral-400 group-hover:text-ink" />
     </Link>
@@ -367,7 +367,7 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
       toast.success("Draft ready — customise anything you want");
       onCreated(data.id);
     } catch (err) {
-      toast.error("Generation failed — try again");
+      if (!isCreditError(err)) toast.error("Generation failed — try again");
     } finally { setBusy(false); }
   };
 
@@ -375,10 +375,10 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
     <div className="fixed inset-0 bg-ink/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()} data-testid="carousel-wizard">
         {/* Header + step indicator */}
-        <div className="px-8 pt-6 pb-4">
+        <div className="px-4 sm:px-8 pt-6 pb-4">
           <div className="flex items-center gap-2 mb-3">
             <Wand2 size={16} className="text-ink" />
-            <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">Create with AI · Step {step} of 4</div>
+            <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">Create with AI · Step {step} of 4</div>
             <button onClick={onClose} className="ml-auto text-neutral-400 hover:text-ink text-sm">Cancel</button>
           </div>
           <div className="flex gap-1">
@@ -388,11 +388,11 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-8 py-6">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-4 sm:py-6">
           {step === 1 && (
             <div className="space-y-4" data-testid="wizard-step-1">
-              <h2 className="font-display font-bold text-3xl leading-tight">What&apos;s your carousel about?</h2>
-              <p className="text-sm text-neutral-600">One sentence is enough — we&apos;ll expand it into a full 6-slide deck.</p>
+              <h2 className="font-display font-bold text-2xl sm:text-3xl leading-tight">What&apos;s your carousel about?</h2>
+              <p className="text-sm text-neutral-400">One sentence is enough — we&apos;ll expand it into a full 6-slide deck.</p>
               <textarea
                 autoFocus
                 value={form.topic}
@@ -403,11 +403,11 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
                 className="w-full border border-line rounded-lg px-4 py-3 text-base focus:outline-none focus:border-ink"
               />
               <div>
-                <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Or try a starter</div>
+                <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-2">Or try a starter</div>
                 <div className="flex flex-wrap gap-1.5">
                   {TOPIC_STARTERS.map((t, i) => (
                     <button key={i} onClick={() => setForm({ ...form, topic: t })} data-testid={`wizard-starter-${i}`}
-                      className="text-xs px-3 py-1.5 rounded-full border border-line hover:border-ink hover:bg-neutral-50 text-neutral-700">
+                      className="text-xs px-3 py-1.5 rounded-xl border border-line hover:border-ink hover:bg-ash text-neutral-700">
                       {t}
                     </button>
                   ))}
@@ -418,15 +418,15 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
 
           {step === 2 && (
             <div className="space-y-4" data-testid="wizard-step-2">
-              <h2 className="font-display font-bold text-3xl leading-tight">Who&apos;s this for?</h2>
-              <p className="text-sm text-neutral-600">We&apos;ll tune the tone and vocabulary to fit.</p>
+              <h2 className="font-display font-bold text-2xl sm:text-3xl leading-tight">Who&apos;s this for?</h2>
+              <p className="text-sm text-neutral-400">We&apos;ll tune the tone and vocabulary to fit.</p>
               <div className="grid grid-cols-2 gap-2">
                 {AUDIENCES.map((a) => (
                   <button key={a.id} onClick={() => setForm({ ...form, audience: a.id, tone: a.tone })}
                     data-testid={`wizard-audience-${a.id}`}
-                    className={`text-left p-4 rounded-lg border transition-colors ${form.audience === a.id ? "border-ink bg-neutral-50" : "border-line hover:border-neutral-400"}`}>
+                    className={`text-left p-4 rounded-2xl border transition-colors ${form.audience === a.id ? "border-ink bg-ash" : "border-line hover:border-neutral-400"}`}>
                     <div className="text-sm font-medium">{a.label}</div>
-                    <div className="text-[11px] text-neutral-500 mt-0.5">Tone: {a.tone}</div>
+                    <div className="text-[11px] text-neutral-400 mt-0.5">Tone: {a.tone}</div>
                   </button>
                 ))}
               </div>
@@ -436,31 +436,31 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
           {step === 3 && (
             <div className="space-y-6" data-testid="wizard-step-3">
               <div>
-                <h2 className="font-display font-bold text-3xl leading-tight">Pick a platform &amp; theme</h2>
-                <p className="text-sm text-neutral-600 mt-1">These are just starting points — everything is editable after.</p>
+                <h2 className="font-display font-bold text-2xl sm:text-3xl leading-tight">Pick a platform &amp; theme</h2>
+                <p className="text-sm text-neutral-400 mt-1">These are just starting points — everything is editable after.</p>
               </div>
 
               <div>
-                <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Platform</div>
+                <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-2">Platform</div>
                 <div className="grid grid-cols-3 gap-2">
                   {PLATFORMS.map((p) => (
                     <button key={p.id} onClick={() => setForm({ ...form, platform: p.id })}
                       data-testid={`wizard-platform-${p.id}`}
-                      className={`text-left p-3 rounded-lg border ${form.platform === p.id ? "border-ink bg-neutral-50" : "border-line hover:border-neutral-400"}`}>
+                      className={`text-left p-3 rounded-2xl border ${form.platform === p.id ? "border-ink bg-ash" : "border-line hover:border-neutral-400"}`}>
                       <div className="text-xs font-medium">{p.label}</div>
-                      <div className="text-[10px] text-neutral-500 mt-0.5 font-mono">{p.ratio} · {p.w}×{p.h}</div>
+                      <div className="text-[10px] text-neutral-400 mt-0.5 font-mono">{p.ratio} · {p.w}×{p.h}</div>
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Theme</div>
-                <div className="grid grid-cols-5 gap-2">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-2">Theme</div>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                   {PALETTES.map((p) => (
                     <button key={p.id} onClick={() => setForm({ ...form, palette_id: p.id })}
                       data-testid={`wizard-palette-${p.id}`}
-                      className={`text-left p-2 rounded-lg border ${form.palette_id === p.id ? "border-ink ring-2 ring-ink/20" : "border-line hover:border-neutral-400"}`}>
+                      className={`text-left p-2 rounded-2xl border ${form.palette_id === p.id ? "border-ink ring-2 ring-ink/20" : "border-line hover:border-neutral-400"}`}>
                       <div className="flex gap-0.5">
                         {[p.bg, p.bg2, p.accent, p.text].map((c, i) => <span key={`${c}-${i}`} className="w-3 h-3 rounded" style={{ background: c }} />)}
                       </div>
@@ -471,12 +471,12 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
               </div>
 
               <div>
-                <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Slide count</div>
-                <div className="flex gap-1.5">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-2">Slide count</div>
+                <div className="flex flex-wrap gap-1.5">
                   {[3, 5, 6, 7, 8, 10].map((n) => (
                     <button key={n} onClick={() => setForm({ ...form, slide_count: n })}
                       data-testid={`wizard-count-${n}`}
-                      className={`px-4 py-2 rounded-full text-sm font-mono ${form.slide_count === n ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
+                      className={`px-4 py-2 rounded-xl text-sm font-mono ${form.slide_count === n ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
                       {n}
                     </button>
                   ))}
@@ -487,14 +487,14 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
 
           {step === 4 && (
             <div className="space-y-5" data-testid="wizard-step-4">
-              <h2 className="font-display font-bold text-3xl leading-tight">Ready to draft?</h2>
-              <p className="text-sm text-neutral-600">Review your choices — you can adjust anything after generation.</p>
+              <h2 className="font-display font-bold text-2xl sm:text-3xl leading-tight">Ready to draft?</h2>
+              <p className="text-sm text-neutral-400">Review your choices — you can adjust anything after generation.</p>
 
-              <div className="rounded-xl border border-line overflow-hidden">
+              <div className="rounded-2xl border border-line overflow-hidden">
                 <div className="aspect-[4/5] p-6 flex flex-col justify-between max-h-72"
                   style={{ background: palette.bg, color: palette.text }}>
                   <div className="text-[10px] font-mono uppercase tracking-widest opacity-70">{platform.label}</div>
-                  <div className="font-bold text-2xl leading-tight" style={{ color: palette.accent }}>
+                  <div className="font-semibold text-2xl leading-tight" style={{ color: palette.accent }}>
                     {form.topic || "Your topic here"}
                   </div>
                   <div className="text-xs opacity-70">Theme: {palette.name} · {form.slide_count} slides</div>
@@ -512,7 +512,7 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
         </div>
 
         {/* Footer nav */}
-        <div className="px-8 py-4 border-t border-line flex items-center justify-between">
+        <div className="px-4 sm:px-8 py-4 border-t border-line flex items-center justify-between">
           <button onClick={goBack} disabled={step === 1} data-testid="wizard-back"
             className="btn-ghost disabled:opacity-40">
             <ChevronLeft size={14} /> Back

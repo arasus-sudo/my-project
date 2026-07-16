@@ -85,7 +85,7 @@ export default function Webhooks() {
   };
 
   return (
-    <div>
+    <div className="animate-fade-in">
       <PageHeader
         title="Webhooks"
         subtitle="Trigger Create EQ carousels from Airtable, Notion, or any HTTP POST."
@@ -96,13 +96,13 @@ export default function Webhooks() {
         }
       />
 
-      <div className="p-6 space-y-6">
-        {loading && <div className="text-neutral-500 text-sm">Loading webhooks…</div>}
+      <div className="p-6 sm:p-8 space-y-6">
+        {loading && <div className="text-neutral-400 text-sm">Loading webhooks…</div>}
         {!loading && hooks.length === 0 && (
-          <div className="rounded-2xl border border-line bg-white p-8 text-center">
+          <div className="rounded-2xl border border-line bg-white shadow-card p-8 text-center">
             <Webhook className="mx-auto mb-3 text-neutral-400" size={32} />
-            <div className="font-display font-bold text-xl mb-1">No webhooks yet</div>
-            <p className="text-sm text-neutral-500 max-w-md mx-auto mb-4">
+            <div className="font-display font-semibold text-xl mb-1">No webhooks yet</div>
+            <p className="text-sm text-neutral-400 max-w-md mx-auto mb-4">
               Automate carousel creation. Pick a source (Airtable / Notion / any HTTP), map the fields, and paste the URL into your automation tool.
             </p>
             <button onClick={() => setModal(true)} data-testid="empty-new-webhook" className="btn-primary">
@@ -117,14 +117,14 @@ export default function Webhooks() {
             const isOpen = expanded === h.id;
             const evs = events[h.id] || [];
             return (
-              <div key={h.id} className="bg-white border border-line rounded-2xl overflow-hidden" data-testid={`webhook-${h.id}`}>
-                <div className="p-4 flex items-center gap-3">
+              <div key={h.id} className="bg-white border border-line rounded-2xl shadow-card hover:shadow-card-hover overflow-hidden" data-testid={`webhook-${h.id}`}>
+                <div className="p-4 flex flex-wrap items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-ink/10 flex items-center justify-center">
                     <Webhook size={14} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm truncate">{h.name}</div>
-                    <div className="text-[11px] text-neutral-500 font-mono uppercase tracking-wider">
+                    <div className="text-[11px] text-neutral-400 font-mono uppercase tracking-wider">
                       {h.source} · {h.call_count || 0} calls
                       {h.last_called_at && ` · last ${new Date(h.last_called_at).toLocaleString()}`}
                     </div>
@@ -143,7 +143,7 @@ export default function Webhooks() {
                   </button>
                 </div>
                 {isOpen && (
-                  <div className="border-t border-line px-4 py-4 bg-neutral-50 space-y-4 text-xs">
+                  <div className="border-t border-line px-4 py-4 bg-ash space-y-4 text-xs">
                     <div>
                       <div className="ui-label mb-1.5">Webhook URL</div>
                       <div className="bg-white border border-line rounded-lg p-3 font-mono text-[11px] break-all select-all">{url}</div>
@@ -152,19 +152,19 @@ export default function Webhooks() {
                       <div className="ui-label mb-1.5">Field mapping</div>
                       <div className="bg-white border border-line rounded-lg p-3 font-mono text-[11px]">
                         {Object.entries(h.field_map || {}).map(([k, v]) => (
-                          <div key={k}><span className="text-neutral-500">{k}</span> ← <span className="text-ink">{v || "(payload." + k + ")"}</span></div>
+                          <div key={k}><span className="text-neutral-400">{k}</span> ← <span className="text-ink">{v || "(payload." + k + ")"}</span></div>
                         ))}
                       </div>
                     </div>
                     <div>
                       <div className="ui-label mb-1.5">Recent events</div>
-                      {evs.length === 0 && <div className="text-neutral-500">No calls yet.</div>}
+                      {evs.length === 0 && <div className="text-neutral-400">No calls yet.</div>}
                       <div className="space-y-1.5">
                         {evs.map((e) => (
                           <div key={e.id} className="bg-white border border-line rounded-lg p-2 flex items-center gap-2">
                             {e.status === "ok" ? <CheckCircle2 size={12} className="text-emerald-600 flex-shrink-0" /> : <XCircle size={12} className="text-red-600 flex-shrink-0" />}
                             <div className="flex-1 min-w-0 truncate">{e.topic || e.reason || "—"}</div>
-                            <div className="text-neutral-500 font-mono flex items-center gap-1"><Clock size={10} /> {new Date(e.at).toLocaleTimeString()}</div>
+                            <div className="text-neutral-400 font-mono flex items-center gap-1"><Clock size={10} /> {new Date(e.at).toLocaleTimeString()}</div>
                           </div>
                         ))}
                       </div>
@@ -214,22 +214,22 @@ function NewWebhookModal({ onClose, onCreated }) {
 
   return (
     <div className="fixed inset-0 bg-ink/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <form onSubmit={submit} className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="new-webhook-modal">
-        <div className="p-6 border-b border-line flex items-center gap-2">
+      <form onSubmit={submit} className="bg-white rounded-2xl shadow-card w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="new-webhook-modal">
+        <div className="p-4 sm:p-6 border-b border-line flex items-center gap-2">
           <Webhook size={16} />
-          <div className="font-display font-bold text-xl">New webhook</div>
+          <div className="font-display font-semibold text-xl">New webhook</div>
           <button type="button" onClick={onClose} className="ml-auto text-neutral-400 hover:text-ink text-sm">Cancel</button>
         </div>
-        <div className="p-6 space-y-5">
+        <div className="p-4 sm:p-6 space-y-5">
           <div>
             <div className="ui-label mb-2">Source</div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {SOURCES.map((s) => (
                 <button key={s.id} type="button" onClick={() => setSource(s.id)}
                   data-testid={`wh-source-${s.id}`}
-                  className={`text-left p-3 rounded-lg border ${source === s.id ? "border-ink bg-neutral-50" : "border-line hover:border-neutral-400"}`}>
+                  className={`text-left p-3 rounded-lg border ${source === s.id ? "border-ink bg-ash" : "border-line hover:border-neutral-400"}`}>
                   <div className="text-xs font-medium">{s.label}</div>
-                  <div className="text-[10px] text-neutral-500 mt-0.5 leading-tight">{s.hint}</div>
+                  <div className="text-[10px] text-neutral-400 mt-0.5 leading-tight">{s.hint}</div>
                 </button>
               ))}
             </div>
@@ -240,7 +240,7 @@ function NewWebhookModal({ onClose, onCreated }) {
             <input value={name} onChange={(e) => setName(e.target.value)}
               data-testid="wh-name"
               placeholder={`${src.label} → Carousel`}
-              className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm" />
+              className="input-premium mt-1 w-full text-sm" />
           </label>
 
           <div className="grid grid-cols-2 gap-3">
@@ -248,7 +248,7 @@ function NewWebhookModal({ onClose, onCreated }) {
               <span className="ui-label">Default platform</span>
               <select value={defaultPlatform} onChange={(e) => setDefaultPlatform(e.target.value)}
                 data-testid="wh-platform"
-                className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+                className="input-premium mt-1 w-full bg-white text-sm">
                 <option value="linkedin">LinkedIn Deck</option>
                 <option value="square">Square Social</option>
                 <option value="twitter">Twitter Cheat Sheet</option>
@@ -259,20 +259,20 @@ function NewWebhookModal({ onClose, onCreated }) {
               <input type="number" min={2} max={12} value={defaultCount}
                 onChange={(e) => setDefaultCount(Number(e.target.value))}
                 data-testid="wh-count"
-                className="mt-1 w-full border border-line rounded-full px-3 py-2 font-mono text-sm" />
+                className="input-premium mt-1 w-full font-mono text-sm" />
             </label>
           </div>
 
           <div className="border-t border-line pt-4">
             <div className="ui-label mb-2">Sample payload</div>
-            <div className="text-[11px] text-neutral-500 mb-2">
+            <div className="text-[11px] text-neutral-400 mb-2">
               Your automation should POST JSON like this to the generated URL. Fields are auto-mapped.
             </div>
             <pre className="bg-neutral-900 text-neutral-100 rounded-lg p-3 text-[11px] font-mono overflow-x-auto whitespace-pre">{src.example}</pre>
           </div>
         </div>
 
-        <div className="p-6 border-t border-line flex justify-end gap-2">
+        <div className="p-4 sm:p-6 border-t border-line flex justify-end gap-2">
           <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
           <button type="submit" disabled={busy} data-testid="wh-create-submit" className="btn-primary disabled:opacity-60">
             {busy ? <><Loader2 size={14} className="animate-spin" /> Creating…</> : <><Plus size={14} /> Create webhook</>}

@@ -40,6 +40,14 @@ export function AuthProvider({ children }) {
     persist(data.token, data.user, data.workspace);
     return data;
   };
+  // credential = the ID-token JWT Google Identity Services hands the browser.
+  // Backend verifies it and either logs in the matching account or creates a
+  // fresh workspace; data.created tells the caller which happened.
+  const googleAuth = async (credential) => {
+    const { data } = await api.post("/auth/google", { credential });
+    persist(data.token, data.user, data.workspace);
+    return data;
+  };
   const logout = () => {
     localStorage.removeItem("pitcheq_token");
     localStorage.removeItem("pitcheq_user");
@@ -60,7 +68,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthCtx.Provider value={{ user, workspace, loading, login, signup, logout, refresh }}>
+    <AuthCtx.Provider value={{ user, workspace, loading, login, signup, googleAuth, logout, refresh }}>
       {children}
     </AuthCtx.Provider>
   );

@@ -9,7 +9,7 @@ import os
 import re
 import json
 import secrets
-from datetime import datetime, timedelta, time as dtime
+from datetime import datetime, timedelta, timezone, time as dtime
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
@@ -21,6 +21,9 @@ from server import (
     _llm_chat, _extract_json, ANTHROPIC_API_KEY,
 )
 from google_calendar_client import google_calendar_client, encrypt_token, decrypt_token, GOOGLE_MOCKED
+import email_client
+from email_client import EMAIL_MOCKED, send_email
+from ics_builder import build_invite
 
 schedule_router = APIRouter(prefix="/schedule-eq")
 schedule_public_router = APIRouter()
@@ -202,6 +205,14 @@ async def _compute_open_slots(workspace_id: str, event_type: Dict[str, Any]) -> 
 async def _score_qualifying_answers(event_type: Dict[str, Any], answers: Dict[str, str]) -> Optional[int]:
     if not ANTHROPIC_API_KEY or not event_type.get("qualifying_questions") or not answers:
         return None
+    # Booking is a public action taken by a guest — if the host is out of credits
+    # we skip the AI scoring rather than block the guest from booking.
+    from billing import charge_credits
+    try:
+        await charge_credits(event_type["workspace_id"], "booking_qualify",
+                              meta={"event_type_id": event_type["id"]})
+    except HTTPException:
+        return None
     system = ("Score how qualified this prospect is for a sales meeting, 0-100, based on their "
                "answers to pre-meeting questions. STRICT JSON: {\"score\": int}")
     user_text = json.dumps({"questions": event_type["qualifying_questions"], "answers": answers})
@@ -234,6 +245,11 @@ async def _no_show_risk_score(workspace_id: str, lead_id: Optional[str], start_a
 async def _generate_prep_brief(workspace_id: str, lead_id: Optional[str]) -> str:
     if not lead_id or not ANTHROPIC_API_KEY:
         return ""
+    from billing import charge_credits
+    try:
+        await charge_credits(workspace_id, "meeting_prep_brief", meta={"lead_id": lead_id})
+    except HTTPException:
+        return ""
     activities = await db.activities.find(
         {"workspace_id": workspace_id, "lead_id": lead_id}, {"_id": 0}
     ).sort("at", -1).to_list(15)
@@ -246,6 +262,183 @@ async def _generate_prep_brief(workspace_id: str, lead_id: Optional[str]) -> str
         return resp.strip()
     except Exception:
         return ""
+
+
+# ----------------------------- Notifications ---------------------------------------
+async def _host_for(workspace_id: str, event_type: Dict[str, Any]) -> Dict[str, str]:
+    """The person the guest is meeting — the event type's owner, falling back to
+    the workspace's first user."""
+    owner = None
+    if event_type.get("owner_id"):
+        owner = await db.users.find_one({"id": event_type["owner_id"]}, {"_id": 0, "name": 1, "email": 1})
+    if not owner:
+        owner = await db.users.find_one({"workspace_id": workspace_id}, {"_id": 0, "name": 1, "email": 1})
+    return {"name": (owner or {}).get("name", "your host"), "email": (owner or {}).get("email", "")}
+
+
+async def _record_email(workspace_id: str, booking_id: str, kind: str, to: str,
+                         subject: str, html: str, result: Dict[str, Any]) -> None:
+    """Every message is persisted, mocked or not — so the flow is auditable and
+    demoable without a mail provider, and the tests can assert on real content."""
+    await db.sent_emails.insert_one({
+        "id": new_id(), "workspace_id": workspace_id, "booking_id": booking_id,
+        "kind": kind, "to": to, "subject": subject, "html": html,
+        "provider_id": result.get("id"), "mocked": result.get("mocked", True),
+        "error": result.get("error"), "at": now_iso(),
+    })
+
+
+async def _notify(kind: str, workspace_id: str, booking: Dict[str, Any],
+                   event_type: Dict[str, Any], old_when: str = "") -> None:
+    """Send the guest + host pair for a booking lifecycle event. Never raises: a
+    mail failure must not undo a booking that already happened."""
+    try:
+        host = await _host_for(workspace_id, event_type)
+        name = event_type.get("name", "Meeting")
+        desc = event_type.get("description", "")
+
+        if kind == "confirmation":
+            ics = build_invite(booking, name, desc, host["email"], method="REQUEST")
+            pairs = [
+                (booking["guest_email"], email_client.confirmation_email(booking, name, host["name"], for_host=False), ics),
+                (host["email"], email_client.confirmation_email(booking, name, host["name"], for_host=True), ics),
+            ]
+        elif kind == "reminder":
+            pairs = [(booking["guest_email"], email_client.reminder_email(booking, name, host["name"]), None)]
+        elif kind == "reschedule":
+            ics = build_invite(booking, name, desc, host["email"], method="REQUEST")
+            pairs = [
+                (booking["guest_email"], email_client.reschedule_email(booking, name, host["name"], old_when, for_host=False), ics),
+                (host["email"], email_client.reschedule_email(booking, name, host["name"], old_when, for_host=True), ics),
+            ]
+        elif kind == "cancellation":
+            ics = build_invite(booking, name, desc, host["email"], method="CANCEL")
+            pairs = [
+                (booking["guest_email"], email_client.cancellation_email(booking, name, host["name"], for_host=False), ics),
+                (host["email"], email_client.cancellation_email(booking, name, host["name"], for_host=True), ics),
+            ]
+        else:
+            return
+
+        for to, (subject, html), ics_body in pairs:
+            if not to:
+                continue
+            result = await send_email(to, subject, html, ics=ics_body, reply_to=host["email"] or None)
+            await _record_email(workspace_id, booking["id"], kind, to, subject, html, result)
+    except Exception:
+        pass
+
+
+def _fmt_when(booking: Dict[str, Any]) -> str:
+    start = datetime.fromisoformat(booking["start_at"])
+    return start.strftime("%a %d %b %Y, %H:%M")
+
+
+# ----------------------------- Guest self-service (public, token-only) --------------
+# The manage_token is the guest's only credential — no login. Every route 404s on
+# an unknown token, so nothing about a workspace leaks to someone guessing.
+#
+# ORDER MATTERS: these must stay ABOVE /book/{workspace_id}/{event_type_slug}.
+# FastAPI matches in registration order, so if the two-segment slug route is
+# registered first it swallows /book/manage/{token} — reading "manage" as a
+# workspace id and 404ing every guest link.
+class RescheduleIn(BaseModel):
+    start_at: str
+
+
+async def _booking_by_token(token: str) -> tuple:
+    b = await db.bookings.find_one({"manage_token": token}, {"_id": 0})
+    if not b:
+        raise HTTPException(404, "not found")
+    et = await db.event_types.find_one({"id": b["event_type_id"]}, {"_id": 0})
+    if not et:
+        raise HTTPException(404, "not found")
+    return b, et
+
+
+def _public_booking(b: Dict[str, Any]) -> Dict[str, Any]:
+    """Never hand the guest the host's internal notes."""
+    return {k: v for k, v in b.items() if k not in ("prep_brief", "no_show_risk_score",
+                                                     "qualification_score", "lead_id")}
+
+
+@schedule_public_router.get("/book/manage/{token}")
+async def get_managed_booking(token: str):
+    b, et = await _booking_by_token(token)
+    ws = await db.workspaces.find_one({"id": b["workspace_id"]}, {"_id": 0, "name": 1})
+    slots = await _compute_open_slots(b["workspace_id"], et) if b["status"] == "confirmed" else []
+    return {
+        "booking": _public_booking(b),
+        "event_type": {"name": et["name"], "duration_minutes": et["duration_minutes"],
+                        "description": et.get("description", ""), "location_type": et.get("location_type")},
+        "workspace_name": (ws or {}).get("name"),
+        "open_slots": slots,
+    }
+
+
+@schedule_public_router.post("/book/manage/{token}/reschedule")
+async def reschedule_booking(token: str, body: RescheduleIn):
+    b, et = await _booking_by_token(token)
+    if b["status"] != "confirmed":
+        raise HTTPException(400, "this meeting is no longer active")
+
+    open_slots = await _compute_open_slots(b["workspace_id"], et)
+    if body.start_at not in open_slots:
+        raise HTTPException(400, "that slot is no longer available — please pick another")
+
+    old_when = _fmt_when(b)
+    start_dt = datetime.fromisoformat(body.start_at)
+    end_dt = start_dt + timedelta(minutes=et["duration_minutes"])
+
+    # Patch the existing calendar event so the guest's entry moves rather than
+    # disappearing and reappearing (which would also drop the Meet link).
+    integration = await db.calendar_integrations.find_one({"workspace_id": b["workspace_id"]}, {"_id": 0})
+    google_calendar_client.move_event(
+        integration, b.get("google_event_id"),
+        start_iso=start_dt.isoformat(), end_iso=end_dt.isoformat(),
+        tz=b.get("timezone", "UTC"),
+    )
+
+    patch = {
+        "start_at": start_dt.isoformat(), "end_at": end_dt.isoformat(),
+        # Bumping SEQUENCE is what tells a calendar client to move the existing
+        # event instead of creating a second one.
+        "ics_sequence": int(b.get("ics_sequence", 0)) + 1,
+        "reminder_sent_at": None,  # new time earns a fresh reminder
+        "rescheduled_at": now_iso(),
+    }
+    await db.bookings.update_one({"id": b["id"]}, {"$set": patch})
+    b.update(patch)
+
+    await _notify("reschedule", b["workspace_id"], b, et, old_when=old_when)
+    if b.get("lead_id"):
+        await _log_activity(b["workspace_id"], b["lead_id"], "scheduler", "meeting_rescheduled",
+                             f"Guest moved “{et['name']}” to {start_dt.strftime('%b %d, %Y %H:%M')}",
+                             {"booking_id": b["id"], "from": old_when})
+    return {"ok": True, "booking": _public_booking(b)}
+
+
+@schedule_public_router.post("/book/manage/{token}/cancel")
+async def guest_cancel_booking(token: str):
+    b, et = await _booking_by_token(token)
+    if b["status"] == "cancelled":
+        return {"ok": True, "already": True}
+
+    integration = await db.calendar_integrations.find_one({"workspace_id": b["workspace_id"]}, {"_id": 0})
+    google_calendar_client.delete_event(integration, b.get("google_event_id"))
+
+    await db.bookings.update_one({"id": b["id"]}, {"$set": {
+        "status": "cancelled", "cancelled_at": now_iso(), "cancelled_by": "guest",
+        "ics_sequence": int(b.get("ics_sequence", 0)) + 1,
+    }})
+    b["status"] = "cancelled"
+    b["ics_sequence"] = int(b.get("ics_sequence", 0)) + 1
+
+    await _notify("cancellation", b["workspace_id"], b, et)
+    if b.get("lead_id"):
+        await _log_activity(b["workspace_id"], b["lead_id"], "scheduler", "meeting_cancelled",
+                             f"Guest cancelled “{et['name']}”", {"booking_id": b["id"], "by": "guest"})
+    return {"ok": True}
 
 
 # ----------------------------- Public booking routes ------------------------------
@@ -311,10 +504,16 @@ async def create_booking(workspace_id: str, event_type_slug: str, body: BookingI
         "status": "confirmed", "google_event_id": cal_result.get("event_id"), "meet_link": cal_result.get("meet_link"),
         "qualifying_answers": body.qualifying_answers, "qualification_score": score,
         "no_show_risk_score": risk_score, "prep_brief": prep_brief,
+        # The guest's only credential for self-service reschedule/cancel. Random
+        # rather than signed, so cancelling can burn it.
+        "manage_token": secrets.token_urlsafe(32),
+        "ics_sequence": 0, "reminder_sent_at": None,
         "created_at": now_iso(), "cancelled_at": None,
     }
     await db.bookings.insert_one(booking)
     booking.pop("_id", None)
+
+    await _notify("confirmation", workspace_id, booking, et)
 
     await _log_activity(workspace_id, lead["id"], "scheduler", "meeting_booked",
                          f"Booked “{et['name']}” for {start_dt.strftime('%b %d, %Y %H:%M')}",
@@ -358,11 +557,84 @@ async def cancel_booking(bid: str, user=Depends(current_user)):
         raise HTTPException(404, "not found")
     integration = await db.calendar_integrations.find_one({"workspace_id": user["workspace_id"]}, {"_id": 0})
     google_calendar_client.delete_event(integration, b.get("google_event_id"))
-    await db.bookings.update_one({"id": bid}, {"$set": {"status": "cancelled", "cancelled_at": now_iso()}})
+    await db.bookings.update_one({"id": bid}, {"$set": {
+        "status": "cancelled", "cancelled_at": now_iso(), "cancelled_by": "host",
+        "ics_sequence": int(b.get("ics_sequence", 0)) + 1,
+    }})
+    b["status"] = "cancelled"
+    b["ics_sequence"] = int(b.get("ics_sequence", 0)) + 1
+
+    # The guest is owed a cancellation notice regardless of who cancelled.
+    et = await db.event_types.find_one({"id": b["event_type_id"]}, {"_id": 0})
+    if et:
+        await _notify("cancellation", user["workspace_id"], b, et)
     if b.get("lead_id"):
         await _log_activity(user["workspace_id"], b["lead_id"], "scheduler", "meeting_cancelled",
-                             "Meeting cancelled", {"booking_id": bid})
+                             "Meeting cancelled", {"booking_id": bid, "by": "host"})
     return {"ok": True}
+
+
+@schedule_router.get("/bookings/{bid}/emails")
+async def booking_emails(bid: str, user=Depends(current_user)):
+    """What we actually sent for this booking — visible whether or not a real mail
+    provider is connected."""
+    return await db.sent_emails.find(
+        {"booking_id": bid, "workspace_id": user["workspace_id"]},
+        {"_id": 0, "html": 0},
+    ).sort("at", -1).to_list(50)
+
+
+@schedule_router.get("/email-status")
+async def email_status(user=Depends(current_user)):
+    sent = await db.sent_emails.count_documents({"workspace_id": user["workspace_id"]})
+    return {"mocked": EMAIL_MOCKED, "from": email_client.EMAIL_FROM, "sent_count": sent}
+
+
+# ----------------------------- 24h reminder job -------------------------------------
+async def run_reminder_tick() -> int:
+    """Email a reminder for every confirmed booking starting in ~24h.
+
+    Idempotent by the `reminder_sent_at` stamp, which is claimed with a conditional
+    update *before* the send — so a restart, an overlapping tick, or two workers can
+    never double-remind the same guest. Returns how many were sent.
+    """
+    now = datetime.now(timezone.utc)
+    lo, hi = now + timedelta(hours=23), now + timedelta(hours=25)
+
+    # `start_at` is an ISO string carrying the workspace's UTC offset, and such
+    # strings do NOT sort correctly against each other across different offsets
+    # ("…T10:00+05:30" vs "…T10:00+00:00" compare bytewise, not chronologically).
+    # So the window is applied on parsed, offset-aware datetimes, not in the query.
+    candidates = await db.bookings.find({
+        "status": "confirmed", "reminder_sent_at": None,
+    }, {"_id": 0}).to_list(2000)
+
+    due = []
+    for b in candidates:
+        try:
+            start = datetime.fromisoformat(b["start_at"])
+        except ValueError:
+            continue
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        if lo <= start <= hi:
+            due.append(b)
+
+    sent = 0
+    for b in due:
+        # Claim it first: only the caller that flips None -> timestamp may send.
+        claimed = await db.bookings.find_one_and_update(
+            {"id": b["id"], "reminder_sent_at": None},
+            {"$set": {"reminder_sent_at": now_iso()}},
+        )
+        if not claimed:
+            continue
+        et = await db.event_types.find_one({"id": b["event_type_id"]}, {"_id": 0})
+        if not et:
+            continue
+        await _notify("reminder", b["workspace_id"], b, et)
+        sent += 1
+    return sent
 
 
 @schedule_router.post("/bookings/{bid}/mark-no-show")

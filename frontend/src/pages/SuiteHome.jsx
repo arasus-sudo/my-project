@@ -4,10 +4,12 @@ import { formatDistanceToNow } from "date-fns";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { AGENTS } from "../components/AppLayout";
+import { CreditPill } from "../components/Credits";
+import InnoiraLogo from "../components/InnoiraLogo";
 import {
   LogOut, ArrowRight, Settings as SettingsIcon, Activity as ActivityIcon,
   Mail, PhoneCall, CalendarCheck, FileBarChart, Share2, Zap, Users, TrendingUp,
-  AlertCircle, Circle,
+  AlertCircle, Circle, Coins,
 } from "lucide-react";
 
 /** Each fetcher returns a rich per-agent status: what it's doing right now,
@@ -115,6 +117,7 @@ export default function SuiteHome() {
   const [data, setData] = useState({});
   const [activities, setActivities] = useState(null);
   const [summary, setSummary] = useState(null);
+  const [sub, setSub] = useState(null);
 
   useEffect(() => {
     AGENTS.forEach((a) => {
@@ -124,6 +127,7 @@ export default function SuiteHome() {
     });
     api.get("/activities", { params: { limit: 40 } }).then((r) => setActivities(r.data)).catch(() => setActivities([]));
     api.get("/activities/summary").then((r) => setSummary(r.data)).catch(() => setSummary(null));
+    api.get("/billing/subscription").then((r) => setSub(r.data)).catch(() => setSub(null));
   }, []);
 
   const leadsStat = data.pitch?.metrics?.find((m) => m.label === "Leads")?.value;
@@ -136,42 +140,42 @@ export default function SuiteHome() {
     .map(({ agent, s }) => ({ key: agent.k, label: s.needsLabel, count: s.needs, href: s.needsHref, agentLabel: agent.label }));
 
   return (
-    <div className="min-h-screen bg-bone">
+    <div className="min-h-screen bg-bone animate-fade-in">
       <div className="border-b border-line bg-white">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-ink text-white flex items-center justify-center rounded-full font-display font-bold text-sm">i</div>
-            <div className="leading-tight">
-              <div className="font-display font-semibold tracking-tight text-sm">Innoira Agentic Suite</div>
-              <div className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider">{workspace?.name}</div>
-            </div>
+        <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 sm:py-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <InnoiraLogo size="sm" />
+            <div className="text-[10px] text-neutral-400 font-mono uppercase tracking-wider border-l border-line pl-3">{workspace?.name}</div>
           </div>
           <div className="flex items-center gap-3">
+            <CreditPill />
             <Link to="/settings" data-testid="suite-settings-link" title="Settings"
-              className="p-1.5 text-neutral-500 hover:text-ink hover:bg-surfacehover rounded-full">
+              className="p-1.5 text-neutral-400 hover:text-ink hover:bg-surfacehover rounded-xl">
               <SettingsIcon size={16} />
             </Link>
             <div className="text-right leading-tight">
               <div className="text-xs font-medium">{user?.name}</div>
-              <div className="text-[10px] text-neutral-500">{user?.email}</div>
+              <div className="text-[10px] text-neutral-400">{user?.email}</div>
             </div>
-            <button onClick={logout} data-testid="suite-logout-btn" className="p-1.5 text-neutral-500 hover:text-ink hover:bg-surfacehover rounded-full">
+            <button onClick={logout} data-testid="suite-logout-btn" className="p-1.5 text-neutral-400 hover:text-ink hover:bg-surfacehover rounded-xl">
               <LogOut size={14} />
             </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-6xl mx-auto px-6 sm:px-8 py-8">
         <h1 className="font-display text-2xl font-bold">Command center</h1>
-        <p className="text-sm text-neutral-500 mt-1">Every agent, what it's working on, and what needs you — live.</p>
+        <p className="text-sm text-neutral-400 mt-1">Every agent, what it's working on, and what needs you — live.</p>
 
         {/* KPI strip */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6 mt-8 animate-fade-in">
           <Kpi icon={Zap} label="Agents active now" value={`${activeAgents} / ${AGENTS.length}`} />
           <Kpi icon={ActivityIcon} label="Actions today" value={summary ? summary.today : "—"} />
           <Kpi icon={TrendingUp} label="Total actions" value={summary ? summary.total : "—"} />
           <Kpi icon={Users} label="Leads in CRM" value={leadsStat ?? "—"} />
+          <Kpi icon={Coins} label="Credits left" to="/billing"
+            value={sub ? Math.max(0, sub.balance).toLocaleString() : "—"} />
         </div>
 
         {/* Needs your attention */}
@@ -194,37 +198,37 @@ export default function SuiteHome() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
           {/* Detailed agent grid */}
           <div className="lg:col-span-2">
-            <div className="ui-label text-neutral-500 mb-3">Agents</div>
+            <div className="ui-label text-neutral-400 mb-3">Agents</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {AGENTS.map((a) => {
                 const Icon = a.icon;
                 const s = data[a.k];
                 return (
                   <button key={a.k} onClick={() => nav(a.root)} data-testid={`suite-card-${a.k}`}
-                    className="text-left card-flat p-5 hover:border-ink transition-colors group">
+                    className="text-left card-flat p-6 hover:border-ink transition-all shadow-card hover:shadow-card-hover group">
                     <div className="flex items-start justify-between">
                       <div className="w-10 h-10 rounded-full bg-ink/10 flex items-center justify-center">
                         <Icon size={18} />
                       </div>
                       {s === undefined ? null : (
-                        <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border ${s?.active ? "text-emerald-700 border-emerald-300 bg-emerald-50" : "text-neutral-500 border-line"}`}>
+                        <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border ${s?.active ? "text-emerald-700 border-emerald-300 bg-emerald-50" : "text-neutral-400 border-line"}`}>
                           <Circle size={7} className={s?.active ? "fill-emerald-500 text-emerald-500" : "fill-neutral-400 text-neutral-400"} />
                           {s?.active ? "Active" : "Idle"}
                         </span>
                       )}
                     </div>
                     <div className="font-display font-bold text-lg mt-3">{a.label}</div>
-                    <p className="text-xs text-neutral-500 mt-0.5 min-h-[16px]">
+                    <p className="text-xs text-neutral-400 mt-0.5 min-h-[16px]">
                       {s === undefined ? "Loading…" : s === null ? "—" : s.working}
                     </p>
                     <div className="flex items-center gap-5 mt-4 pt-4 border-t border-line">
                       {s?.metrics?.map((m) => (
                         <div key={m.label}>
                           <div className="font-display text-lg font-bold">{m.value}</div>
-                          <div className="text-[10px] text-neutral-500 font-mono uppercase">{m.label}</div>
+                          <div className="text-[10px] text-neutral-400 font-mono uppercase">{m.label}</div>
                         </div>
                       ))}
                       {s?.needs > 0 && (
@@ -241,9 +245,9 @@ export default function SuiteHome() {
           </div>
 
           {/* Live activity feed */}
-          <aside>
-            <div className="ui-label text-neutral-500 mb-3">Live activity</div>
-            <div className="card-flat p-0 overflow-hidden">
+          <aside className="animate-fade-in">
+            <div className="ui-label text-neutral-400 mb-3">Live activity</div>
+            <div className="card-flat shadow-card p-0 overflow-hidden">
               {activities === null ? (
                 <div className="p-6 text-sm text-neutral-400">Loading…</div>
               ) : activities.length === 0 ? (
@@ -266,7 +270,7 @@ export default function SuiteHome() {
                           </div>
                           <div className="text-sm leading-snug mt-0.5">{a.summary}</div>
                           {a.lead && (
-                            <Link to={`/app/leads/${a.lead.id}`} className="text-xs text-neutral-500 hover:text-sanguine">
+                            <Link to={`/app/leads/${a.lead.id}`} className="text-xs text-neutral-400 hover:text-sanguine">
                               {a.lead.first_name} {a.lead.last_name || ""}{a.lead.company ? ` · ${a.lead.company}` : ""}
                             </Link>
                           )}
@@ -284,14 +288,15 @@ export default function SuiteHome() {
   );
 }
 
-function Kpi({ icon: Icon, label, value }) {
+function Kpi({ icon: Icon, label, value, to }) {
+  const Wrap = to ? Link : "div";
   return (
-    <div className="card-flat p-4">
-      <div className="flex items-center gap-2 text-neutral-500">
+    <Wrap {...(to ? { to } : {})} className={`card-flat shadow-card rounded-2xl p-4 sm:p-5 block ${to ? "hover:shadow-card-hover transition-all" : ""}`}>
+      <div className="flex items-center gap-2 text-neutral-400">
         <Icon size={14} />
         <span className="ui-label">{label}</span>
       </div>
       <div className="font-display text-2xl font-bold mt-1">{value}</div>
-    </div>
+    </Wrap>
   );
 }

@@ -12,6 +12,23 @@ const VOICE_OPTIONS = [
   { id: "11labs-Brian", label: "Brian — calm, male" },
 ];
 
+// Restricted to voices confirmed to produce intelligible audio over Twilio's
+// 8kHz g711_ulaw media stream — OpenAI's fable/onyx/nova do not, at this
+// sample rate, so they're deliberately left off this list rather than left in
+// as a silent trap.
+const OPENAI_VOICE_OPTIONS = [
+  { id: "alloy", label: "Alloy — neutral, balanced" },
+  { id: "echo", label: "Echo — warm, male" },
+  { id: "shimmer", label: "Shimmer — bright, female" },
+  { id: "ash", label: "Ash — calm, male" },
+  { id: "ballad", label: "Ballad — smooth, male" },
+  { id: "coral", label: "Coral — friendly, female" },
+  { id: "sage", label: "Sage — measured, female" },
+  { id: "verse", label: "Verse — expressive, male" },
+];
+
+const voiceOptionsFor = (provider) => (provider === "twilio_openai" ? OPENAI_VOICE_OPTIONS : VOICE_OPTIONS);
+
 const FRAMEWORKS = {
   BANT: [
     { key: "budget", prompt: "Does the prospect have budget allocated?", type: "string" },
@@ -30,7 +47,7 @@ const FRAMEWORKS = {
 };
 
 const emptyAgent = () => ({
-  name: "Untitled agent", purpose: "outbound",
+  name: "Untitled agent", purpose: "outbound", provider: "retell",
   persona_prompt: "You are a friendly, concise SDR calling on behalf of our company. Qualify the lead, answer questions, and book a follow-up meeting if there's interest.",
   voice_id: VOICE_OPTIONS[0].id, language: "en-US",
   llm_mode: "retell_managed", llm_model: "claude-5-sonnet",
@@ -52,6 +69,11 @@ export default function VoiceAgentBuilder() {
     if (!id || id === "new") return;
     api.get(`/voice-eq/agents/${id}`).then((r) => { setAgent(r.data); setStatus(r.data.status); });
   }, [id]);
+
+  const setProvider = (provider) => {
+    const options = voiceOptionsFor(provider);
+    setAgent({ ...agent, provider, voice_id: options[0].id });
+  };
 
   const applyFramework = (fw) => {
     setAgent({ ...agent, qualification_framework: fw, qualification_fields: FRAMEWORKS[fw] || [] });
@@ -92,7 +114,10 @@ export default function VoiceAgentBuilder() {
     try {
       const { data } = await api.post(`/voice-eq/agents/${id}/sync`);
       setStatus(data.status);
-      toast.success(data.mocked === false ? "Synced to Retell" : "Synced in test mode — connect a Retell account to place live calls");
+      const providerLabel = agent.provider === "twilio_openai" ? "Twilio + OpenAI" : "Retell";
+      toast.success(data.mocked === false
+        ? `Synced to ${providerLabel}`
+        : `Synced in test mode — connect a ${providerLabel} account to place live calls`);
     } catch (err) { toast.error(err?.response?.data?.detail || "Sync failed"); }
     finally { setSyncing(false); }
   };
@@ -105,7 +130,8 @@ export default function VoiceAgentBuilder() {
         right={
           <div className="flex gap-2">
             <button onClick={sync} disabled={syncing} data-testid="sync-agent-btn" className="btn-secondary">
-              <RefreshCw size={14} className={syncing ? "animate-spin" : ""} /> {status === "synced" ? "Re-sync" : "Sync to Retell"}
+              <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />
+              {status === "synced" ? "Re-sync" : `Sync to ${agent.provider === "twilio_openai" ? "Twilio + OpenAI" : "Retell"}`}
             </button>
             <button onClick={save} disabled={busy} data-testid="save-agent-btn" className="btn-primary">
               <Save size={14} /> Save
@@ -113,9 +139,9 @@ export default function VoiceAgentBuilder() {
           </div>
         }
       />
-      <div className="p-6 max-w-3xl space-y-6">
-        <div className="card-flat p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+      <div className="animate-fade-in px-6 sm:px-8 max-w-3xl space-y-6">
+        <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="ui-label block mb-1">Name</label>
               <input value={agent.name} onChange={(e) => setAgent({ ...agent, name: e.target.value })}
@@ -140,12 +166,20 @@ export default function VoiceAgentBuilder() {
             <input value={agent.begin_message} onChange={(e) => setAgent({ ...agent, begin_message: e.target.value })}
               data-testid="agent-begin-message" className="w-full border border-line px-3 py-2 rounded-sm" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="ui-label block mb-1">Calling provider</label>
+              <select value={agent.provider} onChange={(e) => setProvider(e.target.value)}
+                data-testid="agent-provider" className="w-full border border-line px-3 py-2 rounded-sm">
+                <option value="retell">Retell AI</option>
+                <option value="twilio_openai">Twilio + OpenAI Realtime</option>
+              </select>
+            </div>
             <div>
               <label className="ui-label block mb-1">Voice</label>
               <select value={agent.voice_id} onChange={(e) => setAgent({ ...agent, voice_id: e.target.value })}
                 data-testid="agent-voice" className="w-full border border-line px-3 py-2 rounded-sm">
-                {VOICE_OPTIONS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                {voiceOptionsFor(agent.provider).map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
               </select>
             </div>
             <div>
@@ -170,11 +204,11 @@ export default function VoiceAgentBuilder() {
           </label>
         </div>
 
-        <div className="card-flat p-5 space-y-3">
-          <div className="flex items-center justify-between">
+        <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
               <div className="font-display font-semibold">Qualification schema</div>
-              <p className="text-xs text-neutral-500">Structured fields the agent extracts during the call — written to the call log and cascaded to the CRM.</p>
+              <p className="text-xs text-neutral-400">Structured fields the agent extracts during the call — written to the call log and cascaded to the CRM.</p>
             </div>
             <div className="flex gap-2">
               <button onClick={() => applyFramework("BANT")} data-testid="framework-bant" className="btn-ghost text-xs">BANT</button>
@@ -183,9 +217,9 @@ export default function VoiceAgentBuilder() {
           </div>
           <div className="space-y-2">
             {agent.qualification_fields.map((f, i) => (
-              <div key={i} className="flex gap-2 items-center">
+              <div key={i} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
                 <input placeholder="key" value={f.key} onChange={(e) => updateField(i, { key: e.target.value })}
-                  data-testid={`qfield-key-${i}`} className="w-32 border border-line px-2 py-1.5 rounded-sm text-sm font-mono" />
+                  data-testid={`qfield-key-${i}`} className="w-full sm:w-32 border border-line px-2 py-1.5 rounded-sm text-sm font-mono" />
                 <input placeholder="What should the agent extract?" value={f.prompt} onChange={(e) => updateField(i, { prompt: e.target.value })}
                   data-testid={`qfield-prompt-${i}`} className="flex-1 border border-line px-2 py-1.5 rounded-sm text-sm" />
                 <button onClick={() => removeField(i)} data-testid={`qfield-remove-${i}`} className="text-neutral-400 hover:text-red-600">
@@ -198,10 +232,10 @@ export default function VoiceAgentBuilder() {
         </div>
 
         {/* Cross-agent handoff — the differentiator: a qualified call fires another agent automatically */}
-        <div className="card-flat p-5 space-y-3">
+        <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-3">
           <div>
             <div className="font-display font-semibold">When a call qualifies the lead</div>
-            <p className="text-xs text-neutral-500">The suite's edge over standalone dialers — hand off to another agent automatically, no Zapier.</p>
+            <p className="text-xs text-neutral-400">The suite's edge over standalone dialers — hand off to another agent automatically, no Zapier.</p>
           </div>
           <select value={agent.post_call_action} onChange={(e) => setAgent({ ...agent, post_call_action: e.target.value })}
             data-testid="agent-post-call-action" className="w-full border border-line px-3 py-2 rounded-sm">
@@ -212,42 +246,46 @@ export default function VoiceAgentBuilder() {
           </select>
         </div>
 
-        <div className="card-flat p-5 space-y-4">
+        <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-4">
           <div>
             <div className="font-display font-semibold">Knowledge base</div>
-            <p className="text-xs text-neutral-500">Facts, pricing, and FAQs the agent can answer from mid-call.</p>
+            <p className="text-xs text-neutral-400">Facts, pricing, and FAQs the agent can answer from mid-call.</p>
           </div>
           <textarea value={agent.knowledge_base} onChange={(e) => setAgent({ ...agent, knowledge_base: e.target.value })}
             data-testid="agent-knowledge-base" rows={4} placeholder="e.g. Our Starter plan is $499/mo for up to 5 seats. We support SSO on Growth and above…"
             className="w-full border border-line px-3 py-2 rounded-sm text-sm" />
         </div>
 
-        <div className="card-flat p-5 space-y-4">
+        <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-4">
           <div className="font-display font-semibold">Advanced</div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="ui-label block mb-1">Warm-transfer number</label>
-              <input value={agent.warm_transfer_number || ""} onChange={(e) => setAgent({ ...agent, warm_transfer_number: e.target.value })}
-                data-testid="agent-transfer-number" placeholder="+14155550100"
-                className="w-full border border-line px-3 py-2 rounded-sm" />
-              <p className="text-[11px] text-neutral-400 mt-1">Agent hands off to a human when asked.</p>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {agent.provider !== "twilio_openai" && (
+              <div>
+                <label className="ui-label block mb-1">Warm-transfer number</label>
+                <input value={agent.warm_transfer_number || ""} onChange={(e) => setAgent({ ...agent, warm_transfer_number: e.target.value })}
+                  data-testid="agent-transfer-number" placeholder="+14155550100"
+                  className="w-full border border-line px-3 py-2 rounded-sm" />
+                <p className="text-[11px] text-neutral-400 mt-1">Agent hands off to a human when asked.</p>
+              </div>
+            )}
             <div>
               <label className="ui-label block mb-1">Max call length (min)</label>
               <input type="number" min={1} max={60} value={agent.max_call_duration_minutes}
                 onChange={(e) => setAgent({ ...agent, max_call_duration_minutes: Number(e.target.value) || 15 })}
                 data-testid="agent-max-duration" className="w-full border border-line px-3 py-2 rounded-sm" />
             </div>
-            <div>
-              <label className="ui-label block mb-1">Ambient sound</label>
-              <select value={agent.ambient_sound} onChange={(e) => setAgent({ ...agent, ambient_sound: e.target.value })}
-                data-testid="agent-ambient" className="w-full border border-line px-3 py-2 rounded-sm">
-                <option value="none">None</option>
-                <option value="coffee-shop">Coffee shop</option>
-                <option value="call-center">Call center</option>
-                <option value="convention-hall">Convention hall</option>
-              </select>
-            </div>
+            {agent.provider !== "twilio_openai" && (
+              <div>
+                <label className="ui-label block mb-1">Ambient sound</label>
+                <select value={agent.ambient_sound} onChange={(e) => setAgent({ ...agent, ambient_sound: e.target.value })}
+                  data-testid="agent-ambient" className="w-full border border-line px-3 py-2 rounded-sm">
+                  <option value="none">None</option>
+                  <option value="coffee-shop">Coffee shop</option>
+                  <option value="call-center">Call center</option>
+                  <option value="convention-hall">Convention hall</option>
+                </select>
+              </div>
+            )}
             <div>
               <label className="ui-label block mb-1">Speaking speed · {agent.voice_speed.toFixed(1)}×</label>
               <input type="range" min={0.5} max={2} step={0.1} value={agent.voice_speed}

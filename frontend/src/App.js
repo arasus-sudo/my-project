@@ -24,6 +24,8 @@ import Onboarding from "./pages/Onboarding";
 import Team from "./pages/Team";
 import Templates from "./pages/Templates";
 import Settings from "./pages/Settings";
+import Billing from "./pages/Billing";
+import { OutOfCreditsWatcher } from "./components/Credits";
 import Webhooks from "./pages/Webhooks";
 import HubSpotSettings from "./pages/HubSpotSettings";
 import VoiceEQOverview from "./pages/VoiceEQOverview";
@@ -40,6 +42,7 @@ import EventTypeBuilder from "./pages/EventTypeBuilder";
 import Bookings from "./pages/Bookings";
 import ScheduleSettings from "./pages/ScheduleSettings";
 import BookingPage from "./pages/BookingPage";
+import ManageBooking from "./pages/ManageBooking";
 import Proposals from "./pages/Proposals";
 import ProposalBuilder from "./pages/ProposalBuilder";
 import PricingCatalog from "./pages/PricingCatalog";
@@ -61,6 +64,7 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <Toaster position="top-right" theme="light" />
+          <OutOfCreditsWatcher />
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
@@ -68,7 +72,11 @@ function App() {
             <Route path="/onboarding" element={<Private><Onboarding /></Private>} />
             <Route path="/suite" element={<Private><SuiteHome /></Private>} />
             <Route path="/settings" element={<Private><Settings /></Private>} />
+            <Route path="/billing" element={<Private><Billing /></Private>} />
             <Route path="/admin" element={<Private><Admin /></Private>} />
+            {/* Public, token-only guest self-service — must sit before the slug route
+                so "manage" isn't parsed as a workspaceId. */}
+            <Route path="/book/manage/:token" element={<ManageBooking />} />
             <Route path="/book/:workspaceId/:eventTypeSlug" element={<BookingPage />} />
             <Route path="/app" element={<Private><AppLayout /></Private>}>
               <Route index element={<Dashboard />} />

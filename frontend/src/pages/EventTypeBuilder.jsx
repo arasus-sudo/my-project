@@ -57,8 +57,8 @@ export default function EventTypeBuilder() {
         subtitle="Duration, location, buffers, and optional AI qualifying questions."
         right={<button onClick={save} disabled={busy} data-testid="save-event-type-btn" className="btn-primary"><Save size={14} /> Save</button>}
       />
-      <div className="p-6 max-w-2xl space-y-6">
-        <div className="card-flat p-5 space-y-4">
+      <div className="animate-fade-in px-6 sm:px-8 max-w-2xl space-y-6">
+        <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-4">
           <div>
             <label className="ui-label block mb-1">Name</label>
             <input value={et.name} onChange={(e) => setEt({ ...et, name: e.target.value })}
@@ -69,7 +69,7 @@ export default function EventTypeBuilder() {
             <textarea value={et.description} onChange={(e) => setEt({ ...et, description: e.target.value })}
               data-testid="et-description" rows={2} className="w-full border border-line px-3 py-2 rounded-sm" />
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="ui-label block mb-1">Duration (min)</label>
               <input type="number" value={et.duration_minutes} onChange={(e) => setEt({ ...et, duration_minutes: Number(e.target.value) || 15 })}
@@ -90,7 +90,7 @@ export default function EventTypeBuilder() {
                 data-testid="et-min-notice" className="w-full border border-line px-3 py-2 rounded-sm" />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="ui-label block mb-1">Buffer before (min)</label>
               <input type="number" value={et.buffer_before_minutes} onChange={(e) => setEt({ ...et, buffer_before_minutes: Number(e.target.value) || 0 })}
@@ -109,16 +109,16 @@ export default function EventTypeBuilder() {
           </div>
         </div>
 
-        <div className="card-flat p-5 space-y-3">
+        <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-3">
           <div>
             <div className="font-display font-semibold">AI qualifying questions</div>
-            <p className="text-xs text-neutral-500">Asked before the calendar is shown; answers are scored 0-100 and can route low-fit guests elsewhere.</p>
+            <p className="text-xs text-neutral-400">Asked before the calendar is shown; answers are scored 0-100 and can route low-fit guests elsewhere.</p>
           </div>
           <div className="space-y-2">
             {et.qualifying_questions.map((q, i) => (
-              <div key={i} className="flex gap-2 items-center">
+              <div key={i} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
                 <input placeholder="key" value={q.key} onChange={(e) => updateQuestion(i, { key: e.target.value })}
-                  data-testid={`et-qfield-key-${i}`} className="w-28 border border-line px-2 py-1.5 rounded-sm text-sm font-mono" />
+                  data-testid={`et-qfield-key-${i}`} className="w-full sm:w-28 border border-line px-2 py-1.5 rounded-sm text-sm font-mono" />
                 <input placeholder="Question to ask" value={q.prompt} onChange={(e) => updateQuestion(i, { prompt: e.target.value })}
                   data-testid={`et-qfield-prompt-${i}`} className="flex-1 border border-line px-2 py-1.5 rounded-sm text-sm" />
                 <button onClick={() => removeQuestion(i)} data-testid={`et-qfield-remove-${i}`} className="text-neutral-400 hover:text-red-600"><Trash2 size={14} /></button>
@@ -128,7 +128,7 @@ export default function EventTypeBuilder() {
           <button onClick={addQuestion} data-testid="et-qfield-add" className="btn-ghost text-xs"><Plus size={12} /> Add question</button>
 
           {et.qualifying_questions.length > 0 && (
-            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-line">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-line">
               <div>
                 <label className="ui-label block mb-1">Low-score threshold (0=off)</label>
                 <input type="number" min={0} max={100} value={et.low_score_threshold}

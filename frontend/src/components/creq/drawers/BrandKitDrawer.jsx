@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Sparkles, Pencil, Image as ImageIcon } from "lucide-react";
 import { api } from "../../../lib/api";
-import { PALETTES, FONTS } from "../../../lib/creqTemplates";
+import { PALETTES } from "../../../lib/creqTemplates";
+import GoogleFontPicker from "../GoogleFontPicker";
 import { newId } from "../utils";
 
 const DEFAULT_COLORS = () => [
@@ -190,11 +191,11 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
 
             <label className="block">
               <span className="ui-label">Primary font</span>
-              <select value={editing.fonts[0] || "Inter"}
-                onChange={(e) => setEditing({ ...editing, fonts: [e.target.value] })}
-                className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
-                {FONTS.map((f) => <option key={f.id} value={f.id}>{f.id}</option>)}
-              </select>
+              <GoogleFontPicker
+                value={editing.fonts[0] || "Inter"}
+                onChange={(font) => setEditing({ ...editing, fonts: [font] })}
+                testid="brandkit-font"
+              />
             </label>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-line">

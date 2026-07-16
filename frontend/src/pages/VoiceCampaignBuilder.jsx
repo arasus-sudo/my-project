@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import { Save, Play, Pause } from "lucide-react";
@@ -64,7 +64,7 @@ export default function VoiceCampaignBuilder() {
       const { data } = await api.post(`/voice-eq/campaigns/${id}/launch`);
       setStatus("active");
       toast.success(`Launched — ${data.calls_placed} call(s) placed${data.skipped ? `, ${data.skipped} skipped (no phone/DNC)` : ""}`);
-    } catch (err) { toast.error(err?.response?.data?.detail || "Launch failed"); }
+    } catch (err) { if (!isCreditError(err)) toast.error(err?.response?.data?.detail || "Launch failed"); }
     finally { setBusy(false); }
   };
   const pause = async () => {
@@ -97,8 +97,8 @@ export default function VoiceCampaignBuilder() {
           </div>
         }
       />
-      <div className="p-6 max-w-4xl space-y-6">
-        <div className="card-flat p-5 grid grid-cols-2 gap-4">
+      <div className="animate-fade-in px-6 sm:px-8 max-w-4xl space-y-6">
+        <div className="shadow-card rounded-2xl p-6 sm:p-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="ui-label block mb-1">Name</label>
             <input value={campaign.name} onChange={(e) => setCampaign({ ...campaign, name: e.target.value })}
@@ -149,23 +149,23 @@ export default function VoiceCampaignBuilder() {
           </div>
         </div>
 
-        <div className="card-flat p-5 space-y-3">
+        <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-3">
           <div className="flex items-center justify-between">
             <div>
               <div className="font-display font-semibold">Leads to call</div>
-              <p className="text-xs text-neutral-500">{campaign.lead_ids.length} selected · only leads with a phone number can be called.</p>
+              <p className="text-xs text-neutral-400">{campaign.lead_ids.length} selected · only leads with a phone number can be called.</p>
             </div>
             <button onClick={selectAllCallable} data-testid="select-all-callable" className="btn-ghost text-xs">Select all callable</button>
           </div>
           <div className="border border-line max-h-80 overflow-y-auto">
             {callableLeads.length === 0 ? (
-              <div className="p-4 text-sm text-neutral-500">No leads with a phone number yet — add one from the Leads page.</div>
+              <div className="p-4 text-sm text-neutral-400">No leads with a phone number yet — add one from the Leads page.</div>
             ) : callableLeads.map((l) => (
               <label key={l.id} className="flex items-center gap-3 px-3 py-2 border-b border-line last:border-0 hover:bg-surfacehover cursor-pointer">
                 <input type="checkbox" checked={campaign.lead_ids.includes(l.id)} onChange={() => toggleLead(l.id)}
                   data-testid={`voice-campaign-lead-${l.id}`} />
                 <span className="flex-1 text-sm">{l.first_name} {l.last_name}</span>
-                <span className="text-xs font-mono text-neutral-500">{l.phone}</span>
+                <span className="text-xs font-mono text-neutral-400">{l.phone}</span>
                 {l.dnc && <span className="ui-label text-red-600">DNC</span>}
               </label>
             ))}

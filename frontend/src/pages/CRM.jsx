@@ -30,8 +30,8 @@ export default function CRM() {
   return (
     <div>
       <PageHeader title="Pipeline" subtitle="Deals auto-created from interested replies." />
-      <div className="p-6 overflow-x-auto">
-        <div className="grid grid-cols-6 gap-0 min-w-[1100px] border border-line bg-white">
+      <div className="animate-fade-in px-6 sm:px-8 overflow-x-auto">
+        <div className="card-floating p-4 grid grid-cols-6 gap-0 min-w-[1100px] border border-line bg-white rounded-2xl">
           {STAGES.map((s) => (
             <div
               key={s.k}
@@ -42,7 +42,7 @@ export default function CRM() {
             >
               <div className="p-3 border-b border-line bg-white sticky top-0 z-10">
                 <div className="ui-label">{s.t}</div>
-                <div className="font-mono text-xs text-neutral-500">
+                <div className="font-mono text-xs text-neutral-400">
                   {deals.filter((d) => d.stage === s.k).length} deals
                 </div>
               </div>
@@ -54,10 +54,10 @@ export default function CRM() {
                     onDragStart={() => setDragging(d.id)}
                     onDragEnd={() => setDragging(null)}
                     data-testid={`deal-${d.id}`}
-                    className="card-flat p-3 cursor-grab active:cursor-grabbing hover:border-ink"
+                    className="shadow-card p-3 cursor-grab active:cursor-grabbing hover:shadow-card-hover hover:border-ink"
                   >
                     <div className="font-medium text-sm truncate">{d.title}</div>
-                    <div className="text-xs text-neutral-500 mt-1 truncate">
+                    <div className="text-xs text-neutral-400 mt-1 truncate">
                       {d.lead?.first_name} {d.lead?.last_name} · {d.lead?.company}
                     </div>
                     <div className="mt-3 flex justify-between items-center">

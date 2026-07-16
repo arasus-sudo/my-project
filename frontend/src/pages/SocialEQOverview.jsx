@@ -21,8 +21,8 @@ export default function SocialEQOverview() {
         title="Social EQ"
         subtitle="Drafts, schedules, and — only with your explicit approval — publishes posts to LinkedIn, Instagram, and YouTube."
       />
-      <div className="p-6 space-y-6">
-        <div className="grid grid-cols-4 gap-4">
+      <div className="animate-fade-in px-6 sm:px-8 space-y-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <StatCard icon={PenSquare} label="Drafts" value={loading ? "—" : drafts} />
           <StatCard icon={Clock} label="Awaiting approval/publish" value={loading ? "—" : pending} />
           <StatCard icon={CheckCircle2} label="Published" value={loading ? "—" : published.length} />
@@ -30,21 +30,21 @@ export default function SocialEQOverview() {
         </div>
 
         {!loading && posts.length === 0 && (
-          <div className="card-flat p-10 text-center">
-            <div className="font-display text-xl font-bold">Draft your first post</div>
-            <p className="text-sm text-neutral-500 mt-2">Nothing publishes without your explicit review and approval.</p>
+          <div className="shadow-card p-6 sm:p-10 text-center rounded-2xl">
+            <div className="font-display text-xl font-semibold">Draft your first post</div>
+            <p className="text-sm text-neutral-400 mt-2">Nothing publishes without your explicit review and approval.</p>
             <Link to="/app/social-eq/compose" className="btn-primary mt-6 inline-flex">Compose a post</Link>
           </div>
         )}
 
         {!loading && posts.length > 0 && (
-          <div className="border border-line bg-white">
+          <div className="card-floating p-4 border border-line bg-white overflow-x-auto">
             <div className="p-4 border-b border-line font-display font-semibold text-sm">Recent posts</div>
             <table className="w-full text-sm">
               <tbody>
                 {posts.slice(0, 8).map((p) => (
                   <tr key={p.id} className="border-b border-line last:border-0">
-                    <td className="p-3 capitalize text-neutral-600">{p.platform}</td>
+                    <td className="p-3 capitalize text-neutral-400">{p.platform}</td>
                     <td className="p-3 font-medium">{p.headline}</td>
                     <td className="p-3 text-xs text-neutral-400 text-right">{p.status}</td>
                   </tr>
@@ -60,12 +60,12 @@ export default function SocialEQOverview() {
 
 function StatCard({ icon: Icon, label, value }) {
   return (
-    <div className="card-flat p-4">
-      <div className="flex items-center gap-2 text-neutral-500">
+    <div className="shadow-card p-4 rounded-2xl">
+      <div className="flex items-center gap-2 text-neutral-400">
         <Icon size={14} />
         <span className="ui-label">{label}</span>
       </div>
-      <div className="font-display text-2xl font-bold mt-1">{value}</div>
+      <div className="font-display text-xl sm:text-2xl font-bold mt-1">{value}</div>
     </div>
   );
 }

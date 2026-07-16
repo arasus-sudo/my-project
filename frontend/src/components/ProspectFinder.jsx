@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, isCreditError } from "../lib/api";
 import { toast } from "sonner";
 import { Loader2, Sparkles, X, Plus } from "lucide-react";
 
@@ -41,7 +41,7 @@ export default function ProspectFinder({ open, onClose, onDone }) {
       setProviders(data.providers || providers);
       const init = {}; (data.prospects || []).forEach((_, i) => (init[i] = true));
       setSelected(init);
-    } catch { toast.error("Search failed"); }
+    } catch (err) { if (!isCreditError(err)) toast.error("Search failed"); }
     finally { setBusy(false); }
   };
 

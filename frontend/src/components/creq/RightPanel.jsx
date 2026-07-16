@@ -6,9 +6,10 @@ import {
   AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
   AlignHorizontalSpaceAround, AlignVerticalSpaceAround,
 } from "lucide-react";
-import { PALETTES, FONTS, CANVAS } from "../../lib/creqTemplates";
+import { PALETTES, CANVAS } from "../../lib/creqTemplates";
 import PanoramaLayer from "./PanoramaLayer";
 import { ICONS } from "./ElementRender";
+import GoogleFontPicker from "./GoogleFontPicker";
 
 /** Parse a number input's raw value, ignoring transient empty/invalid states
  * (e.g. while the user backspaces to type a new value) instead of committing
@@ -207,10 +208,7 @@ function RightPanel({
             className="w-full border border-line rounded-lg p-2 text-sm focus:outline-none focus:border-ink" />
           <label className="block">
             <span className="ui-label">Font</span>
-            <select value={el.font} onChange={(e) => onEditElement({ font: e.target.value })} data-testid="el-font"
-              className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
-              {FONTS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
-            </select>
+            <GoogleFontPicker value={el.font} onChange={(font) => onEditElement({ font })} testid="el-font" />
           </label>
           <div className="grid grid-cols-2 gap-2">
             <label className="block"><span className="ui-label">Size</span>

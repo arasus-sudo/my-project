@@ -1,15 +1,49 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import ProspectFinder from "../components/ProspectFinder";
 import { toast } from "sonner";
-import { Plus, Upload, Sparkles, Phone } from "lucide-react";
+import { Plus, Upload, Sparkles, Phone, ArrowUpDown, ArrowDown } from "lucide-react";
+
+const BAND_STYLE = {
+  hot: "bg-sanguine text-white",
+  warm: "bg-amber-100 text-amber-900 border border-amber-200",
+  cool: "bg-neutral-100 text-neutral-400 border border-line",
+  cold: "bg-white text-neutral-400 border border-line",
+};
+
+/** Intent replaces the old ICP column, which was fake in every write path
+ *  (hardcoded 70 on import, `60 + len(company) % 40` elsewhere). An unenriched
+ *  lead now says so instead of showing an invented number. */
+function IntentCell({ lead }) {
+  const intent = lead.intent;
+  if (!intent) {
+    return (
+      <span className="text-[11px] text-neutral-400 font-mono" title="Not researched yet">
+        not scored
+      </span>
+    );
+  }
+  return (
+    <span
+      title={(intent.reasons || []).join(" · ")}
+      data-testid={`intent-${lead.id}`}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-mono font-medium ${
+        BAND_STYLE[intent.band] || BAND_STYLE.cold
+      }`}
+    >
+      {intent.score}
+      <span className="uppercase tracking-wider opacity-70">{intent.band}</span>
+    </span>
+  );
+}
 
 export default function Leads() {
   const [leads, setLeads] = useState([]);
   const [voiceAgents, setVoiceAgents] = useState([]);
   const [q, setQ] = useState("");
+  const [sortByIntent, setSortByIntent] = useState(false);
   const [modal, setModal] = useState(false);
   const [finder, setFinder] = useState(false);
   const [callLead, setCallLead] = useState(null);
@@ -36,7 +70,7 @@ export default function Leads() {
       toast.success(`Calling ${callLead.first_name}…`);
       setCallLead(null);
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Call failed");
+      if (!isCreditError(err)) toast.error(err?.response?.data?.detail || "Call failed");
     } finally { setCalling(false); }
   };
 
@@ -131,9 +165,15 @@ export default function Leads() {
     toast.success(`Suppressed ${email}`);
   };
 
-  const filtered = leads.filter((l) =>
-    !q || `${l.first_name} ${l.last_name} ${l.email} ${l.company}`.toLowerCase().includes(q.toLowerCase())
-  );
+  const filtered = leads
+    .filter((l) =>
+      !q || `${l.first_name} ${l.last_name} ${l.email} ${l.company}`.toLowerCase().includes(q.toLowerCase())
+    )
+    // Unscored leads sort last rather than as zero — "we haven't looked yet" is
+    // not the same claim as "this lead is cold".
+    .sort((a, b) => (sortByIntent
+      ? (b.intent?.score ?? -1) - (a.intent?.score ?? -1)
+      : 0));
 
   return (
     <div>
@@ -141,7 +181,7 @@ export default function Leads() {
         title="Leads"
         subtitle={`${leads.length} contacts in your workspace.`}
         right={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button onClick={() => setFinder(true)} data-testid="find-leads-btn" className="btn-secondary">
               <Sparkles size={14} /> Find leads
             </button>
@@ -153,20 +193,20 @@ export default function Leads() {
           </div>
         }
       />
-      <div className="p-6">
+      <div className="animate-fade-in px-6 sm:px-8">
         <input
           value={q} onChange={(e) => setQ(e.target.value)} data-testid="lead-search"
           placeholder="Search leads by name, email, company…"
           className="w-full max-w-md mb-4 border border-line px-3 py-2 rounded-sm focus:outline-none focus:border-ink"
         />
         {filtered.length === 0 ? (
-          <div className="card-flat p-10 text-center">
-            <div className="font-display text-xl font-bold">No leads yet</div>
-            <p className="text-sm text-neutral-500 mt-2">Import a CSV with columns: first_name, last_name, email, company, title.</p>
+          <div className="shadow-card p-10 text-center rounded-2xl">
+            <div className="font-display text-xl font-semibold">No leads yet</div>
+            <p className="text-sm text-neutral-400 mt-2">Import a CSV with columns: first_name, last_name, email, company, title.</p>
           </div>
         ) : (
-          <div className="border border-line bg-white overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="card-floating p-4 border border-line bg-white overflow-hidden overflow-x-auto rounded-2xl">
+            <table className="w-full text-sm min-w-[800px]">
               <thead>
                 <tr className="border-b border-line">
                   <th className="ui-label text-left p-3">Name</th>
@@ -174,7 +214,12 @@ export default function Leads() {
                   <th className="ui-label text-left p-3">Company</th>
                   <th className="ui-label text-left p-3">Title</th>
                   <th className="ui-label text-left p-3">Phone</th>
-                  <th className="ui-label text-right p-3">ICP</th>
+                  <th className="ui-label text-right p-3">
+                    <button onClick={() => setSortByIntent((s) => !s)} data-testid="sort-intent"
+                      className={`inline-flex items-center gap-1 hover:text-ink ${sortByIntent ? "text-ink" : ""}`}>
+                      Intent {sortByIntent ? <ArrowDown size={11} /> : <ArrowUpDown size={11} />}
+                    </button>
+                  </th>
                   <th className="ui-label text-center p-3">Verified</th>
                   <th className="p-3"></th>
                 </tr>
@@ -189,9 +234,9 @@ export default function Leads() {
                     </td>
                     <td className="p-3 font-mono text-xs text-neutral-700">{l.email}</td>
                     <td className="p-3">{l.company}</td>
-                    <td className="p-3 text-neutral-600">{l.title}</td>
-                    <td className="p-3 font-mono text-xs text-neutral-600">{l.phone || "—"}</td>
-                    <td className="p-3 text-right font-mono">{l.icp_score}</td>
+                    <td className="p-3 text-neutral-400">{l.title}</td>
+                    <td className="p-3 font-mono text-xs text-neutral-400">{l.phone || "—"}</td>
+                    <td className="p-3 text-right"><IntentCell lead={l} /></td>
                     <td className="p-3 text-center">{l.verified ? <span className="text-green-700">✓</span> : "—"}</td>
                     <td className="p-3 text-right space-x-2 whitespace-nowrap">
                       <button
@@ -199,11 +244,11 @@ export default function Leads() {
                         disabled={!l.phone}
                         title={l.phone ? "Call with Voice EQ" : "Add a phone number to call this lead"}
                         data-testid={`call-${l.id}`}
-                        className={`inline-flex items-center gap-1 text-xs ${l.phone ? "text-neutral-500 hover:text-ink" : "text-neutral-300 cursor-not-allowed"}`}
+                        className={`inline-flex items-center gap-1 text-xs ${l.phone ? "text-neutral-400 hover:text-ink" : "text-neutral-300 cursor-not-allowed"}`}
                       >
                         <Phone size={12} /> call
                       </button>
-                      <button onClick={() => suppress(l.email)} data-testid={`suppress-${l.id}`} className="text-xs text-neutral-500 hover:text-ink">suppress</button>
+                      <button onClick={() => suppress(l.email)} data-testid={`suppress-${l.id}`} className="text-xs text-neutral-400 hover:text-ink">suppress</button>
                       <button onClick={() => remove(l.id)} data-testid={`delete-${l.id}`} className="text-xs text-red-600 hover:underline">delete</button>
                     </td>
                   </tr>
@@ -216,8 +261,8 @@ export default function Leads() {
 
       {modal && (
         <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50">
-          <form onSubmit={add} className="bg-white border border-line p-6 rounded-sm w-full max-w-md space-y-3">
-            <div className="font-display font-bold text-xl">Add lead</div>
+          <form onSubmit={add} className="bg-white border border-line p-6 rounded-2xl w-full max-w-md space-y-3">
+            <div className="font-display font-semibold text-xl">Add lead</div>
             <div className="grid grid-cols-2 gap-3">
               <input required placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} data-testid="new-lead-fname" className="border border-line px-3 py-2 rounded-sm" />
               <input placeholder="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} data-testid="new-lead-lname" className="border border-line px-3 py-2 rounded-sm" />
@@ -238,11 +283,11 @@ export default function Leads() {
 
       {callLead && (
         <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50">
-          <div className="bg-white border border-line p-6 rounded-sm w-full max-w-sm space-y-3">
-            <div className="font-display font-bold text-xl">Call {callLead.first_name}</div>
-            <p className="text-sm text-neutral-500">{callLead.phone} · {callLead.company || "—"}</p>
+          <div className="bg-white border border-line p-6 rounded-2xl w-full max-w-sm space-y-3">
+            <div className="font-display font-semibold text-xl">Call {callLead.first_name}</div>
+            <p className="text-sm text-neutral-400">{callLead.phone} · {callLead.company || "—"}</p>
             {voiceAgents.length === 0 ? (
-              <p className="text-sm text-neutral-500">No Voice EQ agents yet — create one in Voice EQ first.</p>
+              <p className="text-sm text-neutral-400">No Voice EQ agents yet — create one in Voice EQ first.</p>
             ) : (
               <select
                 value={callAgentId}

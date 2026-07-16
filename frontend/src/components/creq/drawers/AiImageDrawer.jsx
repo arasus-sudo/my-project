@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Wand2 } from "lucide-react";
-import { api } from "../../../lib/api";
+import { api, isCreditError } from "../../../lib/api";
 
 const IMAGE_PROVIDERS = [
   { id: "nano-banana", label: "Gemini Nano Banana", hint: "Stylized, artistic, painterly" },
@@ -37,8 +37,10 @@ export default function AiImageDrawer({ onClose, onAddAsElement, onAddAsBackgrou
       setPreview({ dataUrl, provider: data.provider });
       toast.success(`Generated with ${data.provider}`);
     } catch (err) {
-      const msg = err?.response?.data?.detail || err?.message || "Generation failed";
-      toast.error(String(msg).slice(0, 200));
+      if (!isCreditError(err)) {
+        const msg = err?.response?.data?.detail || err?.message || "Generation failed";
+        toast.error(String(msg).slice(0, 200));
+      }
     } finally { setBusy(false); }
   };
 

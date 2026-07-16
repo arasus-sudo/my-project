@@ -59,16 +59,28 @@ Do not treat this as a simple refactor. This is a full rewrite of the backend an
 
 ## Common Commands
 
-# Backend (current, Python — for reference only during migration)
+# Start everything (MongoDB + Backend + Frontend)
 
 ```
-cd backend && uvicorn server:app --reload
+.\start.ps1
 ```
 
-# Frontend (current, Craco/React — for reference only during migration)
+# Backend only (port 8001)
+
+```
+cd backend && .\venv\Scripts\python.exe -m uvicorn server:app --reload --port 8001
+```
+
+# Frontend only (port 3000)
 
 ```
 cd frontend && npm start
+```
+
+# MongoDB
+
+```
+Start-Process -FilePath "C:\Program Files\MongoDB\Server\8.3\bin\mongod.exe" -ArgumentList '--config "C:\Program Files\MongoDB\Server\8.3\bin\mongod.cfg"' -Verb RunAs
 ```
 
 # Tests (current backend)
@@ -77,4 +89,8 @@ cd frontend && npm start
 cd backend && pytest
 ```
 
-*(Update this section as the new Node/TS backend and Next.js frontend commands are established.)*
+## IMPORTANT — When user says "start", start ALL three services:
+
+1. MongoDB (port 27017)
+2. Backend (port 8001)
+3. Frontend (port 3000)

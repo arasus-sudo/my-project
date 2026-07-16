@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Mountain, Wand2 } from "lucide-react";
-import { api } from "../../../lib/api";
+import { api, isCreditError } from "../../../lib/api";
 import { CANVAS } from "../../../lib/creqTemplates";
 import { panoramaSliceStyle } from "../PanoramaLayer";
 
@@ -38,7 +38,7 @@ export default function PanoramaDrawer({ onClose, panorama, slideCount, onApply 
       setSrc(`data:${data.mime_type || "image/png"};base64,${data.image_base64}`);
       toast.success("Panorama generated");
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Generation failed");
+      if (!isCreditError(err)) toast.error(err?.response?.data?.detail || "Generation failed");
     } finally { setBusy(false); }
   };
 
