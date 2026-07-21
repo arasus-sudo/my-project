@@ -140,37 +140,40 @@ export default function SuiteHome() {
     .map(({ agent, s }) => ({ key: agent.k, label: s.needsLabel, count: s.needs, href: s.needsHref, agentLabel: agent.label }));
 
   return (
-    <div className="min-h-screen bg-bone animate-fade-in">
-      <div className="border-b border-line bg-white">
-        <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 sm:py-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <InnoiraLogo size="sm" />
-            <div className="text-[10px] text-neutral-400 font-mono uppercase tracking-wider border-l border-line pl-3">{workspace?.name}</div>
+    <div className="min-h-screen bg-bone animate-fade-in relative">
+      <div className="border-b border-line bg-white/80 backdrop-blur-xl sticky top-0 z-20 relative">
+        <div className="max-w-6xl mx-auto px-6 sm:px-8 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <InnoiraLogo size="xs" />
+            <div className="text-tiny text-ink-muted font-mono uppercase tracking-wider border-l border-line pl-2.5">{workspace?.name}</div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <CreditPill />
             <Link to="/settings" data-testid="suite-settings-link" title="Settings"
-              className="p-1.5 text-neutral-400 hover:text-ink hover:bg-surfacehover rounded-xl">
-              <SettingsIcon size={16} />
+              className="p-1.5 text-ink-muted hover:text-ink hover:bg-surfacehover rounded-lg transition-colors">
+              <SettingsIcon size={14} />
             </Link>
-            <div className="text-right leading-tight">
-              <div className="text-xs font-medium">{user?.name}</div>
-              <div className="text-[10px] text-neutral-400">{user?.email}</div>
+            <div className="hidden sm:block text-right leading-tight pl-1">
+              <div className="text-caption font-medium">{user?.name}</div>
+              <div className="text-tiny text-ink-muted">{user?.email}</div>
             </div>
-            <button onClick={logout} data-testid="suite-logout-btn" className="p-1.5 text-neutral-400 hover:text-ink hover:bg-surfacehover rounded-xl">
-              <LogOut size={14} />
+            <button onClick={logout} data-testid="suite-logout-btn" className="p-1.5 text-ink-muted hover:text-danger hover:bg-danger/10 rounded-lg transition-colors">
+              <LogOut size={13} />
             </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 sm:px-8 py-8">
-        <h1 className="font-display text-2xl font-bold">Command center</h1>
-        <p className="text-sm text-neutral-400 mt-1">Every agent, what it's working on, and what needs you — live.</p>
+      <div className="max-w-6xl mx-auto px-6 sm:px-8 py-6 sm:py-8 relative">
+        <div className="ui-label text-accent mb-1.5">Live overview</div>
+        <h1 className="text-page-title font-display">
+          Command center
+        </h1>
+        <p className="text-caption text-ink-muted mt-1.5 max-w-lg">Every agent, what it's working on, and what needs you — live.</p>
 
         {/* KPI strip */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6 mt-8 animate-fade-in">
-          <Kpi icon={Zap} label="Agents active now" value={`${activeAgents} / ${AGENTS.length}`} />
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3 mt-5 animate-fade-in">
+          <Kpi icon={Zap} label="Agents active now" value={`${activeAgents} / ${AGENTS.length}`} highlight />
           <Kpi icon={ActivityIcon} label="Actions today" value={summary ? summary.today : "—"} />
           <Kpi icon={TrendingUp} label="Total actions" value={summary ? summary.total : "—"} />
           <Kpi icon={Users} label="Leads in CRM" value={leadsStat ?? "—"} />
@@ -180,63 +183,63 @@ export default function SuiteHome() {
 
         {/* Needs your attention */}
         {attention.length > 0 && (
-          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4" data-testid="needs-attention">
-            <div className="flex items-center gap-2 text-amber-800 mb-2">
-              <AlertCircle size={15} />
+          <div className="mt-4 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3" data-testid="needs-attention">
+            <div className="flex items-center gap-1.5 text-warning mb-1.5">
+              <AlertCircle size={13} />
               <span className="ui-label">Needs your attention</span>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {attention.map((n) => (
                 <Link key={n.key} to={n.href} data-testid={`attention-${n.key}`}
-                  className="inline-flex items-center gap-2 bg-white border border-amber-200 rounded-full pl-1 pr-3 py-1 text-sm hover:border-amber-400">
-                  <span className="bg-amber-500 text-white text-xs font-mono rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center">{n.count}</span>
-                  <span className="text-amber-900">{n.label}</span>
-                  <span className="text-amber-500 text-[11px] font-mono uppercase">{n.agentLabel.replace(" EQ", "")}</span>
+                  className="inline-flex items-center gap-1.5 bg-white border border-warning/30 rounded-full pl-1 pr-2.5 py-0.5 text-caption hover:border-warning">
+                  <span className="bg-warning text-white text-tiny font-mono rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">{n.count}</span>
+                  <span className="text-warning">{n.label}</span>
+                  <span className="text-warning text-tiny font-mono uppercase">{n.agentLabel.replace(" EQ", "")}</span>
                 </Link>
               ))}
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5 mt-6">
           {/* Detailed agent grid */}
           <div className="lg:col-span-2">
-            <div className="ui-label text-neutral-400 mb-3">Agents</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="ui-label mb-2">Agents</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {AGENTS.map((a) => {
                 const Icon = a.icon;
                 const s = data[a.k];
                 return (
                   <button key={a.k} onClick={() => nav(a.root)} data-testid={`suite-card-${a.k}`}
-                    className="text-left card-flat p-6 hover:border-ink transition-all shadow-card hover:shadow-card-hover group">
-                    <div className="flex items-start justify-between">
-                      <div className="w-10 h-10 rounded-full bg-ink/10 flex items-center justify-center">
-                        <Icon size={18} />
+                    className="relative text-left bg-white border border-line rounded-xl p-4 shadow-card hover:shadow-card-lg hover:border-accent/30 transition-all duration-200 group overflow-hidden">
+                    <div className="relative flex items-start justify-between">
+                      <div className="w-8 h-8 rounded-xl bg-accent flex items-center justify-center text-white shadow-sm">
+                        <Icon size={15} />
                       </div>
                       {s === undefined ? null : (
-                        <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border ${s?.active ? "text-emerald-700 border-emerald-300 bg-emerald-50" : "text-neutral-400 border-line"}`}>
-                          <Circle size={7} className={s?.active ? "fill-emerald-500 text-emerald-500" : "fill-neutral-400 text-neutral-400"} />
+                        <span className={`inline-flex items-center gap-1 text-tiny font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${s?.active ? "text-success border-success/30 bg-success/10" : "text-ink-muted border-line"}`}>
+                          <Circle size={6} className={s?.active ? "fill-success text-success" : "fill-ink-muted text-ink-muted"} />
                           {s?.active ? "Active" : "Idle"}
                         </span>
                       )}
                     </div>
-                    <div className="font-display font-bold text-lg mt-3">{a.label}</div>
-                    <p className="text-xs text-neutral-400 mt-0.5 min-h-[16px]">
+                    <div className="relative font-display font-semibold text-subheading mt-2.5">{a.label}</div>
+                    <p className="relative text-tiny text-ink-muted mt-0.5 min-h-[14px] truncate">
                       {s === undefined ? "Loading…" : s === null ? "—" : s.working}
                     </p>
-                    <div className="flex items-center gap-5 mt-4 pt-4 border-t border-line">
+                    <div className="relative flex items-center gap-4 mt-3 pt-3 border-t border-line">
                       {s?.metrics?.map((m) => (
                         <div key={m.label}>
-                          <div className="font-display text-lg font-bold">{m.value}</div>
-                          <div className="text-[10px] text-neutral-400 font-mono uppercase">{m.label}</div>
+                          <div className="font-display text-sm font-bold">{m.value}</div>
+                          <div className="text-tiny text-ink-muted font-mono uppercase">{m.label}</div>
                         </div>
                       ))}
                       {s?.needs > 0 && (
-                        <div className="ml-auto text-[11px] text-amber-700 font-medium flex items-center gap-1">
-                          <AlertCircle size={12} /> {s.needs} {s.needsLabel}
+                        <div className="ml-auto text-tiny text-warning font-medium flex items-center gap-1">
+                          <AlertCircle size={11} /> {s.needs} {s.needsLabel}
                         </div>
                       )}
-                      {(!s || !s.needs) && <span className="ml-auto text-neutral-300 group-hover:text-ink transition-colors"><ArrowRight size={16} /></span>}
+                      {(!s || !s.needs) && <span className="ml-auto text-ink-disabled group-hover:text-accent transition-colors"><ArrowRight size={14} /></span>}
                     </div>
                   </button>
                 );
@@ -246,31 +249,37 @@ export default function SuiteHome() {
 
           {/* Live activity feed */}
           <aside className="animate-fade-in">
-            <div className="ui-label text-neutral-400 mb-3">Live activity</div>
-            <div className="card-flat shadow-card p-0 overflow-hidden">
+            <div className="ui-label mb-2 flex items-center gap-2">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-accent" />
+              </span>
+              Live activity
+            </div>
+            <div className="bg-white border border-line rounded-xl shadow-card p-0 overflow-hidden">
               {activities === null ? (
-                <div className="p-6 text-sm text-neutral-400">Loading…</div>
+                <div className="p-5 text-caption text-ink-muted">Loading…</div>
               ) : activities.length === 0 ? (
-                <div className="p-6 text-sm text-neutral-400">
+                <div className="p-5 text-caption text-ink-muted">
                   No activity yet. As agents send emails, place calls, book meetings, or publish posts, it shows up here.
                 </div>
               ) : (
-                <div className="max-h-[620px] overflow-y-auto divide-y divide-line">
+                <div className="max-h-[560px] overflow-y-auto divide-y divide-line">
                   {activities.map((a) => {
                     const meta = ACTIVITY_META[a.agent] || { icon: ActivityIcon, label: a.agent };
                     const Icon = meta.icon;
                     return (
-                      <div key={a.id} data-testid={`activity-${a.id}`} className="p-3 flex gap-3">
-                        <div className="w-7 h-7 rounded-full bg-ink/10 flex items-center justify-center shrink-0">
-                          <Icon size={13} />
+                      <div key={a.id} data-testid={`activity-${a.id}`} className="p-2.5 flex gap-2.5 hover:bg-ash/60 transition-colors">
+                        <div className="w-6 h-6 rounded-lg bg-accent flex items-center justify-center text-white shrink-0 shadow-sm">
+                          <Icon size={11} />
                         </div>
                         <div className="min-w-0">
-                          <div className="text-[10px] text-neutral-400 font-mono uppercase tracking-wide">
+                          <div className="text-tiny text-ink-muted font-mono uppercase tracking-wide">
                             {meta.label} · {formatDistanceToNow(new Date(a.at), { addSuffix: true })}
                           </div>
-                          <div className="text-sm leading-snug mt-0.5">{a.summary}</div>
+                          <div className="text-caption leading-snug mt-0.5">{a.summary}</div>
                           {a.lead && (
-                            <Link to={`/app/leads/${a.lead.id}`} className="text-xs text-neutral-400 hover:text-sanguine">
+                            <Link to={`/app/crm/leads/${a.lead.id}`} className="text-tiny text-ink-muted hover:text-accent">
                               {a.lead.first_name} {a.lead.last_name || ""}{a.lead.company ? ` · ${a.lead.company}` : ""}
                             </Link>
                           )}
@@ -288,15 +297,18 @@ export default function SuiteHome() {
   );
 }
 
-function Kpi({ icon: Icon, label, value, to }) {
+function Kpi({ icon: Icon, label, value, to, highlight }) {
   const Wrap = to ? Link : "div";
   return (
-    <Wrap {...(to ? { to } : {})} className={`card-flat shadow-card rounded-2xl p-4 sm:p-5 block ${to ? "hover:shadow-card-hover transition-all" : ""}`}>
-      <div className="flex items-center gap-2 text-neutral-400">
-        <Icon size={14} />
-        <span className="ui-label">{label}</span>
+    <Wrap {...(to ? { to } : {})}
+      className={`relative rounded-xl p-3 sm:p-3.5 block overflow-hidden transition-all duration-200 ${
+        highlight ? "bg-accent text-white shadow-card-lg" : "bg-white border border-line shadow-card"
+      } ${to ? "hover:shadow-card-lg" : ""}`}>
+      <div className={`flex items-center gap-1.5 ${highlight ? "text-white/80" : "text-ink-muted"}`}>
+        <Icon size={12} />
+        <span className={`ui-label truncate ${highlight ? "text-white/80" : ""}`}>{label}</span>
       </div>
-      <div className="font-display text-2xl font-bold mt-1">{value}</div>
+      <div className="font-display text-lg sm:text-xl font-bold mt-1 tabular-nums truncate">{value}</div>
     </Wrap>
   );
 }

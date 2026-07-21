@@ -34,22 +34,22 @@ export default function EventTypes() {
         right={<Link to="/app/schedule-eq/event-types/new" data-testid="btn-new-event-type" className="btn-primary"><Plus size={14} /> New event type</Link>}
       />
       <div className="animate-fade-in px-6 sm:px-8">
-        {loading ? <div className="text-neutral-400 text-sm">Loading…</div> : items.length === 0 ? (
+        {loading ? <div className="text-body text-ink-muted">Loading…</div> : items.length === 0 ? (
           <div className="shadow-card rounded-2xl p-10 text-center">
-            <div className="font-display text-xl sm:text-2xl font-semibold">No event types yet</div>
+            <div className="text-section font-display font-semibold">No event types yet</div>
             <Link to="/app/schedule-eq/event-types/new" className="btn-primary mt-6 inline-flex">Create event type</Link>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {items.map((et) => (
               <div key={et.id} className="shadow-card rounded-2xl p-4 space-y-2 hover:shadow-card-hover">
-                <Link to={`/app/schedule-eq/event-types/${et.id}`} data-testid={`event-type-row-${et.id}`} className="font-medium hover:text-sanguine block">
+                <Link to={`/app/schedule-eq/event-types/${et.id}`} data-testid={`event-type-row-${et.id}`} className="text-body font-medium hover:text-ink block">
                   {et.name}
                 </Link>
-                <div className="text-xs text-neutral-400 font-mono">{et.duration_minutes} min · {et.location_type}</div>
+                <div className="text-tiny text-ink-muted font-mono">{et.duration_minutes} min · {et.location_type}</div>
                 <div className="flex gap-2 pt-2">
                   <button onClick={() => copyLink(et.slug)} data-testid={`copy-link-${et.id}`} className="btn-ghost text-xs"><Copy size={12} /> Copy link</button>
-                  <button onClick={() => remove(et.id)} data-testid={`delete-event-type-${et.id}`} className="text-xs text-red-600 hover:underline inline-flex items-center gap-1"><Trash2 size={12} /> delete</button>
+                  <button onClick={() => remove(et.id)} data-testid={`delete-event-type-${et.id}`} className="text-caption text-danger hover:underline inline-flex items-center gap-1"><Trash2 size={12} /> delete</button>
                 </div>
               </div>
             ))}

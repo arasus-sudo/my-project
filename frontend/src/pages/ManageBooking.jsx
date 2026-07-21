@@ -92,7 +92,7 @@ export default function ManageBooking() {
   return (
     <Shell>
       {done === "rescheduled" && (
-        <div className="mb-5 flex items-center gap-2 rounded-xl border border-green-200 bg-ash px-3 py-2 text-xs text-green-800"
+        <div className="mb-5 flex items-center gap-2 rounded-xl border border-success/30 bg-ash px-3 py-2 text-xs text-success"
           data-testid="reschedule-success">
           <CheckCircle2 size={14} /> Moved. We've emailed the new time to both of you.
         </div>
@@ -156,14 +156,14 @@ export default function ManageBooking() {
       )}
 
       {mode === "confirmCancel" && (
-        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4" data-testid="cancel-confirm">
-          <div className="text-sm font-medium text-amber-900">Cancel this meeting?</div>
-          <p className="text-xs text-amber-800 mt-1">
+        <div className="mt-5 rounded-xl border border-warning/30 bg-warning/10 p-4" data-testid="cancel-confirm">
+          <div className="text-sm font-medium text-warning">Cancel this meeting?</div>
+          <p className="text-xs text-warning mt-1">
             The slot opens back up and {ws} is notified. This can't be undone — you'd need to book again.
           </p>
           <div className="flex gap-2 mt-3">
             <button onClick={cancel} disabled={busy} data-testid="cancel-confirm-btn"
-              className="bg-ink text-white rounded-xl px-4 py-1.5 text-xs font-medium disabled:opacity-50">
+              className="bg-danger text-white rounded-xl px-4 py-1.5 text-xs font-medium disabled:opacity-50">
               {busy ? "Cancelling…" : "Yes, cancel it"}
             </button>
             <button onClick={() => setMode("view")} className="text-xs text-neutral-500 px-3 hover:text-ink">

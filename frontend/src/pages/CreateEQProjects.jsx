@@ -85,24 +85,24 @@ export default function CreateEQProjects() {
         }
       />
 
-      <div className="animate-fade-in px-6 sm:px-8 space-y-10 max-w-5xl">
+      <div className="animate-fade-in px-6 sm:px-8 space-y-8 max-w-5xl">
         {/* Hero — the ONE AI entry point: type an idea, hit generate. */}
         <section
-          className="relative overflow-hidden rounded-3xl border border-line p-8 sm:p-10"
-          style={{ background: "radial-gradient(120% 140% at 0% 0%, rgba(232,93,58,0.10), transparent 55%), linear-gradient(180deg, #fafafa, #ffffff)" }}
+          className="relative overflow-hidden rounded-2xl border border-line p-5 sm:p-6"
+          style={{ background: "radial-gradient(120% 140% at 0% 0%, rgba(29,29,31,0.05), transparent 55%), linear-gradient(180deg, #F5F5F7, #ffffff)" }}
         >
           <div className="relative">
-            <div className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-sanguine mb-3">
-              <Sparkles size={12} /> Create with AI
+            <div className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-sanguine mb-2">
+              <Sparkles size={11} /> Create with AI
             </div>
-            <h2 className="font-display font-bold text-3xl sm:text-4xl leading-[1.05] tracking-tight max-w-xl">
-              Describe your idea.<br />We&apos;ll design the deck.
+            <h2 className="font-display font-bold text-xl sm:text-2xl leading-[1.15] tracking-tight max-w-xl">
+              Describe your idea. We&apos;ll design the deck.
             </h2>
-            <p className="text-sm text-neutral-400 mt-3 max-w-md">
+            <p className="text-xs sm:text-sm text-neutral-400 mt-2 max-w-md">
               One sentence is enough. Pick an audience and theme next — a finished, editable carousel in under a minute.
             </p>
 
-            <div className="mt-6 flex flex-col sm:flex-row gap-2 max-w-2xl">
+            <div className="mt-4 flex flex-col sm:flex-row gap-2 max-w-2xl">
               <textarea
                 value={heroTopic}
                 onChange={(e) => setHeroTopic(e.target.value)}
@@ -110,50 +110,53 @@ export default function CreateEQProjects() {
                 data-testid="hero-topic-input"
                 rows={2}
                 placeholder='e.g. "Why cold outreach fails in 2026 — and the 3-step fix"'
-                className="flex-1 resize-none border border-line rounded-2xl px-4 py-3 text-base bg-white focus:outline-none focus:border-ink shadow-sm"
+                className="flex-1 resize-none border border-line rounded-xl px-3.5 py-2.5 text-sm bg-white focus:outline-none focus:border-accent shadow-sm"
               />
-              <button onClick={launchWizard} data-testid="hero-generate" className="btn-primary shrink-0 self-stretch sm:self-start sm:h-[52px] px-5">
-                <Wand2 size={16} /> Generate
+              <button onClick={launchWizard} data-testid="hero-generate" className="btn-primary shrink-0 self-stretch sm:self-start sm:h-[46px] px-4 text-sm">
+                <Wand2 size={14} /> Generate
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-1.5 mt-4">
+            <div className="flex flex-wrap items-center gap-1.5 mt-3">
               <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mr-1">Try</span>
               {TOPIC_STARTERS.slice(0, 4).map((t, i) => (
                 <button key={i} onClick={() => setHeroTopic(t)} data-testid={`hero-starter-${i}`}
-                  className="text-xs px-3 py-1.5 rounded-xl border border-line bg-white/70 hover:border-ink hover:bg-white text-neutral-400 transition-colors">
+                  className="text-[11px] px-2.5 py-1 rounded-lg border border-line bg-white/70 hover:border-accent hover:bg-white text-neutral-400 transition-colors">
                   {t}
                 </button>
               ))}
             </div>
 
-            <div className="text-xs text-neutral-400 mt-5">
+            <div className="text-xs text-neutral-400 mt-3.5">
               or <button onClick={startBlank} disabled={busy} data-testid="start-blank-btn" className="underline underline-offset-2 hover:text-ink disabled:opacity-50">start from a blank canvas</button>
             </div>
           </div>
         </section>
 
-        {/* Templates gallery */}
+        {/* Templates gallery — horizontal filmstrip, not a big grid, so it
+            doesn't compete with the AI hero above it. Cards are small; a
+            hover pops one up in place (scale + z-index) as a quick preview
+            instead of opening anything. */}
         <section>
-          <div className="flex items-baseline justify-between mb-4">
+          <div className="flex items-baseline justify-between mb-3">
             <div>
-              <div className="font-display font-semibold text-lg">Start from a template</div>
-              <div className="text-xs text-neutral-400 mt-0.5">Pre-designed layouts — add your topic, edit anything.</div>
+              <div className="font-display font-semibold text-sm">Start from a template</div>
+              <div className="text-[11px] text-neutral-400 mt-0.5">Pre-designed layouts — add your topic, edit anything.</div>
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-thin">
             {TEMPLATES.map((t) => {
               const pal = PALETTES.find((p) => p.id === t.palette) || PALETTES[0];
               return (
                 <button key={t.id} onClick={() => setPendingTemplate(t)} data-testid={`start-tpl-${t.id}`}
-                  className="group rounded-2xl overflow-hidden border border-line hover:border-ink hover:shadow-lg hover:-translate-y-0.5 transition-all text-left">
-                  <div className="aspect-[4/5] p-4 flex flex-col justify-between relative"
+                  className="group shrink-0 w-28 sm:w-32 rounded-xl overflow-hidden border border-line hover:border-accent hover:shadow-xl hover:scale-[1.12] hover:-translate-y-1 hover:z-10 transition-all duration-200 text-left relative">
+                  <div className="aspect-[4/5] p-3 flex flex-col justify-between relative"
                     style={{ background: pal.bg, color: pal.text, fontFamily: "Inter" }}>
-                    <div className="text-[9px] font-mono uppercase tracking-widest opacity-60">{t.tag}</div>
-                    <div className="font-semibold text-base leading-tight" style={{ color: pal.accent }}>{t.name}</div>
-                    <div className="absolute inset-x-0 bottom-0 h-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[11px] font-medium"
+                    <div className="text-[8px] font-mono uppercase tracking-widest opacity-60">{t.tag}</div>
+                    <div className="font-semibold text-xs leading-tight" style={{ color: pal.accent }}>{t.name}</div>
+                    <div className="absolute inset-x-0 bottom-0 h-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] font-medium"
                       style={{ background: `linear-gradient(transparent, ${pal.bg})`, color: pal.text }}>
-                      Use this template →
+                      Use this →
                     </div>
                   </div>
                 </button>
@@ -291,7 +294,7 @@ function HistoryDrawer({ items, onClose, onDelete }) {
                           </span>
                         </Link>
                         <button onClick={() => onDelete(p.id)} data-testid={`carousel-delete-${p.id}`}
-                          className="text-neutral-300 hover:text-red-600 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={13} /></button>
+                          className="text-neutral-300 hover:text-danger shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={13} /></button>
                       </div>
                     );
                   })}

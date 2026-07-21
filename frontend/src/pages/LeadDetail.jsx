@@ -5,8 +5,10 @@ import { toast } from "sonner";
 import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import {
-  Mail, Phone, CalendarClock, FileText, Share2, ArrowLeft, Sparkles, Loader2,
-  Newspaper, Github, Globe, Flame, ExternalLink, Search,
+  Mail, Phone, CalendarClock, FileText, Share2, ArrowLeft, Loader2,
+  Newspaper, Github, Globe, Flame, ExternalLink, Search, Megaphone, Save, X,
+  Edit2, Check, ListChecks, Tag, Plus, Trash2, StickyNote, CheckSquare, Square,
+  ShieldOff,
 } from "lucide-react";
 
 const AGENT_ICON = { pitch: Mail, voice: Phone, scheduler: CalendarClock, proposal: FileText, social: Share2 };
@@ -14,10 +16,12 @@ const AGENT_LABEL = { pitch: "Pitch EQ", voice: "Voice EQ", scheduler: "Schedule
 
 const BAND_STYLE = {
   hot: "bg-sanguine text-white",
-  warm: "bg-amber-100 text-amber-900 border border-amber-200",
-  cool: "bg-neutral-100 text-neutral-400 border border-line",
-  cold: "bg-white text-neutral-400 border border-line",
+  warm: "bg-warning/20 text-warning border border-warning/30",
+  cool: "bg-neutral-100 text-ink-muted border border-line",
+  cold: "bg-white text-ink-muted border border-line",
 };
+
+const STATUS_OPTIONS = ["new", "contacted", "qualified", "unqualified", "unresponsive"];
 
 export default function LeadDetail() {
   const { id } = useParams();
@@ -26,18 +30,115 @@ export default function LeadDetail() {
   const [research, setResearch] = useState(null);
   const [enriching, setEnriching] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [lists, setLists] = useState([]);
+  const [voiceCalls, setVoiceCalls] = useState([]);
+  const [notes, setNotes] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [team, setTeam] = useState([]);
+  const [noteText, setNoteText] = useState("");
+  const [tagInput, setTagInput] = useState("");
+  const [taskForm, setTaskForm] = useState({ title: "", due_at: "", assignee_id: "" });
 
   const load = useCallback(() => {
     Promise.all([
       api.get(`/leads/${id}`),
       api.get(`/leads/${id}/timeline`),
       api.get(`/pitch-eq/leads/${id}/research`).catch(() => ({ data: null })),
-    ]).then(([l, t, r]) => {
-      setLead(l.data); setTimeline(t.data); setResearch(r.data); setLoading(false);
+      api.get("/crm/lists").catch(() => ({ data: [] })),
+      api.get("/voice-eq/calls", { params: { lead_id: id } }).catch(() => ({ data: [] })),
+      api.get(`/leads/${id}/notes`).catch(() => ({ data: [] })),
+      api.get(`/leads/${id}/tasks`).catch(() => ({ data: [] })),
+      api.get("/team").catch(() => ({ data: [] })),
+    ]).then(([l, t, r, ls, vc, nt, tk, tm]) => {
+      setLead(l.data); setTimeline(t.data); setResearch(r.data);
+      setLists(ls.data); setVoiceCalls(vc.data || []);
+      setNotes(nt.data || []); setTasks(tk.data || []); setTeam(tm.data || []);
+      setLoading(false);
     });
   }, [id]);
 
   useEffect(load, [load]);
+
+  const addTag = async () => {
+    const tag = tagInput.trim();
+    if (!tag || (lead.tags || []).includes(tag)) { setTagInput(""); return; }
+    const tags = [...(lead.tags || []), tag];
+    try {
+      const { data } = await api.put(`/leads/${id}`, { tags });
+      setLead(data); setTagInput("");
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+  };
+
+  const removeTag = async (tag) => {
+    const tags = (lead.tags || []).filter((t) => t !== tag);
+    try {
+      const { data } = await api.put(`/leads/${id}`, { tags });
+      setLead(data);
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+  };
+
+  const setOwner = async (ownerId) => {
+    try {
+      const { data } = await api.put(`/leads/${id}`, { owner_id: ownerId || null });
+      setLead(data);
+      toast.success(ownerId ? "Owner assigned" : "Owner cleared");
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+  };
+
+  const toggleDnc = async () => {
+    try {
+      const { data } = await api.put(`/leads/${id}`, { dnc: !lead.dnc });
+      setLead(data);
+      toast.success(data.dnc ? "Marked do-not-contact" : "Do-not-contact cleared");
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+  };
+
+  const addNote = async () => {
+    if (!noteText.trim()) return;
+    try {
+      const { data } = await api.post(`/leads/${id}/notes`, { text: noteText.trim() });
+      setNotes((n) => [data, ...n]);
+      setNoteText("");
+      load();
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+  };
+
+  const deleteNote = async (noteId) => {
+    try {
+      await api.delete(`/leads/${id}/notes/${noteId}`);
+      setNotes((n) => n.filter((x) => x.id !== noteId));
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+  };
+
+  const addTask = async () => {
+    if (!taskForm.title.trim()) return;
+    try {
+      const { data } = await api.post(`/leads/${id}/tasks`, {
+        title: taskForm.title.trim(),
+        due_at: taskForm.due_at ? new Date(taskForm.due_at).toISOString() : null,
+        assignee_id: taskForm.assignee_id || null,
+      });
+      setTasks((t) => [...t, data].sort((a, b) => (a.due_at || "").localeCompare(b.due_at || "")));
+      setTaskForm({ title: "", due_at: "", assignee_id: "" });
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+  };
+
+  const toggleTask = async (task) => {
+    const status = task.status === "done" ? "open" : "done";
+    try {
+      const { data } = await api.put(`/tasks/${task.id}`, { status });
+      setTasks((ts) => ts.map((t) => (t.id === task.id ? data : t)));
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+  };
+
+  const deleteTask = async (taskId) => {
+    try {
+      await api.delete(`/tasks/${taskId}`);
+      setTasks((t) => t.filter((x) => x.id !== taskId));
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+  };
 
   const enrich = async (force = false) => {
     setEnriching(true);
@@ -50,8 +151,30 @@ export default function LeadDetail() {
     } finally { setEnriching(false); }
   };
 
-  if (loading) return <div className="p-6 sm:p-8 text-neutral-400 text-sm">Loading…</div>;
-  if (!lead) return <div className="p-6 sm:p-8 text-neutral-400 text-sm">Lead not found.</div>;
+  const startEdit = () => {
+    setEditForm({
+      first_name: lead.first_name || "",
+      last_name: lead.last_name || "",
+      email: lead.email || "",
+      phone: lead.phone || "",
+      company: lead.company || "",
+      title: lead.title || "",
+      status: lead.status || "new",
+    });
+    setEditing(true);
+  };
+
+  const saveEdit = async () => {
+    try {
+      const { data } = await api.put(`/leads/${id}`, editForm);
+      setLead(data);
+      setEditing(false);
+      toast.success("Lead updated");
+    } catch (err) { toast.error(err?.response?.data?.detail || "Save failed"); }
+  };
+
+  if (loading) return <div className="p-6 sm:p-8 text-ink-muted text-body">Loading…</div>;
+  if (!lead) return <div className="p-6 sm:p-8 text-ink-muted text-body">Lead not found.</div>;
 
   const pack = research?.pack;
   const intent = research?.intent || lead.intent;
@@ -62,38 +185,135 @@ export default function LeadDetail() {
         title={`${lead.first_name} ${lead.last_name || ""}`}
         subtitle={lead.company || lead.email}
         right={
-          <Link to="/app/leads" data-testid="back-to-leads" className="btn-secondary">
-            <ArrowLeft size={14} /> Leads
-          </Link>
+          <div className="flex items-center gap-2">
+            <button onClick={startEdit} className="btn-secondary text-xs"><Edit2 size={13} /> Edit</button>
+            <Link to="/app/crm/leads" data-testid="back-to-leads" className="btn-secondary">
+              <ArrowLeft size={14} /> Leads
+            </Link>
+          </div>
         }
       />
       <div className="animate-fade-in px-6 sm:px-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="space-y-4">
+          {/* Contact card with inline editing */}
           <div className="shadow-card p-4 space-y-2 rounded-2xl">
             <div className="ui-label">Contact</div>
-            <div className="text-sm font-mono text-neutral-700">{lead.email}</div>
-            {lead.phone && <div className="text-sm font-mono text-neutral-700">{lead.phone}</div>}
-            {lead.title && <div className="text-sm text-neutral-400">{lead.title}</div>}
-            <div className="flex items-center gap-2 pt-2 flex-wrap">
-              <span className="ui-label border border-line px-2 py-0.5 rounded-xl">{lead.status}</span>
-              {intent ? (
-                <span data-testid="lead-intent"
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-mono font-medium ${BAND_STYLE[intent.band]}`}>
-                  <Flame size={10} /> {intent.score} {intent.band}
+            {editing ? (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <input value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
+                    className="w-1/2 border border-line px-2 py-1 rounded text-input" placeholder="First name" />
+                  <input value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
+                    className="w-1/2 border border-line px-2 py-1 rounded text-input" placeholder="Last name" />
+                </div>
+                <input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  className="w-full border border-line px-2 py-1 rounded text-input font-mono" placeholder="Email" />
+                <input value={editForm.phone || ""} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  className="w-full border border-line px-2 py-1 rounded text-input font-mono" placeholder="Phone" />
+                <input value={editForm.company || ""} onChange={(e) => setEditForm({ ...editForm, company: e.target.value })}
+                  className="w-full border border-line px-2 py-1 rounded text-input" placeholder="Company" />
+                <input value={editForm.title || ""} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  className="w-full border border-line px-2 py-1 rounded text-input" placeholder="Title" />
+                <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                  className="w-full border border-line px-2 py-1 rounded text-input">
+                  {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <div className="flex gap-2 pt-1">
+                  <button onClick={saveEdit} className="btn-primary text-xs flex items-center gap-1"><Save size={12} /> Save</button>
+                  <button onClick={() => setEditing(false)} className="btn-secondary text-xs flex items-center gap-1"><X size={12} /> Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="text-body font-mono text-ink-secondary">{lead.email}</div>
+                {lead.phone && <div className="text-body font-mono text-ink-secondary">{lead.phone}</div>}
+                {lead.title && <div className="text-body text-ink-muted">{lead.title}</div>}
+                <div className="flex items-center gap-2 pt-2 flex-wrap">
+                  <span className="ui-label border border-line px-2 py-0.5 rounded-xl">{lead.status}</span>
+                  {intent ? (
+                    <span data-testid="lead-intent"
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-tiny font-mono font-medium ${BAND_STYLE[intent.band]}`}>
+                      <Flame size={10} /> {intent.score} {intent.band}
+                    </span>
+                  ) : (
+                    <span className="text-caption font-mono text-ink-muted">not scored yet</span>
+                  )}
+                  {lead.dnc && (
+                    <span className="inline-flex items-center gap-1 text-tiny font-mono bg-danger/10 text-danger px-2 py-0.5 rounded-full">
+                      <ShieldOff size={9} /> Do not contact
+                    </span>
+                  )}
+                </div>
+                <div className="pt-2 space-y-1.5">
+                  <div className="ui-label">Owner</div>
+                  <select value={lead.owner_id || ""} onChange={(e) => setOwner(e.target.value)} data-testid="lead-owner-select"
+                    className="w-full border border-line px-2 py-1.5 rounded text-caption">
+                    <option value="">Unassigned</option>
+                    {team.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                  <button onClick={toggleDnc} data-testid="toggle-dnc"
+                    className={`text-caption inline-flex items-center gap-1 mt-1 ${lead.dnc ? "text-danger" : "text-ink-muted hover:text-ink"}`}>
+                    <ShieldOff size={11} /> {lead.dnc ? "Clear do-not-contact" : "Mark do not contact"}
+                  </button>
+                </div>
+              </>
+            )}
+            {lead.campaign_names?.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-1 border-t border-line/50">
+                {lead.campaign_names.map((cn) => (
+                  <span key={cn} className="inline-flex items-center gap-1 text-tiny font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                    <Megaphone size={9} /> {cn}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Tags */}
+          <div className="shadow-card p-4 rounded-2xl">
+            <div className="ui-label mb-2 flex items-center gap-1.5"><Tag size={11} /> Tags</div>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {(lead.tags || []).length === 0 && <p className="text-caption text-ink-muted">No tags yet.</p>}
+              {(lead.tags || []).map((t) => (
+                <span key={t} className="inline-flex items-center gap-1 text-tiny font-mono bg-ash text-ink-tertiary px-2 py-0.5 rounded-full">
+                  {t}
+                  <button onClick={() => removeTag(t)} data-testid={`remove-tag-${t}`} className="hover:text-danger"><X size={9} /></button>
                 </span>
-              ) : (
-                <span className="text-xs font-mono text-neutral-400">not scored yet</span>
-              )}
+              ))}
+            </div>
+            <div className="flex gap-1.5">
+              <input value={tagInput} onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())}
+                placeholder="Add a tag…" data-testid="add-tag-input"
+                className="flex-1 border border-line px-2 py-1.5 rounded text-caption" />
+              <button onClick={addTag} data-testid="add-tag-btn" className="btn-secondary text-xs"><Plus size={12} /></button>
             </div>
           </div>
 
-          {/* Why this score — an unexplained number is what we replaced. */}
+          {/* Lead Lists membership */}
+          <div className="shadow-card p-4 rounded-2xl">
+            <div className="ui-label mb-2">Lead Lists</div>
+            {lists.filter((l) => (l.lead_ids || []).includes(lead.id)).length === 0 ? (
+              <p className="text-caption text-ink-muted">Not in any list.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1">
+                {lists.filter((l) => (l.lead_ids || []).includes(lead.id)).map((l) => (
+                  <Link key={l.id} to="/app/crm/lists"
+                    className="inline-flex items-center gap-1 text-tiny font-mono bg-ash text-ink-tertiary px-2 py-0.5 rounded-full hover:bg-neutral-200">
+                    <ListChecks size={9} /> {l.name}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Why this score */}
           {intent?.reasons?.length > 0 && (
             <div className="shadow-card p-4 rounded-2xl" data-testid="intent-reasons">
               <div className="ui-label mb-2">Why this score</div>
-              <ul className="space-y-1.5 text-xs text-neutral-700">
+              <ul className="space-y-1.5 text-caption text-ink-secondary">
                 {intent.reasons.map((r, i) => (
-                  <li key={i} className="border-l-2 border-sanguine pl-2 leading-snug">{r}</li>
+                  <li key={i} className="border-l-2 border-sanguine pl-2">{r}</li>
                 ))}
               </ul>
             </div>
@@ -102,10 +322,10 @@ export default function LeadDetail() {
           {lead.deal && (
             <div className="shadow-card p-4 space-y-1 rounded-2xl">
               <div className="ui-label">Deal</div>
-              <div className="text-sm font-medium">{lead.deal.title}</div>
+              <div className="text-body font-medium">{lead.deal.title}</div>
               <div className="flex justify-between items-center pt-1">
-                <span className="font-mono text-sm font-bold text-sanguine">${Number(lead.deal.value || 0).toLocaleString()}</span>
-                <span className="ui-label text-[9px] border border-line px-2 py-0.5 rounded-xl">{lead.deal.stage}</span>
+                <span className="font-mono text-body font-bold text-ink">${Number(lead.deal.value || 0).toLocaleString()}</span>
+                <span className="ui-label border border-line px-2 py-0.5 rounded-xl">{lead.deal.stage}</span>
               </div>
             </div>
           )}
@@ -124,33 +344,55 @@ export default function LeadDetail() {
         </div>
 
         <div className="col-span-1 lg:col-span-2 space-y-6">
-          {/* Research — the free public signals the draft chain is allowed to use */}
+          {/* Voice EQ Calls */}
+          {voiceCalls.length > 0 && (
+            <div className="shadow-card p-4 sm:p-6 rounded-2xl">
+              <div className="flex items-center gap-2 ui-label mb-3">
+                <Phone size={13} /> Recent calls ({voiceCalls.length})
+              </div>
+              <div className="space-y-2">
+                {voiceCalls.slice(0, 5).map((c) => (
+                  <Link key={c.id} to="/app/voice-eq/calls"
+                    className="flex items-center justify-between p-2 rounded-lg hover:bg-ash transition-colors text-caption">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${c.status === "ended" ? "bg-success" : c.status === "ongoing" ? "bg-info" : "bg-neutral-300"}`} />
+                      <span className="font-mono text-ink-tertiary">{c.to_number}</span>
+                    </div>
+                    <div className="text-ink-muted">
+                      {c.duration_seconds ? `${Math.round(c.duration_seconds / 6) / 10}m` : "—"}
+                      {c.sentiment && <span className="ml-2">{c.sentiment}</span>}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Research */}
           <div className="shadow-card p-6 sm:p-8 rounded-2xl" data-testid="research-panel">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="ui-label">Research</div>
               <div className="flex items-center gap-3">
                 {research?.researched_at && (
-                  <span className="text-[11px] text-neutral-400 font-mono">
+                  <span className="text-tiny text-ink-muted font-mono">
                     {formatDistanceToNow(new Date(research.researched_at), { addSuffix: true })}
                   </span>
                 )}
                 <button onClick={() => enrich(!!pack)} disabled={enriching}
                   data-testid="enrich-btn" className="btn-secondary text-xs disabled:opacity-50">
-                  {enriching ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                  {enriching ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
                   {enriching ? "Researching…" : pack ? "Re-research" : "Research this lead"}
                 </button>
               </div>
             </div>
 
             {!pack ? (
-              <p className="text-xs text-neutral-400 mt-3">
+              <p className="text-caption text-ink-muted mt-3">
                 Not researched yet. We'll check their site, recent news and public GitHub activity,
                 then score how ready they are to hear from you.
               </p>
             ) : !pack.has_signal ? (
-              // The honest empty state. The draft chain will refuse to invent a
-              // trigger from this, and the UI shouldn't imply one exists either.
-              <div className="mt-3 text-xs bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2 text-amber-900">
+              <div className="mt-3 text-caption bg-warning/10 border border-warning/30 rounded-2xl px-3 py-2 text-warning">
                 No public signals found for {pack.company || "this company"}. Any email we write will
                 make no claims about them rather than inventing a reason to reach out.
               </div>
@@ -160,18 +402,16 @@ export default function LeadDetail() {
                   <div data-testid="perplexity-summary">
                     <div className="flex items-center gap-1.5 ui-label mb-1">
                       <Search size={11} /> Current research
-                      <span className="text-neutral-400 normal-case font-normal">
+                      <span className="text-ink-muted normal-case font-normal">
                         · {pack.perplexity.citations?.length || 0} cited sources
                       </span>
                     </div>
-                    <p className="text-xs text-neutral-700 leading-relaxed">
-                      {pack.perplexity.summary}
-                    </p>
+                    <p className="text-caption text-ink-secondary">{pack.perplexity.summary}</p>
                     {pack.perplexity.citations?.length > 0 && (
                       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
                         {pack.perplexity.citations.slice(0, 4).map((url, i) => (
                           <a key={i} href={url} target="_blank" rel="noreferrer"
-                            className="text-[11px] text-neutral-400 hover:text-sanguine inline-flex items-center gap-0.5">
+                            className="text-tiny text-ink-muted hover:text-ink inline-flex items-center gap-0.5">
                             source {i + 1} <ExternalLink size={9} />
                           </a>
                         ))}
@@ -185,9 +425,7 @@ export default function LeadDetail() {
                     <div className="flex items-center gap-1.5 ui-label mb-1">
                       <Globe size={11} /> What they do
                     </div>
-                    <p className="text-xs text-neutral-700 leading-relaxed line-clamp-3">
-                      {pack.site_summary}
-                    </p>
+                    <p className="text-caption text-ink-secondary line-clamp-3">{pack.site_summary}</p>
                   </div>
                 )}
 
@@ -197,9 +435,9 @@ export default function LeadDetail() {
                     <div className="space-y-1.5">
                       {["funding", "hiring", "product"].flatMap((k) =>
                         (pack.signals[k] || []).map((s, i) => (
-                          <div key={`${k}-${i}`} className="flex items-start gap-2 text-xs">
+                          <div key={`${k}-${i}`} className="flex items-start gap-2 text-caption">
                             <span className="kbd shrink-0 uppercase">{k}</span>
-                            <span className="text-neutral-700 leading-snug">{s}</span>
+                            <span className="text-ink-secondary">{s}</span>
                           </div>
                         ))
                       )}
@@ -214,15 +452,13 @@ export default function LeadDetail() {
                     </div>
                     <ul className="space-y-1">
                       {pack.news.slice(0, 4).map((n, i) => (
-                        <li key={i} className="text-xs">
+                        <li key={i} className="text-caption">
                           <a href={n.url} target="_blank" rel="noreferrer"
-                            className="text-neutral-700 hover:text-sanguine inline-flex items-start gap-1">
-                            <span className="leading-snug">{n.title}</span>
+                            className="text-ink-secondary hover:text-ink inline-flex items-start gap-1">
+                            <span>{n.title}</span>
                             <ExternalLink size={9} className="mt-0.5 shrink-0 opacity-50" />
                           </a>
-                          {n.published && (
-                            <span className="text-neutral-400 font-mono ml-1">{n.published}</span>
-                          )}
+                          {n.published && <span className="text-ink-muted font-mono ml-1">{n.published}</span>}
                         </li>
                       ))}
                     </ul>
@@ -243,9 +479,78 @@ export default function LeadDetail() {
             )}
           </div>
 
+          {/* Tasks */}
+          <div className="shadow-card p-4 sm:p-6 rounded-2xl">
+            <div className="ui-label mb-3 flex items-center gap-1.5"><CheckSquare size={13} /> Tasks</div>
+            <div className="space-y-2 mb-3">
+              {tasks.length === 0 && <p className="text-caption text-ink-muted">No tasks yet.</p>}
+              {tasks.map((t) => {
+                const overdue = t.status === "open" && t.due_at && new Date(t.due_at) < new Date();
+                return (
+                  <div key={t.id} data-testid={`task-${t.id}`} className="flex items-start gap-2 text-body">
+                    <button onClick={() => toggleTask(t)} data-testid={`toggle-task-${t.id}`} className="mt-0.5 text-ink-muted hover:text-ink">
+                      {t.status === "done" ? <CheckSquare size={15} className="text-success" /> : <Square size={15} />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className={t.status === "done" ? "line-through text-ink-muted" : ""}>{t.title}</div>
+                      {t.due_at && (
+                        <div className={`text-tiny font-mono ${overdue ? "text-danger" : "text-ink-muted"}`}>
+                          Due {new Date(t.due_at).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                    <button onClick={() => deleteTask(t.id)} className="text-ink-disabled hover:text-danger"><Trash2 size={12} /></button>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <input value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+                placeholder="New task…" data-testid="new-task-title"
+                className="flex-1 min-w-[140px] border border-line px-2 py-1.5 rounded text-caption" />
+              <input type="date" value={taskForm.due_at} onChange={(e) => setTaskForm({ ...taskForm, due_at: e.target.value })}
+                data-testid="new-task-due" className="border border-line px-2 py-1.5 rounded text-caption" />
+              <select value={taskForm.assignee_id} onChange={(e) => setTaskForm({ ...taskForm, assignee_id: e.target.value })}
+                data-testid="new-task-assignee" className="border border-line px-2 py-1.5 rounded text-caption">
+                <option value="">Unassigned</option>
+                {team.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+              <button onClick={addTask} disabled={!taskForm.title.trim()} data-testid="add-task-btn" className="btn-secondary text-xs disabled:opacity-50">
+                <Plus size={12} /> Add
+              </button>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="shadow-card p-4 sm:p-6 rounded-2xl">
+            <div className="ui-label mb-3 flex items-center gap-1.5"><StickyNote size={13} /> Notes</div>
+            <div className="flex gap-2 mb-3">
+              <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} rows={2}
+                placeholder="Add a note…" data-testid="new-note-text"
+                className="flex-1 border border-line px-2 py-1.5 rounded text-input" />
+              <button onClick={addNote} disabled={!noteText.trim()} data-testid="add-note-btn"
+                className="btn-secondary text-xs self-start disabled:opacity-50">Add</button>
+            </div>
+            <div className="space-y-3">
+              {notes.length === 0 && <p className="text-caption text-ink-muted">No notes yet.</p>}
+              {notes.map((n) => (
+                <div key={n.id} data-testid={`note-${n.id}`} className="text-body border-l-2 border-line pl-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p>{n.body}</p>
+                    <button onClick={() => deleteNote(n.id)} className="text-ink-disabled hover:text-danger shrink-0"><Trash2 size={12} /></button>
+                  </div>
+                  <div className="text-tiny text-ink-muted font-mono mt-0.5">
+                    {n.author_name} · {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Activity timeline */}
           <div className="ui-label mb-3">Activity timeline</div>
           {timeline.length === 0 ? (
-            <div className="shadow-card p-10 text-center text-sm text-neutral-400 rounded-2xl">
+            <div className="shadow-card p-10 text-center text-body text-ink-muted rounded-2xl">
               No activity yet — an email, call, or booking will show up here.
             </div>
           ) : (
@@ -257,10 +562,10 @@ export default function LeadDetail() {
                     <div className="absolute -left-[9px] top-0.5 w-4 h-4 rounded-full bg-white border border-line flex items-center justify-center">
                       <Icon size={9} />
                     </div>
-                    <div className="text-xs text-neutral-400 font-mono">
+                    <div className="text-caption text-ink-muted font-mono">
                       {AGENT_LABEL[a.agent] || a.agent} · {formatDistanceToNow(new Date(a.at), { addSuffix: true })}
                     </div>
-                    <div className="text-sm mt-0.5">{a.summary}</div>
+                    <div className="text-body mt-0.5">{a.summary}</div>
                   </div>
                 );
               })}

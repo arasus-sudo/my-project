@@ -1,18 +1,58 @@
 /** Small helpers shared across Create EQ editor modules. */
 import { resolveColor } from "../../lib/creqTemplates";
+import { renderBackgroundExt } from "../../lib/creqBgStyles";
 
 export function newId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
 export function renderBackground(bg, palette) {
-  if (!bg) return palette.bg;
-  if (bg.type === "gradient") {
-    const c1 = resolveColor(bg.color, palette);
-    const c2 = resolveColor(bg.color2 || "accent", palette);
-    return `linear-gradient(${bg.angle || 145}deg, ${c1}, ${c2})`;
-  }
-  return resolveColor(bg.color || "bg", palette);
+  return renderBackgroundExt(bg, palette);
+}
+
+export function renderBackgroundImageCss(slide) {
+  if (!slide?.bg_img) return null;
+  return {
+    position: "absolute", inset: 0,
+    backgroundImage: `url("${slide.bg_img}")`,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    opacity: slide.bg_img_opacity ?? 0.3,
+    pointerEvents: "none",
+    zIndex: 0,
+  };
+}
+
+/** The full typographic style of a text element. Shared by ElementRender and
+ * InlineTextEditor so double-click editing is pixel-identical to the rendered
+ * text — same font, size, spacing, shadow, highlight — with zero visual jump
+ * when the editor overlay appears. */
+export function textStyleOf(el, palette) {
+  const shadow = el.shadow ? `${el.shadow_x || 0}px ${el.shadow_y ?? 4}px ${el.shadow_blur ?? 12}px ${resolveColor(el.shadow_color || "rgba(0,0,0,0.35)", palette)}` : "none";
+  const strokeC = resolveColor(el.stroke_color || "bg", palette);
+  const stroke = el.stroke_w
+    ? `-${el.stroke_w}px -${el.stroke_w}px 0 ${strokeC}, ${el.stroke_w}px -${el.stroke_w}px 0 ${strokeC}, -${el.stroke_w}px ${el.stroke_w}px 0 ${strokeC}, ${el.stroke_w}px ${el.stroke_w}px 0 ${strokeC}`
+    : null;
+  return {
+    color: resolveColor(el.color, palette),
+    fontFamily: `"${el.font || "Inter"}", sans-serif`,
+    fontSize: el.size,
+    fontWeight: el.weight,
+    fontStyle: el.italic ? "italic" : "normal",
+    textTransform: el.uppercase ? "uppercase" : "none",
+    letterSpacing: `${el.letter_spacing || 0}em`,
+    lineHeight: el.line_height || 1.2,
+    textAlign: el.align || "left",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    textShadow: stroke ? `${stroke}${el.shadow ? `, ${shadow}` : ""}` : shadow,
+    ...(el.highlight ? {
+      backgroundColor: resolveColor(el.highlight, palette),
+      padding: "0.05em 0.25em",
+      boxDecorationBreak: "clone",
+      WebkitBoxDecorationBreak: "clone",
+    } : null),
+  };
 }
 
 /** The on-canvas bounding box of an element, in canvas px. Two types don't

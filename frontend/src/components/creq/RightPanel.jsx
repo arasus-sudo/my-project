@@ -1,15 +1,26 @@
-import { memo } from "react";
+import { memo, useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import {
   Copy, Trash2, Layers, Italic, AlignLeft, AlignCenter, AlignRight, Wand2, RotateCcw, Mountain,
   FlipHorizontal2, FlipVertical2,
   AlignStartVertical, AlignCenterVertical, AlignEndVertical,
   AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
-  AlignHorizontalSpaceAround, AlignVerticalSpaceAround,
+  AlignHorizontalSpaceAround, AlignVerticalSpaceAround, Plus,
 } from "lucide-react";
-import { PALETTES, CANVAS } from "../../lib/creqTemplates";
+import { PALETTES, CANVAS, resolveColor } from "../../lib/creqTemplates";
+import { IMAGE_FRAMES, FRAME_CATEGORIES, DECORATIVE_CATEGORIES } from "../../lib/creqDesignEngine";
+import { IMAGE_EFFECTS } from "../../lib/creqCharts";
 import PanoramaLayer from "./PanoramaLayer";
 import { ICONS } from "./ElementRender";
 import GoogleFontPicker from "./GoogleFontPicker";
+
+/** Load custom palettes from localStorage, falling back to empty. */
+function loadCustomPalettes() {
+  try { return JSON.parse(localStorage.getItem("creq_custom_palettes") || "[]"); } catch { return []; }
+}
+function saveCustomPalettes(pals) {
+  localStorage.setItem("creq_custom_palettes", JSON.stringify(pals));
+}
 
 /** Parse a number input's raw value, ignoring transient empty/invalid states
  * (e.g. while the user backspaces to type a new value) instead of committing
@@ -25,12 +36,28 @@ function RightPanel({
   proj, palette, slide, selected,
   activeSlide, selectedCount = 0,
   onAlign, onDeleteMulti,
-  onPalette, onBg, onEditElement, onDelete, onDuplicate, onFront, onBack, onAiAssist,
+  onPalette, onBg, onEditElement, onDelete, onDuplicate, onFront, onBack, onForward, onBackward, onAiAssist,
   onPanoramaViewport, onPanoramaResetSlide, onPanoramaApplyAll,
   onDeckSetting,
-  onGestureStart, onGestureEnd,
+  onGestureStart, onGestureEnd, onGroup, onUngroup,
 }) {
   const showPanoManual = proj?.panorama?.mode === "manual";
+  const imageInputRef = useRef(null);
+  const [customPalettes, setCustomPalettes] = useState(loadCustomPalettes);
+  const [editingPalette, setEditingPalette] = useState(null);
+  useEffect(() => { saveCustomPalettes(customPalettes); }, [customPalettes]);
+  const allPalettes = [...PALETTES, ...customPalettes];
+  const createCustomPalette = () => {
+    const np = { id: `custom-${Date.now()}`, name: "Custom", bg: "#FFFFFF", bg2: "#F4F4F5", accent: "#000000", text: "#000000", muted: "#71717A" };
+    setCustomPalettes((p) => [...p, np]);
+    setEditingPalette(np.id);
+  };
+  const updateCustomPalette = (id, field, value) => {
+    setCustomPalettes((pals) => pals.map((p) => p.id === id ? { ...p, [field]: value } : p));
+  };
+  const deleteCustomPalette = (id) => {
+    setCustomPalettes((pals) => pals.filter((p) => p.id !== id));
+  };
   // Bracket every edit made through this panel (slider drags, typing, and
   // discrete clicks alike) in one history "gesture" — see beginGesture() in
   // CreateEQEditor.jsx. Capture phase so it fires even for clicks on native
@@ -49,7 +76,11 @@ function RightPanel({
       <div className="p-4 space-y-4" {...gestureProps}>
         <div className="flex items-center justify-between">
           <div className="ui-label">{selectedCount} selected</div>
-          <button onClick={onDeleteMulti} title="Delete all" className="btn-ghost text-xs py-1 text-red-600"><Trash2 size={12} /></button>
+          <div className="flex gap-1">
+            <button onClick={onGroup} title="Group elements" className="btn-ghost text-xs py-1"><Layers size={12} /></button>
+            <button onClick={onUngroup} title="Ungroup" className="btn-ghost text-xs py-1"><Layers size={12} /></button>
+            <button onClick={onDeleteMulti} title="Delete all" className="btn-ghost text-xs py-1 text-danger"><Trash2 size={12} /></button>
+          </div>
         </div>
         <div>
           <div className="ui-label mb-2">Align</div>
@@ -82,16 +113,41 @@ function RightPanel({
     return (
       <div className="p-4 space-y-5" {...gestureProps}>
         <div>
-          <div className="ui-label mb-2">Palette</div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="ui-label">Palette</span>
+            <button onClick={createCustomPalette} title="Create custom palette"
+              className="ml-auto btn-ghost text-xs py-0.5 px-1.5"><Plus size={10} /> New</button>
+          </div>
           <div className="grid grid-cols-2 gap-2">
-            {PALETTES.map((p) => (
-              <button key={p.id} onClick={() => onPalette(p.id)} data-testid={`palette-${p.id}`}
-                className={`text-left p-2 rounded-lg border ${p.id === palette.id ? "border-ink" : "border-line"}`}>
-                <div className="flex gap-1">
-                  {[p.bg, p.bg2, p.accent, p.text].map((c, i) => <span key={`${c}-${i}`} className="w-4 h-4 rounded" style={{ background: c }} />)}
-                </div>
-                <div className="text-[11px] mt-1">{p.name}</div>
-              </button>
+            {allPalettes.map((p) => (
+              <div key={p.id} className={`relative rounded-lg border ${p.id === palette.id ? "border-ink" : "border-line"}`}>
+                <button onClick={() => onPalette(p.id)} data-testid={`palette-${p.id}`}
+                  className="w-full text-left p-2">
+                  <div className="flex gap-1">
+                    {[p.bg, p.bg2, p.accent, p.text].map((c, i) => <span key={`${c}-${i}`} className="w-4 h-4 rounded" style={{ background: c }} />)}
+                  </div>
+                  <div className="text-[11px] mt-1">{p.name}</div>
+                </button>
+                {editingPalette === p.id && (
+                  <div className="p-2 border-t border-line space-y-1.5">
+                    <input value={p.name} onChange={(e) => updateCustomPalette(p.id, "name", e.target.value)}
+                      placeholder="Name" className="w-full border border-line rounded px-2 py-1 text-[11px]" />
+                    {["bg", "bg2", "accent", "text", "muted"].map((k) => (
+                      <div key={k} className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-neutral-400 w-10">{k}</span>
+                        <input type="color" value={p[k] || "#000000"}
+                          onChange={(e) => updateCustomPalette(p.id, k, e.target.value)}
+                          className="w-8 h-6 rounded border border-line cursor-pointer" />
+                        <input value={p[k] || ""}
+                          onChange={(e) => updateCustomPalette(p.id, k, e.target.value)}
+                          className="flex-1 border border-line rounded px-1 py-0.5 text-[10px] font-mono" />
+                      </div>
+                    ))}
+                    <button onClick={() => deleteCustomPalette(p.id)}
+                      className="mt-1 text-[10px] text-danger hover:underline">Delete palette</button>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -113,19 +169,78 @@ function RightPanel({
                 style={{ background: palette[k] }} title={k} />
             ))}
           </div>
-          {slide.bg?.type === "gradient" && (
-            <div className="mt-3">
-              <div className="ui-label">Gradient stop 2</div>
-              <div className="grid grid-cols-4 gap-2 mt-1">
-                {["bg", "bg2", "accent", "text", "muted"].map((k) => (
-                  <button key={k} onClick={() => onBg({ ...slide.bg, color2: k })}
-                    className={`aspect-square rounded-md border ${slide.bg?.color2 === k ? "border-ink" : "border-line"}`}
-                    style={{ background: palette[k] }} title={k} />
-                ))}
+          <div className="mt-3 pt-2 border-t border-line">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="ui-label">Background image</span>
+              {slide.bg_img && (
+                <button onClick={() => onBg({ ...slide.bg, bg_img: null, bg_img_opacity: undefined })}
+                  className="ml-auto text-[10px] text-danger hover:underline">Remove</button>
+              )}
+            </div>
+            <input value={slide.bg_img || ""} onChange={(e) => onBg({ ...slide.bg, bg_img: e.target.value })}
+              placeholder="Paste image URL for background"
+              className="w-full border border-line rounded-full px-3 py-2 text-xs font-mono" />
+            {slide.bg_img && (
+              <div className="mt-2">
+                <div className="flex justify-between items-baseline">
+                  <span className="ui-label">Opacity</span>
+                  <span className="text-[10px] font-mono text-neutral-500">{Math.round((slide.bg_img_opacity ?? 0.3) * 100)}%</span>
+                </div>
+                <input type="range" min={0.05} max={1} step={0.05} value={slide.bg_img_opacity ?? 0.3}
+                  onChange={(e) => onBg({ ...slide.bg, bg_img_opacity: Number(e.target.value) })}
+                  className="w-full" />
               </div>
-              <label className="block mt-2">
-                <span className="ui-label">Angle</span>
-                <input type="range" min={0} max={360} value={slide.bg?.angle || 145} onChange={(e) => onBg({ ...slide.bg, angle: Number(e.target.value) })} className="w-full" />
+            )}
+            <div className="text-[10px] text-neutral-400 mt-1">Images are layered over the background color</div>
+          </div>
+
+          {slide.bg?.type === "gradient" && (
+            <div className="mt-3 space-y-2">
+              <div className="ui-label">Gradient stops</div>
+              <div className="flex gap-2 items-center">
+                <div className="flex-1 grid grid-cols-4 gap-1">
+                  {["bg", "bg2", "accent", "text", "muted"].map((k) => (
+                    <button key={k} onClick={() => onBg({ ...slide.bg, color: k })}
+                      className={`aspect-square rounded-md border ${slide.bg?.color === k ? "border-ink" : "border-line"}`}
+                      style={{ background: palette[k] }} title={k} />
+                  ))}
+                </div>
+                <input type="color" value={(() => { try { return resolveColor(slide.bg?.color || "bg", palette); } catch { return "#000000"; } })()}
+                  onChange={(e) => onBg({ ...slide.bg, color: e.target.value })}
+                  className="w-8 h-8 rounded border border-line cursor-pointer shrink-0" title="Custom hex" />
+              </div>
+              <div className="flex gap-2 items-center">
+                <div className="flex-1 grid grid-cols-4 gap-1">
+                  {["bg", "bg2", "accent", "text", "muted"].map((k) => (
+                    <button key={k} onClick={() => onBg({ ...slide.bg, color2: k })}
+                      className={`aspect-square rounded-md border ${slide.bg?.color2 === k ? "border-ink" : "border-line"}`}
+                      style={{ background: palette[k] }} title={k} />
+                  ))}
+                </div>
+                <input type="color" value={(() => { try { return resolveColor(slide.bg?.color2 || "accent", palette); } catch { return "#000000"; } })()}
+                  onChange={(e) => onBg({ ...slide.bg, color2: e.target.value })}
+                  className="w-8 h-8 rounded border border-line cursor-pointer shrink-0" title="Custom hex" />
+              </div>
+              <label className="block">
+                <div className="flex items-center justify-between">
+                  <span className="ui-label">Direction</span>
+                  <span className="text-[10px] font-mono text-neutral-500">{slide.bg?.angle || 145}°</span>
+                </div>
+                <div className="relative mt-1">
+                  <div className="w-full h-6 rounded-md border border-line overflow-hidden"
+                    style={{ background: `linear-gradient(${slide.bg?.angle || 145}deg, ${resolveColor(slide.bg?.color || "bg", palette)} 0%, ${resolveColor(slide.bg?.color2 || "accent", palette)} 100%)` }} />
+                  <input type="range" min={0} max={360} value={slide.bg?.angle || 145}
+                    onChange={(e) => onBg({ ...slide.bg, angle: Number(e.target.value) })}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                </div>
+                <div className="flex gap-1 mt-1">
+                  {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
+                    <button key={a} onClick={() => onBg({ ...slide.bg, angle: a })}
+                      className={`flex-1 text-[9px] py-1 rounded border ${(slide.bg?.angle || 145) === a ? "border-ink bg-ink text-white" : "border-line hover:border-ink"}`}>
+                      {a}°
+                    </button>
+                  ))}
+                </div>
               </label>
             </div>
           )}
@@ -187,10 +302,22 @@ function RightPanel({
       <div className="flex items-center justify-between">
         <div className="ui-label">Element · {el.type}</div>
         <div className="flex gap-1">
-          <button onClick={onFront} title="Bring to front" className="btn-ghost text-xs py-1"><Layers size={12} /></button>
+          <button onClick={() => onEditElement({ locked: !el.locked })} title={el.locked ? "Unlock element" : "Lock element"}
+            className={`btn-ghost text-xs py-1 ${el.locked ? "text-amber-600" : ""}`}>
+            {el.locked ? "🔒" : "🔓"}
+          </button>
           <button onClick={onDuplicate} title="Duplicate" className="btn-ghost text-xs py-1"><Copy size={12} /></button>
-          <button onClick={onDelete} title="Delete" className="btn-ghost text-xs py-1 text-red-600"><Trash2 size={12} /></button>
+          <button onClick={onDelete} title="Delete" className="btn-ghost text-xs py-1 text-danger"><Trash2 size={12} /></button>
         </div>
+      </div>
+
+      {/* Z-order — jump-to plus one-step, Canva-style */}
+      <div className="flex items-center gap-1" data-testid="z-order-group">
+        <span className="ui-label mr-1"><Layers size={11} className="inline -mt-0.5" /> Layer</span>
+        <button onClick={onBack} data-testid="z-back" title="Send to back" className="btn-ghost text-[11px] py-0.5 px-2 border border-line rounded-lg">⇤ Back</button>
+        <button onClick={onBackward} data-testid="z-backward" title="Send backward one step" className="btn-ghost text-[11px] py-0.5 px-2 border border-line rounded-lg">←</button>
+        <button onClick={onForward} data-testid="z-forward" title="Bring forward one step" className="btn-ghost text-[11px] py-0.5 px-2 border border-line rounded-lg">→</button>
+        <button onClick={onFront} data-testid="z-front" title="Bring to front" className="btn-ghost text-[11px] py-0.5 px-2 border border-line rounded-lg">Front ⇥</button>
       </div>
 
       {/* Precise position & size — matches every design tool's inspector. */}
@@ -286,6 +413,22 @@ function RightPanel({
           <label className="block"><span className="ui-label">Thickness</span>
             <input type="range" min={2} max={40} value={el.h || 4} onChange={(e) => onEditElement({ h: Number(e.target.value) })} className="w-full" />
           </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block"><span className="ui-label">Start cap</span>
+              <select value={el.cap_start || "none"} onChange={(e) => onEditElement({ cap_start: e.target.value })}
+                data-testid="el-cap-start" className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+                <option value="none">None</option>
+                <option value="arrow">Arrow</option>
+                <option value="dot">Dot</option>
+              </select></label>
+            <label className="block"><span className="ui-label">End cap</span>
+              <select value={el.cap_end || "none"} onChange={(e) => onEditElement({ cap_end: e.target.value })}
+                data-testid="el-cap-end" className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+                <option value="none">None</option>
+                <option value="arrow">Arrow</option>
+                <option value="dot">Dot</option>
+              </select></label>
+          </div>
         </>
       )}
 
@@ -305,8 +448,27 @@ function RightPanel({
               ))}
             </div>
           )}
+          {isShape && !el.stroke_only && (
+            <div className="flex gap-2">
+              {[["solid", "Solid"], ["gradient", "Gradient"]].map(([k, l]) => (
+                <button key={k} onClick={() => onEditElement({ fill_type: k })}
+                  data-testid={`el-fill-type-${k}`}
+                  className={`flex-1 py-1.5 rounded-full text-[11px] border ${(el.fill_type || "solid") === k ? "border-ink bg-ink text-white" : "border-line hover:border-ink"}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          )}
           {(!isShape || !el.stroke_only) && (
-            <ColorPicker label={isBadge ? "Background" : "Fill"} palette={palette} value={el.fill || el.bg} onChange={(c) => onEditElement(isBadge ? { bg: c } : { fill: c })} />
+            <ColorPicker label={isBadge ? "Background" : (isShape && el.fill_type === "gradient" ? "Gradient stop 1" : "Fill")} palette={palette} value={el.fill || el.bg} onChange={(c) => onEditElement(isBadge ? { bg: c } : { fill: c })} />
+          )}
+          {isShape && !el.stroke_only && el.fill_type === "gradient" && (
+            <>
+              <ColorPicker label="Gradient stop 2" palette={palette} value={el.fill2 || "accent"} onChange={(c) => onEditElement({ fill2: c })} />
+              <label className="block"><span className="ui-label">Angle</span>
+                <input type="range" min={0} max={360} value={el.gradient_angle ?? 145} onChange={(e) => onEditElement({ gradient_angle: Number(e.target.value) })} className="w-full" />
+              </label>
+            </>
           )}
           {isBadge && <ColorPicker label="Text color" palette={palette} value={el.color} onChange={(c) => onEditElement({ color: c })} />}
           {isShape && el.stroke_only && (
@@ -350,9 +512,65 @@ function RightPanel({
 
       {isImage && (
         <>
-          <input value={el.src || ""} onChange={(e) => onEditElement({ src: e.target.value })} data-testid="el-image-src"
-            placeholder="Image URL (PNG/JPG/SVG)"
-            className="w-full border border-line rounded-full px-3 py-2 text-sm font-mono" />
+          <div className="flex gap-2">
+            <input value={el.src || ""} onChange={(e) => onEditElement({ src: e.target.value })} data-testid="el-image-src"
+              placeholder="Paste image URL"
+              className="flex-1 border border-line rounded-full px-3 py-2 text-sm font-mono" />
+            <button onClick={() => imageInputRef.current?.click()}
+              className="shrink-0 px-3 py-2 rounded-full bg-brand-gradient text-white text-xs font-medium">
+              Upload
+            </button>
+            <input ref={imageInputRef} type="file" accept="image/*" className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                if (!f.type?.startsWith("image/")) { toast.error("Please pick an image file"); return; }
+                if (f.size > 15 * 1024 * 1024) { toast.error("Image too large (max ~15 MB)"); return; }
+                const reader = new FileReader();
+                reader.onload = () => onEditElement({ src: String(reader.result || "") });
+                reader.readAsDataURL(f);
+                e.target.value = "";
+              }} />
+          </div>
+          <label className="block"><span className="ui-label">Image frame</span>
+              <select value={el.frame || ""} onChange={(e) => onEditElement({ frame: e.target.value || null })}
+                data-testid="el-image-frame"
+                className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+                <option value="">Rectangle (no frame)</option>
+                {FRAME_CATEGORIES.map((cat) => {
+                  const frames = IMAGE_FRAMES.filter((f) => f.category === cat.key);
+                  if (!frames.length) return null;
+                  return (
+                    <optgroup key={cat.key} label={cat.label}>
+                      {frames.map((f) => (
+                        <option key={f.id} value={f.id}>{f.label}</option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
+              </select>
+          </label>
+          <label className="block"><span className="ui-label">Image effect</span>
+            <select value={el.effect || ""} onChange={(e) => onEditElement({ effect: e.target.value || null })}
+              data-testid="el-image-effect"
+              className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+              <option value="">No effect</option>
+              {IMAGE_EFFECTS.filter((e) => e.id !== "none").map((eff) => (
+                <option key={eff.id} value={eff.id}>{eff.label}</option>
+              ))}
+            </select>
+          </label>
+          <div className="border-t border-line my-1.5" />
+          <span className="ui-label block mb-1">Adjust</span>
+          <Slider label="Brightness" value={el.filters?.brightness ?? 100} min={0} max={200} step={1}
+            onChange={(v) => onEditElement({ filters: { ...el.filters, brightness: v } })} suffix="%" />
+          <Slider label="Contrast" value={el.filters?.contrast ?? 100} min={0} max={200} step={1}
+            onChange={(v) => onEditElement({ filters: { ...el.filters, contrast: v } })} suffix="%" />
+          <Slider label="Saturation" value={el.filters?.saturate ?? 100} min={0} max={200} step={1}
+            onChange={(v) => onEditElement({ filters: { ...el.filters, saturate: v } })} suffix="%" />
+          <Slider label="Blur" value={el.filters?.blur ?? 0} min={0} max={10} step={0.5}
+            onChange={(v) => onEditElement({ filters: { ...el.filters, blur: v } })} suffix="px" />
+          <div className="border-t border-line my-1.5" />
           <label className="block"><span className="ui-label">Fit</span>
             <select value={el.fit || "cover"} onChange={(e) => onEditElement({ fit: e.target.value })} data-testid="el-image-fit"
               className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
@@ -372,6 +590,167 @@ function RightPanel({
             <input type="checkbox" checked={el.role === "logo"} data-testid="el-treat-as-logo"
               onChange={(e) => onEditElement({ role: e.target.checked ? "logo" : null })} />
             Treat as logo (transparent background, no crop tint)
+          </label>
+        </>
+      )}
+
+      {el.type === "chart" && (
+        <>
+          <label className="block"><span className="ui-label">Chart type</span>
+            <select value={el.chart_type || "bar"} onChange={(e) => onEditElement({ chart_type: e.target.value })}
+              className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+              <option value="bar">Bar chart</option>
+              <option value="pie">Pie chart</option>
+              <option value="donut">Donut chart</option>
+              <option value="line">Line chart</option>
+              <option value="area">Area chart</option>
+              <option value="stacked-bar">Stacked bar</option>
+              <option value="hbar">Horizontal bar</option>
+            </select>
+          </label>
+          <label className="block"><span className="ui-label">Data values (comma-separated)</span>
+            <input value={(el.chart_data || []).join(", ")} onChange={(e) => {
+              const nums = e.target.value.split(",").map((s) => Number(s.trim())).filter((n) => !isNaN(n));
+              onEditElement({ chart_data: nums.length ? nums : [1] });
+            }} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm font-mono" />
+          </label>
+          <label className="block"><span className="ui-label">Labels (comma-separated)</span>
+            <input value={(el.chart_labels || []).join(", ")} onChange={(e) => {
+              const labels = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+              onEditElement({ chart_labels: labels });
+            }} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm font-mono" />
+          </label>
+        </>
+      )}
+
+      {el.type === "card" && (
+        <>
+          <label className="block"><span className="ui-label">Card style</span>
+            <select value={el.card_style || "flat"} onChange={(e) => onEditElement({ card_style: e.target.value })}
+              className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+              <option value="flat">Flat</option>
+              <option value="elevated">Elevated</option>
+              <option value="outlined">Outlined</option>
+              <option value="glass">Glassmorphism</option>
+              <option value="bento">Bento</option>
+              <option value="dashboard">Dashboard</option>
+              <option value="split">Split</option>
+              <option value="timeline">Timeline</option>
+            </select>
+          </label>
+          <input value={el.title || ""} onChange={(e) => onEditElement({ title: e.target.value })}
+            placeholder="Card title" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+          <textarea value={el.body || ""} onChange={(e) => onEditElement({ body: e.target.value })}
+            placeholder="Card body text" rows={3}
+            className="w-full border border-line rounded-lg px-3 py-2 text-sm" />
+          {el.card_style === "dashboard" && (
+            <>
+              <input value={el.metric || ""} onChange={(e) => onEditElement({ metric: e.target.value })}
+                placeholder="Metric value (e.g. 99.7%)" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+              <input value={el.metric_label || ""} onChange={(e) => onEditElement({ metric_label: e.target.value })}
+                placeholder="Metric label" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+            </>
+          )}
+          {el.card_style === "timeline" && (
+            <input value={el.badge || ""} onChange={(e) => onEditElement({ badge: e.target.value })}
+              placeholder="Badge / date" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+          )}
+          {el.card_style === "bento" && (
+            <label className="block"><span className="ui-label">Icon</span>
+              <select value={el.icon_name || "Zap"} onChange={(e) => onEditElement({ icon_name: e.target.value })}
+                className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+                {Object.keys(ICONS).map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+          )}
+        </>
+      )}
+
+      {el.type === "kpi" && (
+        <>
+          <input value={el.kpi_value || ""} onChange={(e) => onEditElement({ kpi_value: e.target.value })}
+            placeholder="Value (e.g. 86%)" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+          <input value={el.kpi_label || ""} onChange={(e) => onEditElement({ kpi_label: e.target.value })}
+            placeholder="Label (e.g. Conversion Rate)" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+          <input value={el.kpi_change || ""} onChange={(e) => onEditElement({ kpi_change: e.target.value })}
+            placeholder="Change (e.g. +12%)" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+          <label className="flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={!!el.kpi_negative} onChange={(e) => onEditElement({ kpi_negative: e.target.checked })} />
+            Negative trend (red)
+          </label>
+        </>
+      )}
+
+      {el.type === "funnel" && (
+        <>
+          <label className="block"><span className="ui-label">Stage values (comma-separated)</span>
+            <input value={(el.chart_data || []).join(", ")} onChange={(e) => {
+              const nums = e.target.value.split(",").map((s) => Number(s.trim())).filter((n) => !isNaN(n));
+              onEditElement({ chart_data: nums.length ? nums : [1] });
+            }} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm font-mono" />
+          </label>
+          <label className="block"><span className="ui-label">Stage labels</span>
+            <input value={(el.chart_labels || []).join(", ")} onChange={(e) => {
+              const labels = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+              onEditElement({ chart_labels: labels });
+            }} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm font-mono" />
+          </label>
+        </>
+      )}
+
+      {el.type === "timeline" && (
+        <>
+          <div className="ui-label mb-1">Timeline items</div>
+          <textarea value={JSON.stringify(el.timeline_items || [], null, 2)}
+            onChange={(e) => {
+              try { const parsed = JSON.parse(e.target.value); if (Array.isArray(parsed)) onEditElement({ timeline_items: parsed }); }
+              catch { /* invalid JSON — ignore during typing */ }
+            }}
+            rows={6} className="w-full border border-line rounded-lg px-3 py-2 text-sm font-mono" />
+          <div className="text-[10px] text-neutral-400">Edit as JSON array of {`{date, title, desc}`} objects</div>
+        </>
+      )}
+
+      {el.type === "progress" && (
+        <>
+          <input value={el.label || ""} onChange={(e) => onEditElement({ label: e.target.value })}
+            placeholder="Label" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+          <label className="block"><span className="ui-label">Progress</span>
+            <input type="range" min={0} max={100} step={1} value={el.progress ?? 65}
+              onChange={(e) => onEditElement({ progress: Number(e.target.value) })} className="w-full" />
+            <span className="text-[10px] font-mono text-neutral-500">{Math.round(el.progress ?? 65)}%</span>
+          </label>
+        </>
+      )}
+
+      {el.type === "coolshape" && (
+        <>
+          <label className="block"><span className="ui-label">Shape category</span>
+            <select value={el.shape_category || "star"} onChange={(e) => onEditElement({ shape_category: e.target.value })}
+              data-testid="el-cs-category"
+              className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+              {DECORATIVE_CATEGORIES.map((cat) => (
+                <option key={cat.type} value={cat.type}>{cat.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block"><span className="ui-label">Shape index</span>
+            <input type="range" min={0} max={7} value={el.shape_index || 0} onChange={(e) => onEditElement({ shape_index: Number(e.target.value) })}
+              className="w-full" />
+          </label>
+          <label className="block"><span className="ui-label">Size</span>
+            <input type="range" min={40} max={500} value={el.size || 200} onChange={(e) => onEditElement({ size: Number(e.target.value), w: Number(e.target.value), h: Number(e.target.value) })}
+              className="w-full" />
+          </label>
+          <ColorPicker label="Color tint" palette={palette} value={el.color || "accent"} onChange={(c) => onEditElement({ color: c })} />
+          <label className="block"><span className="ui-label">Opacity</span>
+            <input type="range" min={0.05} max={1} step={0.05} value={el.opacity ?? 0.3} onChange={(e) => onEditElement({ opacity: Number(e.target.value) })}
+              className="w-full" />
+          </label>
+          <label className="flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={el.noise !== false} data-testid="el-cs-noise"
+              onChange={(e) => onEditElement({ noise: e.target.checked })} />
+            Grainy gradient effect
           </label>
         </>
       )}
@@ -426,6 +805,20 @@ function ToggleBtn({ children, active, onClick }) {
     <button onClick={onClick} className={`flex-1 py-1.5 rounded-md border text-xs ${active ? "bg-ink text-white border-ink" : "bg-white border-line hover:border-ink"}`}>
       {children}
     </button>
+  );
+}
+
+function Slider({ label, value, min, max, step, onChange, suffix }) {
+  return (
+    <label className="block mb-1.5">
+      <div className="flex justify-between items-baseline mb-0.5">
+        <span className="text-[10px] font-mono text-neutral-500">{label}</span>
+        <span className="text-[10px] font-mono text-neutral-400">{value}{suffix || ""}</span>
+      </div>
+      <input type="range" min={min} max={max} step={step || 1} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-brand" />
+    </label>
   );
 }
 

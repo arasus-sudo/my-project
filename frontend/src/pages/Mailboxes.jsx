@@ -80,8 +80,8 @@ export default function Mailboxes() {
       />
 
       <div className="animate-fade-in px-6 sm:px-8 pt-6">
-        <div className="shadow-card p-4 flex items-start gap-2.5 text-xs text-neutral-400 rounded-2xl">
-          <ShieldCheck size={15} className="text-neutral-400 mt-0.5 shrink-0" />
+        <div className="shadow-card p-4 flex items-start gap-2.5 text-caption text-ink-muted rounded-2xl">
+          <ShieldCheck size={15} className="text-ink-muted mt-0.5 shrink-0" />
           <p>
             Outbound is sent through your connected Google or Microsoft mailbox, never a
             transactional provider — cold email through one of those violates their terms and gets
@@ -94,8 +94,8 @@ export default function Mailboxes() {
       <div className="px-6 sm:px-8 pb-6 grid md:grid-cols-2 gap-6">
         {items.length === 0 && (
           <div className="col-span-2 shadow-card p-10 text-center rounded-2xl">
-            <div className="font-display text-xl font-semibold">No mailboxes connected</div>
-            <p className="text-sm text-neutral-400 mt-2">
+            <div className="text-section font-display font-semibold">No mailboxes connected</div>
+            <p className="text-body text-ink-muted mt-2">
               Campaigns can't launch without one — there'd be nothing to send from.
             </p>
           </div>
@@ -110,22 +110,22 @@ export default function Mailboxes() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="ui-label">{m.provider}</div>
-                  <div className="font-display font-semibold text-lg mt-1 truncate">{m.email}</div>
-                  <div className="text-xs text-neutral-400 font-mono mt-0.5">{m.display_name || "—"}</div>
+                  <div className="text-card-title font-display font-semibold mt-1 truncate">{m.email}</div>
+                  <div className="text-tiny text-ink-muted font-mono mt-0.5">{m.display_name || "—"}</div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span
                     data-testid={`mailbox-status-${m.id}`}
                     className={`ui-label px-2 py-1 rounded-xl border ${
-                      !connected ? "text-red-700 border-red-300 bg-red-50"
-                        : mocked ? "text-neutral-400 border-line bg-bone"
-                        : "text-green-700 border-green-300 bg-green-50"
+                      !connected ? "text-danger border-danger/30 bg-danger/10"
+                        : mocked ? "text-ink-muted border-line bg-bone"
+                        : "text-success border-success/30 bg-success/10"
                     }`}
                   >
                     {!connected ? "not connected" : mocked ? "test mode" : "sending"}
                   </span>
                   <button onClick={() => deleteMailbox(m.id, m.email)} data-testid={`delete-${m.id}`}
-                    className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors" title="Remove mailbox">
+                    className="p-1.5 text-ink-muted hover:text-danger hover:bg-danger/10 rounded-xl transition-colors" title="Remove mailbox">
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -138,7 +138,7 @@ export default function Mailboxes() {
                 </button>
               )}
               {connected && mocked && (
-                <div className="mt-3 text-[11px] text-neutral-400 bg-bone border border-line rounded-lg px-2.5 py-1.5">
+                <div className="mt-3 text-tiny text-ink-muted bg-bone border border-line rounded-lg px-2.5 py-1.5">
                   Queueing and drafting work, but no mail actually leaves the box until a Google or
                   Microsoft OAuth app is configured.
                 </div>
@@ -146,20 +146,20 @@ export default function Mailboxes() {
 
               <div className="mt-6 ui-label mb-2">Domain authentication</div>
               {!m.dns?.checked ? (
-                <div className="flex items-center gap-2 text-xs text-neutral-400 border border-line rounded-2xl px-3 py-2">
-                  <AlertTriangle size={13} className="text-amber-500" />
+                <div className="flex items-center gap-2 text-caption text-ink-muted border border-line rounded-2xl px-3 py-2">
+                  <AlertTriangle size={13} className="text-warning" />
                   Not checked yet — we won't guess. Run a check to see the real records.
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-caption">
                   {["spf", "dkim", "dmarc"].map((k) => (
                     <div key={k} title={DNS_HELP[k]}
                       data-testid={`dns-${k}-${m.id}`}
                       className={`border rounded-2xl p-2 text-center ${
-                        m.dns?.[k] ? "border-green-300 bg-green-50 text-green-800"
-                                    : "border-red-300 bg-red-50 text-red-700"
+                        m.dns?.[k] ? "border-success/30 bg-success/10 text-success"
+                                    : "border-danger/30 bg-danger/10 text-danger"
                       }`}>
-                      <div className="font-mono uppercase text-[10px]">{k}</div>
+                      <div className="font-mono uppercase text-tiny">{k}</div>
                       {m.dns?.[k] ? <CheckCircle2 size={15} className="inline mt-1" />
                                    : <XCircle size={15} className="inline mt-1" />}
                     </div>
@@ -167,7 +167,7 @@ export default function Mailboxes() {
                 </div>
               )}
               {m.dns?.dmarc_policy && (
-                <div className="text-[11px] text-neutral-400 font-mono mt-1.5">
+                <div className="text-tiny text-ink-muted font-mono mt-1.5">
                   DMARC policy: p={m.dns.dmarc_policy}
                 </div>
               )}
@@ -183,11 +183,11 @@ export default function Mailboxes() {
                     {m.warmup_enabled ? `day ${m.warmup_day}` : "off"}
                   </div>
                   <button onClick={() => toggleWarmup(m.id)} data-testid={`warmup-${m.id}`}
-                    className="text-[11px] mt-1 text-sanguine hover:underline">
+                    className="text-tiny mt-1 text-ink hover:underline">
                     {m.warmup_enabled ? "pause" : "resume"}
                   </button>
                   {m.warmup_enabled && (
-                    <div className="text-[10px] text-neutral-400 mt-1 leading-tight">
+                    <div className="text-tiny text-ink-muted mt-1 leading-tight">
                       caps sends at {Math.min(cap, 5 + (m.warmup_day || 1) * 5)}/day while ramping
                     </div>
                   )}
@@ -196,7 +196,7 @@ export default function Mailboxes() {
                   <div className="ui-label">Sent today</div>
                   <div className="font-mono text-lg font-bold">{m.sent_today || 0}/{cap}</div>
                   <div className="h-1 mt-1.5 bg-neutral-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-ink rounded-full"
+                    <div className="h-full bg-accent rounded-full"
                       style={{ width: `${Math.min(100, ((m.sent_today || 0) / cap) * 100)}%` }} />
                   </div>
                 </div>
@@ -210,12 +210,12 @@ export default function Mailboxes() {
         <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50 p-4"
           onClick={(e) => e.target === e.currentTarget && setModal(false)}>
           <form onSubmit={add} className="bg-white border border-line p-6 rounded-2xl w-full max-w-md space-y-3">
-            <div className="font-display font-semibold text-xl">Connect mailbox</div>
-            <p className="text-xs text-neutral-400">
+            <div className="text-section font-display font-semibold">Connect mailbox</div>
+            <p className="text-caption text-ink-muted">
               You'll be sent to your provider to authorise sending. Nothing can go out until you do.
             </p>
             <label className="block">
-              <span className="ui-label">Provider</span>
+              <span className="form-label">Provider</span>
               <select value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })}
                 data-testid="mailbox-provider"
                 className="mt-1 w-full border border-line px-3 py-2 rounded-xl">
@@ -224,21 +224,21 @@ export default function Mailboxes() {
               </select>
             </label>
             <label className="block">
-              <span className="ui-label">Email</span>
+              <span className="form-label">Email</span>
               <input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
                 data-testid="mailbox-email" className="mt-1 w-full border border-line px-3 py-2 rounded-xl" />
             </label>
             <label className="block">
-              <span className="ui-label">Display name</span>
+              <span className="form-label">Display name</span>
               <input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })}
                 data-testid="mailbox-display" className="mt-1 w-full border border-line px-3 py-2 rounded-xl" />
             </label>
             <label className="block">
-              <span className="ui-label">Daily cap</span>
+              <span className="form-label">Daily cap</span>
               <input type="number" min={10} max={500} value={form.daily_cap}
                 onChange={(e) => setForm({ ...form, daily_cap: Number(e.target.value) })}
                 data-testid="mailbox-cap" className="mt-1 w-full border border-line px-3 py-2 rounded-xl" />
-              <span className="text-[11px] text-neutral-400">
+              <span className="text-tiny text-ink-muted">
                 50/day is a safe ceiling for a warmed mailbox. More than that and you're gambling.
               </span>
             </label>

@@ -10,21 +10,21 @@ export default function AuditLog() {
     <div className="animate-fade-in">
       <PageHeader title="Audit log" subtitle="Immutable record of key actions in your workspace." />
       <div className="p-6 sm:p-8">
-        {items.length === 0 && <div className="text-sm text-neutral-400">No audit entries yet.</div>}
+        {items.length === 0 && <div className="text-body text-ink-muted">No audit entries yet.</div>}
         <div className="bg-white border border-line rounded-2xl overflow-hidden card-floating">
-          <table className="w-full text-sm min-w-[480px]">
+          <table className="w-full text-table min-w-[480px]">
             <thead>
               <tr className="border-b border-line">
-                {["Time", "Actor", "Action", "Meta"].map((h) => <th key={h} className="ui-label text-left p-3">{h}</th>)}
+                {["Time", "Actor", "Action", "Meta"].map((h) => <th key={h} className="table-header text-left p-3">{h}</th>)}
               </tr>
             </thead>
             <tbody>
               {items.map((e) => (
                 <tr key={e.id} className="border-b border-line last:border-b-0">
-                  <td className="p-3 font-mono text-xs whitespace-nowrap">{e.at?.replace("T", " ").slice(0, 19)}</td>
-                  <td className="p-3 text-xs">{e.actor_email}</td>
+                  <td className="p-3 font-mono whitespace-nowrap">{e.at?.replace("T", " ").slice(0, 19)}</td>
+                  <td className="p-3">{e.actor_email}</td>
                   <td className="p-3"><span className="pill">{e.action}</span></td>
-                  <td className="p-3 font-mono text-xs text-neutral-500 truncate max-w-md">{JSON.stringify(e.meta)}</td>
+                  <td className="p-3 font-mono text-ink-tertiary truncate max-w-md">{JSON.stringify(e.meta)}</td>
                 </tr>
               ))}
             </tbody>

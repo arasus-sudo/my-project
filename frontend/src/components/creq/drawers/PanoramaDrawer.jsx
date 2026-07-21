@@ -119,7 +119,7 @@ export default function PanoramaDrawer({ onClose, panorama, slideCount, onApply 
 
           <div className="border-t border-line pt-4 grid grid-cols-2 gap-2">
             <button onClick={() => onApply(null)} data-testid="pano-remove"
-              className="text-xs py-2 rounded-full border border-line hover:border-red-600 text-red-600 justify-center">
+              className="text-xs py-2 rounded-full border border-line hover:border-danger text-danger justify-center">
               Remove background
             </button>
             <button onClick={() => onApply({ src, mode, viewports: panorama?.viewports || [], baked_count: slideCount })}

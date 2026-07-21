@@ -40,11 +40,11 @@ export default function Login() {
       <div className="hidden md:flex md:w-1/2 border-r border-line p-16 flex-col justify-between bg-gradient-to-b from-white to-ash">
         <Link to="/"><InnoiraLogo size="sm" /></Link>
         <div>
-          <div className="ui-label text-sanguine mb-5">One login, every agent</div>
-          <p className="font-display text-3xl tracking-tight leading-tight max-w-md">
+          <div className="ui-label text-ink mb-5">One login, every agent</div>
+          <p className="font-display text-app-title leading-tight max-w-md">
             Your AI revenue team is already at its desk.
           </p>
-          <ul className="mt-8 space-y-2.5 text-sm text-neutral-500">
+          <ul className="mt-8 space-y-2.5 text-body text-ink-muted">
             {AGENT_LINES.map(([name, tag]) => (
               <li key={name} className="flex gap-3 items-baseline">
                 <span className="font-display font-semibold text-ink w-28 shrink-0">{name}</span>
@@ -59,18 +59,18 @@ export default function Login() {
         <div className="w-full max-w-sm space-y-6">
           <div className="md:hidden mb-2 text-center"><Link to="/"><InnoiraLogo size="sm" /></Link></div>
           <div>
-            <h1 className="text-3xl font-display font-bold tracking-tight">Sign in</h1>
-            <p className="text-sm text-neutral-400 mt-1">Welcome back to your suite.</p>
+            <h1 className="text-page-title font-display">Sign in</h1>
+            <p className="text-caption text-ink-muted mt-1">Welcome back to your suite.</p>
           </div>
           <GoogleSignInButton text="signin_with" />
           <form onSubmit={submit} className="space-y-5">
             <label className="block">
-              <span className="ui-label">Email</span>
+              <span className="form-label">Email</span>
               <input data-testid="login-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
                 className="input-premium mt-1 w-full px-3 py-2" />
             </label>
             <label className="block">
-              <span className="ui-label">Password</span>
+              <span className="form-label">Password</span>
               <input data-testid="login-password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
                 className="input-premium mt-1 w-full px-3 py-2" />
             </label>
@@ -78,8 +78,8 @@ export default function Login() {
               {busy ? "Signing in…" : "Sign in"}
             </button>
           </form>
-          <p className="text-sm text-neutral-400">
-            New here? <Link to="/signup" className="text-sanguine hover:underline">Create an account</Link>
+          <p className="text-caption text-ink-muted">
+            New here? <Link to="/signup" className="text-ink hover:underline">Create an account</Link>
           </p>
         </div>
       </div>

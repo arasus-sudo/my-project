@@ -110,7 +110,7 @@ export default function Billing() {
           <div className="flex items-start justify-between flex-wrap gap-4">
             <div>
               <div className="ui-label flex items-center gap-1.5"><Coins size={12} /> Credits remaining</div>
-              <div className="font-display text-3xl sm:text-4xl font-bold mt-1 tabular-nums" data-testid="billing-balance-value">
+              <div className="font-display text-2xl sm:text-3xl font-bold mt-1 tabular-nums" data-testid="billing-balance-value">
                 {fmt(balance)}
               </div>
               <div className="text-xs text-neutral-400 mt-1">
@@ -134,12 +134,12 @@ export default function Billing() {
           </div>
           <div className="h-2 rounded-full bg-neutral-100 overflow-hidden mt-5">
             <div
-              className={`h-full rounded-full transition-all ${pct > 85 ? "bg-amber-500" : "bg-ink"}`}
+              className={`h-full rounded-full transition-all ${pct > 85 ? "bg-warning" : "bg-brand-gradient"}`}
               style={{ width: `${pct}%` }}
             />
           </div>
           {balance === 0 && (
-            <div className="mt-4 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+            <div className="mt-4 text-xs text-warning bg-warning/10 border border-warning/30 rounded-xl px-3 py-2">
               You're out of credits. Agents are paused until you top up or upgrade.
             </div>
           )}
@@ -163,9 +163,9 @@ export default function Billing() {
               const price = annual ? p.price_annual : p.price_monthly;
               return (
                 <div key={p.id} data-testid={`plan-${p.id}`}
-                  className={`card-flat shadow-card p-4 sm:p-5 flex flex-col relative ${p.popular ? "ring-1 ring-ink" : ""}`}>
+                  className={`card-flat shadow-card p-4 sm:p-5 flex flex-col relative ${p.popular ? "ring-1 ring-accent" : ""}`}>
                   {p.popular && (
-                    <div className="absolute -top-2 left-5 bg-ink text-white text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full">
+                    <div className="absolute -top-2 left-5 bg-brand-gradient text-white text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full">
                       Most popular
                     </div>
                   )}
@@ -179,9 +179,9 @@ export default function Billing() {
                   )}
                   <p className="text-xs text-neutral-400 mt-3 min-h-[32px]">{p.blurb}</p>
                   <ul className="text-xs space-y-1.5 mt-4 flex-1">
-                    <li className="flex items-center gap-1.5"><Check size={12} className="text-sanguine" /> {fmt(p.credits)} credits / month</li>
-                    <li className="flex items-center gap-1.5"><Check size={12} className="text-sanguine" /> {p.seats === 0 ? "Unlimited seats" : `${p.seats} seat${p.seats > 1 ? "s" : ""}`}</li>
-                    <li className="flex items-center gap-1.5"><Check size={12} className="text-sanguine" /> All six agents</li>
+                    <li className="flex items-center gap-1.5"><Check size={12} className="text-accent" /> {fmt(p.credits)} credits / month</li>
+                    <li className="flex items-center gap-1.5"><Check size={12} className="text-accent" /> {p.seats === 0 ? "Unlimited seats" : `${p.seats} seat${p.seats > 1 ? "s" : ""}`}</li>
+                    <li className="flex items-center gap-1.5"><Check size={12} className="text-accent" /> All six agents</li>
                   </ul>
                   <button
                     disabled={current || busy === p.id || p.id === "trial"}
@@ -239,7 +239,7 @@ export default function Billing() {
                     <div className="flex items-center justify-between text-xs">
                       <span className="flex items-center gap-2">
                         {u.agent && (
-                          <span className="w-4 h-4 rounded bg-ink text-white text-[9px] flex items-center justify-center font-mono">
+                          <span className="w-4 h-4 rounded bg-brand-gradient text-white text-[9px] flex items-center justify-center font-mono">
                             {AGENT_BADGE[u.agent] || "·"}
                           </span>
                         )}
@@ -309,7 +309,7 @@ export default function Billing() {
                       </td>
                       <td className="py-2">{l.reason}{l.units > 1 ? ` (${l.units}×)` : ""}</td>
                       <td className="py-2 text-neutral-400">{AGENT_NAME[l.agent] || "—"}</td>
-                      <td className={`py-2 text-right tabular-nums font-medium ${l.delta > 0 ? "text-emerald-600" : ""}`}>
+                      <td className={`py-2 text-right tabular-nums font-medium ${l.delta > 0 ? "text-success" : ""}`}>
                         {l.delta > 0 ? `+${fmt(l.delta)}` : fmt(l.delta)}
                       </td>
                       <td className="py-2 text-right tabular-nums text-neutral-400">{fmt(l.balance_after)}</td>

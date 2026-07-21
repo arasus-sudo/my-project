@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  User as UserIcon, KeyRound, Building2, Loader2, Camera, Trash2, Sparkles, ArrowLeft, LogOut,
+  User as UserIcon, KeyRound, Building2, Loader2, Camera, Trash2, MessageSquare, ArrowLeft, LogOut,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -140,7 +140,7 @@ function ProfileSection({ profile, onProfileUpdated }) {
           <input ref={fileRef} type="file" accept="image/*" className="hidden" data-testid="profile-avatar-input" onChange={onFile} />
           <button type="button" onClick={() => fileRef.current?.click()}
             data-testid="profile-avatar-upload"
-            className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-ink text-white flex items-center justify-center shadow hover:bg-neutral-800">
+            className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-brand-gradient text-white flex items-center justify-center shadow hover:brightness-105">
             <Camera size={14} />
           </button>
         </div>
@@ -150,7 +150,7 @@ function ProfileSection({ profile, onProfileUpdated }) {
           {avatarUrl && (
             <button type="button" onClick={removeAvatar}
               data-testid="profile-avatar-remove"
-              className="text-[11px] text-neutral-400 hover:text-red-600 flex items-center gap-1">
+              className="text-[11px] text-neutral-400 hover:text-danger flex items-center gap-1">
               <Trash2 size={11} /> Remove headshot
             </button>
           )}
@@ -233,7 +233,7 @@ function SecuritySection() {
           autoComplete="new-password" minLength={8}
           className="input-premium mt-1 w-full text-sm" required />
         {next && (
-          <div className={`text-[10px] mt-1 font-mono ${strong ? "text-emerald-700" : "text-neutral-400"}`}>
+          <div className={`text-[10px] mt-1 font-mono ${strong ? "text-success" : "text-neutral-400"}`}>
             {strong ? "Strong ✓" : "Add an uppercase letter and a digit to strengthen"}
           </div>
         )}
@@ -245,7 +245,7 @@ function SecuritySection() {
           autoComplete="new-password" minLength={8}
           className="input-premium mt-1 w-full text-sm" required />
         {confirm && confirm !== next && (
-          <div className="text-[10px] mt-1 text-red-600">Passwords don&apos;t match</div>
+          <div className="text-[10px] mt-1 text-danger">Passwords don&apos;t match</div>
         )}
       </label>
 

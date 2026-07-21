@@ -16,7 +16,7 @@ export default function Dashboard() {
     catch { toast.error("Could not seed"); }
   };
 
-  if (!data)     return <div className="p-6 sm:p-8 text-neutral-400 animate-fade-in">Loading…</div>;
+  if (!data)     return <div className="p-6 sm:p-8 text-body text-ink-muted animate-fade-in">Loading…</div>;
   const { kpis, counts, trend } = data;
 
   return (
@@ -34,8 +34,8 @@ export default function Dashboard() {
         {kpis.sent === 0 && (
           <div className="card-flat shadow-card p-6 flex items-center justify-between">
             <div>
-              <div className="font-display font-bold">Get a live demo in one click</div>
-              <div className="text-sm text-neutral-400">Seed sample leads, a mailbox and a Q1 outreach campaign.</div>
+              <div className="text-card-title font-display font-semibold">Get a live demo in one click</div>
+              <div className="text-caption text-ink-muted">Seed sample leads, a mailbox and a Q1 outreach campaign.</div>
             </div>
             <button data-testid="seed-demo-btn" onClick={seed} className="btn-secondary">Seed demo data</button>
           </div>
@@ -52,8 +52,8 @@ export default function Dashboard() {
           ].map((c, i) => (
             <div key={c.k} className="p-3 sm:p-6 bg-white shadow-card rounded-2xl">
               <div className="ui-label">{c.k}</div>
-              <div className="font-mono text-2xl sm:text-4xl font-bold mt-2 tracking-tighter">{c.v}</div>
-              {c.sub && <div className="text-xs text-neutral-400 mt-1 font-mono">{c.sub}</div>}
+              <div className="font-mono text-xl sm:text-2xl font-bold mt-2 tracking-tighter truncate">{c.v}</div>
+              {c.sub && <div className="text-tiny text-ink-muted mt-1 font-mono">{c.sub}</div>}
             </div>
           ))}
         </div>
@@ -67,17 +67,18 @@ export default function Dashboard() {
                   <CartesianGrid vertical={false} strokeDasharray="0" />
                   <XAxis dataKey="date" tickLine={false} axisLine={false} />
                   <YAxis tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ border: "1px solid #E5E6E1", borderRadius: 2, fontFamily: "JetBrains Mono", fontSize: 12 }} />
-                  <Line type="monotone" dataKey="sent" stroke="#0F1010" strokeWidth={1.5} dot={{ r: 2 }} />
-                  <Line type="monotone" dataKey="opened" stroke="#D94526" strokeWidth={1.5} dot={{ r: 2 }} />
-                  <Line type="monotone" dataKey="replied" stroke="#118D57" strokeWidth={1.5} dot={{ r: 2 }} />
+                  <Tooltip contentStyle={{ border: "1px solid #E5E5E7", borderRadius: 12, fontFamily: "Roboto Mono", fontSize: 12 }} />
+                  {/* Monochrome ramp — series differ by weight/dash, not hue. */}
+                  <Line type="monotone" dataKey="sent" stroke="#1D1D1F" strokeWidth={2} dot={{ r: 2 }} />
+                  <Line type="monotone" dataKey="opened" stroke="#8E8E93" strokeWidth={1.5} strokeDasharray="6 3" dot={{ r: 2 }} />
+                  <Line type="monotone" dataKey="replied" stroke="#D2D2D7" strokeWidth={1.5} strokeDasharray="2 3" dot={{ r: 2 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
-            <div className="mt-3 flex flex-wrap gap-3 sm:gap-5 text-xs font-mono text-neutral-400 uppercase">
+            <div className="mt-3 flex flex-wrap gap-3 sm:gap-5 text-caption font-mono text-ink-muted uppercase">
               <span className="flex items-center gap-1.5"><span className="w-2 h-2 bg-ink" /> Sent</span>
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 bg-sanguine" /> Opened</span>
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 bg-green-700" /> Replied</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 bg-neutral-500" /> Opened</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 bg-neutral-300" /> Replied</span>
             </div>
           </div>
 
@@ -91,7 +92,7 @@ export default function Dashboard() {
                 ["Mailboxes", counts.mailboxes],
               ].map(([k, v]) => (
                 <li key={k} className="flex justify-between py-3">
-                  <span className="text-sm text-neutral-500">{k}</span>
+                  <span className="text-body text-ink-tertiary">{k}</span>
                   <span className="font-mono text-lg font-bold">{v}</span>
                 </li>
               ))}
@@ -111,9 +112,9 @@ export default function Dashboard() {
             ].map((s) => (
               <div key={s.k}>
                 <div className="ui-label">{s.k}</div>
-                <div className="font-mono text-xl sm:text-3xl font-bold mt-1">{s.v}</div>
-                <div className="mt-2 h-2 bg-line">
-                  <div className="h-full bg-sanguine" style={{ width: `${Math.max(2, s.w)}%` }} />
+                <div className="font-mono text-lg sm:text-2xl font-bold mt-1 truncate">{s.v}</div>
+                <div className="mt-2 h-2 bg-line rounded-full overflow-hidden">
+                  <div className="h-full bg-accent" style={{ width: `${Math.max(2, s.w)}%` }} />
                 </div>
               </div>
             ))}

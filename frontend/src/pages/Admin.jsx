@@ -113,7 +113,7 @@ export default function Admin() {
                     <td className="p-3 font-mono">{w.stats.sent}</td>
                     <td className="p-3 font-mono">{w.stats.replied}</td>
                     <td className="p-3">
-                      <span className={`ui-label px-2 py-1 border rounded-full ${w.blocked ? "text-red-700 border-red-500" : "text-green-700 border-green-600"}`}>
+                      <span className={`ui-label px-2 py-1 border rounded-full ${w.blocked ? "text-danger border-danger" : "text-success border-success"}`}>
                         {w.blocked ? "blocked" : "active"}
                       </span>
                     </td>
@@ -150,7 +150,7 @@ export default function Admin() {
                     <td className="p-3 text-neutral-500">{u.workspace_name || "—"}</td>
                     <td className="p-3 text-xs">{u.role}</td>
                     <td className="p-3">
-                      <span className={`ui-label px-2 py-1 border rounded-full ${u.blocked ? "text-red-700 border-red-500" : "text-green-700 border-green-600"}`}>
+                      <span className={`ui-label px-2 py-1 border rounded-full ${u.blocked ? "text-danger border-danger" : "text-success border-success"}`}>
                         {u.blocked ? "blocked" : "active"}
                       </span>
                     </td>
@@ -171,7 +171,7 @@ export default function Admin() {
                         <Ban size={12} /> {u.blocked ? "Unblock" : "Block"}
                       </button>
                       {!u.is_admin && (
-                        <button onClick={() => deleteUser(u.id)} data-testid={`admin-user-delete-${u.id}`} className="btn-ghost text-xs text-red-600 hover:bg-red-50">
+                        <button onClick={() => deleteUser(u.id)} data-testid={`admin-user-delete-${u.id}`} className="btn-ghost text-xs text-danger hover:bg-danger/10">
                           <Trash2 size={12} /> Delete
                         </button>
                       )}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, Fragment } from "react";
 import { createRoot } from "react-dom/client";
 import { useParams, useNavigate } from "react-router-dom";
 import html2canvas from "html2canvas";
@@ -6,13 +6,15 @@ import jsPDF from "jspdf";
 import { toast } from "sonner";
 import {
   Save, Download, ChevronLeft, Loader2, Plus, Trash2, Copy,
-  Sparkles, Undo2, Redo2, Wand2, FileText, LayoutGrid, Maximize2, Mountain,
+  Sparkles, Undo2, Redo2, Wand2, FileText, LayoutGrid, Maximize2, Mountain, Play,
 } from "lucide-react";
 
 import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { useAuth } from "../lib/auth";
 import { PALETTES, CANVAS, blankSlide, slideFromTemplate } from "../lib/creqTemplates";
+import { STYLES, LAYOUTS } from "../lib/creqStyles";
+import { ACCENT_ELEMENTS, DESIGN_THEMES, COMPOSITIONS, IMAGE_FRAMES } from "../lib/creqDesignEngine";
 import { ensureProjectFontsLoaded, waitForProjectFonts } from "../lib/googleFonts";
 
 import LeftPanel from "../components/creq/LeftPanel";
@@ -20,13 +22,15 @@ import RightPanel from "../components/creq/RightPanel";
 import BoardView from "../components/creq/BoardView";
 import ElementRender from "../components/creq/ElementRender";
 import SelectionChrome from "../components/creq/SelectionChrome";
+import InlineTextEditor from "../components/creq/InlineTextEditor";
+import SlidePreview from "../components/creq/SlidePreview";
 import PanoramaLayer from "../components/creq/PanoramaLayer";
 import DeckOverlay from "../components/creq/DeckOverlay";
 import BrandKitDrawer from "../components/creq/drawers/BrandKitDrawer";
 import AiImageDrawer from "../components/creq/drawers/AiImageDrawer";
 import PanoramaDrawer from "../components/creq/drawers/PanoramaDrawer";
 import PdfExportDialog, { EXPORT_QUALITIES } from "../components/creq/drawers/PdfExportDialog";
-import { newId, renderBackground, stripLocalKeys, elementBounds } from "../components/creq/utils";
+import { newId, renderBackground, renderBackgroundImageCss, stripLocalKeys, elementBounds } from "../components/creq/utils";
 
 /* ------------------------- Project load / hydrate ------------------------- */
 
@@ -162,14 +166,23 @@ export default function CreateEQEditor() {
   const [showPanorama, setShowPanorama] = useState(false);
   const [showPdfPicker, setShowPdfPicker] = useState(false);
   const [showGenerateContent, setShowGenerateContent] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [viewMode, setViewMode] = useState("focus");
   const [dropHint, setDropHint] = useState(false);
+  const [customTemplates, setCustomTemplates] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("creq_custom_templates") || "[]"); } catch { return []; }
+  });
   const canvasRef = useRef(null);
   const dragState = useRef(null);
   const resizeState = useRef(null);
   const rotateState = useRef(null);
   const groupResizeState = useRef(null);
   const panoDragState = useRef(null);
+  const dropTargetRef = useRef(null);
+  const [dropTargetElId, setDropTargetElId] = useState(null);
+  const [repositionTargetId, setRepositionTargetId] = useState(null);
+  const repositionState = useRef(null);
+  const [ctxMenu, setCtxMenu] = useState(null);
   // Live manipulation readout for the HUD pill in SelectionChrome —
   // { mode: "drag"|"resize"|"rotate", label } while a gesture is in flight.
   const [interaction, setInteraction] = useState(null);
@@ -179,6 +192,10 @@ export default function CreateEQEditor() {
   // the chrome when a measurement actually moves.
   const measuredRef = useRef({});
   const [, setMeasureTick] = useState(0);
+  // Double-click inline text editing — id of the text element being edited.
+  const [editingId, setEditingId] = useState(null);
+  // The scrollable canvas section — ctrl-wheel zoom + fit-to-view need it.
+  const sectionRef = useRef(null);
   const historyRef = useRef({ past: [], future: [] });
   const clipboardRef = useRef(null); // { el } — copied element for paste
   const imageFileRef = useRef(null);
@@ -385,7 +402,62 @@ export default function CreateEQEditor() {
     if (idx > -1) { const [el] = s.elements.splice(idx, 1); s.elements.unshift(el); }
   });
 
+  /* --- Element grouping --- */
+  const groupElements = useCallback(() => {
+    const ids = [...selectedIds];
+    if (ids.length < 2) return;
+    const groupId = newId();
+    mutate((n) => {
+      const s = n.slides[activeSlide];
+      s.groups = s.groups || [];
+      s.groups.push({ id: groupId, name: `Group ${s.groups.length + 1}`, elementIds: ids });
+    });
+    toast.success(`Grouped ${ids.length} elements`);
+  }, [selectedIds, activeSlide, mutate]);
+  const ungroupElements = useCallback(() => {
+    // If a single element is selected and it belongs to a group, ungroup that group.
+    const s = proj?.slides?.[activeSlide];
+    if (!s || !s.groups) return;
+    const id = selectedId;
+    if (!id) return;
+    const group = s.groups.find((g) => g.elementIds.includes(id));
+    if (!group) return;
+    mutate((n) => {
+      n.slides[activeSlide].groups = (n.slides[activeSlide].groups || []).filter((g) => g.id !== group.id);
+    });
+    toast.success("Ungrouped");
+  }, [selectedId, activeSlide, proj, mutate]);
+  /** Get group ids for the active selection — used by drag to move all members. */
+  const getGroupMemberIds = useCallback((ids) => {
+    if (!ids || !ids.size) return ids;
+    const s = proj?.slides?.[activeSlide];
+    if (!s || !s.groups) return ids;
+    const out = new Set(ids);
+    for (const g of s.groups) {
+      const hasAny = g.elementIds.some((eid) => ids.has(eid));
+      if (hasAny) g.elementIds.forEach((eid) => out.add(eid));
+    }
+    return out;
+  }, [proj, activeSlide]);
+
   /* --- Slides --- */
+  const saveSlideAsTemplate = () => {
+    const s = proj?.slides?.[activeSlide];
+    if (!s) return;
+    const tpl = {
+      id: "custom-" + newId(),
+      name: `Slide ${activeSlide + 1}`,
+      tag: "Custom",
+      palette: proj?.palette_id || "midnight",
+      thumb_bg: "#E8E9EB",
+      thumb_accent: "#212025",
+      build: () => ({ bg: JSON.parse(JSON.stringify(s.bg)), elements: s.elements.map((e) => JSON.parse(JSON.stringify(e))) }),
+    };
+    const updated = [...customTemplates, tpl];
+    setCustomTemplates(updated);
+    localStorage.setItem("creq_custom_templates", JSON.stringify(updated));
+    toast.success("Saved as custom template");
+  };
   const addSlide = () => {
     mutate((n) => { n.slides.push(blankSlide()); });
     setActiveSlide(proj.slides.length);
@@ -459,11 +531,38 @@ export default function CreateEQEditor() {
   const onImageFilesSelected = async (files) => {
     for (const f of Array.from(files || [])) { try { await insertImageFile(f); } catch { /* skip */ } }
   };
-  const onCanvasDragOver = (e) => { if (e.dataTransfer?.types?.includes("Files")) { e.preventDefault(); setDropHint(true); } };
-  const onCanvasDragLeave = () => setDropHint(false);
+  const onCanvasDragOver = (e) => {
+    if (e.dataTransfer?.types?.includes("Files")) {
+      e.preventDefault();
+      setDropHint(true);
+      if (!canvasRef.current) return;
+      const rect = canvasRef.current.getBoundingClientRect();
+      const cx = Math.round((e.clientX - rect.left) / zoom);
+      const cy = Math.round((e.clientY - rect.top) / zoom);
+      const els = slide?.elements || [];
+      let found = null;
+      for (let i = els.length - 1; i >= 0; i--) {
+        const el = els[i];
+        if (el.locked) continue;
+        if (el.type === "image" && (el.frame || !el.src)) {
+          if (cx >= el.x && cx <= el.x + el.w && cy >= el.y && cy <= el.y + el.h) {
+            found = el.id; break;
+          }
+        }
+      }
+      if (found !== dropTargetRef.current) {
+        dropTargetRef.current = found;
+        setDropTargetElId(found);
+      }
+    }
+  };
+  const onCanvasDragLeave = () => { setDropHint(false); dropTargetRef.current = null; setDropTargetElId(null); };
   const onCanvasDrop = async (e) => {
     e.preventDefault();
     setDropHint(false);
+    const targetId = dropTargetRef.current;
+    dropTargetRef.current = null;
+    setDropTargetElId(null);
     const files = Array.from(e.dataTransfer?.files || []).filter((f) => f.type.startsWith("image/"));
     if (!files.length) return;
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -474,7 +573,22 @@ export default function CreateEQEditor() {
       px = Math.max(0, Math.min(CANVAS.w - 400, px));
       py = Math.max(0, Math.min(CANVAS.h - 400, py));
     }
-    for (const f of files) { try { await insertImageFile(f, { x: px, y: py }); px += 40; py += 40; } catch { /* skip */ } }
+    for (const f of files) {
+      try {
+        if (targetId) {
+          const reader = new FileReader();
+          await new Promise((resolve, reject) => {
+            reader.onload = () => { patchElement(targetId, { src: String(reader.result || "") }); toast.success("Image placed in frame"); resolve(); };
+            reader.onerror = () => reject();
+            reader.readAsDataURL(f);
+          });
+          break;
+        } else {
+          await insertImageFile(f, { x: px, y: py });
+          px += 40; py += 40;
+        }
+      } catch { /* skip */ }
+    }
   };
 
   /* --- Pointer drag: move selected element(s) ---
@@ -486,6 +600,34 @@ export default function CreateEQEditor() {
   const onPointerDown = useCallback((e, el) => {
     e.stopPropagation();
     if (el.locked) return;
+    if (repositionTargetId === el.id) {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      repositionState.current = {
+        startX: e.clientX, startY: e.clientY,
+        origOffsetX: el.imgOffsetX || 0,
+        origOffsetY: el.imgOffsetY || 0,
+      };
+      const onMove = (ev) => {
+        const dx = (ev.clientX - repositionState.current.startX) / zoomRef.current;
+        const dy = (ev.clientY - repositionState.current.startY) / zoomRef.current;
+        const elW = el.w || 480, elH = el.h || 480;
+        const pctX = Math.round((dx / elW) * 100);
+        const pctY = Math.round((dy / elH) * 100);
+        patchElement(el.id, {
+          imgOffsetX: Math.max(-50, Math.min(50, repositionState.current.origOffsetX + pctX)),
+          imgOffsetY: Math.max(-50, Math.min(50, repositionState.current.origOffsetY + pctY)),
+        });
+      };
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        repositionState.current = null;
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      return;
+    }
     if (e.shiftKey) {
       setSelectedIds((prev) => {
         const next = new Set(prev);
@@ -496,27 +638,57 @@ export default function CreateEQEditor() {
       return;
     }
     const prevIds = selectedIdsRef.current;
-    const ids = (prevIds.has(el.id) && prevIds.size > 1) ? prevIds : new Set([el.id]);
+    let ids = (prevIds.has(el.id) && prevIds.size > 1) ? prevIds : new Set([el.id]);
+    // Expand to entire group if this element is grouped
+    const expandedIds = getGroupMemberIds(ids);
+    if (expandedIds.size > ids.size) ids = expandedIds;
     if (ids !== prevIds) selectSingle(el.id);
     else setSelectedId(el.id);
     const slideNow = projRef.current?.slides?.[activeSlideRef.current];
     if (!slideNow) return;
     beginGesture();
+
+    // Alt-drag = duplicate-and-drag (Figma/Canva): clone the selection inside
+    // the already-open gesture (one undo removes both the copies and the move)
+    // and drag the clones, leaving the originals in place.
+    let dragEls = slideNow.elements.filter((e2) => ids.has(e2.id));
+    let dragIds = ids;
+    if (e.altKey) {
+      const clones = dragEls.map((e2) => ({ ...JSON.parse(JSON.stringify(e2)), id: newId() }));
+      mutateLive((n) => { n.slides[activeSlideRef.current].elements.push(...clones); });
+      dragIds = new Set(clones.map((c) => c.id));
+      setSelectedIds(dragIds);
+      setSelectedId(clones[0]?.id ?? null);
+      dragEls = clones;
+    }
+
     const starts = {};
-    slideNow.elements.forEach((e2) => { if (ids.has(e2.id)) starts[e2.id] = { x: e2.x, y: e2.y }; });
-    // Snapping only applies to a single-element drag; the "others" it aligns to
-    // are every element that isn't being dragged.
-    const single = ids.size === 1 ? el : null;
-    const others = single ? slideNow.elements.filter((e2) => e2.id !== el.id) : [];
-    dragState.current = { ids, starts, startX: e.clientX, startY: e.clientY, scale: zoomRef.current, single, others };
+    dragEls.forEach((e2) => { starts[e2.id] = { x: e2.x, y: e2.y }; });
+    // Snap targets = every element NOT being dragged. Single drags snap the
+    // element itself; group drags snap the selection's union bounding box.
+    const single = dragEls.length === 1 ? dragEls[0] : null;
+    const others = slideNow.elements.filter((e2) => !dragIds.has(e2.id));
+    let bbox = null;
+    if (!single) {
+      const bs = dragEls.map((e2) => elementBounds(e2, measuredRef.current));
+      const minX = Math.min(...bs.map((b) => b.x)), minY = Math.min(...bs.map((b) => b.y));
+      const maxX = Math.max(...bs.map((b) => b.x + b.w)), maxY = Math.max(...bs.map((b) => b.y + b.h));
+      bbox = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+    }
+    dragState.current = { ids: dragIds, starts, startX: e.clientX, startY: e.clientY, scale: zoomRef.current, single, others, bbox };
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
-  }, [beginGesture, selectSingle]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [beginGesture, selectSingle, mutateLive]); // eslint-disable-line react-hooks/exhaustive-deps
   const onPointerMove = useCallback((e) => {
     const ds = dragState.current;
     if (!ds) return;
-    const dx = (e.clientX - ds.startX) / ds.scale;
-    const dy = (e.clientY - ds.startY) / ds.scale;
+    let dx = (e.clientX - ds.startX) / ds.scale;
+    let dy = (e.clientY - ds.startY) / ds.scale;
+    // Shift = constrain to the dominant axis (only once a real drag is in
+    // flight, so shift-click selection toggling stays untouched).
+    if (e.shiftKey && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
+      if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0;
+    }
     if (ds.single) {
       const start = ds.starts[ds.single.id];
       const snap = computeSnap(ds.single, start.x + dx, start.y + dy, ds.others);
@@ -525,12 +697,16 @@ export default function CreateEQEditor() {
       setInteraction({ mode: "drag", label: `${snap.x}, ${snap.y}` });
       return;
     }
+    // Group drag: snap the union bbox, then apply the snapped delta to every member.
+    const snap = computeSnap({ w: ds.bbox.w, h: ds.bbox.h }, ds.bbox.x + dx, ds.bbox.y + dy, ds.others);
+    const sdx = snap.x - ds.bbox.x, sdy = snap.y - ds.bbox.y;
     ds.ids.forEach((id) => {
       const start = ds.starts[id];
       if (!start) return;
-      patchElement(id, { x: Math.round(start.x + dx), y: Math.round(start.y + dy) });
+      patchElement(id, { x: Math.round(start.x + sdx), y: Math.round(start.y + sdy) });
     });
-    setInteraction({ mode: "drag", label: `${dx >= 0 ? "+" : ""}${Math.round(dx)}, ${dy >= 0 ? "+" : ""}${Math.round(dy)}` });
+    setGuides(snap.guides);
+    setInteraction({ mode: "drag", label: `${sdx >= 0 ? "+" : ""}${Math.round(sdx)}, ${sdy >= 0 ? "+" : ""}${Math.round(sdy)}` });
   }, [patchElement]);
   const onPointerUp = useCallback(() => {
     dragState.current = null;
@@ -543,6 +719,7 @@ export default function CreateEQEditor() {
 
   /* --- Marquee select: drag on empty canvas to box-select elements --- */
   const onCanvasBgPointerDown = useCallback((e) => {
+    if (repositionTargetId) { setRepositionTargetId(null); return; }
     if (e.target !== e.currentTarget || !canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
     const startX = (e.clientX - rect.left) / zoomRef.current;
@@ -585,8 +762,36 @@ export default function CreateEQEditor() {
     setSelectedId([...hit][0]);
   }, [slide]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* --- Right-click context menu --- */
+  const onElementContextMenu = useCallback((e, el) => {
+    e.preventDefault();
+    e.stopPropagation();
+    selectSingle(el.id);
+    setCtxMenu({ x: e.clientX, y: e.clientY, elId: el.id, locked: !!el.locked });
+  }, [selectSingle]);
+  const onCanvasContextMenu = useCallback((e) => {
+    e.preventDefault();
+    if (!canvasRef.current || !slide) { setCtxMenu(null); return; }
+    const rect = canvasRef.current.getBoundingClientRect();
+    const cx = (e.clientX - rect.left) / zoom;
+    const cy = (e.clientY - rect.top) / zoom;
+    // Find topmost element containing this point
+    const els = slide.elements;
+    let found = null;
+    for (let i = els.length - 1; i >= 0; i--) {
+      const el = els[i];
+      if (cx >= el.x && cx <= el.x + el.w && cy >= el.y && cy <= el.y + el.h) {
+        found = el; break;
+      }
+    }
+    if (found) { selectSingle(found.id); setCtxMenu({ x: e.clientX, y: e.clientY, elId: found.id, locked: !!found.locked }); }
+    else { setCtxMenu(null); }
+  }, [selectSingle, slide, zoom]);
+  const dismissCtxMenu = useCallback(() => setCtxMenu(null), []);
+
   /* --- Resize handles (8-directional) --- */
   const onResizeStart = useCallback((e, el, pos) => {
+    if (el.locked) return;
     e.stopPropagation();
     selectSingle(el.id);
     beginGesture();
@@ -663,6 +868,7 @@ export default function CreateEQEditor() {
     window.removeEventListener("pointerup", onRotateEnd);
   }, [endGesture]); // eslint-disable-line react-hooks/exhaustive-deps
   const onRotateStart = useCallback((e, el) => {
+    if (el.locked) return;
     e.stopPropagation();
     if (!canvasRef.current) return;
     selectSingle(el.id);
@@ -738,6 +944,108 @@ export default function CreateEQEditor() {
     window.addEventListener("pointerup", onGroupResizeEnd);
   }, [beginGesture]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* --- Ctrl/Cmd+wheel zoom, centered on the cursor ---
+   * A native non-passive listener is required — React's synthetic onWheel
+   * can't reliably preventDefault, so the browser would page-zoom instead.
+   * Pinch-zoom trackpads emit ctrlKey wheel events, so pinch works too. */
+  useEffect(() => {
+    const sec = sectionRef.current;
+    if (!sec) return undefined;
+    const onWheel = (e) => {
+      const target = repositionTargetId;
+      if (target && !(e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        const el = projRef.current?.slides?.[activeSlideRef.current]?.elements.find((x) => x.id === target);
+        if (!el) return;
+        const oldScale = el.imgScale || 1;
+        const delta = -e.deltaY * 0.002;
+        const newScale = Math.max(1, Math.min(3, +(oldScale + delta).toFixed(2)));
+        if (newScale !== oldScale) patchElement(el.id, { imgScale: newScale });
+        return;
+      }
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const oldZ = zoomRef.current;
+      const nz = Math.min(1.5, Math.max(0.1, +(oldZ * Math.exp(-e.deltaY * 0.0015)).toFixed(3)));
+      if (nz === oldZ) return;
+      const rect = sec.getBoundingClientRect();
+      const px = e.clientX - rect.left + sec.scrollLeft;
+      const py = e.clientY - rect.top + sec.scrollTop;
+      setZoom(nz);
+      // Keep the content point under the cursor stationary through the zoom.
+      requestAnimationFrame(() => {
+        const s = nz / oldZ;
+        sec.scrollLeft = px * s - (e.clientX - rect.left);
+        sec.scrollTop = py * s - (e.clientY - rect.top);
+      });
+    };
+    sec.addEventListener("wheel", onWheel, { passive: false });
+    return () => sec.removeEventListener("wheel", onWheel);
+    // The section only exists once the project has loaded (and only in focus
+    // view) — re-run when either flips so the listener actually attaches.
+  }, [!!proj, viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const zoomToFit = useCallback(() => {
+    const sec = sectionRef.current;
+    if (!sec) return;
+    const fit = Math.min((sec.clientWidth - 64) / CANVAS.w, (sec.clientHeight - 150) / CANVAS.h);
+    setZoom(Math.min(1.5, Math.max(0.1, +fit.toFixed(2))));
+  }, []);
+
+  /* --- Inline text editing (double-click a text element) --- */
+  const onElementDoubleClick = useCallback((el) => {
+    if (el.locked) return;
+    if (el.type === "image") {
+      if (el.frame && el.src) {
+        setRepositionTargetId(el.id);
+        selectSingle(el.id);
+        toast.info("Drag to reposition · Scroll to zoom · Click canvas to finish", { duration: 3000 });
+        return;
+      }
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.onchange = () => {
+        const f = input.files?.[0];
+        if (!f) return;
+        if (!f.type?.startsWith("image/")) { toast.error("Please pick an image file"); return; }
+        if (f.size > 15 * 1024 * 1024) { toast.error("Image too large (max ~15 MB)"); return; }
+        const reader = new FileReader();
+        reader.onload = () => { patchElement(el.id, { src: String(reader.result || "") }); };
+        reader.readAsDataURL(f);
+      };
+      input.click();
+      return;
+    }
+    if (el.type !== "text") return;
+    selectSingle(el.id);
+    setEditingId(el.id);
+  }, [selectSingle, patchElement]);
+  const commitInlineText = useCallback((text) => {
+    const elId = editingId;
+    setEditingId(null);
+    if (!elId) return;
+    const cur = projRef.current?.slides?.[activeSlideRef.current]?.elements.find((e) => e.id === elId);
+    // Unchanged text commits nothing — no junk undo step.
+    if (!cur || cur.text === text) return;
+    mutate((n) => {
+      const s = n.slides[activeSlideRef.current];
+      s.elements = s.elements.map((e) => (e.id === elId ? { ...e, text } : e));
+    });
+  }, [editingId, mutate]);
+
+  /* --- Z-order: one-step forward/backward alongside the front/back jumps --- */
+  const bringForward = (elId) => mutate((n) => {
+    const s = n.slides[activeSlide];
+    const i = s.elements.findIndex((e) => e.id === elId);
+    if (i > -1 && i < s.elements.length - 1) { const [el] = s.elements.splice(i, 1); s.elements.splice(i + 1, 0, el); }
+  });
+  const sendBackward = (elId) => mutate((n) => {
+    const s = n.slides[activeSlide];
+    const i = s.elements.findIndex((e) => e.id === elId);
+    if (i > 0) { const [el] = s.elements.splice(i, 1); s.elements.splice(i - 1, 0, el); }
+  });
+
   /* --- Panorama direct-drag overlay (manual mode) --- */
   const panoManual = proj?.panorama?.mode === "manual" && proj?.panorama?.src && !selected;
   const onPanoDragStart = (e) => {
@@ -809,7 +1117,8 @@ export default function CreateEQEditor() {
         duplicateElement(selectedId);
         return;
       }
-      if (!selectedId && selectedIds.size === 0) return;
+      if (!selectedId && selectedIds.size === 0 && !repositionTargetId) return;
+      if (e.key === "Escape" && repositionTargetId) { e.preventDefault(); setRepositionTargetId(null); return; }
       if (e.key === "Backspace" || e.key === "Delete") { e.preventDefault(); deleteSelectedElements(); return; }
       // Arrow-key nudge: 1px, or 10px with shift held.
       const step = e.shiftKey ? 10 : 1;
@@ -899,6 +1208,7 @@ export default function CreateEQEditor() {
       try {
         root.render(
           <>
+            {proj.slides[slideIdx].bg_img && <div style={renderBackgroundImageCss(proj.slides[slideIdx])} />}
             <PanoramaLayer panorama={proj.panorama} slideIdx={slideIdx} totalSlides={proj.slides.length} />
             {proj.slides[slideIdx].elements.map((el) => (
               <ElementRender key={el.id} el={el} palette={palette} onPointerDown={() => {}} />
@@ -979,22 +1289,61 @@ export default function CreateEQEditor() {
     } finally { setBusy(false); setExportProgress(null); }
   };
 
+  /* --- Styles & layouts --- */
+  const handleApplyStyle = useCallback((styleId, allSlides) => {
+    const style = STYLES.find((s) => s.id === styleId);
+    if (!style || !proj) return;
+    const palette = PALETTES.find((p) => p.id === proj.palette_id);
+    mutate((n) => {
+      n.slides = n.slides.map((slide, i) => {
+        if (!allSlides && i !== activeSlide) return slide;
+        const transformed = style.apply(slide, palette);
+        return { ...slide, bg: transformed.bg, elements: transformed.elements };
+      });
+    });
+    toast.success(`Applied "${style.name}" style${allSlides ? " to all slides" : ""}`);
+  }, [proj, activeSlide, mutate]);
+
+  const handleApplyLayout = useCallback((layoutId) => {
+    const layout = LAYOUTS.find((l) => l.id === layoutId);
+    if (!layout || !proj) return;
+    mutate((n) => {
+      const s = n.slides[activeSlide];
+      const transformed = layout.apply(s);
+      n.slides[activeSlide] = { ...s, bg: transformed.bg, elements: transformed.elements };
+    });
+    toast.success(`Applied "${layout.name}" layout`);
+  }, [proj, activeSlide, mutate]);
+
   /* --- Brand kit apply / AI copy assist --- */
+  const LOGO_POS = {
+    tl: { x: 80, y: 80 }, tr: { x: CANVAS.w - 80 - 240, y: 80 },
+    bl: { x: 80, y: CANVAS.h - 120 - 120 }, br: { x: CANVAS.w - 80 - 240, y: CANVAS.h - 120 - 120 },
+  };
+  const LOGO_DIMS = { s: { w: 120, h: 60 }, m: { w: 180, h: 90 }, l: { w: 240, h: 120 }, xl: { w: 360, h: 180 } };
   const applyBrandKit = async (kit) => {
     if (!kit) return;
+    const reapply = kit._reapply_logo;
+    const sizeKey = kit.logo_size || "l";
+    const posKey = kit.logo_position || "bl";
+    const dims = LOGO_DIMS[sizeKey] || LOGO_DIMS.l;
+    const pos = LOGO_POS[posKey] || LOGO_POS.bl;
     mutate((n) => {
-      if (kit.palette_id) n.palette_id = kit.palette_id;
-      n.brand = { ...(n.brand || {}), logo_url: kit.logo_url, colors: kit.colors, fonts: kit.fonts };
+      if (kit.palette_id && !reapply) n.palette_id = kit.palette_id;
+      n.brand = { ...(n.brand || {}), logo_url: kit.logo_url, colors: kit.colors, fonts: kit.fonts, logo_size: sizeKey, logo_position: posKey };
       if (kit.logo_url) {
         for (const s of n.slides) {
-          const hasLogo = (s.elements || []).some((e) => e.type === "image" && e.role === "logo");
-          if (!hasLogo) {
-            s.elements.push({ id: newId(), type: "image", role: "logo", src: kit.logo_url, x: 80, y: CANVAS.h - 160, w: 160, h: 80, fit: "contain" });
+          const existing = (s.elements || []).findIndex((e) => e.type === "image" && e.role === "logo");
+          if (reapply || existing === -1) {
+            if (existing >= 0) s.elements.splice(existing, 1);
+            s.elements.push({ id: newId(), type: "image", role: "logo", src: kit.logo_url, x: pos.x, y: pos.y, w: dims.w, h: dims.h, fit: "contain" });
+          } else {
+            s.elements.push({ id: newId(), type: "image", role: "logo", src: kit.logo_url, x: pos.x, y: pos.y, w: dims.w, h: dims.h, fit: "contain" });
           }
         }
       }
     });
-    toast.success(`Applied brand kit "${kit.name}"`);
+    toast.success(reapply ? `Logo re-applied to all slides (${sizeKey.toUpperCase()}, ${posKey})` : `Applied brand kit "${kit.name}"`);
   };
 
   const aiAssistText = async (mode) => {
@@ -1055,6 +1404,7 @@ export default function CreateEQEditor() {
             <button onClick={() => setViewMode(viewMode === "focus" ? "board" : "focus")} data-testid="view-mode-toggle" className="btn-ghost">
               {viewMode === "focus" ? <><LayoutGrid size={14} /> Board</> : <><Maximize2 size={14} /> Focus</>}
             </button>
+            <button onClick={() => setShowPreview(true)} data-testid="preview-open-btn" className="btn-secondary"><Play size={14} /> Preview</button>
             <button onClick={() => setShowGenerateContent(true)} data-testid="generate-content-open" className="btn-secondary"><Wand2 size={14} /> Generate content</button>
             <button onClick={() => setShowPanorama(true)} data-testid="panorama-open" className="btn-secondary"><Mountain size={14} /> Panorama</button>
             <button onClick={() => setShowAiImage(true)} data-testid="ai-image-open" className="btn-secondary"><Wand2 size={14} /> AI Image</button>
@@ -1073,9 +1423,11 @@ export default function CreateEQEditor() {
           <aside className="col-span-2 border-r border-line bg-white overflow-y-auto">
             <LeftPanel
               onTemplate={(tpl) => applyTemplateToSlide(tpl)}
+              onStyle={(styleId, allSlides) => handleApplyStyle(styleId, allSlides)}
+              onLayout={(layoutId) => handleApplyLayout(layoutId)}
               onAddText={(preset) => addElement(preset)}
-              onAddShape={(shape) => addElement({ type: "shape", shape, x: 400, y: 500, w: 280, h: 280, fill: "accent", opacity: 1, radius: shape === "circle" ? 999 : 24 })}
-              onAddLine={() => addElement({ type: "line", x: 80, y: 700, w: 920, h: 4, color: "text" })}
+              onAddShape={(shape) => addElement({ type: "shape", shape, x: 400, y: 500, w: 280, h: 280, fill: "accent", opacity: 1, radius: shape === "circle" ? 999 : shape === "rect" ? 24 : 0 })}
+              onAddLine={(caps) => addElement({ type: "line", x: 80, y: 700, w: 920, h: caps ? 6 : 4, color: "text", ...(caps || {}) })}
               onAddBadge={() => addElement({ type: "badge", x: 80, y: 96, text: "NEW", bg: "accent", color: "bg", radius: 999, size: 20 })}
               onAddIcon={(name) => addElement({ type: "icon", x: 400, y: 500, w: 128, name, color: "accent", stroke: 2 })}
               onAddImage={() => imageFileRef.current?.click()}
@@ -1086,14 +1438,79 @@ export default function CreateEQEditor() {
               onAddHeadshot={insertHeadshot}
               onAddAuthorBar={insertAuthorBar}
               hasHeadshot={!!user?.avatar_url}
+              customTemplates={customTemplates}
+              onAddCoolshape={(d) => addElement({
+                type: "coolshape", shape_category: d.type, shape_index: d.index, size: d.size,
+                x: 400, y: 500, w: d.size, h: d.size,
+                color: "accent", opacity: 0.3, noise: true,
+              })}
+              onAddAccent={(idx) => {
+                const accent = ACCENT_ELEMENTS[idx];
+                if (!accent) return;
+                const built = accent.build(proj.slides[activeSlide].elements.length);
+                if (Array.isArray(built)) { built.forEach((el) => addElement(el)); }
+                else { addElement(built); }
+              }}
+              onApplyTheme={(theme) => {
+                if (theme.palette_id) setProj((p) => ({ ...p, palette_id: theme.palette_id }));
+                if (theme.bg) patchSlide({ bg: theme.bg });
+                if (theme.decoration) {
+                  const d = theme.decoration;
+                  const cornerX = d.corner === "tl" ? 40 : d.corner === "tr" ? CANVAS.w - d.size - 40 : d.corner === "bl" ? 40 : CANVAS.w - d.size - 40;
+                  const cornerY = d.corner === "tl" || d.corner === "tr" ? 40 : CANVAS.h - d.size - 40;
+                  addElement({
+                    type: "coolshape", shape_category: d.type, shape_index: d.index, size: d.size,
+                    x: cornerX, y: cornerY, w: d.size, h: d.size,
+                    color: "accent", opacity: 0.3, noise: true,
+                  });
+                }
+                toast.success(`Applied "${theme.name}" theme`);
+              }}
+              onAddFrameImage={(frameId) => {
+                const x = 200 + Math.random() * 80, y = 200 + Math.random() * 80;
+                addElement({
+                  type: "image", src: null, frame: frameId,
+                  x, y, w: 400, h: 400, fit: "cover", radius: 0,
+                });
+                toast.success("Frame placed — double-click to add image");
+              }}
+              onAddBgPreset={(preset) => {
+                patchSlide({ bg: preset.bg });
+                if (preset.palette_id) setProj((p) => ({ ...p, palette_id: preset.palette_id }));
+              }}
+              onAddChart={(preset) => {
+                const el = { ...preset, x: 200, y: 300, color: "accent", id: newId() };
+                delete el.name;
+                addElement(el);
+              }}
+              onAddCard={(preset) => {
+                const el = { ...preset, x: 200, y: 300, color: "accent", id: newId() };
+                delete el.name;
+                addElement(el);
+              }}
+              onAddComposition={(idx) => {
+                const comp = COMPOSITIONS[idx];
+                if (!comp) return;
+                const els = comp.build(idx);
+                els.forEach((el) => addElement({ ...el, id: newId() }));
+              }}
             />
           </aside>
 
-          <section className="col-span-7 relative overflow-auto"
-            onDragOver={onCanvasDragOver} onDragLeave={onCanvasDragLeave} onDrop={onCanvasDrop}>
+          <section ref={sectionRef} className="col-span-7 relative overflow-auto"
+            onDragOver={onCanvasDragOver} onDragLeave={onCanvasDragLeave} onDrop={onCanvasDrop}
+            onContextMenu={onCanvasContextMenu}>
             {dropHint && (
               <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
                 <div className="bg-ink text-white px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest">Drop image to add</div>
+              </div>
+            )}
+            {repositionTargetId && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 pointer-events-none">
+                <div className="bg-indigo-600 text-white px-3 py-1.5 rounded-full font-mono text-[10px] uppercase tracking-widest shadow-lg flex items-center gap-2">
+                  <span>Reposition mode</span>
+                  <span className="opacity-60">Drag to move · Scroll to zoom</span>
+                </div>
               </div>
             )}
               <div className="p-4 sm:p-6 flex items-start justify-center">
@@ -1104,6 +1521,7 @@ export default function CreateEQEditor() {
                   className={`absolute inset-0 origin-top-left overflow-hidden shadow-[0_20px_80px_-30px_rgba(0,0,0,0.35)] rounded-md creq-canvas ${interaction || marqueeRect ? "creq-interacting" : ""} ${interaction?.mode === "drag" ? "creq-dragging" : ""} ${marqueeRect ? "creq-marqueeing" : ""} ${dropHint ? "ring-2 ring-ink" : ""}`}
                   style={{ width: CANVAS.w, height: CANVAS.h, transform: `scale(${zoom})`, transformOrigin: "top left", background: renderBackground(slide.bg, palette), "--inv-zoom": 1 / zoom }}
                 >
+                  {slide.bg_img && <div style={renderBackgroundImageCss(slide)} />}
                   <PanoramaLayer panorama={proj.panorama} slideIdx={activeSlide} totalSlides={proj.slides.length} />
                   {panoManual && (
                     <div
@@ -1115,13 +1533,44 @@ export default function CreateEQEditor() {
                     />
                   )}
                   {slide.elements.map((el) => (
-                    <ElementRender key={el.id} el={el} palette={palette}
-                      onPointerDown={onPointerDown}
-                      onMeasure={onElementMeasure} />
+                    <Fragment key={el.id}>
+                      <ElementRender el={el} palette={palette}
+                        onPointerDown={onPointerDown}
+                        onContextMenu={onElementContextMenu}
+                        onMeasure={onElementMeasure}
+                        onDoubleClick={onElementDoubleClick}
+                        editing={el.id === editingId}
+                        isDropTarget={el.id === dropTargetElId}
+                        isRepositioning={el.id === repositionTargetId}
+                        onImageDrop={(srcId) => {
+                          const srcEl = slide.elements.find((e) => e.id === srcId);
+                          if (!srcEl || !srcEl.src) return;
+                          if (el.id === srcId) return;
+                          const mySrc = el.src;
+                          patchElement(el.id, { src: srcEl.src });
+                          patchElement(srcId, { src: mySrc || null });
+                          toast.success("Image moved to frame");
+                        }} />
+                      {el.locked && (
+                        <div style={{
+                          position: "absolute", left: el.x, top: el.y,
+                          width: el.w, height: el.h,
+                          pointerEvents: "none", zIndex: 99999,
+                          display: "flex", alignItems: "flex-start", justifyContent: "flex-end",
+                          padding: "4px 6px 0 0",
+                        }}>
+                          <span style={{
+                            fontSize: 11, background: "rgba(0,0,0,0.5)", color: "#fff",
+                            borderRadius: 4, padding: "1px 5px", lineHeight: "16px",
+                            fontFamily: "sans-serif",
+                          }}>🔒</span>
+                        </div>
+                      )}
+                    </Fragment>
                   ))}
                   <DeckOverlay proj={proj} slideIdx={activeSlide} palette={palette} />
                   <SelectionChrome
-                    els={slide.elements.filter((e2) => selectedIds.has(e2.id))}
+                    els={slide.elements.filter((e2) => selectedIds.has(e2.id) && e2.id !== editingId)}
                     zoom={zoom}
                     measured={measuredRef.current}
                     interaction={interaction}
@@ -1129,6 +1578,13 @@ export default function CreateEQEditor() {
                     onRotateStart={onRotateStart}
                     onGroupResizeStart={onGroupResizeStart}
                   />
+                  {editingId && (() => {
+                    const editingEl = slide.elements.find((e2) => e2.id === editingId);
+                    return editingEl ? (
+                      <InlineTextEditor el={editingEl} palette={palette} zoom={zoom}
+                        onCommit={commitInlineText} onCancel={() => setEditingId(null)} />
+                    ) : null;
+                  })()}
                   {marqueeRect && (
                     <div data-testid="marquee-select" style={{
                       position: "absolute", left: marqueeRect.x, top: marqueeRect.y,
@@ -1156,18 +1612,42 @@ export default function CreateEQEditor() {
             </div>
             <div className="sticky bottom-0 left-0 right-0 bg-white/90 backdrop-blur border-t border-line px-4 py-2 flex items-center gap-2 text-xs">
               <span className="ui-label">Zoom</span>
-              <input type="range" min={0.15} max={0.7} step={0.02} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} data-testid="zoom-slider" className="w-32" />
-              <span className="font-mono text-neutral-400">{Math.round(zoom * 100)}%</span>
+              <input type="range" min={0.1} max={1.5} step={0.02} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} data-testid="zoom-slider" className="w-32" />
+              <span className="font-mono text-neutral-400 w-10">{Math.round(zoom * 100)}%</span>
+              <button onClick={zoomToFit} data-testid="zoom-fit" className="btn-ghost text-xs py-1 px-2" title="Fit slide to view (also: Ctrl+scroll to zoom)">Fit</button>
+              <button onClick={() => setZoom(0.5)} data-testid="zoom-50" className="btn-ghost text-xs py-1 px-2">50%</button>
+              <button onClick={() => setZoom(1)} data-testid="zoom-100" className="btn-ghost text-xs py-1 px-2">100%</button>
               <div className="ml-4 flex items-center gap-1 flex-wrap">
                 {proj.slides.map((s, i) => (
-                  <button key={s._k} onClick={() => { setActiveSlide(i); selectSingle(null); }} data-testid={`slide-thumb-${i}`}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-mono ${i === activeSlide ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
+                  <button key={s._k}
+                    onClick={() => { setActiveSlide(i); selectSingle(null); }}
+                    draggable
+                    onDragStart={(e) => { e.dataTransfer.setData("text/plain", String(i)); e.currentTarget.style.opacity = "0.4"; }}
+                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.opacity = "0.4"; }}
+                    onDragLeave={(e) => { e.currentTarget.style.opacity = ""; }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.style.opacity = "";
+                      const fromIdx = Number(e.dataTransfer.getData("text/plain"));
+                      const toIdx = i;
+                      if (fromIdx === toIdx) return;
+                      setProj((prev) => {
+                        const slides = [...prev.slides];
+                        const [moved] = slides.splice(fromIdx, 1);
+                        slides.splice(toIdx, 0, moved);
+                        return { ...prev, slides };
+                      });
+                      setActiveSlide(toIdx);
+                    }}
+                    data-testid={`slide-thumb-${i}`}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-mono ${i === activeSlide ? "bg-brand-gradient text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
                     {i + 1}
                   </button>
                 ))}
                 <button onClick={() => addSlide()} data-testid="add-slide" className="btn-ghost text-xs py-1"><Plus size={12} /> Slide</button>
                 <button onClick={duplicateSlide} data-testid="dup-slide" className="btn-ghost text-xs py-1"><Copy size={12} /></button>
-                <button onClick={deleteSlide} data-testid="del-slide" className="btn-ghost text-xs py-1 text-red-600"><Trash2 size={12} /></button>
+                <button onClick={saveSlideAsTemplate} data-testid="save-template" className="btn-ghost text-xs py-1" title="Save slide as template">📋</button>
+                <button onClick={deleteSlide} data-testid="del-slide" className="btn-ghost text-xs py-1 text-danger"><Trash2 size={12} /></button>
               </div>
             </div>
           </section>
@@ -1185,6 +1665,8 @@ export default function CreateEQEditor() {
               onDuplicate={() => selected && duplicateElement(selected.id)}
               onFront={() => selected && bringToFront(selected.id)}
               onBack={() => selected && sendToBack(selected.id)}
+              onForward={() => selected && bringForward(selected.id)}
+              onBackward={() => selected && sendBackward(selected.id)}
               onAiAssist={aiAssistText}
               onPanoramaViewport={setPanoViewport}
               onPanoramaResetSlide={resetPanoSlide}
@@ -1192,6 +1674,8 @@ export default function CreateEQEditor() {
               onDeckSetting={setDeckSetting}
               onGestureStart={beginGesture}
               onGestureEnd={endGesture}
+              onGroup={groupElements}
+              onUngroup={ungroupElements}
             />
           </aside>
         </div>
@@ -1200,6 +1684,22 @@ export default function CreateEQEditor() {
           proj={proj} palette={palette}
           onFocus={(i) => { setActiveSlide(i); selectSingle(null); setViewMode("focus"); }}
         />
+      )}
+
+      {/* Right-click context menu */}
+      {ctxMenu && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999 }} onClick={dismissCtxMenu} onContextMenu={(e) => { e.preventDefault(); dismissCtxMenu(); }}>
+          <div style={{ position: "fixed", top: ctxMenu.y, left: ctxMenu.x, minWidth: 160, background: "#fff", borderRadius: 8, boxShadow: "0 8px 32px rgba(0,0,0,0.15)", border: "1px solid #e4e4e7", overflow: "hidden", fontSize: 13 }}
+            onClick={(e) => e.stopPropagation()}>
+            <CtxBtn onClick={() => { duplicateElement(ctxMenu.elId); dismissCtxMenu(); }}>Duplicate</CtxBtn>
+            <CtxBtn onClick={() => { const el = slide?.elements.find((x) => x.id === ctxMenu.elId); if (el) { patchElement(el.id, { locked: !ctxMenu.locked }); } dismissCtxMenu(); }}>{ctxMenu.locked ? "Unlock" : "Lock"}</CtxBtn>
+            <div className="border-t border-line" />
+            <CtxBtn onClick={() => { bringToFront(ctxMenu.elId); dismissCtxMenu(); }}>Bring to front</CtxBtn>
+            <CtxBtn onClick={() => { sendToBack(ctxMenu.elId); dismissCtxMenu(); }}>Send to back</CtxBtn>
+            <div className="border-t border-line" />
+            <CtxBtn onClick={() => { deleteSelectedElements(); dismissCtxMenu(); }} className="text-red-600">Delete</CtxBtn>
+          </div>
+        </div>
       )}
 
       {showBrandKit && (
@@ -1267,6 +1767,13 @@ export default function CreateEQEditor() {
         />
       )}
 
+      {showPreview && (
+        <SlidePreview
+          proj={proj} palette={palette} startIndex={activeSlide}
+          onClose={() => setShowPreview(false)}
+        />
+      )}
+
       <input
         ref={imageFileRef}
         type="file" accept="image/*" multiple className="hidden"
@@ -1302,7 +1809,7 @@ function GenerateContentDialog({ busy, onClose, onGenerate }) {
           <span className="text-xs text-neutral-400">Slides to add:</span>
           {[1, 3, 5, 6].map((n) => (
             <button key={n} onClick={() => setSlideCount(n)} data-testid={`generate-content-count-${n}`}
-              className={`px-3 py-1 rounded-xl text-xs font-mono ${slideCount === n ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
+              className={`px-3 py-1 rounded-xl text-xs font-mono ${slideCount === n ? "bg-brand-gradient text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
               {n}
             </button>
           ))}
@@ -1316,5 +1823,13 @@ function GenerateContentDialog({ busy, onClose, onGenerate }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function CtxBtn({ children, onClick, className }) {
+  return (
+    <button onClick={onClick} className={`w-full text-left px-3 py-2 hover:bg-neutral-50 text-sm ${className || ""}`} style={{ whiteSpace: "nowrap" }}>
+      {children}
+    </button>
   );
 }

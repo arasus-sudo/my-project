@@ -6,6 +6,9 @@ import RichEmailEditor, { sanitizeEmailHtml } from "../components/RichEmailEdito
 import { toast } from "sonner";
 import {
   Sparkles, Save, Play, Plus, Trash2, Loader2, Check, AlertTriangle, Flame,
+  Mail, Eye, ThumbsUp, Signature, Search, Megaphone,
+  Zap, ChevronLeft, ChevronRight,
+  Edit2, RotateCw, Flag,
 } from "lucide-react";
 
 const stepKey = () => `s_${Math.random().toString(36).slice(2, 10)}`;
@@ -48,6 +51,39 @@ export default function CampaignBuilder() {
   const [previewLeadId, setPreviewLeadId] = useState("");
   const [chainStep, setChainStep] = useState(null);   // which chain step is running
   const [draftMeta, setDraftMeta] = useState(null);   // confidence / angle / note
+  const [campaignLeads, setCampaignLeads] = useState([]);
+  const [generatingEmail, setGeneratingEmail] = useState(null);
+  const [generatingAll, setGeneratingAll] = useState(false);
+  const [previewEmail, setPreviewEmail] = useState(null);
+  const [selectedPanelLeads, setSelectedPanelLeads] = useState([]);
+  const [selectAllPanel, setSelectAllPanel] = useState(false);
+  const [leadSearch, setLeadSearch] = useState("");
+  const [signatures, setSignatures] = useState([]);
+  const [signatureId, setSignatureId] = useState("");
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [signatureName, setSignatureName] = useState("");
+  const [signatureHtml, setSignatureHtml] = useState("");
+  const [sigSenderName, setSigSenderName] = useState("");
+  const [sigTitle, setSigTitle] = useState("");
+  const [sigCompany, setSigCompany] = useState("");
+  const [sigEmail, setSigEmail] = useState("");
+  const [sigPhone, setSigPhone] = useState("");
+  const [savingSignature, setSavingSignature] = useState(false);
+  
+  const [sendWindowStart, setSendWindowStart] = useState("09:00");
+  const [sendWindowEnd, setSendWindowEnd] = useState("17:00");
+  const [timezone, setTimezone] = useState("UTC");
+
+  // Campaign Engine & Review states
+  const [engineRunning, setEngineRunning] = useState(false);
+  const [reviewIndex, setReviewIndex] = useState(0);
+  const [reviewMode, setReviewMode] = useState(false);
+  const [editingOpener, setEditingOpener] = useState(null); // {leadId, opener}
+
+  const loadCampaignLeads = () => {
+    if (!id) return;
+    api.get(`/campaigns/${id}/leads`).then((r) => setCampaignLeads(r.data.leads || [])).catch(() => {});
+  };
 
   useEffect(() => {
     api.get("/leads").then((r) => setLeads(r.data));
@@ -55,12 +91,255 @@ export default function CampaignBuilder() {
       api.get(`/campaigns/${id}`).then((r) => {
         const c = r.data;
         setName(c.name); setGoal(c.goal || "");
-        setSteps(c.steps?.length ? c.steps.map((s) => ({ ...s, _key: s._key || stepKey() })) : [DEFAULT_STEP()]);
+        setSteps(c.steps?.length ? c.steps.map((s) => ({
+          ...s,
+          _key: s._key || stepKey(),
+          body_html: s.body_html || (s.body ? "<p>" + s.body.replace(/\n\n+/g, "</p><p>").replace(/\n/g, "<br/>") + "</p>" : ""),
+        })) : [DEFAULT_STEP()]);
         setSelectedLeads(c.lead_ids || []);
         setStatus(c.status || "draft");
+        if (c.signature_id) setSignatureId(c.signature_id);
+        if (c.send_window_start) setSendWindowStart(c.send_window_start);
+        if (c.send_window_end) setSendWindowEnd(c.send_window_end);
+        if (c.timezone) setTimezone(c.timezone);
       });
+      loadCampaignLeads();
     }
   }, [id]);
+
+  const generateLeadEmail = async (leadId) => {
+    setGeneratingEmail(leadId);
+    try {
+      const { data } = await api.post(`/campaigns/${id}/leads/${leadId}/generate-email`);
+      toast.success("Personalized email generated");
+      loadCampaignLeads();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Generation failed");
+    } finally {
+      setGeneratingEmail(null);
+    }
+  };
+
+  const generateAllEmails = async () => {
+    setGeneratingAll(true);
+    try {
+      const { data } = await api.post(`/campaigns/${id}/leads/generate-all`);
+      toast.success(`Generated ${data.generated} personalized email${data.generated === 1 ? '' : 's'}`);
+      if (data.errors?.length) console.warn("Generation errors:", data.errors);
+      loadCampaignLeads();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Bulk generation failed");
+    } finally {
+      setGeneratingAll(false);
+    }
+  };
+
+  const deleteLeadEmail = async (leadId) => {
+    try {
+      await api.delete(`/campaigns/${id}/leads/${leadId}/email`);
+      toast.success("Email removed");
+      loadCampaignLeads();
+    } catch {
+      toast.error("Failed to remove");
+    }
+  };
+
+  // Load signatures
+  useEffect(() => {
+    api.get("/signatures").then((r) => {
+      setSignatures(r.data || []);
+      const def = (r.data || []).find((s) => s.is_default);
+      if (def) setSignatureId(def.id);
+    }).catch(() => {});
+  }, []);
+
+  // Signature CRUD
+  const buildSignatureHtml = () => {
+    const parts = [];
+    if (sigSenderName) parts.push(`<strong>${sigSenderName}</strong>`);
+    if (sigTitle) parts.push(sigTitle);
+    if (sigCompany) parts.push(sigCompany);
+    if (sigEmail) parts.push(`<a href="mailto:${sigEmail}" style="color:inherit;text-decoration:none">${sigEmail}</a>`);
+    if (sigPhone) parts.push(sigPhone);
+    return parts.join('<br>');
+  };
+
+  const createSignature = async () => {
+    if (!signatureName.trim()) { toast.error("Name is required"); return; }
+    setSavingSignature(true);
+    try {
+      const html = buildSignatureHtml();
+      const text = [sigSenderName, sigTitle, sigCompany, sigEmail, sigPhone].filter(Boolean).join('\n');
+      const { data } = await api.post("/signatures", { name: signatureName, content_html: html, content_text: text });
+      setSignatures((prev) => [data, ...prev]);
+      setSignatureId(data.id);
+      setShowSignatureModal(false);
+      setSignatureName(""); setSigSenderName(""); setSigTitle(""); setSigCompany(""); setSigEmail(""); setSigPhone("");
+      toast.success("Signature created");
+    } catch { toast.error("Failed to create signature"); }
+    finally { setSavingSignature(false); }
+  };
+
+  const deleteSignature = async (sid) => {
+    try {
+      await api.delete(`/signatures/${sid}`);
+      setSignatures((prev) => prev.filter((s) => s.id !== sid));
+      if (signatureId === sid) setSignatureId(signatures.find((s) => s.id !== sid)?.id || "");
+      toast.success("Signature deleted");
+    } catch { toast.error("Failed to delete"); }
+  };
+
+  // Panel: select/deselect all
+  const toggleSelectAllPanel = () => {
+    if (selectAllPanel) {
+      setSelectedPanelLeads([]);
+      setSelectAllPanel(false);
+    } else {
+      setSelectedPanelLeads(campaignLeads.map((l) => l.id));
+      setSelectAllPanel(true);
+    }
+  };
+
+  const togglePanelLead = (lid) => {
+    setSelectedPanelLeads((prev) =>
+      prev.includes(lid) ? prev.filter((x) => x !== lid) : [...prev, lid]
+    );
+    setSelectAllPanel(false);
+  };
+
+  // Add selected panel leads to campaign and auto-generate emails
+  const addSelectedToCampaign = async () => {
+    if (!id || selectedPanelLeads.length === 0) return;
+    try {
+      const { data } = await api.post(`/campaigns/${id}/leads/batch`, { lead_ids: selectedPanelLeads });
+      if (data.added === 0) {
+        toast.info("Leads already in campaign");
+        return;
+      }
+      toast.success(`Added ${data.added} lead${data.added === 1 ? '' : 's'} — generating emails...`);
+      const campaign = await api.get(`/campaigns/${id}`);
+      setSelectedLeads(campaign.data.lead_ids || []);
+      loadCampaignLeads();
+      const engine = await api.post(`/campaigns/${id}/run-engine`);
+      toast.success(`Generated ${engine.data.generated} personalized emails`);
+      loadCampaignLeads();
+      setReviewMode(true);
+      setReviewIndex(0);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Failed to add leads");
+    }
+  };
+
+  // Approve / Reject
+  const approveEmail = async (leadId) => {
+    try {
+      await api.post(`/campaigns/${id}/leads/${leadId}/approve`);
+      toast.success("Email approved");
+      loadCampaignLeads();
+    } catch { toast.error("Approval failed"); }
+  };
+
+  const approveAllEmails = async () => {
+    if (!id) return;
+    try {
+      const { data } = await api.post(`/campaigns/${id}/leads/approve-all`);
+      toast.success(`${data.approved} email(s) approved`);
+      loadCampaignLeads();
+    } catch { toast.error("Approve-all failed"); }
+  };
+
+  const rejectEmail = async (leadId) => {
+    try {
+      await api.post(`/campaigns/${id}/leads/${leadId}/reject`);
+      toast.success("Email rejected");
+      loadCampaignLeads();
+    } catch { toast.error("Rejection failed"); }
+  };
+
+  // Run Campaign Engine - generates personalized openers for all leads
+  const runCampaignEngine = async () => {
+    if (!id) return;
+    setEngineRunning(true);
+    try {
+      const { data } = await api.post(`/campaigns/${id}/run-engine`);
+      toast.success(`Campaign engine generated ${data.generated} personalized emails`);
+      loadCampaignLeads();
+      setReviewMode(true);
+      setReviewIndex(0);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Engine failed");
+    } finally {
+      setEngineRunning(false);
+    }
+  };
+
+  // Regenerate opener for a single lead
+  const regenerateOpener = async (leadId) => {
+    if (!id) return;
+    setGeneratingEmail(leadId);
+    try {
+      const { data } = await api.post(`/campaigns/${id}/leads/${leadId}/regenerate-opener`);
+      toast.success("Opener regenerated");
+      loadCampaignLeads();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Regeneration failed");
+    } finally {
+      setGeneratingEmail(null);
+    }
+  };
+
+  // Save edited opener
+  const saveOpener = async (leadId, newOpener) => {
+    if (!id) return;
+    try {
+      await api.post(`/campaigns/${id}/leads/${leadId}/update-opener`, { opener: newOpener });
+      toast.success("Opener updated");
+      loadCampaignLeads();
+      setEditingOpener(null);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Save failed");
+    }
+  };
+
+  // Review navigation
+  const getReviewEmails = () => {
+    return campaignLeads.filter(l => l.personalized).sort((a, b) => {
+      const idxA = campaignLeads.findIndex(l => l.id === a.id);
+      const idxB = campaignLeads.findIndex(l => l.id === b.id);
+      return idxA - idxB;
+    });
+  };
+
+  const nextReview = () => {
+    const emails = getReviewEmails();
+    if (reviewIndex < emails.length - 1) setReviewIndex(reviewIndex + 1);
+  };
+
+  const prevReview = () => {
+    if (reviewIndex > 0) setReviewIndex(reviewIndex - 1);
+  };
+
+  const startReview = () => {
+    setReviewMode(true);
+    setReviewIndex(0);
+  };
+
+  const exitReview = () => {
+    setReviewMode(false);
+    setReviewIndex(0);
+  };
+
+  // Assigned-leads / review-progress summary, driven by the same data the
+  // server's launch gate checks — so the button and the 400 never disagree.
+  const leadStats = useMemo(() => {
+    const total = campaignLeads.length;
+    const approved = campaignLeads.filter((l) => l.email_status === "approved").length;
+    const rejected = campaignLeads.filter((l) => l.email_status === "rejected").length;
+    const draft = campaignLeads.filter((l) => l.personalized && l.email_status === "draft").length;
+    const ungenerated = total - approved - rejected - draft;
+    const reviewed = approved + rejected;
+    return { total, approved, rejected, draft, ungenerated, reviewed, canLaunch: total > 0 && reviewed === total };
+  }, [campaignLeads]);
 
   const step = steps[activeStep];
 
@@ -147,12 +426,10 @@ export default function CampaignBuilder() {
     try {
       const cleanSteps = steps.map(({ _key, ...rest }) => ({
         ...rest,
-        // Persist both parts: the HTML we send, and a text alternative. An
-        // HTML-only email is one of the strongest spam signals there is.
-        body_html: sanitizeEmailHtml(rest.body_html || ""),
+        body_html: sanitizeEmailHtml(rest.body_html || rest.body || ""),
         body_text: htmlToText(rest.body_html || "") || rest.body || "",
       }));
-      const payload = { name, goal, steps: cleanSteps, lead_ids: selectedLeads };
+      const payload = { name, goal, steps: cleanSteps, lead_ids: selectedLeads, signature_id: signatureId || null, send_window_start: sendWindowStart, send_window_end: sendWindowEnd, timezone };
       let cid = id;
       if (!cid) {
         const { data } = await api.post("/campaigns", payload);
@@ -160,8 +437,19 @@ export default function CampaignBuilder() {
       } else {
         await api.put(`/campaigns/${id}`, payload);
       }
-      toast.success("Saved");
-      nav(`/app/campaigns/${cid}`);
+      if (cid && selectedLeads.length > 0) {
+        try {
+          const engine = await api.post(`/campaigns/${cid}/run-engine`);
+          loadCampaignLeads();
+          setReviewMode(true);
+          setReviewIndex(0);
+          toast.success(`Saved — ${engine.data.generated} emails generated`);
+        } catch (err) {
+          toast.warning("Saved, but email generation failed: " + (err?.response?.data?.detail || err.message));
+        }
+      } else {
+        toast.success("Saved");
+      }
     } catch { toast.error("Save failed"); }
     finally { setBusy(false); }
   };
@@ -196,10 +484,35 @@ export default function CampaignBuilder() {
         right={
           <div className="flex gap-2">
             <button data-testid="save-campaign" onClick={save} disabled={busy} className="btn-secondary"><Save size={14} /> Save</button>
-            <button data-testid="launch-campaign" onClick={launch} disabled={busy || !id} className="btn-primary"><Play size={14} /> Launch</button>
+            <button
+              data-testid="launch-campaign"
+              onClick={launch}
+              disabled={busy || !id || !leadStats.canLaunch}
+              title={leadStats.canLaunch ? "" : `${leadStats.reviewed} of ${leadStats.total} leads reviewed — approve or reject every lead before launching`}
+              className="btn-primary"
+            >
+              <Play size={14} /> Launch
+            </button>
           </div>
         }
       />
+      {id && leadStats.total > 0 && (
+        <div className="px-4 sm:px-6 pt-4 flex items-center gap-4 flex-wrap" data-testid="assigned-leads-stat">
+          <div className="flex items-baseline gap-2">
+            <span className="ui-label">Assigned Leads</span>
+            <span className="font-mono text-2xl font-bold">{leadStats.total}</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-mono">
+            {leadStats.approved > 0 && <span className="text-success">{leadStats.approved} approved</span>}
+            {leadStats.rejected > 0 && <span className="text-danger">{leadStats.rejected} rejected</span>}
+            {leadStats.draft > 0 && <span className="text-warning">{leadStats.draft} draft</span>}
+            {leadStats.ungenerated > 0 && <span className="text-neutral-400">{leadStats.ungenerated} not generated</span>}
+          </div>
+          {!leadStats.canLaunch && (
+            <span className="text-xs text-neutral-400 ml-auto">{leadStats.reviewed}/{leadStats.total} reviewed — approve or reject every lead to unlock Launch</span>
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 min-h-[calc(100vh-90px)]">
         {/* Steps sidebar */}
         <aside className="col-span-full lg:col-span-3 border-r border-line bg-white p-4">
@@ -218,7 +531,7 @@ export default function CampaignBuilder() {
                   </div>
                   <div className="text-sm font-medium mt-1 truncate">{s.subject || "(no subject)"}</div>
                   {steps.length > 1 && (
-                    <button onClick={(e) => { e.stopPropagation(); removeStep(i); }} data-testid={`remove-step-${i}`} className="text-xs text-neutral-400 hover:text-red-600 mt-2">
+                    <button onClick={(e) => { e.stopPropagation(); removeStep(i); }} data-testid={`remove-step-${i}`} className="text-xs text-neutral-400 hover:text-danger mt-2">
                       <Trash2 size={11} className="inline" /> remove
                     </button>
                   )}
@@ -228,152 +541,424 @@ export default function CampaignBuilder() {
           </ol>
           <button onClick={addStep} data-testid="add-step" className="btn-ghost w-full justify-start mt-3 text-sm"><Plus size={14} /> Add step</button>
 
-          <div className="ui-label mt-8 mb-2">Leads ({selectedLeads.length}/{leads.length})</div>
+          <div className="mt-6 pt-4 border-t border-line">
+            <div className="ui-label mb-2">Sending Window</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-neutral-400">Start</label>
+                <input type="time" value={sendWindowStart}
+                  onChange={(e) => setSendWindowStart(e.target.value)}
+                  className="w-full border border-line px-2 py-1.5 rounded-lg text-xs" />
+              </div>
+              <div>
+                <label className="text-[10px] text-neutral-400">End</label>
+                <input type="time" value={sendWindowEnd}
+                  onChange={(e) => setSendWindowEnd(e.target.value)}
+                  className="w-full border border-line px-2 py-1.5 rounded-lg text-xs" />
+              </div>
+            </div>
+            <div className="mt-2">
+              <label className="text-[10px] text-neutral-400">Timezone</label>
+              <input value={timezone} onChange={(e) => setTimezone(e.target.value)}
+                className="w-full border border-line px-2 py-1.5 rounded-lg text-xs font-mono"
+                placeholder="UTC" />
+            </div>
+          </div>
+
+          <div className="ui-label mt-6 mb-2">Leads ({selectedLeads.length}/{leads.length})</div>
+          <div className="relative mb-2">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+            <input value={leadSearch} onChange={(e) => setLeadSearch(e.target.value)}
+              placeholder="Search leads..."
+              className="w-full border border-line rounded-xl pl-7 pr-3 py-1.5 text-xs font-mono" />
+          </div>
           <div className="border border-line rounded-xl max-h-64 overflow-y-auto">
-            {leads.map((l) => (
-              <label key={l.id} className="flex items-center gap-2 p-2 border-b border-line last:border-b-0 text-xs cursor-pointer hover:bg-surfacehover">
-                <input
-                  type="checkbox"
+            {leads.filter((l) => {
+              if (!leadSearch) return true;
+              const q = leadSearch.toLowerCase();
+              return [l.first_name, l.last_name, l.company, l.email, l.title].some((f) => f?.toLowerCase().includes(q));
+            }).map((l) => (
+              <label key={l.id} className="flex items-start gap-2 p-2 border-b border-line last:border-b-0 text-xs cursor-pointer hover:bg-surfacehover">
+                <input type="checkbox" className="mt-0.5"
                   checked={selectedLeads.includes(l.id)}
                   onChange={(e) => setSelectedLeads(e.target.checked ? [...selectedLeads, l.id] : selectedLeads.filter((x) => x !== l.id))}
                   data-testid={`lead-check-${l.id}`}
                 />
-                <div className="flex-1 truncate">
-                  <div className="font-medium">{l.first_name} {l.last_name}</div>
-                  <div className="text-neutral-400 truncate">{l.company}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{l.first_name} {l.last_name}</div>
+                  <div className="text-neutral-400 truncate">{l.company}{l.title ? ` · ${l.title}` : ""}</div>
+                  <div className="text-[10px] text-neutral-300 font-mono truncate">{l.email}</div>
+                  {l.campaign_names?.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {l.campaign_names.map((cn) => (
+                        <span key={cn} className="text-[9px] font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{cn}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </label>
             ))}
           </div>
           <button onClick={() => setSelectedLeads(leads.map((l) => l.id))} className="text-xs text-sanguine mt-2 hover:underline" data-testid="select-all-leads">Select all</button>
+          <button onClick={() => setSelectedLeads([])} className="text-xs text-neutral-400 mt-2 hover:underline ml-3" data-testid="deselect-all-leads">Deselect all</button>
+          {selectedLeads.length > 0 && (
+            <button onClick={save} disabled={busy} className="btn-primary w-full mt-3 text-sm flex items-center justify-center gap-1">
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+              Add & Generate ({selectedLeads.length} leads)
+            </button>
+          )}
+
         </aside>
 
         {/* Editor */}
         <section className="col-span-full lg:col-span-6 p-4 sm:p-6 bg-bone space-y-4">
-          <div className="shadow-card p-6 sm:p-8 rounded-2xl">
-            <div className="ui-label mb-2">Subject</div>
-            <input
-              value={step.subject}
-              onChange={(e) => updateStep({ subject: e.target.value })}
-              data-testid="editor-subject"
-              className="w-full text-lg font-display font-bold border-0 border-b border-line py-2 focus:outline-none focus:border-ink bg-transparent"
-              placeholder="Quick idea for {{company}}"
-            />
-
-            <div className="mt-5 flex items-center justify-between">
-              <div className="ui-label">Body</div>
-              <div className="flex items-center gap-3">
-                <label className="text-xs text-neutral-400 font-mono">day</label>
-                <input type="number" min={0} value={step.day}
-                  onChange={(e) => updateStep({ day: Number(e.target.value) })}
-                  data-testid="editor-day"
-                  className="w-16 border border-line px-2 py-1 text-sm rounded-xl font-mono" />
-              </div>
-            </div>
-
-            <div className="mt-2">
-              <RichEmailEditor
-                value={step.body_html || ""}
-                onChange={(html) => updateStep({ body_html: html })}
-                placeholder="Write your email, or let the AI research this lead and write it for you."
-              />
-            </div>
-          </div>
-
-          {/* AI draft chain */}
-          <div className="shadow-card p-6 sm:p-8 rounded-2xl" data-testid="ai-panel">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-2">
-                <Sparkles size={15} className="text-sanguine" />
-                <div className="text-sm font-medium">Write from real research</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={previewLead?.id || ""}
-                  onChange={(e) => setPreviewLeadId(e.target.value)}
-                  data-testid="preview-lead-select"
-                  className="border border-line rounded-xl px-3 py-1.5 text-xs max-w-[190px]"
-                >
-                  {leads.length === 0 && <option value="">No leads yet</option>}
-                  {leads.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.first_name} {l.last_name} · {l.company || "—"}
-                    </option>
-                  ))}
-                </select>
-                <button onClick={writeWithAI} disabled={busy || !leads.length}
-                  data-testid="ai-write" className="btn-primary text-xs disabled:opacity-50">
-                  {chainStep ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-                  {chainStep ? "Writing…" : "Write with AI"}
-                </button>
-              </div>
-            </div>
-
-            {/* Four steps, because the backend really does run four calls. */}
-            <div className="flex items-center gap-2 mt-4" data-testid="chain-progress">
-              {CHAIN_STEPS.map((s, i) => {
-                const idx = CHAIN_STEPS.findIndex((x) => x.key === chainStep);
-                const done = chainStep && i < idx;
-                const active = chainStep === s.key;
+          {reviewMode ? (
+            /* REVIEW MODE — replaces editor */
+            <div className="shadow-card p-6 sm:p-8 rounded-2xl">
+              {(() => {
+                const reviewEmails = campaignLeads.filter(l => l.personalized);
+                const current = reviewEmails[reviewIndex];
+                if (!current) return <div className="text-center py-8 text-neutral-400">No emails to review</div>;
                 return (
-                  <div key={s.key} className="flex items-center gap-2 flex-1">
-                    <div className={`flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider ${
-                      active ? "text-ink font-semibold" : done ? "text-neutral-400" : "text-neutral-300"
-                    }`}>
-                      {done ? <Check size={11} /> : active ? <Loader2 size={11} className="animate-spin" /> : <span className="w-[11px]" />}
-                      {s.label}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-line pb-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-neutral-400 font-mono">{reviewIndex + 1} / {reviewEmails.length}</span>
+                        <span className={`text-xs font-medium ${current.email_status === "approved" ? "text-success" : current.email_status === "rejected" ? "text-danger" : "text-warning"}`}>
+                          {current.email_status === "approved" ? "Approved" : current.email_status === "rejected" ? "Rejected" : "Draft"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={prevReview} disabled={reviewIndex === 0} className="btn-ghost text-xs px-2 py-1"><ChevronLeft size={12} /> Prev</button>
+                        <button onClick={nextReview} disabled={reviewIndex >= reviewEmails.length - 1} className="btn-ghost text-xs px-2 py-1">Next <ChevronRight size={12} /></button>
+                        <button onClick={exitReview} className="btn-ghost text-xs text-neutral-400 px-2 py-1">Exit</button>
+                      </div>
                     </div>
-                    {i < CHAIN_STEPS.length - 1 && <div className="flex-1 h-px bg-line" />}
-                  </div>
-                );
-              })}
-            </div>
-
-            {draftMeta && (
-              <div className="mt-4 space-y-2" data-testid="draft-meta">
-                {draftMeta.has_angle ? (
-                  <div className="flex items-start gap-2 text-xs bg-bone border border-line rounded-2xl px-3 py-2">
-                    <Flame size={13} className="text-sanguine mt-0.5 shrink-0" />
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-medium">{current.first_name} {current.last_name}</span>
+                        <span className="text-xs text-neutral-400 ml-2">{current.company}{current.title ? ` · ${current.title}` : ''}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {current.personalized_opener && (
+                          <button onClick={() => setEditingOpener({ leadId: current.id, opener: current.personalized_opener })} className="btn-ghost text-xs flex items-center gap-1">
+                            <Edit2 size={11} /> Edit Opener
+                          </button>
+                        )}
+                      </div>
+                    </div>
                     <div>
-                      <div className="font-medium">{draftMeta.angle?.angle}</div>
-                      {draftMeta.angle?.trigger && (
-                        <div className="text-neutral-400 mt-0.5">Trigger: {draftMeta.angle.trigger}</div>
+                      <div className="ui-label text-xs mb-1">Subject</div>
+                      <div className="w-full text-sm font-semibold border border-line rounded-xl px-3 py-2">{current.email_subject || "(no subject)"}</div>
+                    </div>
+                    <div>
+                      <div className="ui-label text-xs mb-1">Body</div>
+                      <div className="max-h-80 overflow-y-auto text-sm text-neutral-700 whitespace-pre-wrap font-sans leading-relaxed border border-line rounded-xl p-3 bg-white">
+                        {current.email_body || current.email_body_html ? (
+                          <div dangerouslySetInnerHTML={{ __html: current.email_body_html || current.email_body?.replace(/\n/g, "<br>") || "" }} />
+                        ) : (
+                          <div className="text-neutral-400 italic">No content</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Write from real research */}
+                    <div className="shadow-card p-4 rounded-2xl">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Sparkles size={13} className="text-sanguine" />
+                        <div className="text-xs font-semibold">Write from real research</div>
+                      </div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <select
+                          value={previewLead?.id || ""}
+                          onChange={(e) => setPreviewLeadId(e.target.value)}
+                          className="border border-line rounded-lg px-2 py-1 text-xs flex-1 min-w-0"
+                        >
+                          {leads.length === 0 && <option value="">No leads yet</option>}
+                          {leads.map((l) => (
+                            <option key={l.id} value={l.id}>
+                              {l.first_name} {l.last_name} · {l.company || "—"}
+                            </option>
+                          ))}
+                        </select>
+                        <button onClick={writeWithAI} disabled={busy || !leads.length}
+                          className="btn-primary text-xs disabled:opacity-50 shrink-0">
+                          {chainStep ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                          {chainStep ? "Writing…" : "Write with AI"}
+                        </button>
+                      </div>
+                      {chainStep && (
+                        <div className="flex items-center gap-1 mb-2" data-testid="chain-progress">
+                          {CHAIN_STEPS.map((s, i) => {
+                            const idx = CHAIN_STEPS.findIndex((x) => x.key === chainStep);
+                            const done = chainStep && i < idx;
+                            const active = chainStep === s.key;
+                            return (
+                              <div key={s.key} className="flex items-center gap-1 flex-1">
+                                <div className={`flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider ${
+                                  active ? "text-ink font-semibold" : done ? "text-neutral-400" : "text-neutral-300"
+                                }`}>
+                                  {done ? <Check size={9} /> : active ? <Loader2 size={9} className="animate-spin" /> : <span className="w-[9px]" />}
+                                  {s.label}
+                                </div>
+                                {i < CHAIN_STEPS.length - 1 && <div className="flex-1 h-px bg-line" />}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {draftMeta && (
+                        <div className="space-y-1">
+                          {draftMeta.has_angle ? (
+                            <div className="flex items-start gap-1.5 text-[11px] bg-bone border border-line rounded-xl px-2 py-1.5">
+                              <Flame size={11} className="text-sanguine mt-0.5 shrink-0" />
+                              <div>
+                                <div className="font-medium">{draftMeta.angle?.angle}</div>
+                                {draftMeta.angle?.trigger && (
+                                  <div className="text-neutral-400 mt-0.5">{draftMeta.angle.trigger}</div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-start gap-1.5 text-[11px] bg-warning/10 border border-warning/30 rounded-xl px-2 py-1.5 text-warning">
+                              <AlertTriangle size={11} className="mt-0.5 shrink-0" />
+                              <div>
+                                <div className="font-medium">
+                                  {draftMeta.has_signal
+                                    ? "Researched — but no usable trigger."
+                                    : "No public signals found for this company."}
+                                </div>
+                                <div className="mt-0.5">{draftMeta.note}</div>
+                              </div>
+                            </div>
+                          )}
+                          {!!draftMeta.changes?.length && (
+                            <details className="text-[10px] text-neutral-400">
+                              <summary className="cursor-pointer hover:text-ink">What the humanise pass changed</summary>
+                              <ul className="mt-1 pl-3 list-disc space-y-0.5">
+                                {draftMeta.changes.map((c, i) => <li key={i}>{c}</li>)}
+                              </ul>
+                            </details>
+                          )}
+                        </div>
                       )}
                     </div>
-                  </div>
-                ) : (
-                  // Two different honest outcomes, and they must not be conflated:
-                  // "we found nothing" is a different claim from "we found things,
-                  // none of which justify a hook".
-                  <div className="flex items-start gap-2 text-xs bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2 text-amber-900">
-                    <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                    <div>
-                      <div className="font-medium">
-                        {draftMeta.has_signal
-                          ? "Researched — but no usable trigger."
-                          : "No public signals found for this company."}
+
+                    {/* Signature */}
+                    <div className="shadow-card p-4 rounded-2xl">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Signature size={13} className="text-sanguine" />
+                        <div className="text-xs font-semibold">Signature</div>
                       </div>
-                      <div className="mt-0.5">{draftMeta.note}</div>
+                      <div className="flex items-center gap-2">
+                        <select value={signatureId} onChange={(e) => setSignatureId(e.target.value)}
+                          className="border border-line rounded-lg px-2 py-1 text-xs flex-1 min-w-0">
+                          <option value="">No signature</option>
+                          {signatures.map((s) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                        <button onClick={() => setShowSignatureModal(true)} className="btn-ghost text-xs shrink-0" title="New signature">
+                          <Plus size={11} />
+                        </button>
+                        {signatureId && (
+                          <button onClick={() => { const s = signatures.find((x) => x.id === signatureId); if (s) deleteSignature(s.id); }}
+                            className="btn-ghost text-xs text-danger/70 shrink-0" title="Delete signature">
+                            <Trash2 size={11} />
+                          </button>
+                        )}
+                      </div>
+                      {signatureId && (() => {
+                        const sig = signatures.find((s) => s.id === signatureId);
+                        if (!sig) return null;
+                        return (
+                          <div className="mt-1 text-[10px] text-neutral-500 border-t border-line pt-1"
+                            dangerouslySetInnerHTML={{ __html: sig.content_html || sig.content_text || '' }} />
+                        );
+                      })()}
+                    </div>
+
+                    {/* Personalized Emails */}
+                    {id && (
+                      <div className="shadow-card p-4 rounded-2xl">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-1.5">
+                            <Mail size={13} className="text-sanguine" />
+                            <div className="text-xs font-semibold">Personalized Emails</div>
+                          </div>
+                          <span className="text-xs text-neutral-400">{campaignLeads.filter((l) => l.personalized).length}/{campaignLeads.length}</span>
+                        </div>
+                        {campaignLeads.length > 0 && (
+                          <>
+                            <div className="flex items-center gap-1 mb-2">
+                              {campaignLeads.some(l => !l.personalized) && (
+                                <button onClick={runCampaignEngine} disabled={engineRunning} className="btn-primary text-xs flex items-center gap-1">
+                                  {engineRunning ? <Loader2 size={11} className="animate-spin" /> : <Zap size={11} />}
+                                  {engineRunning ? "Engine…" : "Generate All"}
+                                </button>
+                              )}
+                              {campaignLeads.some(l => l.personalized && l.email_status !== "approved") && campaignLeads.every(l => l.personalized) && (
+                                <button onClick={approveAllEmails} className="btn-secondary text-xs flex items-center gap-1">
+                                  <ThumbsUp size={11} />
+                                  Approve All
+                                </button>
+                              )}
+                              {campaignLeads.every(l => l.personalized) && campaignLeads.length > 0 && (
+                                <button onClick={startReview} className="btn-secondary text-xs flex items-center gap-1">
+                                  <Eye size={11} />
+                                  Review
+                                </button>
+                              )}
+                            </div>
+                            <div className="max-h-48 overflow-y-auto space-y-1">
+                              {campaignLeads.map((cl, idx) => (
+                                <div key={cl.id} className="flex items-center gap-1.5 px-1 py-1 rounded-lg hover:bg-surfacehover cursor-pointer"
+                                  onClick={() => { setReviewIndex(idx); setReviewMode(true); }}>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-medium truncate">{cl.first_name} {cl.last_name}</div>
+                                    <div className="text-[10px] text-neutral-400 truncate">{cl.company}{cl.title ? ` · ${cl.title}` : ''}</div>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {cl.personalized ? (
+                                      <>
+                                        <span className={`text-[10px] font-mono ${cl.email_status === "approved" ? "text-success" : cl.email_status === "rejected" ? "text-danger" : "text-warning"}`}>
+                                          {cl.email_status === "approved" ? "Approved" : cl.email_status === "rejected" ? "Rejected" : "Draft"}
+                                        </span>
+                                        {cl.email_status !== "approved" && (
+                                          <button onClick={(e) => { e.stopPropagation(); approveEmail(cl.id); }} className="btn-ghost text-success p-0.5" title="Approve"><ThumbsUp size={10} /></button>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <button onClick={(e) => { e.stopPropagation(); generateLeadEmail(cl.id); }} disabled={generatingEmail === cl.id} className="btn-primary text-[10px] px-1.5 py-0.5">
+                                        {generatingEmail === cl.id ? <Loader2 size={9} className="animate-spin" /> : <Sparkles size={9} />}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {editingOpener && editingOpener.leadId === current.id && (
+                      <div className="bg-warning/10 border border-warning/30 rounded-xl p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium text-warning">Edit Personalized Opener</span>
+                          <button onClick={() => setEditingOpener(null)} className="btn-ghost text-xs">Cancel</button>
+                        </div>
+                        <textarea
+                          value={editingOpener.opener}
+                          onChange={(e) => setEditingOpener({...editingOpener, opener: e.target.value})}
+                          className="w-full min-h-[60px] border border-line rounded-lg px-3 py-2 text-sm font-mono"
+                        />
+                        <div className="flex justify-end gap-2 mt-2">
+                          <button onClick={() => regenerateOpener(current.id)} className="btn-ghost text-xs flex items-center gap-1">
+                            <RotateCw size={11} /> Regenerate with AI
+                          </button>
+                          <button onClick={() => saveOpener(current.id, editingOpener.opener)} className="btn-primary text-xs flex items-center gap-1">
+                            <Check size={11} /> Save Opener
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 pt-3 border-t border-line">
+                      {current.email_status === "approved" ? (
+                        <>
+                          <span className="btn-ghost text-success flex items-center gap-1 text-xs"><Check size={12} /> Approved</span>
+                          <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-danger flex items-center gap-1 text-xs"><Flag size={12} /> Reject</button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => approveEmail(current.id)} className="btn-primary text-xs flex items-center gap-1"><Check size={12} /> Approve</button>
+                          <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-danger flex items-center gap-1 text-xs"><Flag size={12} /> Reject</button>
+                        </>
+                      )}
+                      <button onClick={() => deleteLeadEmail(current.id)} className="btn-ghost text-xs text-danger ml-auto flex items-center gap-1"><Trash2 size={12} /> Remove</button>
                     </div>
                   </div>
-                )}
-                {!!draftMeta.changes?.length && (
-                  <details className="text-xs text-neutral-400">
-                    <summary className="cursor-pointer hover:text-ink">What the humanise pass changed</summary>
-                    <ul className="mt-1.5 space-y-1 pl-4 list-disc">
-                      {draftMeta.changes.map((c, i) => <li key={i}>{c}</li>)}
-                    </ul>
-                  </details>
-                )}
+                );
+              })()}
+            </div>
+          ) : (
+            /* TEMPLATE EDITOR — normal mode */
+            <div className="shadow-card p-6 sm:p-8 rounded-2xl">
+              <div className="ui-label mb-2">Subject</div>
+              <input
+                value={step.subject}
+                onChange={(e) => updateStep({ subject: e.target.value })}
+                data-testid="editor-subject"
+                className="w-full text-lg font-display font-bold border-0 border-b border-line py-2 focus:outline-none focus:border-ink bg-transparent"
+                placeholder="Quick idea for {{company}}"
+              />
+              <div className="mt-5 flex items-center justify-between">
+                <div className="ui-label">Body</div>
+                <div className="flex items-center gap-3">
+                  <label className="text-xs text-neutral-400 font-mono">day</label>
+                  <input type="number" min={0} value={step.day}
+                    onChange={(e) => updateStep({ day: Number(e.target.value) })}
+                    data-testid="editor-day"
+                    className="w-16 border border-line px-2 py-1 text-sm rounded-xl font-mono" />
+                </div>
               </div>
-            )}
+              <div className="mt-2">
+                <RichEmailEditor
+                  value={step.body_html || ""}
+                  onChange={(html) => updateStep({ body_html: html })}
+                  placeholder="Write your email, or let the AI research this lead and write it for you."
+                />
+              </div>
           </div>
+            )}
+
+          {/* Signature modal */}
+          {showSignatureModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowSignatureModal(false)}>
+              <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="text-sm font-medium">Create Signature</div>
+                  <button onClick={() => setShowSignatureModal(false)} className="btn-ghost text-xs">Close</button>
+                </div>
+                <div className="space-y-3">
+                  <input value={signatureName} onChange={(e) => setSignatureName(e.target.value)}
+                    className="w-full border border-line rounded-xl px-3 py-2 text-sm"
+                    placeholder="Signature name (e.g. My Standard Signature)" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <input value={sigSenderName} onChange={(e) => setSigSenderName(e.target.value)}
+                      className="w-full border border-line rounded-xl px-3 py-2 text-sm" placeholder="Your name" />
+                    <input value={sigTitle} onChange={(e) => setSigTitle(e.target.value)}
+                      className="w-full border border-line rounded-xl px-3 py-2 text-sm" placeholder="Title" />
+                    <input value={sigCompany} onChange={(e) => setSigCompany(e.target.value)}
+                      className="w-full border border-line rounded-xl px-3 py-2 text-sm" placeholder="Company" />
+                    <input value={sigEmail} onChange={(e) => setSigEmail(e.target.value)}
+                      className="w-full border border-line rounded-xl px-3 py-2 text-sm" placeholder="Email" />
+                    <input value={sigPhone} onChange={(e) => setSigPhone(e.target.value)}
+                      className="w-full border border-line rounded-xl px-3 py-2 text-sm" placeholder="Phone (optional)" />
+                  </div>
+                  {(sigSenderName || sigTitle || sigCompany || sigEmail || sigPhone) && (
+                    <div className="bg-bone border border-line rounded-xl p-3 text-sm">
+                      <div className="text-[10px] font-mono uppercase text-neutral-400 mb-1">Preview</div>
+                      <div className="border-t border-line pt-2 mt-1" dangerouslySetInnerHTML={{ __html: buildSignatureHtml() }} />
+                    </div>
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setShowSignatureModal(false)} className="btn-secondary text-xs">Cancel</button>
+                    <button onClick={createSignature} disabled={savingSignature} className="btn-primary text-xs">
+                      {savingSignature ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                      Create
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* EQ Panel */}
         <aside className="col-span-full lg:col-span-3 border-l border-line bg-white p-6 sm:p-8">
           <div className="ui-label text-sanguine">EQ Score</div>
-          <div className="font-mono text-4xl sm:text-6xl font-bold tracking-tighter mt-1"
+          <div className="font-mono text-3xl sm:text-5xl font-bold tracking-tighter mt-1"
             style={{ color: eq ? (eq.overall > 70 ? "#212025" : eq.overall > 40 ? "#5A5A63" : "#B33636") : "#8A8B86" }}>
             {eq?.overall ?? "—"}
           </div>
@@ -390,8 +975,8 @@ export default function CampaignBuilder() {
                   <span className="ui-label">{k}</span>
                   <span className="font-mono text-neutral-700">{v}</span>
                 </div>
-                <div className="h-1 mt-1 bg-line">
-                  <div className="h-full bg-ink" style={{ width: `${v}%` }} />
+                <div className="h-1 mt-1 bg-line rounded-full overflow-hidden">
+                  <div className="h-full bg-brand-gradient" style={{ width: `${v}%` }} />
                 </div>
               </div>
             ))}

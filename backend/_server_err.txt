@@ -1,0 +1,21 @@
+INFO:     Will watch for changes in these directories: ['D:\\SUITEOFAGETNS\\backend']
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [22300] using StatReload
+INFO:     Started server process [21692]
+INFO:     Waiting for application startup.
+2026-07-20 12:21:42,283 INFO indexes ensured
+2026-07-20 12:21:42,394 INFO Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-20 12:21:42,395 INFO Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-20 12:21:42,397 INFO Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-20 12:21:42,398 INFO Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-20 12:21:42,399 INFO Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-20 12:21:42,400 INFO Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-20 12:21:42,401 INFO Added job "run_reminder_tick" to job store "default"
+2026-07-20 12:21:42,402 INFO Added job "_start_scheduler.<locals>.<lambda>" to job store "default"
+2026-07-20 12:21:42,402 INFO Added job "run_reply_tick" to job store "default"
+2026-07-20 12:21:42,402 INFO Added job "run_social_publish_tick" to job store "default"
+2026-07-20 12:21:42,403 INFO Added job "run_social_engagement_tick" to job store "default"
+2026-07-20 12:21:42,403 INFO Added job "run_rss_poll_tick" to job store "default"
+2026-07-20 12:21:42,403 INFO Scheduler started
+2026-07-20 12:21:42,403 INFO scheduler started (reminders 15m, sends 2m, reply polling 10m, social publish 2m, social engagement 10m, RSS poll 30m)
+INFO:     Application startup complete.

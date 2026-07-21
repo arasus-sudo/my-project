@@ -8,8 +8,22 @@ import { newId } from "../utils";
 
 const DEFAULT_COLORS = () => [
   { id: newId(), hex: "#212025" },
-  { id: newId(), hex: "#E85D3A" },
+  { id: newId(), hex: "#6E6E73" },
   { id: newId(), hex: "#FDFDF9" },
+];
+
+const LOGO_SIZES = [
+  { id: "s", label: "S", w: 120, h: 60 },
+  { id: "m", label: "M", w: 180, h: 90 },
+  { id: "l", label: "L", w: 240, h: 120 },
+  { id: "xl", label: "XL", w: 360, h: 180 },
+];
+
+const LOGO_POSITIONS = [
+  { id: "tl", label: "Top-left", x: 80, y: 80 },
+  { id: "tr", label: "Top-right", x: 760, y: 80 },
+  { id: "bl", label: "Bottom-left", x: 80, y: 1190 },
+  { id: "br", label: "Bottom-right", x: 760, y: 1190 },
 ];
 
 const EMPTY_FORM = () => ({
@@ -19,6 +33,8 @@ const EMPTY_FORM = () => ({
   colors: DEFAULT_COLORS(),
   fonts: ["Inter"],
   palette_id: "midnight",
+  logo_size: "l",
+  logo_position: "bl",
 });
 
 export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDeleted, onApply }) {
@@ -38,6 +54,8 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
       ),
       fonts: k.fonts && k.fonts.length ? k.fonts : ["Inter"],
       palette_id: k.palette_id || "midnight",
+      logo_size: k.logo_size || "l",
+      logo_position: k.logo_position || "bl",
     });
   };
   const cancel = () => setEditing(null);
@@ -51,6 +69,8 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
       colors: form.colors.map((c) => c.hex),
       fonts: form.fonts,
       palette_id: form.palette_id,
+      logo_size: form.logo_size,
+      logo_position: form.logo_position,
     };
     try {
       if (form.id) {
@@ -144,7 +164,7 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
                     className="w-full border border-line rounded-full px-3 py-1.5 text-xs font-mono disabled:bg-neutral-50 disabled:text-neutral-500" />
                   {editing.logo_url && (
                     <button type="button" onClick={() => setEditing({ ...editing, logo_url: "" })}
-                      className="text-[10px] text-neutral-500 hover:text-red-600">
+                      className="text-[10px] text-neutral-500 hover:text-danger">
                       Remove logo
                     </button>
                   )}
@@ -166,7 +186,7 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
                     {editing.colors.length > 1 && (
                       <button type="button"
                         onClick={() => setEditing({ ...editing, colors: editing.colors.filter((x) => x.id !== c.id) })}
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-white border border-line rounded-full text-[9px] hover:border-red-600 hover:text-red-600">
+                        className="absolute -top-1 -right-1 w-4 h-4 bg-white border border-line rounded-full text-[9px] hover:border-danger hover:text-danger">
                         ×
                       </button>
                     )}
@@ -197,6 +217,40 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
                 testid="brandkit-font"
               />
             </label>
+
+            <div>
+              <div className="ui-label mb-1.5">Logo size</div>
+              <div className="flex gap-1.5">
+                {LOGO_SIZES.map((sz) => (
+                  <button key={sz.id} type="button"
+                    onClick={() => setEditing({ ...editing, logo_size: sz.id })}
+                    className={`flex-1 py-1.5 rounded text-xs font-mono border transition-colors ${
+                      editing.logo_size === sz.id
+                        ? "border-ink bg-ink text-white"
+                        : "border-line hover:border-ink"
+                    }`}>
+                    {sz.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="ui-label mb-1.5">Logo position</div>
+              <div className="grid grid-cols-4 gap-1.5">
+                {LOGO_POSITIONS.map((pos) => (
+                  <button key={pos.id} type="button"
+                    onClick={() => setEditing({ ...editing, logo_position: pos.id })}
+                    className={`py-2 rounded text-[10px] border transition-colors ${
+                      editing.logo_position === pos.id
+                        ? "border-ink bg-ink text-white"
+                        : "border-line hover:border-ink"
+                    }`}>
+                    {pos.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-line">
               <button type="button" onClick={cancel} className="btn-secondary text-sm">Cancel</button>
@@ -233,13 +287,20 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
                     </div>
                   </div>
                 </div>
+                <div className="flex items-center gap-1.5 mt-2 text-[10px] text-neutral-500">
+                  <span>Logo: {LOGO_SIZES.find(s => s.id === (k.logo_size || "l"))?.label || "L"} · {
+                    LOGO_POSITIONS.find(p => p.id === (k.logo_position || "bl"))?.label || "Bottom-left"
+                  }</span>
+                </div>
                 <div className="mt-3 flex gap-1.5">
                   <button onClick={() => onApply(k)} data-testid={`brandkit-apply-${k.id}`}
                     className="btn-primary text-xs py-1.5 flex-1 justify-center">Apply to deck</button>
+                  <button onClick={() => { onApply({ ...k, _reapply_logo: true }); }} data-testid={`brandkit-reapply-${k.id}`}
+                    className="btn-ghost text-xs py-1.5">Re-apply logo</button>
                   <button onClick={() => startEdit(k)} data-testid={`brandkit-edit-${k.id}`}
                     className="btn-ghost text-xs py-1.5"><Pencil size={11} /> Edit</button>
                   <button onClick={() => del(k.id)} data-testid={`brandkit-delete-${k.id}`}
-                    className="btn-ghost text-xs py-1.5 text-red-600"><Trash2 size={11} /></button>
+                    className="btn-ghost text-xs py-1.5 text-danger"><Trash2 size={11} /></button>
                 </div>
               </div>
             ))}

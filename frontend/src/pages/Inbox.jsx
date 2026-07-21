@@ -4,12 +4,12 @@ import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 
 const LABELS = {
-  interested: { t: "Interested", c: "text-green-700 border-green-700" },
-  not_interested: { t: "Not interested", c: "text-neutral-400 border-neutral-400" },
-  ooo: { t: "Out of office", c: "text-amber-700 border-amber-500" },
-  referral: { t: "Referral", c: "text-blue-700 border-blue-700" },
-  unsubscribe: { t: "Unsubscribe", c: "text-red-700 border-red-700" },
-  other: { t: "Other", c: "text-neutral-400 border-line" },
+  interested: { t: "Interested", c: "text-success border-success" },
+  not_interested: { t: "Not interested", c: "text-ink-muted border-neutral-400" },
+  ooo: { t: "Out of office", c: "text-warning border-warning" },
+  referral: { t: "Referral", c: "text-info border-info" },
+  unsubscribe: { t: "Unsubscribe", c: "text-danger border-danger" },
+  other: { t: "Other", c: "text-ink-muted border-line" },
 };
 
 export default function Inbox() {
@@ -60,18 +60,18 @@ export default function Inbox() {
 
         {/* List */}
         <div className="col-span-full md:col-span-4 border-r border-line overflow-y-auto">
-          {filtered.length === 0 && <div className="p-6 text-sm text-neutral-400">No conversations. Launch a campaign to receive replies.</div>}
+          {filtered.length === 0 && <div className="p-6 text-body text-ink-muted">No conversations. Launch a campaign to receive replies.</div>}
           {filtered.map((c) => (
             <button key={c.id} onClick={() => setActive(c)} data-testid={`convo-${c.id}`}
-              className={`w-full text-left p-4 border-b border-line block ${active?.id === c.id ? "bg-surfacehover border-l-2 border-l-sanguine" : "hover:bg-surfacehover"}`}>
+              className={`w-full text-left p-4 border-b border-line block ${active?.id === c.id ? "bg-surfacehover border-l-2 border-l-ink" : "hover:bg-surfacehover"}`}>
               <div className="flex items-center justify-between">
                 <div className="font-medium truncate">{c.lead?.first_name} {c.lead?.last_name}</div>
-                <span className={`ui-label border px-1.5 py-0.5 text-[9px] ${LABELS[c.classification]?.c || LABELS.other.c}`}>
+                <span className={`ui-label border px-1.5 py-0.5 ${LABELS[c.classification]?.c || LABELS.other.c}`}>
                   {LABELS[c.classification]?.t || "Other"}
                 </span>
               </div>
-              <div className="text-xs text-neutral-400 truncate mt-1">{c.lead?.company} · {c.lead?.email}</div>
-              <div className="text-xs text-neutral-700 mt-2 line-clamp-2">{c.snippet}</div>
+              <div className="text-caption text-ink-muted truncate mt-1">{c.lead?.company} · {c.lead?.email}</div>
+              <div className="text-caption text-ink-tertiary mt-2 line-clamp-2">{c.snippet}</div>
             </button>
           ))}
         </div>
@@ -81,14 +81,14 @@ export default function Inbox() {
           {active ? (
             <>
               <div className="p-4 border-b border-line bg-white">
-                <div className="font-display font-semibold">{active.lead?.first_name} {active.lead?.last_name}</div>
-                <div className="text-xs text-neutral-400 font-mono">{active.lead?.email}</div>
+                <div className="text-card-title font-display font-semibold">{active.lead?.first_name} {active.lead?.last_name}</div>
+                <div className="text-tiny text-ink-muted font-mono">{active.lead?.email}</div>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {active.messages?.map((m, i) => (
                   <div key={i} className={`max-w-md ${m.from === "me" ? "ml-auto" : ""}`}>
                     <div className="ui-label mb-1">{m.from === "me" ? "You" : active.lead?.first_name}</div>
-                    <div className={`p-3 text-sm rounded-xl border ${m.from === "me" ? "bg-ink text-bone border-ink" : "bg-white border-line"}`}>
+                    <div className={`p-3 text-body rounded-xl border ${m.from === "me" ? "bg-ink text-bone border-ink" : "bg-white border-line"}`}>
                       {m.body}
                     </div>
                   </div>
@@ -97,12 +97,12 @@ export default function Inbox() {
               <div className="p-4 border-t border-line bg-white">
                 <textarea value={reply} onChange={(e) => setReply(e.target.value)} data-testid="reply-body"
                   rows={3} placeholder={`Reply to ${active.lead?.first_name}…`}
-                  className="w-full border border-line p-3 rounded-sm focus:outline-none focus:border-ink text-sm" />
+                  className="w-full border border-line p-3 rounded-sm focus:outline-none focus:border-ink text-input" />
                 <button onClick={send} data-testid="send-reply" disabled={!reply.trim()} className="btn-primary mt-2 disabled:opacity-50">Send reply</button>
               </div>
             </>
           ) : (
-            <div className="p-8 text-neutral-400 text-sm">Select a conversation</div>
+            <div className="p-8 text-body text-ink-muted">Select a conversation</div>
           )}
         </div>
 
@@ -111,16 +111,16 @@ export default function Inbox() {
           {active?.lead ? (
             <>
               <div className="ui-label">Lead</div>
-              <div className="font-display font-semibold mt-1">{active.lead.first_name} {active.lead.last_name}</div>
-              <div className="text-xs text-neutral-400 font-mono">{active.lead.title}</div>
-              <div className="text-xs text-neutral-400 font-mono">{active.lead.company}</div>
+              <div className="text-subheading font-display font-semibold mt-1">{active.lead.first_name} {active.lead.last_name}</div>
+              <div className="text-tiny text-ink-muted font-mono">{active.lead.title}</div>
+              <div className="text-tiny text-ink-muted font-mono">{active.lead.company}</div>
               <div className="mt-4 ui-label">ICP score</div>
-              <div className="font-mono text-2xl font-bold text-sanguine">{active.lead.icp_score}</div>
+              <div className="font-mono text-2xl font-bold text-ink">{active.lead.icp_score}</div>
               <div className="mt-4 ui-label">Classification</div>
-              <div className="text-sm mt-1">{LABELS[active.classification]?.t || "Other"}</div>
+              <div className="text-body mt-1">{LABELS[active.classification]?.t || "Other"}</div>
             </>
           ) : (
-            <div className="text-neutral-400 text-sm">—</div>
+            <div className="text-body text-ink-muted">—</div>
           )}
         </aside>
       </div>

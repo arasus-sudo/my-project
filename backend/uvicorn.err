@@ -1,0 +1,130 @@
+INFO:     Started server process [23764]
+INFO:     Waiting for application startup.
+2026-07-21 15:26:46,456 INFO indexes ensured
+2026-07-21 15:26:46,564 INFO Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-21 15:26:46,566 INFO Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-21 15:26:46,567 INFO Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-21 15:26:46,569 INFO Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-21 15:26:46,570 INFO Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-21 15:26:46,572 INFO Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-21 15:26:46,573 INFO Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-21 15:26:46,575 INFO Added job "run_reminder_tick" to job store "default"
+2026-07-21 15:26:46,575 INFO Added job "_start_scheduler.<locals>.<lambda>" to job store "default"
+2026-07-21 15:26:46,575 INFO Added job "run_reply_tick" to job store "default"
+2026-07-21 15:26:46,576 INFO Added job "run_social_publish_tick" to job store "default"
+2026-07-21 15:26:46,576 INFO Added job "run_social_engagement_tick" to job store "default"
+2026-07-21 15:26:46,576 INFO Added job "run_rss_poll_tick" to job store "default"
+2026-07-21 15:26:46,577 INFO Added job "run_site_recrawl_tick" to job store "default"
+2026-07-21 15:26:46,577 INFO Scheduler started
+2026-07-21 15:26:46,577 INFO scheduler started (reminders 15m, sends 2m, reply polling 10m, social publish 2m, social engagement 10m, RSS poll 30m, site recrawl 24h)
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\jwt\api_jwt.py:147: InsecureKeyLengthWarning: The HMAC key is 28 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  return self._jws.encode(
+D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\jwt\api_jwt.py:368: InsecureKeyLengthWarning: The HMAC key is 28 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 408, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 84, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\applications.py", line 123, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\middleware\cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 65, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\routing.py", line 756, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\routing.py", line 776, in app
+    await route.handle(scope, receive, send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\routing.py", line 297, in handle
+    await self.app(scope, receive, send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\routing.py", line 77, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\routing.py", line 72, in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\fastapi\routing.py", line 278, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\fastapi\routing.py", line 191, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\SUITEOFAGETNS\backend\server.py", line 3155, in li_create_list
+    lid = uuid4().hex[:12]
+          ^^^^^
+NameError: name 'uuid4' is not defined. Did you mean: 'uuid'?
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 408, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 84, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\applications.py", line 123, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\middleware\cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 65, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\routing.py", line 756, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\routing.py", line 776, in app
+    await route.handle(scope, receive, send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\routing.py", line 297, in handle
+    await self.app(scope, receive, send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\routing.py", line 77, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\starlette\routing.py", line 72, in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\fastapi\routing.py", line 278, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\SUITEOFAGETNS\backend\venv\Lib\site-packages\fastapi\routing.py", line 191, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\SUITEOFAGETNS\backend\server.py", line 3155, in li_create_list
+    lid = uuid4().hex[:12]
+          ^^^^^
+NameError: name 'uuid4' is not defined. Did you mean: 'uuid'?
+2026-07-21 15:28:46,578 INFO Running job "_start_scheduler.<locals>.<lambda> (trigger: interval[0:02:00], next run at: 2026-07-21 09:58:46 UTC)" (scheduled at 2026-07-21 09:58:46.565272+00:00)
+2026-07-21 15:28:46,579 INFO Running job "run_social_publish_tick (trigger: interval[0:02:00], next run at: 2026-07-21 10:00:46 UTC)" (scheduled at 2026-07-21 09:58:46.569317+00:00)
+2026-07-21 15:28:46,589 INFO Job "_start_scheduler.<locals>.<lambda> (trigger: interval[0:02:00], next run at: 2026-07-21 10:00:46 UTC)" executed successfully
+C:\Users\INNOIRA\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:2000: RuntimeWarning: coroutine 'run_send_tick' was never awaited
+  handle = None  # Needed to break cycles when an exception occurs.
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+2026-07-21 15:28:46,601 INFO Job "run_social_publish_tick (trigger: interval[0:02:00], next run at: 2026-07-21 10:00:46 UTC)" executed successfully

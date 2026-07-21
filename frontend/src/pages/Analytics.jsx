@@ -21,18 +21,18 @@ export default function Analytics() {
           <div className="bg-white border border-line rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
             <div>
               <div className="ui-label">LLM calls today</div>
-              <div className="font-mono text-2xl sm:text-3xl font-bold mt-1">{quota.used} <span className="text-neutral-400 text-lg">/ {quota.limit}</span></div>
+              <div className="font-mono text-xl sm:text-2xl font-bold mt-1">{quota.used} <span className="text-ink-muted text-base">/ {quota.limit}</span></div>
             </div>
             <div className="flex-1 h-2 bg-neutral-100 rounded-full overflow-hidden">
-              <div className="h-full bg-ink" style={{ width: `${Math.min(100, (quota.used / quota.limit) * 100)}%` }} />
+              <div className="h-full bg-accent" style={{ width: `${Math.min(100, (quota.used / quota.limit) * 100)}%` }} />
             </div>
-            <div className="ui-label text-neutral-400">{quota.remaining} remaining</div>
+            <div className="ui-label">{quota.remaining} remaining</div>
           </div>
         )}
 
         <div>
           <div className="ui-label mb-2">Campaign step performance</div>
-          {campaigns.length === 0 && <div className="text-sm text-neutral-400">No campaigns yet.</div>}
+          {campaigns.length === 0 && <div className="text-body text-ink-muted">No campaigns yet.</div>}
           <div className="space-y-4">
             {campaigns.map((c) => (
               <div key={c.id} className="bg-white border border-line rounded-2xl overflow-hidden card-floating">
@@ -41,11 +41,11 @@ export default function Analytics() {
                   <span className="ui-label">{c.status}</span>
                 </div>
                 <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[600px]">
+                <table className="w-full text-table min-w-[600px]">
                   <thead>
                     <tr className="border-b border-line">
                       {["Step", "Subject", "Sent", "Open %", "Reply %", "Clicked", "Replied"].map((h) => (
-                        <th key={h} className="ui-label text-left p-3">{h}</th>
+                        <th key={h} className="table-header text-left p-3">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -53,7 +53,7 @@ export default function Analytics() {
                     {c.by_step.map((s) => (
                       <tr key={s.step} className="border-b border-line last:border-b-0">
                         <td className="p-3 font-mono">{s.step + 1}</td>
-                        <td className="p-3 text-xs">{s.subject}</td>
+                        <td className="p-3">{s.subject}</td>
                         <td className="p-3 font-mono">{s.sent}</td>
                         <td className="p-3 font-mono">{s.open_rate}%</td>
                         <td className="p-3 font-mono">{s.reply_rate}%</td>
@@ -93,7 +93,7 @@ export default function Analytics() {
                 </div>
                 <div className="mt-4 flex gap-2 flex-wrap">
                   {["spf", "dkim", "dmarc", "tracking_domain"].map((k) => (
-                    <span key={k} className={`ui-label px-2 py-0.5 rounded-full border ${m.dns?.[k] ? "text-green-700 border-green-600" : "text-red-700 border-red-500"}`}>
+                    <span key={k} className={`ui-label px-2 py-0.5 rounded-full border ${m.dns?.[k] ? "text-success border-success" : "text-danger border-danger"}`}>
                       {k.replace("_", " ")}
                     </span>
                   ))}

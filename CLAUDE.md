@@ -30,11 +30,46 @@ Do not treat this as a simple refactor. This is a full rewrite of the backend an
 - **LLM:** Anthropic Claude API directly — no third-party LLM wrapper packages
 - **Auth:** Multi-tenant from day one (workspace/org → users → roles), JWT or session-based, rewritten in the new stack — do not port the Python JWT logic verbatim, redesign as part of the shared agent runtime
 
-## Brand System (N·LATTICE) — apply to all frontend work
+## Brand System (Innoira Agentic Suite) — apply to all frontend work
 
-- Near-black background, silver / warm-white text palette, monochrome (no blue-purple gradients — this was explicitly replaced)
-- Typography: Archivo, Inter, Roboto Mono
+**Superseded 2026-07-21.** The blue→purple gradient accent (adopted 2026-07-17, below) is
+retired in favor of a flat, enterprise-grade design system — an explicit, deliberate
+reversal, made to position the product against Linear/Stripe Dashboard/GitHub Enterprise/
+Atlassian/SAP Fiori rather than an AI-demo/startup aesthetic. Do not revert to the gradient
+or treat this flat system as an error; do not reintroduce sparkle/wand/AI-decorative iconography,
+glassmorphism, heavy shadows, or oversized radii.
+
+- **Color**: ~95% neutral (the existing `ink`/`neutral`/`bone`/`ash`/`line` palette), brand
+  color (`accent`, `#3B82F6`) used sparingly and only for primary buttons, selected nav/active
+  states, links, and focus rings — flat fills, never gradients. `.bg-brand-gradient` stays
+  defined in `index.css` for back-compat only; nothing new should apply it.
+- **Shadows**: near-invisible (`shadow-card` family in `tailwind.config.js`) — rely on borders
+  and surface contrast, not elevation, for grouping. No hover-lift/floating-card effects.
+- **Radius**: 4/6/8px (Tailwind's stock `rounded`/`rounded-md`/`rounded-lg`), capped at 12px
+  (`rounded-3xl`, repointed in `tailwind.config.js`) — no oversized corners.
+- **Motion**: 150–200ms simple fade/slide only, no bounce/elastic (see `tailwind.config.js`
+  `animation` block). Continuous loading indicators (shimmer/spinners) are exempt.
+- **Icons**: `lucide-react` only (already the sole icon library in use). Avoid sparkle/magic-
+  wand/star icons and other AI-demo iconography — pick the icon that matches the actual
+  business action (search, refresh, analyze, etc.), not a generic "AI" glyph.
+- **Copy**: prefer business-functional language (Generate, Draft, Analyze, Summarize, Search,
+  Research, Automate, Insights, Workflow, Reports) over "AI/Magic/Smart/Intelligent" framing in
+  in-app UI strings — the marketing Landing page gets more latitude for hero copy than the
+  internal app chrome does.
+- Typography: Geist (UI chrome — nav/sidebar/buttons/headings/labels/badges/tabs), Inter (body/
+  forms/tables/chat/docs), Roboto Mono (mono/numeric data) — see the app-wide typography design
+  system (type scale + `ink` text-color hierarchy) built out in `tailwind.config.js`/`index.css`.
 - Footer convention on decks/docs: `© INNOIRA Consulting Services 2026 · CONFIDENTIAL` (docs only, not required in-app, but keep in mind for any generated collateral)
+
+<details>
+<summary>Superseded 2026-07-17 → 2026-07-21 (gradient-accent era, kept for history)</summary>
+
+The prior monochrome-only rule (near-black background, no blue-purple gradients) was retired
+on 2026-07-17 — the product briefly used a light UI with a **blue → purple gradient as the
+primary accent** (buttons, active/selected states, key bullet/icon accents), matching the
+Innoira wordmark's existing gradient. That gradient-primary-accent direction is itself now
+superseded by the flat enterprise system above.
+</details>
 
 ## Migration Priorities (in order)
 
@@ -55,7 +90,7 @@ Do not treat this as a simple refactor. This is a full rewrite of the backend an
 - Preserve existing product logic (EQ Score heuristics, campaign/sequencer behavior, CRM pipeline stages) even as the implementation is rewritten — ask before dropping any behavior found in `server.py` that isn't explicitly listed above
 - Keep commits scoped and reviewable — this is a large migration, prefer many small PRs over one giant rewrite commit
 - Never commit secrets, API keys, or `.env` files
-- Follow N·LATTICE brand system for any new UI, not the current repo's existing visual style
+- Follow the Brand System section above (flat enterprise design system, light UI) for any new UI
 
 ## Common Commands
 

@@ -5,7 +5,7 @@ import { PageHeader } from "../components/AppLayout";
 import RichEmailEditor, { sanitizeEmailHtml } from "../components/RichEmailEditor";
 import { toast } from "sonner";
 import {
-  Sparkles, FileText, FileDown, Send, Save, Loader2, Check, AlertTriangle,
+  FileSignature, FileText, FileDown, Send, Save, Loader2, Check, AlertTriangle,
   Plus, Trash2,
 } from "lucide-react";
 
@@ -169,9 +169,9 @@ export default function ProposalBuilder() {
         <div className="animate-fade-in px-6 sm:px-8 max-w-xl">
           <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-4">
             <div>
-              <label className="ui-label block mb-1">Lead / deal</label>
+              <label className="form-label block mb-1">Lead / deal</label>
               <select value={leadId} onChange={(e) => setLeadId(e.target.value)} data-testid="proposal-lead-select"
-                className="w-full border border-line px-3 py-2 rounded-full">
+                className="w-full border border-line px-3 py-2 rounded-full text-input">
                 <option value="">Select a lead…</option>
                 {leads.map((l) => (
                   <option key={l.id} value={l.id}>{l.first_name} {l.last_name} — {l.company || l.email}</option>
@@ -179,17 +179,17 @@ export default function ProposalBuilder() {
               </select>
             </div>
             <div>
-              <label className="ui-label block mb-1">Proposal type</label>
+              <label className="form-label block mb-1">Proposal type</label>
               <select value={templateId} onChange={(e) => setTemplateId(e.target.value)} data-testid="proposal-template-select"
-                className="w-full border border-line px-3 py-2 rounded-full">
+                className="w-full border border-line px-3 py-2 rounded-full text-input">
                 {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
-              {template?.blurb && <p className="text-xs text-neutral-400 mt-1">{template.blurb}</p>}
+              {template?.blurb && <p className="text-caption text-ink-muted mt-1">{template.blurb}</p>}
             </div>
 
             <button onClick={generate} disabled={busy} data-testid="generate-proposal-btn"
               className="btn-primary w-full justify-center">
-              {chainStep ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              {chainStep ? <Loader2 size={14} className="animate-spin" /> : <FileSignature size={14} />}
               {chainStep ? "Drafting…" : "Generate proposal"}
             </button>
 
@@ -200,8 +200,8 @@ export default function ProposalBuilder() {
                   const done = i < idx, active = s.key === chainStep;
                   return (
                     <div key={s.key} className="flex items-center gap-1.5 flex-1">
-                      <span className={`text-[11px] font-mono uppercase tracking-wider flex items-center gap-1 ${
-                        active ? "text-ink font-semibold" : done ? "text-neutral-400" : "text-neutral-300"}`}>
+                      <span className={`text-tiny font-mono uppercase tracking-wider flex items-center gap-1 ${
+                        active ? "text-ink font-semibold" : done ? "text-ink-muted" : "text-ink-disabled"}`}>
                         {done ? <Check size={10} /> : active ? <Loader2 size={10} className="animate-spin" /> : <span className="w-2.5" />}
                         {s.label}
                       </span>
@@ -217,7 +217,7 @@ export default function ProposalBuilder() {
     );
   }
 
-  if (!proposal) return <div className="p-10 text-neutral-400 text-sm">Loading…</div>;
+  if (!proposal) return <div className="p-10 text-ink-muted text-body">Loading…</div>;
 
   return (
     <div>
@@ -245,12 +245,12 @@ export default function ProposalBuilder() {
 
       <div className="animate-fade-in px-6 sm:px-8 max-w-3xl mx-auto space-y-5">
         {!!(proposal.missing || []).length && (
-          <div className="shadow-card rounded-2xl p-4 border-amber-200 bg-amber-50" data-testid="missing-banner">
-            <div className="flex items-start gap-2 text-sm text-amber-900">
+          <div className="shadow-card rounded-2xl p-4 border-warning/30 bg-warning/10" data-testid="missing-banner">
+            <div className="flex items-start gap-2 text-body text-warning">
               <AlertTriangle size={15} className="mt-0.5 shrink-0" />
               <div>
                 <div className="font-medium">Some inputs are missing.</div>
-                <div className="text-xs mt-0.5">
+                <div className="text-caption mt-0.5">
                   The draft left these blank rather than inventing them — fill them in:
                   {" "}{proposal.missing.join("; ")}.
                 </div>
@@ -270,7 +270,7 @@ export default function ProposalBuilder() {
               />
             ) : (
               <RichEmailEditor value={s.html || ""} onChange={(html) => setSectionHtml(s.key, html)}
-                placeholder="Write this section, or leave the AI's draft as-is." />
+                placeholder="Write this section, or leave the drafted copy as-is." />
             )}
           </div>
         ))}
@@ -287,21 +287,21 @@ function PricingEditor({ pricing, catalog, onAdd, onRemove, onQty, onDiscount })
 
   return (
     <div data-testid="pricing-editor">
-      <p className="text-xs text-neutral-400 mb-3">
-        Prices come from your catalog and totals are computed server-side — the AI never sets a number.
+      <p className="text-caption text-ink-muted mb-3">
+        Prices come from your catalog and totals are computed server-side — never set by hand.
       </p>
 
       {(pricing.line_items || []).length === 0 ? (
-        <p className="text-sm text-neutral-400 py-3">No line items yet — add from your catalog below.</p>
+        <p className="text-body text-ink-muted py-3">No line items yet — add from your catalog below.</p>
       ) : (
         <div className="overflow-x-auto">
-        <table className="w-full text-sm" data-testid="pricing-table">
+        <table className="w-full text-table" data-testid="pricing-table">
           <thead>
-            <tr className="text-left text-neutral-400 border-b border-line">
-              <th className="py-1.5 font-medium">Item</th>
-              <th className="py-1.5 font-medium w-16 text-center">Qty</th>
-              <th className="py-1.5 font-medium w-28 text-right">Unit</th>
-              <th className="py-1.5 font-medium w-28 text-right">Amount</th>
+            <tr className="border-b border-line">
+              <th className="table-header py-1.5">Item</th>
+              <th className="table-header py-1.5 w-16 text-center">Qty</th>
+              <th className="table-header py-1.5 w-28 text-right">Unit</th>
+              <th className="table-header py-1.5 w-28 text-right">Amount</th>
               <th className="w-8"></th>
             </tr>
           </thead>
@@ -309,35 +309,35 @@ function PricingEditor({ pricing, catalog, onAdd, onRemove, onQty, onDiscount })
             {pricing.line_items.map((li, i) => (
               <tr key={i} className="border-b border-line/60">
                 <td className="py-1.5">
-                  {li.name}{li.unit ? <span className="text-neutral-400"> /{li.unit}</span> : ""}
+                  {li.name}{li.unit ? <span className="text-ink-muted"> /{li.unit}</span> : ""}
                 </td>
                 <td className="py-1.5 text-center">
                   <input type="number" min={1} value={li.qty}
                     onChange={(e) => onQty(i, parseInt(e.target.value, 10) || 1)}
                     data-testid={`qty-${i}`}
-                    className="w-14 border border-line rounded px-1 py-0.5 text-center" />
+                    className="w-14 border border-line rounded px-1 py-0.5 text-center text-input" />
                 </td>
-                <td className="py-1.5 text-right tabular-nums text-neutral-400">{money(li.unit_price, cur)}</td>
+                <td className="py-1.5 text-right tabular-nums text-ink-muted">{money(li.unit_price, cur)}</td>
                 <td className="py-1.5 text-right tabular-nums font-medium">{money(li.line_total, cur)}</td>
                 <td className="py-1.5 text-right">
                   <button onClick={() => onRemove(i)} data-testid={`remove-line-${i}`}
-                    className="text-neutral-400 hover:text-sanguine"><Trash2 size={13} /></button>
+                    className="text-ink-muted hover:text-danger"><Trash2 size={13} /></button>
                 </td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={3} className="py-1.5 text-right text-neutral-400">Subtotal</td>
+              <td colSpan={3} className="py-1.5 text-right text-ink-muted">Subtotal</td>
               <td className="py-1.5 text-right tabular-nums">{money(pricing.subtotal, cur)}</td><td></td>
             </tr>
             <tr>
-              <td colSpan={3} className="py-1 text-right text-neutral-400">
+              <td colSpan={3} className="py-1 text-right text-ink-muted">
                 Discount
                 <input type="number" min={0} max={100} value={pricing.discount_pct || 0}
                   onChange={(e) => onDiscount(Math.max(0, Math.min(100, Number(e.target.value))))}
                   data-testid="discount-pct"
-                  className="w-14 border border-line rounded px-1 py-0.5 text-center mx-1" />%
+                  className="w-14 border border-line rounded px-1 py-0.5 text-center mx-1 text-input" />%
               </td>
               <td className="py-1 text-right tabular-nums">{pricing.discount ? `-${money(pricing.discount, cur)}` : money(0, cur)}</td><td></td>
             </tr>
@@ -353,7 +353,7 @@ function PricingEditor({ pricing, catalog, onAdd, onRemove, onQty, onDiscount })
       {unused.length > 0 && (
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-3">
           <select value={pick} onChange={(e) => setPick(e.target.value)} data-testid="add-line-select"
-            className="border border-line rounded-full px-3 py-1.5 text-xs flex-1">
+            className="border border-line rounded-full px-3 py-1.5 text-caption flex-1">
             <option value="">Add a line from your catalog…</option>
             {unused.map((c) => <option key={c.id} value={c.id}>{c.name} — {money(c.unit_price, c.currency)}{c.unit ? `/${c.unit}` : ""}</option>)}
           </select>
@@ -362,7 +362,7 @@ function PricingEditor({ pricing, catalog, onAdd, onRemove, onQty, onDiscount })
         </div>
       )}
 
-      {pricing.notes && <p className="text-xs text-neutral-400 mt-3 italic">{pricing.notes}</p>}
+      {pricing.notes && <p className="text-caption text-ink-muted mt-3 italic">{pricing.notes}</p>}
     </div>
   );
 }

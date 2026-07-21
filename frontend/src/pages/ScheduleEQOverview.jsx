@@ -24,7 +24,7 @@ export default function ScheduleEQOverview() {
     <div>
       <PageHeader
         title="Schedule EQ"
-        subtitle="Calendly-style booking — real availability, AI qualifying, no-show risk, meeting prep."
+        subtitle="Calendly-style booking — real availability, lead qualifying, no-show risk, meeting prep."
       />
       <div className="animate-fade-in px-6 sm:px-8 space-y-6">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -36,24 +36,24 @@ export default function ScheduleEQOverview() {
 
         {!loading && eventTypes.length === 0 && (
           <div className="shadow-card rounded-2xl p-10 text-center">
-            <div className="font-display text-xl sm:text-2xl font-semibold">Create your first event type</div>
-            <p className="text-sm text-neutral-400 mt-2">Set your availability, then publish a public booking link.</p>
+            <div className="text-section font-display font-semibold">Create your first event type</div>
+            <p className="text-body text-ink-muted mt-2">Set your availability, then publish a public booking link.</p>
             <Link to="/app/schedule-eq/event-types" className="btn-primary mt-6 inline-flex">Create event type</Link>
           </div>
         )}
 
         {!loading && upcoming.length > 0 && (
           <div className="shadow-card rounded-2xl border border-line bg-white overflow-x-auto">
-            <div className="p-4 border-b border-line font-display font-semibold text-sm">Upcoming meetings</div>
-            <table className="w-full text-sm">
+            <div className="p-4 border-b border-line text-card-title font-display font-semibold">Upcoming meetings</div>
+            <table className="w-full text-table">
               <tbody>
                 {upcoming.slice(0, 8).map((b) => (
                   <tr key={b.id} className="border-b border-line last:border-0">
                     <td className="p-3">{b.guest_name}</td>
-                    <td className="p-3 text-neutral-500">{b.event_type?.name}</td>
-                    <td className="p-3 text-xs text-neutral-400">{(b.start_at || "").slice(0, 16).replace("T", " ")}</td>
-                    <td className="p-3 text-right text-xs">
-                      {b.no_show_risk_score >= 50 && <span className="text-amber-700">⚠ risk {b.no_show_risk_score}%</span>}
+                    <td className="p-3 text-ink-tertiary">{b.event_type?.name}</td>
+                    <td className="p-3 text-tiny text-ink-muted">{(b.start_at || "").slice(0, 16).replace("T", " ")}</td>
+                    <td className="p-3 text-right text-tiny">
+                      {b.no_show_risk_score >= 50 && <span className="text-warning">⚠ risk {b.no_show_risk_score}%</span>}
                     </td>
                   </tr>
                 ))}
@@ -69,11 +69,11 @@ export default function ScheduleEQOverview() {
 function StatCard({ icon: Icon, label, value }) {
   return (
     <div className="shadow-card rounded-2xl p-4">
-      <div className="flex items-center gap-2 text-neutral-400">
+      <div className="flex items-center gap-2 text-ink-muted">
         <Icon size={14} />
         <span className="ui-label">{label}</span>
       </div>
-      <div className="font-display text-xl sm:text-2xl font-bold mt-1">{value}</div>
+      <div className="text-page-title font-display font-semibold mt-1">{value}</div>
     </div>
   );
 }

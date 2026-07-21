@@ -5,10 +5,10 @@ import { toast } from "sonner";
 import { X, UserX, Info } from "lucide-react";
 
 const STATUS_COLOR = {
-  confirmed: "text-green-700 border-green-700",
-  cancelled: "text-neutral-400 border-neutral-300",
-  no_show: "text-red-700 border-red-500",
-  completed: "text-neutral-400 border-line",
+  confirmed: "text-success border-success",
+  cancelled: "text-ink-muted border-neutral-300",
+  no_show: "text-danger border-danger",
+  completed: "text-ink-muted border-line",
 };
 
 export default function Bookings() {
@@ -34,18 +34,18 @@ export default function Bookings() {
     <div>
       <PageHeader title="Bookings" subtitle="Every meeting booked through Schedule EQ." />
       <div className="animate-fade-in px-6 sm:px-8">
-        {loading ? <div className="text-neutral-400 text-sm">Loading…</div> : items.length === 0 ? (
-          <div className="shadow-card rounded-2xl p-10 text-center text-sm text-neutral-400">No bookings yet.</div>
+        {loading ? <div className="text-body text-ink-muted">Loading…</div> : items.length === 0 ? (
+          <div className="shadow-card rounded-2xl p-10 text-center text-body text-ink-muted">No bookings yet.</div>
         ) : (
           <div className="shadow-card rounded-2xl border border-line bg-white overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-table">
               <thead>
-                <tr className="border-b border-line text-neutral-400">
-                  <th className="ui-label text-left p-3">Guest</th>
-                  <th className="ui-label text-left p-3">Event type</th>
-                  <th className="ui-label text-left p-3">When</th>
-                  <th className="ui-label text-left p-3">Status</th>
-                  <th className="ui-label text-right p-3">No-show risk</th>
+                <tr className="border-b border-line">
+                  <th className="table-header text-left p-3">Guest</th>
+                  <th className="table-header text-left p-3">Event type</th>
+                  <th className="table-header text-left p-3">When</th>
+                  <th className="table-header text-left p-3">Status</th>
+                  <th className="table-header text-right p-3">No-show risk</th>
                 </tr>
               </thead>
               <tbody>
@@ -53,10 +53,10 @@ export default function Bookings() {
                   <tr key={b.id} onClick={() => setDetail(b)} data-testid={`booking-row-${b.id}`}
                     className="border-b border-line hover:bg-surfacehover cursor-pointer">
                     <td className="p-3 font-medium">{b.guest_name}</td>
-                    <td className="p-3 text-neutral-500">{b.event_type?.name}</td>
-                    <td className="p-3 text-xs text-neutral-400">{(b.start_at || "").slice(0, 16).replace("T", " ")}</td>
+                    <td className="p-3 text-ink-tertiary">{b.event_type?.name}</td>
+                    <td className="p-3 text-tiny text-ink-muted">{(b.start_at || "").slice(0, 16).replace("T", " ")}</td>
                     <td className="p-3"><span className={`ui-label inline-block px-2 py-0.5 border ${STATUS_COLOR[b.status] || STATUS_COLOR.confirmed}`}>{b.status}</span></td>
-                    <td className="p-3 text-right font-mono text-xs">
+                    <td className="p-3 text-right font-mono text-tiny">
                       {b.no_show_risk_score != null ? `${b.no_show_risk_score}%` : "—"}
                     </td>
                   </tr>
@@ -72,23 +72,23 @@ export default function Bookings() {
           <div className="bg-white border border-line p-4 sm:p-6 rounded-2xl w-full max-w-md space-y-3">
             <div className="flex items-start justify-between">
               <div>
-                <div className="font-display font-bold text-xl">{detail.guest_name}</div>
-                <div className="text-xs text-neutral-400 font-mono">{detail.guest_email}</div>
+                <div className="text-section font-display font-semibold">{detail.guest_name}</div>
+                <div className="text-tiny text-ink-muted font-mono">{detail.guest_email}</div>
               </div>
-              <button onClick={() => setDetail(null)} className="text-neutral-400 hover:text-ink"><X size={18} /></button>
+              <button onClick={() => setDetail(null)} className="text-ink-muted hover:text-ink"><X size={18} /></button>
             </div>
-            <div className="text-sm text-neutral-500">{detail.event_type?.name} · {(detail.start_at || "").slice(0, 16).replace("T", " ")}</div>
-            {detail.meet_link && <a href={detail.meet_link} target="_blank" rel="noreferrer" className="text-sm text-sanguine hover:underline block">Join video call</a>}
+            <div className="text-body text-ink-tertiary">{detail.event_type?.name} · {(detail.start_at || "").slice(0, 16).replace("T", " ")}</div>
+            {detail.meet_link && <a href={detail.meet_link} target="_blank" rel="noreferrer" className="text-body text-ink hover:underline block">Join video call</a>}
             {detail.prep_brief && (
-              <div className="bg-surfacehover p-3 rounded-sm text-sm flex gap-2">
-                <Info size={14} className="shrink-0 mt-0.5 text-neutral-500" />
+              <div className="bg-surfacehover p-3 rounded-sm text-body flex gap-2">
+                <Info size={14} className="shrink-0 mt-0.5 text-ink-muted" />
                 <span>{detail.prep_brief}</span>
               </div>
             )}
             {detail.status === "confirmed" && (
               <div className="flex justify-end gap-2 pt-2">
                 <button onClick={() => markNoShow(detail.id)} data-testid="mark-no-show-btn" className="btn-secondary text-xs"><UserX size={12} /> Mark no-show</button>
-                <button onClick={() => cancel(detail.id)} data-testid="cancel-booking-btn" className="btn-secondary text-xs text-red-600">Cancel</button>
+                <button onClick={() => cancel(detail.id)} data-testid="cancel-booking-btn" className="btn-secondary text-xs text-danger">Cancel</button>
               </div>
             )}
           </div>

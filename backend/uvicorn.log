@@ -1,0 +1,7 @@
+INFO:     127.0.0.1:51072 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60224 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63195 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53716 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53716 - "POST /api/lead-intelligence/lists HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:54039 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54039 - "POST /api/lead-intelligence/lists HTTP/1.1" 500 Internal Server Error

@@ -85,7 +85,7 @@ export default function ScheduleSettings() {
             <span data-testid="email-status-chip"
               className={`shrink-0 text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded-full border ${
                 emailStatus?.mocked === false
-                  ? "border-green-300 bg-green-50 text-green-700"
+                  ? "border-success/30 bg-success/10 text-success"
                   : "border-line bg-bone text-neutral-400"
               }`}>
               {emailStatus?.mocked === false ? "Live" : "Test mode"}

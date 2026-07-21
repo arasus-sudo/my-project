@@ -32,11 +32,11 @@ export default function Signup() {
       <div className="hidden md:flex md:w-1/2 border-r border-line p-16 flex-col justify-between bg-gradient-to-b from-white to-ash">
         <Link to="/"><InnoiraLogo size="sm" /></Link>
         <div>
-          <div className="ui-label text-sanguine mb-5">You're 60 seconds away</div>
-          <p className="font-display text-3xl tracking-tight leading-tight max-w-md">
+          <div className="ui-label text-ink mb-5">You're 60 seconds away</div>
+          <p className="font-display text-app-title leading-tight max-w-md">
             Six AI agents. One pipeline. Zero copy-pasting between tools.
           </p>
-          <ul className="mt-8 space-y-2 text-sm text-neutral-500">
+          <ul className="mt-8 space-y-2 text-body text-ink-muted">
             <li>→ Outbound email, AI calling, scheduling, proposals, content and social — under one login</li>
             <li>→ A shared CRM every agent reads from and writes back to</li>
             <li>→ A qualified call can auto-draft the proposal and queue the booking link</li>
@@ -48,33 +48,33 @@ export default function Signup() {
         <div className="w-full max-w-sm space-y-6">
           <div className="md:hidden mb-2 text-center"><Link to="/"><InnoiraLogo size="sm" /></Link></div>
           <div>
-            <h1 className="text-3xl font-display font-bold tracking-tight">Create your workspace</h1>
-            <p className="text-sm text-neutral-400 mt-1">One account, every agent in the suite.</p>
+            <h1 className="text-page-title font-display">Create your workspace</h1>
+            <p className="text-caption text-ink-muted mt-1">One account, every agent in the suite.</p>
           </div>
           <GoogleSignInButton text="signup_with" />
           <form onSubmit={submit} className="space-y-5">
             <label className="block">
-              <span className="ui-label">Your name</span>
+              <span className="form-label">Your name</span>
               <input data-testid="signup-name" required value={form.name} onChange={set("name")} className="input-premium mt-1 w-full px-3 py-2" />
             </label>
             <label className="block">
-              <span className="ui-label">Workspace name</span>
+              <span className="form-label">Workspace name</span>
               <input data-testid="signup-workspace" required value={form.workspace_name} onChange={set("workspace_name")} className="input-premium mt-1 w-full px-3 py-2" placeholder="e.g. Acme Sales" />
             </label>
             <label className="block">
-              <span className="ui-label">Email</span>
+              <span className="form-label">Email</span>
               <input data-testid="signup-email" type="email" required value={form.email} onChange={set("email")} className="input-premium mt-1 w-full px-3 py-2" />
             </label>
             <label className="block">
-              <span className="ui-label">Password</span>
+              <span className="form-label">Password</span>
               <input data-testid="signup-password" type="password" required minLength={6} value={form.password} onChange={set("password")} className="input-premium mt-1 w-full px-3 py-2" />
             </label>
             <button data-testid="signup-submit" disabled={busy} type="submit" className="btn-primary w-full disabled:opacity-60">
               {busy ? "Creating…" : "Create workspace"}
             </button>
           </form>
-          <p className="text-sm text-neutral-400">
-            Already have an account? <Link to="/login" className="text-sanguine hover:underline">Sign in</Link>
+          <p className="text-caption text-ink-muted">
+            Already have an account? <Link to="/login" className="text-ink hover:underline">Sign in</Link>
           </p>
         </div>
       </div>

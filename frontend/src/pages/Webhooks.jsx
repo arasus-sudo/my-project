@@ -138,7 +138,7 @@ export default function Webhooks() {
                     {isOpen ? "Hide" : "Details"} <ChevronRight size={12} className={`transition-transform ${isOpen ? "rotate-90" : ""}`} />
                   </button>
                   <button onClick={() => del(h.id)} data-testid={`webhook-delete-${h.id}`}
-                    className="btn-ghost text-xs text-red-600">
+                    className="btn-ghost text-xs text-danger">
                     <Trash2 size={12} />
                   </button>
                 </div>
@@ -162,7 +162,7 @@ export default function Webhooks() {
                       <div className="space-y-1.5">
                         {evs.map((e) => (
                           <div key={e.id} className="bg-white border border-line rounded-lg p-2 flex items-center gap-2">
-                            {e.status === "ok" ? <CheckCircle2 size={12} className="text-emerald-600 flex-shrink-0" /> : <XCircle size={12} className="text-red-600 flex-shrink-0" />}
+                            {e.status === "ok" ? <CheckCircle2 size={12} className="text-success flex-shrink-0" /> : <XCircle size={12} className="text-danger flex-shrink-0" />}
                             <div className="flex-1 min-w-0 truncate">{e.topic || e.reason || "—"}</div>
                             <div className="text-neutral-400 font-mono flex items-center gap-1"><Clock size={10} /> {new Date(e.at).toLocaleTimeString()}</div>
                           </div>

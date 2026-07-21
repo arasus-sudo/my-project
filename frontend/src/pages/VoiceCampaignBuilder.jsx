@@ -5,9 +5,22 @@ import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import { Save, Play, Pause } from "lucide-react";
 
+const TIMEZONES = [
+  "UTC", "US/Eastern", "US/Central", "US/Mountain", "US/Pacific",
+  "US/Alaska", "US/Hawaii", "Canada/Atlantic", "Canada/Newfoundland",
+  "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Madrid",
+  "Europe/Rome", "Europe/Amsterdam", "Europe/Stockholm", "Europe/Moscow",
+  "Asia/Dubai", "Asia/Kolkata", "Asia/Bangkok", "Asia/Singapore",
+  "Asia/Hong_Kong", "Asia/Shanghai", "Asia/Tokyo", "Asia/Seoul",
+  "Australia/Sydney", "Australia/Melbourne", "Australia/Perth",
+  "Pacific/Auckland", "Pacific/Fiji", "America/Sao_Paulo",
+  "America/Mexico_City", "America/Argentina/Buenos_Aires",
+  "Africa/Cairo", "Africa/Lagos", "Africa/Johannesburg",
+];
+
 const emptyCampaign = () => ({
   name: "Untitled voice campaign", goal: "Qualify leads",
-  agent_id: "", agent_id_b: null, ab_split: 0, lead_ids: [],
+  agent_id: "", lead_ids: [],
   send_window_start: "09:00", send_window_end: "17:00", timezone: "UTC",
   max_concurrent_calls: 5,
 });
@@ -64,7 +77,14 @@ export default function VoiceCampaignBuilder() {
       const { data } = await api.post(`/voice-eq/campaigns/${id}/launch`);
       setStatus("active");
       toast.success(`Launched — ${data.calls_placed} call(s) placed${data.skipped ? `, ${data.skipped} skipped (no phone/DNC)` : ""}`);
-    } catch (err) { if (!isCreditError(err)) toast.error(err?.response?.data?.detail || "Launch failed"); }
+    } catch (err) {
+      if (!isCreditError(err)) {
+        const detail = err?.response?.data?.detail;
+        const status = err?.response?.status;
+        console.error("Launch failed:", { status, detail, data: err?.response?.data });
+        toast.error(detail ? (typeof detail === "string" ? detail : JSON.stringify(detail)) : `Launch failed (${status || "network"})`);
+      }
+    }
     finally { setBusy(false); }
   };
   const pause = async () => {
@@ -82,15 +102,17 @@ export default function VoiceCampaignBuilder() {
         subtitle="Dial a lead list with a voice agent, respecting call windows and timezone."
         right={
           <div className="flex gap-2">
-            <button onClick={save} disabled={busy} data-testid="save-voice-campaign-btn" className="btn-secondary">
-              <Save size={14} /> Save
-            </button>
+            {status !== "active" && (
+              <button onClick={save} disabled={busy} className="btn-secondary">
+                <Save size={14} /> Save
+              </button>
+            )}
             {status === "active" ? (
-              <button onClick={pause} disabled={busy} data-testid="pause-voice-campaign-btn" className="btn-primary">
+              <button onClick={pause} disabled={busy} className="btn-primary">
                 <Pause size={14} /> Pause
               </button>
             ) : (
-              <button onClick={launch} disabled={busy || id === "new"} data-testid="launch-voice-campaign-btn" className="btn-primary disabled:opacity-50">
+              <button onClick={launch} disabled={busy || id === "new"} className="btn-primary disabled:opacity-50">
                 <Play size={14} /> Launch
               </button>
             )}
@@ -99,74 +121,61 @@ export default function VoiceCampaignBuilder() {
       />
       <div className="animate-fade-in px-6 sm:px-8 max-w-4xl space-y-6">
         <div className="shadow-card rounded-2xl p-6 sm:p-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="ui-label block mb-1">Name</label>
+          <div className="sm:col-span-2">
+            <label className="form-label block mb-1">Campaign name</label>
             <input value={campaign.name} onChange={(e) => setCampaign({ ...campaign, name: e.target.value })}
-              data-testid="voice-campaign-name" className="w-full border border-line px-3 py-2 rounded-sm" />
+              className="w-full border border-line px-3 py-2 rounded-sm" />
           </div>
           <div>
-            <label className="ui-label block mb-1">Voice agent</label>
+            <label className="form-label block mb-1">Voice agent</label>
             <select value={campaign.agent_id} onChange={(e) => setCampaign({ ...campaign, agent_id: e.target.value })}
-              data-testid="voice-campaign-agent" className="w-full border border-line px-3 py-2 rounded-sm">
+              className="w-full border border-line px-3 py-2 rounded-sm">
               <option value="">Select an agent…</option>
-              {agents.map((a) => <option key={a.id} value={a.id}>{a.name}{a.status !== "synced" ? " (unsynced)" : ""}</option>)}
+              {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="ui-label block mb-1">Call window start</label>
-            <input type="time" value={campaign.send_window_start} onChange={(e) => setCampaign({ ...campaign, send_window_start: e.target.value })}
-              data-testid="voice-campaign-window-start" className="w-full border border-line px-3 py-2 rounded-sm" />
-          </div>
-          <div>
-            <label className="ui-label block mb-1">Call window end</label>
-            <input type="time" value={campaign.send_window_end} onChange={(e) => setCampaign({ ...campaign, send_window_end: e.target.value })}
-              data-testid="voice-campaign-window-end" className="w-full border border-line px-3 py-2 rounded-sm" />
-          </div>
-          <div>
-            <label className="ui-label block mb-1">Timezone</label>
-            <input value={campaign.timezone} onChange={(e) => setCampaign({ ...campaign, timezone: e.target.value })}
-              data-testid="voice-campaign-timezone" className="w-full border border-line px-3 py-2 rounded-sm" />
-          </div>
-          <div>
-            <label className="ui-label block mb-1">Max concurrent calls</label>
+            <label className="form-label block mb-1">Max concurrent calls</label>
             <input type="number" min={1} value={campaign.max_concurrent_calls}
               onChange={(e) => setCampaign({ ...campaign, max_concurrent_calls: Number(e.target.value) || 1 })}
-              data-testid="voice-campaign-concurrency" className="w-full border border-line px-3 py-2 rounded-sm" />
+              className="w-full border border-line px-3 py-2 rounded-sm" />
           </div>
           <div>
-            <label className="ui-label block mb-1">A/B test agent (optional)</label>
-            <select value={campaign.agent_id_b || ""} onChange={(e) => setCampaign({ ...campaign, agent_id_b: e.target.value || null })}
-              data-testid="voice-campaign-agent-b" className="w-full border border-line px-3 py-2 rounded-sm">
-              <option value="">None</option>
-              {agents.filter((a) => a.id !== campaign.agent_id).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            <label className="form-label block mb-1">Call window start</label>
+            <input type="time" value={campaign.send_window_start} onChange={(e) => setCampaign({ ...campaign, send_window_start: e.target.value })}
+              className="w-full border border-line px-3 py-2 rounded-sm" />
+          </div>
+          <div>
+            <label className="form-label block mb-1">Call window end</label>
+            <input type="time" value={campaign.send_window_end} onChange={(e) => setCampaign({ ...campaign, send_window_end: e.target.value })}
+              className="w-full border border-line px-3 py-2 rounded-sm" />
+          </div>
+          <div>
+            <label className="form-label block mb-1">Timezone</label>
+            <select value={campaign.timezone} onChange={(e) => setCampaign({ ...campaign, timezone: e.target.value })}
+              className="w-full border border-line px-3 py-2 rounded-sm">
+              {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
             </select>
-          </div>
-          <div>
-            <label className="ui-label block mb-1">% of leads to variant B</label>
-            <input type="number" min={0} max={100} value={campaign.ab_split} disabled={!campaign.agent_id_b}
-              onChange={(e) => setCampaign({ ...campaign, ab_split: Number(e.target.value) || 0 })}
-              data-testid="voice-campaign-ab-split" className="w-full border border-line px-3 py-2 rounded-sm disabled:opacity-50" />
           </div>
         </div>
 
         <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-display font-semibold">Leads to call</div>
-              <p className="text-xs text-neutral-400">{campaign.lead_ids.length} selected · only leads with a phone number can be called.</p>
+              <div className="text-card-title font-display font-semibold">Leads to call</div>
+              <p className="text-caption text-ink-muted">{campaign.lead_ids.length} selected · only leads with a phone number can be called.</p>
             </div>
-            <button onClick={selectAllCallable} data-testid="select-all-callable" className="btn-ghost text-xs">Select all callable</button>
+            <button onClick={selectAllCallable} className="btn-ghost text-xs">Select all callable</button>
           </div>
           <div className="border border-line max-h-80 overflow-y-auto">
             {callableLeads.length === 0 ? (
-              <div className="p-4 text-sm text-neutral-400">No leads with a phone number yet — add one from the Leads page.</div>
+              <div className="p-4 text-body text-ink-muted">No leads with a phone number yet — add one from the Leads page.</div>
             ) : callableLeads.map((l) => (
               <label key={l.id} className="flex items-center gap-3 px-3 py-2 border-b border-line last:border-0 hover:bg-surfacehover cursor-pointer">
-                <input type="checkbox" checked={campaign.lead_ids.includes(l.id)} onChange={() => toggleLead(l.id)}
-                  data-testid={`voice-campaign-lead-${l.id}`} />
-                <span className="flex-1 text-sm">{l.first_name} {l.last_name}</span>
-                <span className="text-xs font-mono text-neutral-400">{l.phone}</span>
-                {l.dnc && <span className="ui-label text-red-600">DNC</span>}
+                <input type="checkbox" checked={campaign.lead_ids.includes(l.id)} onChange={() => toggleLead(l.id)} />
+                <span className="flex-1 text-body">{l.first_name} {l.last_name}</span>
+                <span className="text-tiny font-mono text-ink-muted">{l.phone}</span>
+                {l.dnc && <span className="ui-label text-danger">DNC</span>}
               </label>
             ))}
           </div>
