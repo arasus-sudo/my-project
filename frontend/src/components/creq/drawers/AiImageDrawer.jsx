@@ -32,9 +32,8 @@ export default function AiImageDrawer({ onClose, onAddAsElement, onAddAsBackgrou
     setPreview(null);
     try {
       const { data } = await api.post("/carousel/ai-image", { prompt: prompt.trim(), provider, size, aspect });
-      if (!data?.image_base64) throw new Error("no image");
-      const dataUrl = `data:${data.mime_type || "image/png"};base64,${data.image_base64}`;
-      setPreview({ dataUrl, provider: data.provider });
+      if (!data?.image_url) throw new Error("no image");
+      setPreview({ imageUrl: data.image_url, imageId: data.image_id, provider: data.provider });
       toast.success(`Generated with ${data.provider}`);
     } catch (err) {
       if (!isCreditError(err)) {
@@ -105,17 +104,17 @@ export default function AiImageDrawer({ onClose, onAddAsElement, onAddAsBackgrou
             <div className="pt-4 border-t border-line space-y-3">
               <div className="ui-label">Preview · {preview.provider}</div>
               <div className="rounded-lg overflow-hidden border border-line bg-neutral-100" style={{ aspectRatio: aspect === "square" ? "1 / 1" : aspect === "story" ? "9 / 16" : "4 / 5" }}>
-                <img src={preview.dataUrl} alt="preview" className="w-full h-full object-cover" data-testid="ai-image-preview" />
+                <img src={preview.imageUrl} alt="preview" className="w-full h-full object-cover" data-testid="ai-image-preview" />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => onAddAsElement(preview.dataUrl)} data-testid="ai-image-add-element" className="btn-secondary text-xs justify-center">Add as element</button>
-                <button onClick={() => onAddAsBackground(preview.dataUrl)} data-testid="ai-image-add-background" className="btn-primary text-xs justify-center">Set as background</button>
+                <button onClick={() => onAddAsElement(preview.imageUrl)} data-testid="ai-image-add-element" className="btn-secondary text-xs justify-center">Add as element</button>
+                <button onClick={() => onAddAsBackground(preview.imageUrl)} data-testid="ai-image-add-background" className="btn-primary text-xs justify-center">Set as background</button>
               </div>
             </div>
           )}
 
           <div className="text-[11px] text-neutral-500 pt-3 border-t border-line">
-            Images are generated on-demand and embedded directly in your slide — nothing is uploaded anywhere.
+            Images are saved to the server and referenced by URL — they persist when you reopen the project.
           </div>
         </div>
       </div>

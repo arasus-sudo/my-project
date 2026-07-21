@@ -2253,14 +2253,41 @@ async def generate_ai_image(user: Dict[str, Any], prompt: str, provider: str = "
 
 @api.post("/carousel/ai-image")
 async def carousel_ai_image(body: AiImageIn, user=Depends(current_user)):
-    """Generate an AI image and return it as base64. The frontend embeds this as a
-    `data:image/png;base64,...` URL directly on the canvas — no external storage needed."""
+    """Generate an AI image, save to MongoDB as binary, return a reference URL.
+    The frontend stores the image_url in the element instead of an inline base64
+    data URL — this keeps the carousel document small enough to stay under MongoDB's
+    16 MB limit even with dozens of images."""
     result = await generate_ai_image(user, body.prompt, body.provider, body.size, body.aspect)
+    image_id = new_id()
+    await db.carousel_images.insert_one({
+        "id": image_id,
+        "workspace_id": user["workspace_id"],
+        "data": result["image_bytes"],
+        "mime_type": result["mime_type"],
+        "created_at": now_iso(),
+    })
+    base = (PUBLIC_BASE_URL or FRONTEND_URL).rstrip("/")
     return {
-        "image_base64": base64.b64encode(result["image_bytes"]).decode("utf-8"),
+        "image_id": image_id,
+        "image_url": f"{base}/api/carousel/image/{image_id}",
         "mime_type": result["mime_type"],
         "provider": result["provider"],
     }
+
+
+@api.get("/carousel/image/{image_id}")
+async def carousel_image_get(image_id: str, user=Depends(current_user)):
+    """Serve a saved carousel image by ID."""
+    doc = await db.carousel_images.find_one(
+        {"id": image_id, "workspace_id": user["workspace_id"]},
+    )
+    if not doc:
+        raise HTTPException(404, "image not found")
+    from fastapi.responses import Response
+    return Response(
+        content=doc["data"],
+        media_type=doc.get("mime_type", "image/png"),
+    )
 
 
 # ----------------------------- Webhooks: Airtable / Notion → Carousel -------
@@ -2913,6 +2940,20 @@ async def li_search(body: dict, user=Depends(current_user)):
     result = await lead_manager.search(
         filters, workspace_id=user["workspace_id"], user_id=user.get("id", ""),
     )
+    if result and result.leads:
+        from lead_intelligence.schema import LeadRecord
+        lead_records = []
+        for l in result.leads:
+            if isinstance(l, dict):
+                lead_records.append(LeadRecord(**l))
+            else:
+                lead_records.append(l)
+        await lead_manager.import_leads(
+            lead_records, workspace_id=user["workspace_id"],
+            user_id=user.get("id", ""),
+            merge_strategy="skip",
+            request_id=result.search_id or "",
+        )
     return result.model_dump(mode="json")
 
 
@@ -3052,6 +3093,20 @@ async def li_natural_search(body: dict, user=Depends(current_user)):
     result = await lead_manager.natural_search(
         query, workspace_id=user["workspace_id"], user_id=user.get("id", ""),
     )
+    if result and result.leads:
+        from lead_intelligence.schema import LeadRecord
+        lead_records = []
+        for l in result.leads:
+            if isinstance(l, dict):
+                lead_records.append(LeadRecord(**l))
+            else:
+                lead_records.append(l)
+        await lead_manager.import_leads(
+            lead_records, workspace_id=user["workspace_id"],
+            user_id=user.get("id", ""),
+            merge_strategy="skip",
+            request_id=result.search_id or "",
+        )
     return result.model_dump(mode="json")
 
 
