@@ -3,15 +3,24 @@ import os
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://saas-platform-109.preview.emergentagent.com").rstrip("/")
-EMAIL = "demo@innoira.ai"
-ORIG_PW = "Demo@1234"
+def _read_frontend_env():
+    tests_dir = os.path.dirname(os.path.abspath(__file__))
+    env_path = os.path.join(tests_dir, "..", "..", "frontend", ".env")
+    with open(env_path) as f:
+        for line in f:
+            if line.startswith("REACT_APP_BACKEND_URL="):
+                return line.split("=", 1)[1].strip()
+    raise RuntimeError("REACT_APP_BACKEND_URL not found")
+
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL") or _read_frontend_env().rstrip("/")
+EMAIL = "test@test.com"
+ORIG_PW = "TempPw@98765"
 
 
 @pytest.fixture(scope="module")
 def token():
     r = requests.post(f"{BASE_URL}/api/auth/login", json={"email": EMAIL, "password": ORIG_PW}, timeout=20)
-    assert r.status_code == 200, r.text
+    assert r.status_code == 200, f"login failed: {r.text}"
     return r.json()["token"]
 
 
@@ -29,7 +38,7 @@ def test_change_password_wrong_current(headers):
 
 
 def test_change_password_success_and_restore(headers):
-    new_pw = "TempPw@98765"
+    new_pw = "ChangeMe@123"
     # change
     r = requests.post(f"{BASE_URL}/api/auth/change-password",
                       json={"current_password": ORIG_PW, "new_password": new_pw},
@@ -42,7 +51,7 @@ def test_change_password_success_and_restore(headers):
     assert r2.status_code == 200, r2.text
     new_token = r2.json()["token"]
 
-    # restore
+    # restore back to ORIG_PW
     r3 = requests.post(f"{BASE_URL}/api/auth/change-password",
                       json={"current_password": new_pw, "new_password": ORIG_PW},
                       headers={"Authorization": f"Bearer {new_token}", "Content-Type": "application/json"},

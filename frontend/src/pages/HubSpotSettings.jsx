@@ -49,7 +49,7 @@ export default function HubSpotSettings() {
     } finally { setBusy(false); }
   };
 
-  if (!status) return <div className="p-4 sm:p-10 text-neutral-400 text-sm">Loading HubSpot status…</div>;
+  if (!status) return <div className="p-4 sm:p-10 text-body text-ink-muted">Loading HubSpot status…</div>;
 
   const connected = status.connected;
   const mocked = status.mocked;
@@ -60,8 +60,8 @@ export default function HubSpotSettings() {
         subtitle="Pull HubSpot contacts as leads, and their emails/notes/calls into proposal research." />
 
       <div className="p-6 sm:p-8 space-y-6 max-w-3xl">
-        <div className="card-flat shadow-card p-4 flex items-start gap-2.5 text-xs text-neutral-500">
-          <ShieldCheck size={15} className="text-neutral-400 mt-0.5 shrink-0" />
+        <div className="card-flat shadow-card p-4 flex items-start gap-2.5 text-caption text-ink-tertiary">
+          <ShieldCheck size={15} className="text-ink-muted mt-0.5 shrink-0" />
           <p>
             {mocked
               ? <>No HubSpot app is configured, so this runs in <strong>test mode</strong>: connecting works and returns sample contacts and engagements, but nothing contacts hubapi.com. Add <span className="font-mono">HUBSPOT_CLIENT_ID/SECRET/REDIRECT_URI</span> to go live.</>
@@ -74,8 +74,8 @@ export default function HubSpotSettings() {
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-ink/10 flex items-center justify-center"><Link2 size={16} /></div>
               <div>
-                <div className="font-display font-semibold text-lg">Connect HubSpot</div>
-                <div className="text-xs text-neutral-400">
+                <div className="text-card-title font-display font-semibold">Connect HubSpot</div>
+                <div className="text-caption text-ink-muted">
                   {mocked ? "Test mode — no redirect." : "You'll be sent to HubSpot to authorise read access."}
                 </div>
               </div>
@@ -88,17 +88,17 @@ export default function HubSpotSettings() {
           <>
             <div className="card-flat shadow-card p-4 sm:p-6 space-y-3" data-testid="hubspot-status-card">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
+                <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center">
+                  <div className="w-2.5 h-2.5 rounded-full bg-success" />
                 </div>
                 <div className="flex-1">
-                  <div className="font-display font-semibold text-lg flex items-center gap-2">
+                  <div className="text-card-title font-display font-semibold flex items-center gap-2">
                     Connected
-                    {mocked && <span className="text-[10px] font-mono uppercase tracking-wider border border-line bg-bone text-neutral-400 px-2 py-0.5 rounded-full">test mode</span>}
+                    {mocked && <span className="pill">test mode</span>}
                   </div>
-                  {status.portal_id && <div className="text-xs text-neutral-400 font-mono">Portal: {status.portal_id}</div>}
+                  {status.portal_id && <div className="text-caption text-ink-muted font-mono">Portal: {status.portal_id}</div>}
                 </div>
-                <button onClick={doDisconnect} disabled={busy} data-testid="hubspot-disconnect-btn" className="btn-ghost text-xs text-sanguine ml-auto shrink-0">
+                <button onClick={doDisconnect} disabled={busy} data-testid="hubspot-disconnect-btn" className="btn-ghost text-xs text-ink ml-auto shrink-0">
                   <PowerOff size={12} /> Disconnect
                 </button>
               </div>
@@ -112,8 +112,8 @@ export default function HubSpotSettings() {
               className="text-left p-3 sm:p-4 rounded-2xl border border-line bg-white shadow-card hover:shadow-card-hover transition-colors disabled:opacity-50 w-full flex items-start gap-3">
               <div className="w-9 h-9 rounded-full bg-ink/10 flex items-center justify-center shrink-0"><ArrowDownToLine size={16} /></div>
               <div>
-                <div className="text-sm font-medium">Pull contacts from HubSpot</div>
-                <div className="text-xs text-neutral-400 mt-1">
+                <div className="text-body font-medium">Pull contacts from HubSpot</div>
+                <div className="text-caption text-ink-muted mt-1">
                   Import new HubSpot contacts as leads (deduped by email). Their engagements become available to Proposal EQ.
                 </div>
               </div>
@@ -129,7 +129,7 @@ function Stat({ label, value, small }) {
   return (
     <div>
       <div className="ui-label">{label}</div>
-      <div className={`mt-1 font-display font-bold ${small ? "text-xs font-mono font-normal text-neutral-700" : "text-2xl"}`}>{value}</div>
+      <div className={`mt-1 font-display font-bold ${small ? "text-caption font-mono font-normal text-ink-secondary" : "text-2xl"}`}>{value}</div>
     </div>
   );
 }

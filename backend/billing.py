@@ -95,6 +95,9 @@ CREDIT_COSTS: Dict[str, int] = {
     "booking_qualify": 2,
     "intent_score": 2,
     "social_publish": 2,
+    "social_reply_suggest": 1,  # single small LLM call, same tier as email_ai
+    "site_crawl": 8,     # matches lead_research's tier — multi-page fetch + one LLM-free pass
+    "site_chat_reply": 1,  # single small LLM call, same tier as email_ai
     "email_ai": 1,
     # Sending, tracking and reply-polling are deliberately absent = free. We never
     # charge for delivery, or for reading data you already own.
@@ -114,6 +117,9 @@ ACTION_LABELS = {
     "booking_qualify": "Booking qualification",
     "intent_score": "Intent scored",
     "social_publish": "Social post published",
+    "social_reply_suggest": "AI reply suggested",
+    "site_crawl": "Website crawled",
+    "site_chat_reply": "Site chat reply",
     "email_ai": "AI email / EQ score",
 }
 
@@ -128,6 +134,7 @@ ACTION_AGENT = {
     "intent_score": "pitch",
     "social_draft": "social",
     "social_publish": "social",
+    "social_reply_suggest": "social",
     "meeting_prep_brief": "schedule",
     "booking_qualify": "schedule",
     "next_best_action": "voice",

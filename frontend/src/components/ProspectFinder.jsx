@@ -3,16 +3,14 @@ import { api, isCreditError } from "../lib/api";
 import { toast } from "sonner";
 import { Loader2, Sparkles, X, Plus } from "lucide-react";
 
-/** Prospect Finder drawer — Prospeo + Icypeas + LLM icebreaker */
+/** Prospect Finder drawer — lead providers + LLM icebreaker */
 export default function ProspectFinder({ open, onClose, onDone }) {
   const [icps, setIcps] = useState([]);
   const [icpModalOpen, setIcpModalOpen] = useState(false);
-  const [providers, setProviders] = useState({ prospeo: "test", icypeas: "test" });
-  const provLabel = (v) => (v === "live" ? "live" : "test mode");
   const [form, setForm] = useState({
     icp_id: "", domain: "", titles: "", industries: "", locations: "", limit: 8,
   });
-  const [prospects, setProspects] = useState([]);
+  const [leads, setLeads] = useState([]);
   const [selected, setSelected] = useState({});
   const [busy, setBusy] = useState(false);
   const [icpDraft, setIcpDraft] = useState({ name: "", titles: "", industries: "", keywords: "", seniority: "" });
@@ -20,38 +18,47 @@ export default function ProspectFinder({ open, onClose, onDone }) {
   useEffect(() => {
     if (!open) return;
     api.get("/icps").then((r) => setIcps(r.data));
-    api.get("/prospect/providers").then((r) => setProviders(r.data)).catch(() => {});
   }, [open]);
 
   if (!open) return null;
 
   const search = async () => {
-    setBusy(true); setProspects([]);
+    setBusy(true); setLeads([]);
     try {
       const body = {
-        icp_id: form.icp_id || null,
-        domain: form.domain || null,
-        titles: split(form.titles),
-        industries: split(form.industries),
-        locations: split(form.locations),
-        limit: Number(form.limit) || 10,
+        company_domain: form.domain || null,
+        job_titles: split(form.titles),
+        industry: split(form.industries),
+        country: split(form.locations),
+        page_size: Number(form.limit) || 10,
       };
-      const { data } = await api.post("/prospect/search", body);
-      setProspects(data.prospects || []);
-      setProviders(data.providers || providers);
-      const init = {}; (data.prospects || []).forEach((_, i) => (init[i] = true));
+      const { data } = await api.post("/lead-intelligence/search", body);
+      const raw = data.leads || data.results || [];
+      const results = raw.map((p) => ({
+        first_name: p.person?.first_name || p.first_name || "",
+        last_name: p.person?.last_name || p.last_name || "",
+        email: p.contact?.email || p.email || "",
+        title: p.person?.title || p.title || "",
+        company: p.company?.name || p.company_name || p.company || "",
+        company_domain: p.company?.domain || p.company_domain || "",
+        linkedin_url: p.contact?.linkedin_url || p.linkedin_url || "",
+      }));
+      setLeads(results);
+      const init = {}; results.forEach((_, i) => (init[i] = true));
       setSelected(init);
     } catch (err) { if (!isCreditError(err)) toast.error("Search failed"); }
     finally { setBusy(false); }
   };
 
   const importSelected = async () => {
-    const chosen = prospects.filter((_, i) => selected[i]);
+    const chosen = leads.filter((_, i) => selected[i]);
     if (!chosen.length) { toast.error("Select at least one prospect"); return; }
     setBusy(true);
     try {
-      const { data } = await api.post("/prospect/import", { prospects: chosen, generate_icebreaker: true });
-      toast.success(`Added ${data.added} · skipped ${data.skipped} · icebreakers ready`);
+      const { data } = await api.post("/lead-intelligence/import", {
+        leads: chosen, merge_strategy: "skip",
+      });
+      toast.success(`Added ${data.added || chosen.length} · ${data.skipped || 0} skipped`);
       onDone?.();
       onClose();
     } catch { toast.error("Import failed"); }
@@ -85,18 +92,10 @@ export default function ProspectFinder({ open, onClose, onDone }) {
             <Sparkles size={16} />
             <div className="font-display font-bold text-lg">Prospect Finder</div>
           </div>
-          <span className={`ui-label px-2 py-0.5 rounded-full border ${providers.prospeo === "live" ? "text-green-700 border-green-600" : "text-amber-700 border-amber-500"}`}>Prospeo: {provLabel(providers.prospeo)}</span>
-          <span className={`ui-label px-2 py-0.5 rounded-full border ${providers.icypeas === "live" ? "text-green-700 border-green-600" : "text-amber-700 border-amber-500"}`}>Icypeas: {provLabel(providers.icypeas)}</span>
           <button onClick={onClose} data-testid="pf-close" className="ml-auto btn-ghost"><X size={14} /></button>
         </div>
 
         <div className="p-6 space-y-5">
-          {(providers.prospeo !== "live" || providers.icypeas !== "live") && (
-            <div className="bg-white border border-amber-300 rounded-2xl p-4 text-sm text-amber-900">
-              <span className="font-mono uppercase text-[10px] tracking-widest">Test mode</span> — enrichment returns sample prospects until you connect a data provider. Add your Prospeo or Icypeas account to search live contact data.
-            </div>
-          )}
-
           {/* Filter panel */}
           <div className="bg-white border border-line rounded-2xl p-5 space-y-3">
             <div className="flex items-center gap-3">
@@ -143,36 +142,31 @@ export default function ProspectFinder({ open, onClose, onDone }) {
           </div>
 
           {/* Results */}
-          {prospects.length > 0 && (
+          {leads.length > 0 && (
             <div className="bg-white border border-line rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-line flex items-center justify-between">
-                <div className="ui-label">Found {prospects.length} · Verified via Icypeas</div>
+                <div className="ui-label">Found {leads.length}</div>
                 <button onClick={importSelected} disabled={busy} data-testid="pf-import" className="btn-primary text-sm py-2">
-                  {busy ? "Importing…" : "Import selected + write icebreakers"}
+                  {busy ? "Importing…" : "Import selected"}
                 </button>
               </div>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line">
                     <th className="p-3 w-8"></th>
-                    {["Name", "Email", "Title", "Company", "Verify"].map((h) => <th key={h} className="ui-label text-left p-3">{h}</th>)}
+                    {["Name", "Email", "Title", "Company"].map((h) => <th key={h} className="ui-label text-left p-3">{h}</th>)}
                   </tr>
                 </thead>
                 <tbody>
-                  {prospects.map((p, i) => (
-                    <tr key={p.email + i} className="border-b border-line last:border-0">
+                  {leads.map((p, i) => (
+                    <tr key={(p.id || p.email || i)} className="border-b border-line last:border-0">
                       <td className="p-3">
                         <input type="checkbox" checked={!!selected[i]} onChange={(e) => setSelected({ ...selected, [i]: e.target.checked })} data-testid={`pf-select-${i}`} />
                       </td>
                       <td className="p-3 font-medium">{p.first_name} {p.last_name}</td>
-                      <td className="p-3 font-mono text-xs">{p.email}</td>
-                      <td className="p-3 text-neutral-600">{p.title}</td>
-                      <td className="p-3">{p.company}</td>
-                      <td className="p-3">
-                        <span className={`ui-label px-2 py-0.5 border rounded-full ${p.verified ? "text-green-700 border-green-600" : "text-amber-700 border-amber-500"}`}>
-                          {(p.verification?.status || "risky")}
-                        </span>
-                      </td>
+                      <td className="p-3 font-mono text-xs">{p.email || "—"}</td>
+                      <td className="p-3 text-neutral-600">{p.title || "—"}</td>
+                      <td className="p-3">{p.company || "—"}</td>
                     </tr>
                   ))}
                 </tbody>

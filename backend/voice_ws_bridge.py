@@ -58,6 +58,7 @@ it end to end.
 """
 
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -72,6 +73,44 @@ from twilio_client import twilio_client
 from openai_realtime_client import connect_session, session_update_payload, DEFAULT_VOICE
 
 log = logging.getLogger(__name__)
+
+
+# ── μ-law audio gain ──────────────────────────────────────────────────
+# Pre-computed lookup table for fast μ-law -> linear conversion.
+# Standard μ-law is 8-bit companded audio; the 256 encoded values map to
+# a non-uniform range of 14-bit signed linear values.
+_MU_LAW_TO_LINEAR = [0] * 256
+for _i in range(256):
+    _mulaw = _i ^ 0xFF
+    _sign = -1 if _mulaw & 0x80 else 1
+    _exp = (_mulaw >> 4) & 0x07
+    _mant = _mulaw & 0x0F
+    _val = ((_mant << 3) + 0x84) << _exp
+    _MU_LAW_TO_LINEAR[_i] = _sign * _val
+# Build reverse table by scanning all possible linear values
+_LINEAR_TO_MU_LAW: Dict[int, int] = {}
+for _i, _lin in enumerate(_MU_LAW_TO_LINEAR):
+    _LINEAR_TO_MU_LAW[_lin] = _i
+for _v in range(-32124, 32125):
+    if _v not in _LINEAR_TO_MU_LAW:
+        _LINEAR_TO_MU_LAW[_v] = min(
+            range(256), key=lambda x: abs(_MU_LAW_TO_LINEAR[x] - _v)
+        )
+
+
+def _apply_gain(mu_law_data: bytes, gain_db: float) -> bytes:
+    """Apply gain (dB) to μ-law audio.  gain_db=0 → no change."""
+    if not mu_law_data or abs(gain_db) < 0.5:
+        return mu_law_data
+    factor = 10.0 ** (gain_db / 20.0)
+    out = bytearray(len(mu_law_data))
+    for i, b in enumerate(mu_law_data):
+        lin = _MU_LAW_TO_LINEAR[b]
+        lin = int(lin * factor)
+        lin = max(-32124, min(32124, lin))
+        out[i] = _LINEAR_TO_MU_LAW[lin]
+    return bytes(out)
+
 
 voice_ws_router = APIRouter()
 
@@ -206,11 +245,56 @@ async def voice_media_stream(ws: WebSocket, token: str, call_id: str):
         return
 
     workspace_id = hook["workspace_id"]
+    cfg = agent.get("config") or {}
     prompt = agent.get("persona_prompt", "")
-    if agent.get("knowledge_base"):
-        prompt += f"\n\n# Knowledge base (answer questions using these facts):\n{agent['knowledge_base']}"
-    voice = agent.get("voice_id") or DEFAULT_VOICE
-    max_duration_s = max(60, int(agent.get("max_call_duration_minutes", 15)) * 60)
+
+    lang = cfg.get("language", "en-US")
+    if lang and lang != "en-US":
+        prompt += f"\n\nLanguage: Conduct the conversation in {lang}."
+
+    style = cfg.get("speaking_style", "professional")
+    if style and style != "professional":
+        prompt += f"\n\nCommunication style: Adopt a {style} communication style."
+
+    resp_style = cfg.get("response_style", "conversational")
+    if resp_style and resp_style != "conversational":
+        prompt += f"\n\nResponse style: Keep your responses {resp_style}."
+
+    accent = cfg.get("accent", "neutral")
+    accent_map = {
+        "indian": "Speak with a warm Indian English accent. Use Indian expressions naturally.",
+        "british": "Speak with a British English accent. Use British expressions naturally.",
+        "australian": "Speak with an Australian English accent. Use Australian expressions naturally.",
+        "american": "Speak with an American English accent.",
+    }
+    if accent in accent_map:
+        prompt += f"\n\nAccent: {accent_map[accent]}"
+
+    silence = cfg.get("silence_timeout_seconds", 15)
+    if silence and silence != 15:
+        prompt += f"\n\nSilence handling: If the lead is silent for more than {silence} seconds, ask if they're still there and wrap up the conversation naturally."
+
+    if cfg.get("human_handoff_enabled"):
+        prompt += "\n\nHuman handoff: If the lead explicitly asks to speak to a human representative, acknowledge and say you'll transfer them to a team member."
+
+    qf = cfg.get("qualification_framework", "custom")
+    qfields = cfg.get("qualification_fields", [])
+    if qf and qf != "custom" and qfields:
+        field_descriptions = "\n".join(f"- {f.get('key', 'field')}: {f.get('prompt', '')}" for f in qfields)
+        prompt += f"\n\nQualification framework ({qf.upper()}): Extract the following information during the conversation:\n{field_descriptions}"
+
+    kb = cfg.get("knowledge_base", "")
+    if kb:
+        prompt += f"\n\n# Knowledge base (answer questions using these facts):\n{kb}"
+
+    voice = cfg.get("voice") or DEFAULT_VOICE
+    if voice not in ("alloy", "echo", "shimmer", "ash", "ballad", "coral", "sage", "verse"):
+        log.warning("voice_ws_bridge unknown voice '%s' for call %s, falling back to '%s'", voice, call_id, DEFAULT_VOICE)
+        voice = DEFAULT_VOICE
+    temperature = cfg.get("temperature", 0.7)
+    model = cfg.get("model") or None
+    max_duration_s = max(60, int(cfg.get("max_duration_minutes", 15)) * 60)
+    volume_gain_db = float(cfg.get("volume_gain_db", 3.0))
 
     stream_sid: Optional[str] = None
     transcript_turns: List[Dict[str, str]] = []
@@ -219,6 +303,7 @@ async def voice_media_stream(ws: WebSocket, token: str, call_id: str):
     finalized = False
     loop = asyncio.get_event_loop()
     audio_in_queue: "asyncio.Queue[Optional[str]]" = asyncio.Queue()
+    pre_stream_buffer: List[str] = []  # audio chunks that arrived before stream_sid
 
     async def finalize():
         nonlocal finalized
@@ -229,10 +314,53 @@ async def voice_media_stream(ws: WebSocket, token: str, call_id: str):
         await _finalize_twilio_call(workspace_id, call_id, transcript_turns, duration, end_reason)
 
     try:
-        async with connect_session() as conn:
-            # session.update shape/field names are the single biggest
-            # unverified surface in this feature — see module docstring.
-            await conn.send(session_update_payload(instructions=prompt, voice=voice))
+        async with connect_session(model=model) as conn:
+            await conn.send(session_update_payload(
+                instructions=prompt, voice=voice, temperature=temperature,
+                interrupt_sensitivity=cfg.get("interrupt_sensitivity", "balanced"),
+                language=lang,
+            ))
+
+            # Trigger the AI's first response immediately — don't wait for
+            # Twilio's media stream to open.  Audio will be buffered in
+            # pre_stream_buffer until stream_sid is set, then flushed.
+            lead_info = call.get("metadata", {}).get("lead_snapshot", {})
+            crm_level = cfg.get("crm_context_level", "full_lead")
+            if crm_level == "none":
+                greeting_context = "Start the call with the lead."
+            elif crm_level == "summary":
+                summary_parts = []
+                if lead_info.get("first_name"):
+                    summary_parts.append(lead_info["first_name"])
+                if lead_info.get("company"):
+                    summary_parts.append(f"from {lead_info['company']}")
+                if lead_info.get("title"):
+                    summary_parts.append(f"({lead_info['title']})")
+                greeting_context = f"The lead is {' '.join(summary_parts)}."
+            else:
+                greeting_context = f"The lead is {lead_info.get('first_name', 'there')} from {lead_info.get('company', 'their company')}."
+                if lead_info.get("title"):
+                    greeting_context += f" Title: {lead_info['title']}."
+                if lead_info.get("industry"):
+                    greeting_context += f" Industry: {lead_info['industry']}."
+            await conn.send({
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": f"Start the call. {greeting_context} Begin your greeting and qualification conversation."}]
+                }
+            })
+            await conn.send({"type": "response.create"})
+
+            async def _flush_buffer():
+                nonlocal pre_stream_buffer
+                for buf_payload in pre_stream_buffer:
+                    await ws.send_text(json.dumps({
+                        "event": "media", "streamSid": stream_sid,
+                        "media": {"payload": buf_payload},
+                    }))
+                pre_stream_buffer = []
 
             async def twilio_reader():
                 nonlocal stream_sid, start_time, end_reason
@@ -247,12 +375,13 @@ async def voice_media_stream(ws: WebSocket, token: str, call_id: str):
                             "twilio_call_sid": msg["start"].get("callSid") or call.get("twilio_call_sid"),
                             "updated_at": now_iso(),
                         }})
+                        await _flush_buffer()
                     elif ev == "media":
                         await audio_in_queue.put(msg["media"]["payload"])
                     elif ev == "stop":
                         end_reason = "caller_hangup"
                         break
-                await audio_in_queue.put(None)  # sentinel — stop the forwarder cleanly
+                await audio_in_queue.put(None)
 
             async def forward_to_openai():
                 while True:
@@ -263,22 +392,38 @@ async def voice_media_stream(ws: WebSocket, token: str, call_id: str):
 
             async def openai_reader():
                 async for event in conn:
-                    etype = getattr(event, "type", None)
-                    if etype == "response.output_audio.delta" and stream_sid:
-                        await ws.send_text(json.dumps({
-                            "event": "media", "streamSid": stream_sid,
-                            "media": {"payload": getattr(event, "delta", "")},
-                        }))
+                    etype = event.get("type") if isinstance(event, dict) else getattr(event, "type", None)
+                    if etype == "response.output_audio.delta":
+                        payload_b64 = event.get("delta", "") if isinstance(event, dict) else getattr(event, "delta", "")
+                        # Apply volume gain (decode base64 μ-law -> gain -> re-encode)
+                        if volume_gain_db:
+                            try:
+                                raw = base64.b64decode(payload_b64)
+                                gained = _apply_gain(raw, volume_gain_db)
+                                payload_b64 = base64.b64encode(gained).decode("ascii")
+                            except Exception:
+                                pass  # send original if gain processing fails
+                        if stream_sid:
+                            await ws.send_text(json.dumps({
+                                "event": "media", "streamSid": stream_sid,
+                                "media": {"payload": payload_b64},
+                            }))
+                        else:
+                            pre_stream_buffer.append(payload_b64)
                     elif etype == "input_audio_buffer.speech_started" and stream_sid:
-                        # Barge-in: the caller started talking over the
-                        # assistant. Flush whatever assistant audio Twilio
-                        # still has queued for playback — without this the
-                        # assistant keeps talking with no way to stop.
                         await ws.send_text(json.dumps({"event": "clear", "streamSid": stream_sid}))
                     elif etype == "response.output_audio_transcript.done":
-                        transcript_turns.append({"role": "agent", "content": getattr(event, "transcript", "")})
+                        transcript = event.get("transcript", "") if isinstance(event, dict) else getattr(event, "transcript", "")
+                        transcript_turns.append({"role": "agent", "content": transcript})
                     elif etype == "conversation.item.input_audio_transcription.completed":
-                        transcript_turns.append({"role": "caller", "content": getattr(event, "transcript", "")})
+                        transcript = event.get("transcript", "") if isinstance(event, dict) else getattr(event, "transcript", "")
+                        transcript_turns.append({"role": "caller", "content": transcript})
+                    elif etype == "error":
+                        # A rejected session.update lands here — without this
+                        # log the session silently runs on default PCM16 and
+                        # the caller hears static.
+                        err = event.get("error", event) if isinstance(event, dict) else event
+                        log.error("OpenAI realtime error on call %s: %s", call_id, err)
 
             async def duration_guard():
                 nonlocal end_reason

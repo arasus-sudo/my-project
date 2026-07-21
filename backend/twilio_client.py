@@ -2,8 +2,7 @@
 Twilio + OpenAI Realtime provider.
 
 Falls back to deterministic mock responses when TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN
-are unset, mirroring retell_client.py's "mocked": True convention — this provider
-is fully demoable without a Twilio account, same as Retell.
+are unset — this provider is fully demoable without a Twilio account.
 
 twilio-python's REST client is synchronous; every call here runs it via
 asyncio.to_thread so an await-based caller never blocks the event loop on a
@@ -38,9 +37,7 @@ class TwilioClient:
                                  record: bool = True) -> Dict[str, Any]:
         """Places the outbound call. `twiml_url` is fetched by Twilio the moment
         the call connects and must return the <Connect><Stream> TwiML that opens
-        the media-stream WebSocket — see voice_ws_bridge.py. Return shape matches
-        retell_client.create_phone_call so the caller (voice_eq.py) can build a
-        call doc without branching on provider."""
+        the media-stream WebSocket — see voice_ws_bridge.py."""
         if TWILIO_MOCKED:
             return {
                 "call_id": _mock_id("call"), "call_status": "registered",
@@ -76,9 +73,7 @@ class TwilioClient:
         return {"sid": call.sid, "status": call.status, "duration": call.duration}
 
     async def hangup_call(self, call_sid: str) -> None:
-        """Used to enforce max_call_duration_minutes — Retell does this
-        server-side on its own infra; nothing does it for this provider unless
-        the bridge does, see voice_ws_bridge.py's duration timer."""
+        """Used to enforce max_call_duration_minutes — see voice_ws_bridge.py's duration timer."""
         if TWILIO_MOCKED or call_sid.startswith("mock-"):
             return
         await asyncio.to_thread(self._sdk.calls(call_sid).update, status="completed")
@@ -88,7 +83,7 @@ class TwilioClient:
         an X-Twilio-Signature header — HMAC-SHA1 over the full URL + sorted form
         params, keyed on the auth token. This is NOT used for the media-stream
         WebSocket itself, which has no signature scheme of its own; that route's
-        auth is the token-in-path, same design as the existing Retell webhook."""
+        auth is the token-in-path."""
         if TWILIO_MOCKED:
             return True
         from twilio.request_validator import RequestValidator

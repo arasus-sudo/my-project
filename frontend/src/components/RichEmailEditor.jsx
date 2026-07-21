@@ -13,6 +13,7 @@ export const MERGE_FIELDS = [
   { token: "{{last_name}}", label: "Last name" },
   { token: "{{company}}", label: "Company" },
   { token: "{{title}}", label: "Title" },
+  { token: "{{personalized_opener}}", label: "Opener" },
 ];
 
 /** We now store and send HTML, so this is the XSS boundary. Everything is

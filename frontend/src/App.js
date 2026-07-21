@@ -15,6 +15,9 @@ import LeadDetail from "./pages/LeadDetail";
 import Mailboxes from "./pages/Mailboxes";
 import Inbox from "./pages/Inbox";
 import CRM from "./pages/CRM";
+import Pipeline from "./pages/Pipeline";
+import LeadLists from "./pages/LeadLists";
+import LeadSearch from "./pages/LeadSearch";
 import Admin from "./pages/Admin";
 import Analytics from "./pages/Analytics";
 import AuditLog from "./pages/AuditLog";
@@ -28,6 +31,10 @@ import Billing from "./pages/Billing";
 import { OutOfCreditsWatcher } from "./components/Credits";
 import Webhooks from "./pages/Webhooks";
 import HubSpotSettings from "./pages/HubSpotSettings";
+import CompanyIntel from "./pages/CompanyIntel";
+
+import ServiceLibrary from "./pages/ServiceLibrary";
+import CampaignWizard from "./pages/CampaignWizard";
 import VoiceEQOverview from "./pages/VoiceEQOverview";
 import VoiceAgents from "./pages/VoiceAgents";
 import VoiceAgentBuilder from "./pages/VoiceAgentBuilder";
@@ -50,6 +57,14 @@ import SocialEQOverview from "./pages/SocialEQOverview";
 import PostComposer from "./pages/PostComposer";
 import PostQueue from "./pages/PostQueue";
 import SocialSettings from "./pages/SocialSettings";
+import SocialCalendar from "./pages/SocialCalendar";
+import BulkImportDrawer from "./pages/BulkImportDrawer";
+import SocialAnalytics from "./pages/SocialAnalytics";
+import SocialInbox from "./pages/SocialInbox";
+import SiteEQOverview from "./pages/SiteEQOverview";
+import SiteList from "./pages/SiteList";
+import SiteInbox from "./pages/SiteInbox";
+import SiteAnalytics from "./pages/SiteAnalytics";
 
 function Private({ children }) {
   const { user, loading } = useAuth();
@@ -83,8 +98,16 @@ function App() {
               <Route path="campaigns" element={<Campaigns />} />
               <Route path="campaigns/new" element={<CampaignBuilder />} />
               <Route path="campaigns/:id" element={<CampaignBuilder />} />
-              <Route path="leads" element={<Leads />} />
-              <Route path="leads/:id" element={<LeadDetail />} />
+              {/* CRM routes */}
+              <Route path="crm" element={<CRM />} />
+              <Route path="crm/leads" element={<Leads />} />
+              <Route path="crm/leads/:id" element={<LeadDetail />} />
+              <Route path="crm/search" element={<LeadSearch />} />
+              <Route path="crm/lists" element={<LeadLists />} />
+              <Route path="crm/pipeline" element={<Pipeline />} />
+              {/* Legacy leads routes redirect to CRM */}
+              <Route path="leads" element={<Navigate to="/app/crm/leads" replace />} />
+              <Route path="leads/:id" element={<Navigate to="/app/crm/leads/:id" replace />} />
               <Route path="mailboxes" element={<Mailboxes />} />
               <Route path="templates" element={<Templates />} />
               <Route path="analytics" element={<Analytics />} />
@@ -115,10 +138,21 @@ function App() {
               <Route path="social-eq/compose" element={<PostComposer />} />
               <Route path="social-eq/queue" element={<PostQueue />} />
               <Route path="social-eq/settings" element={<SocialSettings />} />
+              <Route path="social-eq/calendar" element={<SocialCalendar />} />
+              <Route path="social-eq/import" element={<BulkImportDrawer />} />
+              <Route path="social-eq/analytics" element={<SocialAnalytics />} />
+              <Route path="social-eq/inbox" element={<SocialInbox />} />
+              <Route path="site-eq" element={<SiteEQOverview />} />
+              <Route path="site-eq/sites" element={<SiteList />} />
+              <Route path="site-eq/inbox" element={<SiteInbox />} />
+              <Route path="site-eq/analytics" element={<SiteAnalytics />} />
               <Route path="webhooks" element={<Webhooks />} />
               <Route path="hubspot" element={<HubSpotSettings />} />
               <Route path="inbox" element={<Inbox />} />
-              <Route path="crm" element={<CRM />} />
+              <Route path="intelligence" element={<CompanyIntel />} />
+              <Route path="services" element={<ServiceLibrary />} />
+              <Route path="campaigns/wizard" element={<CampaignWizard />} />
+              <Route path="campaigns/pro/:id" element={<CampaignWizard />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

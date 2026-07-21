@@ -29,6 +29,22 @@ MAX_PER_TICK = 25          # a polite trickle; bursts look like spam
 RETRY_BACKOFF_MIN = 15
 
 
+def _get_signature_html(workspace_id: str, signature_id: Optional[str]) -> str:
+    """Resolve a signature to HTML."""
+    return ""  # placeholder — we resolve async in enqueue
+
+
+def _apply_opener(text: str, opener: str) -> str:
+    """Fill {{personalized_opener}} on a later-step template, or drop the line
+    entirely when no opener is on file — the literal placeholder must never
+    reach a recipient."""
+    if not text or "{{personalized_opener}}" not in text:
+        return text or ""
+    if opener:
+        return text.replace("{{personalized_opener}}", opener)
+    return "\n".join(l for l in text.split("\n") if "{{personalized_opener}}" not in l).strip()
+
+
 # ----------------------------- Enqueue -----------------------------------------
 async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[str, Any]:
     """Turn a campaign into scheduled sends. Refuses to launch without a connected
@@ -53,6 +69,22 @@ async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[
     tz = ZoneInfo(campaign.get("timezone") or "UTC")
     now_local = datetime.now(tz)
 
+    # Resolve signature
+    signature_html = ""
+    signature_text = ""
+    sig_id = campaign.get("signature_id")
+    if sig_id:
+        sig = await db.signatures.find_one({"id": sig_id, "workspace_id": workspace_id}, {"_id": 0})
+        if sig:
+            signature_html = sig.get("content_html", "")
+            signature_text = sig.get("content_text", "")
+
+    # Build personalized email lookup (lead_id -> email data, only approved)
+    personalized_map = {}
+    for p in campaign.get("personalized_emails", []):
+        if p.get("status") == "approved":
+            personalized_map[p["lead_id"]] = p
+
     queued, skipped = 0, 0
     for lid in lead_ids:
         lead = await db.leads.find_one({"id": lid, "workspace_id": workspace_id}, {"_id": 0})
@@ -73,7 +105,29 @@ async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[
             skipped += 1
             continue
 
+        # A lead without an approved step-0 email never gets queued for ANY
+        # step — the old code fell back to the raw template (still holding a
+        # literal {{personalized_opener}}) for anyone who skipped review.
+        personal = personalized_map.get(lid)
+        if not personal:
+            skipped += 1
+            continue
+
         for step_idx, step in enumerate(steps):
+            if step_idx == 0:
+                subject = personal.get("subject", step.get("subject", ""))
+                body_html = personal.get("body_html", step.get("body_html") or "")
+                body_text = personal.get("body", step.get("body_text") or step.get("body") or "")
+            else:
+                opener = personal.get("personalized_opener", "")
+                subject = _apply_opener(step.get("subject", ""), opener)
+                body_html = _apply_opener(step.get("body_html") or "", opener)
+                body_text = _apply_opener(step.get("body_text") or step.get("body") or "", opener)
+            # Append signature
+            if signature_html and body_html:
+                body_html = body_html + "<br><br>" + signature_html
+            if signature_text and body_text:
+                body_text = body_text + "\n\n" + signature_text
             send_at = _next_window_slot(
                 now_local + timedelta(days=int(step.get("day") or 0)),
                 campaign.get("send_window_start", "09:00"),
@@ -83,9 +137,9 @@ async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[
             await db.send_queue.insert_one({
                 "id": new_id(), "workspace_id": workspace_id,
                 "campaign_id": campaign["id"], "lead_id": lid, "step": step_idx,
-                "subject": step.get("subject", ""),
-                "body_html": step.get("body_html") or "",
-                "body_text": step.get("body_text") or step.get("body") or "",
+                "subject": subject,
+                "body_html": body_html,
+                "body_text": body_text,
                 "status": "pending",          # pending | sent | failed | cancelled
                 "send_at": send_at.isoformat(),
                 "attempts": 0, "error": None,

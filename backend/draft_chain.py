@@ -24,9 +24,7 @@ import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-import anthropic
-
-from server import ANTHROPIC_API_KEY, ANTHROPIC_MODEL, _extract_json, compute_eq
+from server import _llm_chat, _extract_json, compute_eq
 from research_worker import summarize_for_prompt
 
 log = logging.getLogger(__name__)
@@ -43,20 +41,12 @@ class ChainError(RuntimeError):
 async def _chain_call(system: str, user_text: str, required: List[str],
                        max_tokens: int = 900) -> Dict[str, Any]:
     """One step. Retries on rate limit and on malformed JSON, then fails loudly."""
-    if not ANTHROPIC_API_KEY:
-        raise ChainError("ANTHROPIC_API_KEY is not configured")
-
-    client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
     delay = 4.0
     last = ""
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            resp = await client.messages.create(
-                model=ANTHROPIC_MODEL, max_tokens=max_tokens, system=system,
-                messages=[{"role": "user", "content": user_text}],
-            )
-            text = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text")
+            text = await _llm_chat(system, user_text, f"chain-{attempt}", max_tokens=max_tokens)
             parsed = _extract_json(text)
             if parsed is None:
                 last = "response was not JSON"
@@ -69,12 +59,6 @@ async def _chain_call(system: str, user_text: str, required: List[str],
             # Malformed output is usually transient — one more go, then give up.
             if attempt < MAX_ATTEMPTS:
                 await asyncio.sleep(1)
-                continue
-        except anthropic.RateLimitError as ex:
-            last = f"rate limited: {ex}"
-            if attempt < MAX_ATTEMPTS:
-                await asyncio.sleep(delay)
-                delay *= 2
                 continue
         except Exception as ex:
             last = str(ex)

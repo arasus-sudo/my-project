@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --radius: 1rem;
+    --radius: 0.5rem;
   }
   * { @apply border-line; }
   html { scroll-behavior: smooth; }
@@ -12,53 +12,75 @@
     background-color: #F5F5F7;
     color: #1D1D1F;
     font-family: "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 0.875rem;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    letter-spacing: -0.01em;
-    line-height: 1.6;
+    letter-spacing: 0;
+    line-height: 1.5;
   }
   h1, h2, h3, h4, h5 {
-    font-family: "Inter", system-ui, sans-serif;
-    letter-spacing: -0.03em;
+    font-family: "Geist", system-ui, sans-serif;
+    letter-spacing: -0.02em;
     font-weight: 600;
+    line-height: 1.2;
   }
-  ::selection { background: #1D1D1F; color: #FFFFFF; }
-  :focus-visible { outline: 2px solid #1D1D1F; outline-offset: 2px; border-radius: 6px; }
+  ::selection { background: #3B82F6; color: #FFFFFF; }
+  :focus-visible { outline: 2px solid #3B82F6; outline-offset: 2px; border-radius: 6px; }
 }
 
 @layer components {
+  /* Deprecated (2026-07-21 enterprise redesign — see CLAUDE.md). The
+     blue → purple gradient accent is retired in favor of flat brand color;
+     kept defined only for back-compat, nothing new should apply it. */
+  .bg-brand-gradient { background-image: linear-gradient(135deg, theme("colors.brand.from"), theme("colors.brand.to")); }
+
+  /* Button typography: 14px Medium (500), Geist, no ALL CAPS — never font-semibold.
+     Flat brand color, subtle hover, no gradient/glow/exaggerated shadow. */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-accent text-white text-sm font-medium rounded-xl hover:bg-accent-hover active:scale-[0.97] transition-all duration-200 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-accent/20;
+    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-accent text-white text-button font-medium font-display rounded-xl active:scale-[0.98] transition-colors duration-150 hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent/30;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-white text-ink text-sm font-medium rounded-xl border border-line hover:border-ink/20 hover:bg-ash active:scale-[0.97] transition-all duration-200 shadow-sm;
+    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-white text-ink text-button font-medium font-display rounded-xl border border-line hover:border-ink/20 hover:bg-ash active:scale-[0.97] transition-all duration-200 shadow-sm;
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-neutral-500 hover:text-ink hover:bg-ash rounded-xl transition-all duration-200 text-sm;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-ink-muted hover:text-ink hover:bg-ash rounded-xl transition-all duration-200 text-button font-medium font-display;
   }
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-danger text-white text-sm font-medium rounded-xl hover:opacity-90 active:scale-[0.97] transition-all duration-200;
+    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-danger text-white text-button font-medium font-display rounded-xl hover:opacity-90 active:scale-[0.97] transition-all duration-200;
   }
   .btn-sm {
-    @apply px-4 py-1.5 text-xs rounded-lg;
+    @apply px-4 py-1.5 text-caption rounded-lg;
   }
+  /* Eyebrow/kicker labels (stat captions, section dividers) — NOT form field
+     labels and NOT table headers, see .form-label / .table-header below. */
   .ui-label {
-    @apply text-[11px] font-medium tracking-wider uppercase text-neutral-400;
+    @apply text-tiny font-medium font-display tracking-wider uppercase text-ink-muted;
+  }
+  /* Form field labels — spec: 13-14px Medium, Geist. */
+  .form-label {
+    @apply text-table font-medium font-display text-ink-secondary;
+  }
+  /* Table column headers — spec: 13px Medium, normal case (not the ui-label
+     eyebrow treatment tables used to borrow). Table body rows use `text-table`
+     directly (13px/400) alongside this. */
+  .table-header {
+    @apply text-table font-medium font-display text-ink-tertiary;
   }
   .card-flat {
     @apply bg-white border border-line rounded-2xl;
   }
+  /* Flat surface, tiny border, minimal shadow — no lift/dramatic depth. */
   .card-floating {
-    @apply bg-white border border-line rounded-2xl shadow-card transition-all duration-200 hover:shadow-card-hover hover:-translate-y-0.5;
+    @apply bg-white border border-line rounded-2xl shadow-card transition-colors duration-150 hover:border-ink/15;
   }
   .input-premium {
-    @apply w-full px-4 py-2.5 bg-white border border-line rounded-xl text-sm text-ink placeholder:text-neutral-400 focus:outline-none focus:border-ink focus:ring-2 focus:ring-ink/10 transition-all duration-200;
+    @apply w-full px-4 py-2.5 bg-white border border-line rounded-xl text-input text-ink placeholder:text-ink-muted focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/15 transition-all duration-200;
   }
   .pill {
-    @apply inline-flex items-center gap-1.5 px-3 py-1 text-2xs rounded-full bg-ash border border-line text-neutral-500 font-medium uppercase tracking-wider;
+    @apply inline-flex items-center gap-1.5 px-3 py-1 text-tiny rounded-full bg-ash border border-line text-ink-muted font-medium font-display uppercase tracking-wider;
   }
   .kbd {
-    @apply font-mono text-xs px-1.5 py-0.5 border border-line rounded-lg bg-ash text-neutral-500;
+    @apply font-mono text-caption px-1.5 py-0.5 border border-line rounded-lg bg-ash text-ink-muted;
   }
   .nav-floating {
     @apply fixed top-3 left-1/2 -translate-x-1/2 z-50 bg-white/80 backdrop-blur-xl border border-line rounded-2xl shadow-nav transition-all duration-300;
@@ -67,14 +89,34 @@
     @apply bg-gradient-to-r from-ash via-white to-ash bg-[length:200%_100%] animate-shimmer rounded-lg;
   }
   .badge {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 text-2xs font-medium rounded-full;
+    @apply inline-flex items-center gap-1 px-2 py-0.5 text-tiny font-medium font-display rounded-full;
   }
   .badge-success { @apply badge bg-success/10 text-success; }
   .badge-warning { @apply badge bg-warning/10 text-warning; }
   .badge-danger { @apply badge bg-danger/10 text-danger; }
-  .badge-info { @apply badge bg-accent/10 text-accent; }
+  .badge-info { @apply badge bg-info/10 text-info; }
   .badge-neutral { @apply badge bg-ash text-neutral-500; }
   .divider { @apply h-px bg-line my-4; }
+}
+
+/* Marker-style headline highlights (Landing) — ink block on light sections,
+   white block on bg-ink sections. box-decoration-break keeps the padding on
+   every wrapped line, matching the selection-style look. */
+.hl-ink, .hl-white {
+  padding: 0.02em 0.18em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.hl-ink { background: #1D1D1F; color: #FFFFFF; }
+.hl-white { background: #FFFFFF; color: #1D1D1F; }
+.hl-brand { background-image: linear-gradient(135deg, #3B82F6, #8B5CF6); color: #FFFFFF; }
+
+/* Feature-list bullet dot in the brand gradient (checklists, bullet lists) —
+   text stays dark ink per brand rule, only the marker carries the accent. */
+.bullet-brand {
+  display: inline-block; width: 6px; height: 6px; border-radius: 9999px;
+  background-image: linear-gradient(135deg, #3B82F6, #8B5CF6);
+  flex-shrink: 0;
 }
 
 .prose-email p { margin: 0 0 0.85em; }
@@ -107,6 +149,12 @@
 .creq-rotate-cursor {
   cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="%231D1D1F" stroke-width="2.4" stroke-linecap="round"><path d="M20 11A8 8 0 1 0 12 20" /><path d="M20 6v5h-5" fill="none"/></svg>') 11 11, grab;
 }
+
+/* Slideshow preview — Instagram-Stories-style per-slide progress fill.
+   Keyed by slide+state in SlidePreview.jsx so each new "active" bar remounts
+   and restarts the animation from empty, rather than fighting CSS transitions
+   across state changes. */
+@keyframes creq-preview-fill { from { width: 0%; } to { width: 100%; } }
 
 @layer utilities {
   .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #E5E5E7 transparent; }

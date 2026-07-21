@@ -4,7 +4,9 @@ import pytest
 import requests
 
 def _read_frontend_env():
-    with open("/app/frontend/.env") as f:
+    tests_dir = os.path.dirname(os.path.abspath(__file__))
+    env_path = os.path.join(tests_dir, "..", "..", "frontend", ".env")
+    with open(env_path) as f:
         for line in f:
             if line.startswith("REACT_APP_BACKEND_URL="):
                 return line.split("=", 1)[1].strip()
@@ -12,8 +14,8 @@ def _read_frontend_env():
 
 BASE = (os.environ.get("REACT_APP_BACKEND_URL") or _read_frontend_env()).rstrip("/")
 API = f"{BASE}/api"
-EMAIL = "demo@innoira.ai"
-PASS = "Demo@1234"
+EMAIL = "test@test.com"
+PASS = "TempPw@98765"
 
 
 @pytest.fixture(scope="session")

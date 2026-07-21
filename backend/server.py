@@ -5,11 +5,13 @@ campaigns, sequencer, leads, mailboxes, unified inbox, CRM pipeline, and a
 heuristic EQ Score engine (real LLM to be plugged in later).
 """
 
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, status
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response, RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import re
@@ -23,6 +25,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
+import asyncio
 import anthropic
 import openai
 from google import genai
@@ -39,6 +42,16 @@ JWT_SECRET = os.environ.get("JWT_SECRET", "pitcheq-dev-secret-change-me")
 JWT_ALG = "HS256"
 JWT_TTL_HOURS = 24 * 7
 
+# Deployment environment. "dev" (default) keeps local-friendly fallbacks;
+# anything else (staging/production) makes insecure defaults fatal at boot
+# rather than silently shipping them.
+APP_ENV = os.environ.get("ENV", "dev").lower()
+if APP_ENV != "dev" and JWT_SECRET == "pitcheq-dev-secret-change-me":
+    raise RuntimeError(
+        "FATAL: JWT_SECRET is still the built-in dev default but ENV=%s. "
+        "Set a strong JWT_SECRET before deploying." % APP_ENV
+    )
+
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 # Where the recipient's mail client reaches the open pixel / click redirect. Must
 # be publicly reachable for tracking to work at all — on localhost it won't be.
@@ -47,6 +60,10 @@ PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "")
 app = FastAPI(title="Pitch EQ API")
 api = APIRouter(prefix="/api")
 bearer = HTTPBearer(auto_error=False)
+
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
+app.state.limiter = limiter
+app.add_exception_handler(429, _rate_limit_exceeded_handler)
 
 
 # ----------------------------- Helpers ---------------------------------------
@@ -105,19 +122,7 @@ class LoginIn(BaseModel):
     password: str
 
 
-class LeadIn(BaseModel):
-    first_name: str
-    last_name: Optional[str] = ""
-    email: EmailStr
-    company: Optional[str] = ""
-    title: Optional[str] = ""
-    linkedin: Optional[str] = ""
-    phone: Optional[str] = None
-    tags: List[str] = []
-
-
-class LeadBulk(BaseModel):
-    leads: List[LeadIn]
+# LeadIn/LeadUpdate/LeadBulk moved to crm.py.
 
 
 class SequenceStep(BaseModel):
@@ -137,6 +142,14 @@ class CampaignIn(BaseModel):
     send_window_start: str = "09:00"
     send_window_end: str = "17:00"
     timezone: str = "UTC"
+    signature_id: Optional[str] = None
+
+
+class SignatureIn(BaseModel):
+    name: str
+    content_html: str = ""
+    content_text: str = ""
+    is_default: bool = False
 
 
 class MailboxIn(BaseModel):
@@ -150,11 +163,7 @@ class ReplyIn(BaseModel):
     body: str
 
 
-class DealIn(BaseModel):
-    lead_id: str
-    title: str
-    value: float = 0
-    stage: str = "new"
+# DealIn moved to crm.py.
 
 
 class AIPersonalizeIn(BaseModel):
@@ -250,7 +259,10 @@ def personalize(template: str, lead: Dict[str, Any]) -> str:
 
 # ----------------------------- Auth Routes -----------------------------------
 @api.post("/auth/signup")
-async def signup(body: SignupIn):
+@limiter.limit("10/minute")
+async def signup(request: Request, body: SignupIn):
+    if len(body.password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
     if await db.users.find_one({"email": body.email.lower()}):
         raise HTTPException(400, "Email already registered")
     workspace_id = new_id()
@@ -281,7 +293,8 @@ async def signup(body: SignupIn):
 
 
 @api.post("/auth/login")
-async def login(body: LoginIn):
+@limiter.limit("20/minute")
+async def login(request: Request, body: LoginIn):
     user = await db.users.find_one({"email": body.email.lower()}, {"_id": 0})
     if not user or not verify_pw(body.password, user["password_hash"]):
         raise HTTPException(401, "Invalid credentials")
@@ -422,79 +435,8 @@ async def update_profile(body: ProfileUpdateIn, user=Depends(current_user)):
     return {"user": fresh}
 
 
-# ----------------------------- Leads -----------------------------------------
-@api.get("/leads")
-async def list_leads(user=Depends(current_user)):
-    items = await db.leads.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(2000)
-    return items
-
-
-@api.post("/leads")
-async def create_lead(body: LeadIn, user=Depends(current_user)):
-    lead = body.model_dump()
-    lead["id"] = new_id()
-    lead["workspace_id"] = user["workspace_id"]
-    lead["email"] = lead["email"].lower()
-    lead["status"] = "new"
-    lead["icp_score"] = 60 + (len(lead.get("company", "")) % 40)
-    lead["verified"] = "@" in lead["email"] and "." in lead["email"].split("@")[-1]
-    lead["phone_verified"] = False
-    lead["dnc"] = False
-    lead["created_at"] = now_iso()
-    # dedup by email in workspace
-    if await db.leads.find_one({"workspace_id": user["workspace_id"], "email": lead["email"]}):
-        raise HTTPException(400, "Lead with this email already exists")
-    await db.leads.insert_one(lead)
-    lead.pop("_id", None)
-    return lead
-
-
-@api.post("/leads/bulk")
-async def bulk_leads(body: LeadBulk, user=Depends(current_user)):
-    added, skipped = 0, 0
-    for item in body.leads:
-        d = item.model_dump()
-        d["email"] = d["email"].lower()
-        if await db.leads.find_one({"workspace_id": user["workspace_id"], "email": d["email"]}):
-            skipped += 1
-            continue
-        d.update({
-            "id": new_id(),
-            "workspace_id": user["workspace_id"],
-            "status": "new",
-            "icp_score": 55 + (len(d.get("company", "")) % 45),
-            "verified": True,
-            "phone_verified": False,
-            "dnc": False,
-            "created_at": now_iso(),
-        })
-        await db.leads.insert_one(d)
-        added += 1
-    return {"added": added, "skipped": skipped}
-
-
-@api.delete("/leads/{lead_id}")
-async def delete_lead(lead_id: str, user=Depends(current_user)):
-    await db.leads.delete_one({"id": lead_id, "workspace_id": user["workspace_id"]})
-    return {"ok": True}
-
-
-@api.post("/suppressions")
-async def suppress(body: Dict[str, str], user=Depends(current_user)):
-    email = body.get("email", "").lower()
-    if not email:
-        raise HTTPException(400, "email required")
-    await db.suppressions.update_one(
-        {"workspace_id": user["workspace_id"], "email": email},
-        {"$set": {"workspace_id": user["workspace_id"], "email": email, "created_at": now_iso()}},
-        upsert=True,
-    )
-    return {"ok": True}
-
-
-@api.get("/suppressions")
-async def list_suppressions(user=Depends(current_user)):
-    return await db.suppressions.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(1000)
+# ----------------------------- Leads, Lead Lists, Suppressions ---------------
+# Moved to crm.py (mounted below) — CRM is a spoke module like every other agent.
 
 
 # ----------------------------- Mailboxes -------------------------------------
@@ -626,6 +568,11 @@ async def create_campaign(body: CampaignIn, user=Depends(current_user)):
     })
     await db.campaigns.insert_one(c)
     c.pop("_id", None)
+    if c.get("lead_ids"):
+        await db.leads.update_many(
+            {"id": {"$in": c["lead_ids"]}},
+            {"$addToSet": {"campaign_ids": c["id"]}},
+        )
     return c
 
 
@@ -640,11 +587,38 @@ async def get_campaign(cid: str, user=Depends(current_user)):
 
 @api.put("/campaigns/{cid}")
 async def update_campaign(cid: str, body: CampaignIn, user=Depends(current_user)):
+    old = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0, "lead_ids": 1})
+    new_ids = body.lead_ids
+    old_ids = (old or {}).get("lead_ids", [])
     await db.campaigns.update_one(
         {"id": cid, "workspace_id": user["workspace_id"]},
         {"$set": body.model_dump()},
     )
+    added = [lid for lid in new_ids if lid not in old_ids]
+    removed = [lid for lid in old_ids if lid not in new_ids]
+    if added:
+        await db.leads.update_many(
+            {"id": {"$in": added}},
+            {"$addToSet": {"campaign_ids": cid}},
+        )
+    if removed:
+        await db.leads.update_many(
+            {"id": {"$in": removed}},
+            {"$pull": {"campaign_ids": cid}},
+        )
     return await get_campaign(cid, user)
+
+
+@api.delete("/campaigns/{cid}")
+async def delete_campaign(cid: str, user=Depends(current_user)):
+    result = await db.campaigns.delete_one({"id": cid, "workspace_id": user["workspace_id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Campaign not found")
+    # Also clean up related data
+    await db.send_queue.delete_many({"campaign_id": cid})
+    await db.events.delete_many({"campaign_id": cid})
+    await db.conversations.delete_many({"campaign_id": cid})
+    return {"ok": True}
 
 
 @api.post("/campaigns/{cid}/launch")
@@ -661,6 +635,20 @@ async def launch_campaign(cid: str, user=Depends(current_user)):
     c = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
     if not c:
         raise HTTPException(404, "not found")
+
+    lead_ids = c.get("lead_ids") or []
+    if lead_ids:
+        pmap = {p["lead_id"]: p for p in c.get("personalized_emails", [])}
+        missing = [lid for lid in lead_ids if lid not in pmap]
+        drafts = [lid for lid in lead_ids if pmap.get(lid, {}).get("status") == "draft"]
+        if missing or drafts:
+            reviewed = len(lead_ids) - len(missing) - len(drafts)
+            raise HTTPException(
+                400,
+                f"Review incomplete — {reviewed} of {len(lead_ids)} leads reviewed "
+                f"({len(missing)} not yet generated, {len(drafts)} awaiting approve/reject). "
+                "Every lead must be approved or rejected before launch.",
+            )
 
     try:
         result = await enqueue_campaign(user["workspace_id"], c)
@@ -684,6 +672,425 @@ async def campaign_queue(cid: str, user=Depends(current_user)):
     return {"counts": counts, "rows": rows[:100]}
 
 
+# ----------------------------- Campaign Personalization ----------------------------
+@api.post("/campaigns/{cid}/leads/{lead_id}/generate-email")
+async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(current_user)):
+    """Research a lead via Perplexity, then draft a personalized cold email using
+    the campaign's service context and step template."""
+    if not await _rate_ok(user):
+        raise HTTPException(429, "Daily AI quota exceeded")
+    wid = user["workspace_id"]
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(404, "Campaign not found")
+    lead = await db.leads.find_one({"id": lead_id, "workspace_id": wid}, {"_id": 0})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    service_info = {}
+    service_id = campaign.get("ai_meta", {}).get("service_id") or campaign.get("service_id")
+    if service_id:
+        svc = await db.service_library.find_one({"id": service_id, "workspace_id": wid}, {"_id": 0})
+        if svc:
+            service_info = {k: v for k, v in svc.items() if k not in ("id", "workspace_id", "created_at", "updated_at", "status", "_id")}
+    domain = ""
+    if lead.get("email") and "@" in lead["email"]:
+        domain = lead["email"].split("@", 1)[1]
+    lead_context = {k: lead.get(k) for k in ("first_name", "last_name", "title", "company", "email", "linkedin_url")}
+    # Step 1: Real research — site crawl + Google News + GitHub + Perplexity,
+    # cached 7 days. Replaces a generic LLM call that only claimed to research.
+    from research_worker import get_research, summarize_for_prompt
+    research_pack = await get_research(wid, lead)
+    research_summary = summarize_for_prompt(research_pack)
+    research = {"summary": research_summary, "has_signal": research_pack.get("has_signal", False)}
+    # Step 2: Generate personalized opener only (not full email)
+    campaign_steps = campaign.get("steps", [])
+    step_template = campaign_steps[0] if campaign_steps else {}
+    
+    # Build explicit campaign service context from ai_meta (most reliable)
+    ai_meta = campaign.get("ai_meta", {})
+    campaign_service = ""
+    if ai_meta.get("service_name"):
+        campaign_service = f"CAMPAIGN SERVICE: {ai_meta['service_name']}\n"
+    if campaign.get("goal"):
+        campaign_service += f"CAMPAIGN GOAL: {campaign['goal']}\n"
+    if campaign.get("tone"):
+        campaign_service += f"CAMPAIGN TONE: {campaign['tone']}\n"
+
+    opener_system = (
+        "You are Pitch EQ's personalization agent. Generate ONLY a personalized ice-breaker opener for a cold email.\n"
+        "Rules:\n"
+        "1. Use real specific details from the lead research — never invent\n"
+        "2. Write 1-2 sentences max — a genuine ice breaker tied to something real (their role, company news, recent event, tech stack, funding, hiring, etc.)\n"
+        "3. Make it conversational and natural — not salesy\n"
+        "4. Do NOT include greeting, do NOT include the pitch, do NOT include CTA\n"
+        "5. Return STRICT JSON only: {\"opener\": \"...\"}"
+    )
+    opener_prompt = (
+        f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\n"
+        f"LEAD RESEARCH:\n{research_summary}\n\n"
+        f"CAMPAIGN SERVICE: {ai_meta.get('service_name', campaign.get('goal', ''))}\n"
+        f"CAMPAIGN GOAL: {campaign.get('goal', '')}\n"
+        f"CAMPAIGN TONE: {campaign.get('tone', 'professional')}\n\n"
+        f"Generate a personalized ice-breaker opener for this specific lead. "
+        f"This will be inserted into the {{personalized_opener}} placeholder in the email template."
+    )
+    try:
+        raw2 = await _llm_chat(opener_system, opener_prompt, f"lead-opnr-{lead_id[:8]}", user=user, max_tokens=512)
+        opener_data = _extract_json(raw2) or {}
+        personalized_opener = opener_data.get("opener", "")
+    except Exception as ex:
+        raise HTTPException(502, f"Opener generation failed: {ex}")
+
+    # Merge opener into template
+    template_body = step_template.get("body", "")
+    template_html = step_template.get("body_html", "")
+    merged_body = template_body.replace("{{personalized_opener}}", personalized_opener)
+    merged_html = template_html.replace("{{personalized_opener}}", personalized_opener) if template_html else ""
+
+    personalized = {
+        "lead_id": lead_id,
+        "subject": step_template.get("subject", ""),
+        "body": merged_body,
+        "body_html": merged_html,
+        "personalized_opener": personalized_opener,  # Store opener separately for review/regeneration
+        "research": research,
+        "status": "draft",
+        "generated_at": now_iso(),
+    }
+    await db.campaigns.update_one(
+        {"id": cid},
+        {"$push": {"personalized_emails": personalized}}
+    )
+    await _audit(user, "campaign.lead.email_generated", {"campaign_id": cid, "lead_id": lead_id})
+    return personalized
+
+
+@api.get("/campaigns/{cid}/leads")
+async def get_campaign_leads(cid: str, user=Depends(current_user)):
+    """Return leads for a campaign with their personalized email status."""
+    wid = user["workspace_id"]
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0, "personalized_emails": 1, "lead_ids": 1})
+    if not campaign:
+        raise HTTPException(404, "not found")
+    lead_ids = campaign.get("lead_ids", [])
+    personalized = campaign.get("personalized_emails", [])
+    personalization_map = {p["lead_id"]: p for p in personalized}
+    leads = await db.leads.find(
+        {"id": {"$in": lead_ids}, "workspace_id": wid},
+        {"_id": 0}
+    ).to_list(500)
+    def _resolve(s: str) -> str:
+        if not s:
+            return s
+        for k in ("first_name", "last_name", "company", "title"):
+            v = lead.get(k, "")
+            if v:
+                s = s.replace("{{" + k + "}}", v)
+        return s
+
+    result = []
+    for lead in leads:
+        p = personalization_map.get(lead["id"])
+        result.append({
+            "id": lead["id"],
+            "first_name": lead.get("first_name", ""),
+            "last_name": lead.get("last_name", ""),
+            "email": lead.get("email", ""),
+            "company": lead.get("company", ""),
+            "title": lead.get("title", ""),
+            "personalized": p is not None,
+            "email_status": p.get("status", "none") if p else "none",
+            "email_subject": _resolve(p.get("subject", "")) if p else "",
+            "email_body": _resolve(p.get("body", "")) if p else "",
+            "email_body_html": _resolve(p.get("body_html", "")) if p else "",
+            "personalized_opener": p.get("personalized_opener", "") if p else "",
+            "generated_at": p.get("generated_at", "") if p else "",
+        })
+    return {"leads": result, "personalized_count": len(personalized), "total_count": len(lead_ids)}
+
+
+@api.post("/campaigns/{cid}/leads/generate-all")
+async def generate_all_lead_emails(cid: str, user=Depends(current_user)):
+    """Generate personalized emails for all leads in a campaign."""
+    wid = user["workspace_id"]
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(404, "not found")
+    service_info = {}
+    service_id = campaign.get("ai_meta", {}).get("service_id") or campaign.get("service_id")
+    if service_id:
+        svc = await db.service_library.find_one({"id": service_id, "workspace_id": wid}, {"_id": 0})
+        if svc:
+            service_info = {k: v for k, v in svc.items() if k not in ("id", "workspace_id", "created_at", "updated_at", "status", "_id")}
+    lead_ids = campaign.get("lead_ids", [])
+    personalized = campaign.get("personalized_emails", [])
+    already_done = {p["lead_id"] for p in personalized}
+    to_generate = [lid for lid in lead_ids if lid not in already_done]
+    if not to_generate:
+        return {"generated": 0, "message": "All leads already have personalized emails"}
+    results, errors = [], []
+    campaign_steps = campaign.get("steps", [])
+    step_template = campaign_steps[0] if campaign_steps else {}
+    template_body = step_template.get("body", "")
+    template_html = step_template.get("body_html", "")
+    template_subject = step_template.get("subject", "")
+    ai_meta = campaign.get("ai_meta", {})
+    campaign_name = ai_meta.get("service_name", campaign.get("goal", ""))
+    campaign_goal = campaign.get("goal", "")
+    campaign_tone = campaign.get("tone", "professional")
+
+    from research_worker import get_research, summarize_for_prompt
+    sem = asyncio.Semaphore(4)
+
+    async def _generate_one(lid: str):
+        async with sem:
+            lead = await db.leads.find_one({"id": lid, "workspace_id": wid}, {"_id": 0})
+            if not lead:
+                return
+            lead_context = {k: lead.get(k) for k in ("first_name", "last_name", "title", "company", "email", "linkedin_url")}
+            research_pack = await get_research(wid, lead)
+            research_summary = summarize_for_prompt(research_pack)
+
+            opener_raw = await _llm_chat(
+                "You are Pitch EQ's personalization agent. Generate ONLY a personalized ice-breaker opener. Rules: 1) Use real details from research — never invent. 2) 1-2 sentences max. 3) Conversational, not salesy. 4) No greeting, pitch, or CTA. Return STRICT JSON: {\"opener\": \"...\"}",
+                f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\nLEAD RESEARCH:\n{research_summary}\n\nCAMPAIGN SERVICE: {campaign_name}\nCAMPAIGN GOAL: {campaign_goal}\nCAMPAIGN TONE: {campaign_tone}\n\nGenerate a personalized ice-breaker opener for this specific lead.",
+                f"genall-opnr-{lid[:8]}", user=user, max_tokens=512
+            )
+            opener_data = _extract_json(opener_raw) or {}
+            personalized_opener = opener_data.get("opener", "")
+
+            # Merge opener into template
+            merged_body = template_body.replace("{{personalized_opener}}", personalized_opener)
+            merged_html = template_html.replace("{{personalized_opener}}", personalized_opener) if template_html else ""
+
+            await db.campaigns.update_one(
+                {"id": cid},
+                {"$push": {"personalized_emails": {
+                    "lead_id": lid, "subject": template_subject,
+                    "body": merged_body, "body_html": merged_html,
+                    "personalized_opener": personalized_opener,
+                    "research": {"summary": research_summary, "has_signal": research_pack.get("has_signal", False)},
+                    "status": "draft", "generated_at": now_iso(),
+                }}}
+            )
+            results.append(lid)
+
+    outcomes = await asyncio.gather(*(_generate_one(lid) for lid in to_generate), return_exceptions=True)
+    for lid, outcome in zip(to_generate, outcomes):
+        if isinstance(outcome, Exception):
+            errors.append({"lead_id": lid, "error": str(outcome)})
+    await _audit(user, "campaign.leads.email_generated_all", {"campaign_id": cid, "count": len(results)})
+    return {"generated": len(results), "errors": errors}
+
+
+@api.delete("/campaigns/{cid}/leads/{lead_id}/email")
+async def delete_campaign_lead_email(cid: str, lead_id: str, user=Depends(current_user)):
+    """Delete a personalized email for a lead."""
+    wid = user["workspace_id"]
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(404, "not found")
+    await db.campaigns.update_one(
+        {"id": cid},
+        {"$pull": {"personalized_emails": {"lead_id": lead_id}}}
+    )
+    return {"ok": True}
+
+
+@api.post("/campaigns/{cid}/leads/batch")
+async def add_leads_to_campaign(cid: str, body: Dict[str, Any], user=Depends(current_user)):
+    """Add selected lead IDs to a campaign."""
+    wid = user["workspace_id"]
+    lead_ids = body.get("lead_ids", [])
+    if not lead_ids:
+        raise HTTPException(400, "No lead IDs provided")
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(404, "not found")
+    existing = set(campaign.get("lead_ids", []))
+    new_ids = [lid for lid in lead_ids if lid not in existing]
+    if not new_ids:
+        return {"added": 0, "message": "All selected leads already in campaign"}
+    await db.campaigns.update_one(
+        {"id": cid},
+        {"$push": {"lead_ids": {"$each": new_ids}}}
+    )
+    # Tag each lead with the campaign reference
+    await db.leads.update_many(
+        {"id": {"$in": new_ids}},
+        {"$addToSet": {"campaign_ids": cid}}
+    )
+    return {"added": len(new_ids), "lead_ids": new_ids}
+
+
+@api.post("/campaigns/{cid}/run-engine")
+async def run_campaign_engine(cid: str, user=Depends(current_user)):
+    """
+    Run the campaign engine to generate personalized openers for ALL assigned leads.
+    This is the bulk personalization step — generates unique opener per lead and merges into template.
+    """
+    if not await _rate_ok(user):
+        raise HTTPException(429, "Daily AI quota exceeded")
+    wid = user["workspace_id"]
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(404, "Campaign not found")
+    
+    lead_ids = campaign.get("lead_ids", [])
+    if not lead_ids:
+        raise HTTPException(400, "No leads assigned to campaign. Add leads first.")
+    
+    # Check if already has personalized emails — allow re-run with force flag
+    personalized = campaign.get("personalized_emails", [])
+    if personalized:
+        # Allow re-running by clearing existing first
+        pass  # generate_all_lead_emails handles skipping already-done leads
+    
+    # Use the existing generate-all logic
+    return await generate_all_lead_emails(cid, user)
+
+
+@api.post("/campaigns/{cid}/leads/{lead_id}/regenerate-opener")
+async def regenerate_lead_opener(cid: str, lead_id: str, user=Depends(current_user)):
+    """Regenerate just the personalized opener for a specific lead."""
+    if not await _rate_ok(user):
+        raise HTTPException(429, "Daily AI quota exceeded")
+    wid = user["workspace_id"]
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(404, "Campaign not found")
+    lead = await db.leads.find_one({"id": lead_id, "workspace_id": wid}, {"_id": 0})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    
+    # Get existing personalized email to find the research
+    personalized = None
+    for p in campaign.get("personalized_emails", []):
+        if p["lead_id"] == lead_id:
+            personalized = p
+            break
+    
+    # Remove old personalized email
+    await db.campaigns.update_one(
+        {"id": cid},
+        {"$pull": {"personalized_emails": {"lead_id": lead_id}}}
+    )
+    
+    # Re-generate using the single-lead endpoint logic
+    return await generate_campaign_lead_email(cid, lead_id, user)
+
+
+@api.post("/campaigns/{cid}/leads/{lead_id}/approve")
+async def approve_campaign_lead_email(cid: str, lead_id: str, user=Depends(current_user)):
+    """Approve a personalized email for sending."""
+    wid = user["workspace_id"]
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(404, "not found")
+    result = await db.campaigns.update_one(
+        {"id": cid, "personalized_emails.lead_id": lead_id},
+        {"$set": {"personalized_emails.$.status": "approved"}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(404, "Personalized email not found")
+    await _audit(user, "campaign.lead.email_approved", {"campaign_id": cid, "lead_id": lead_id})
+    return {"status": "approved"}
+
+
+@api.post("/campaigns/{cid}/leads/{lead_id}/reject")
+async def reject_campaign_lead_email(cid: str, lead_id: str, user=Depends(current_user)):
+    """Reject a personalized email."""
+    wid = user["workspace_id"]
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(404, "not found")
+    result = await db.campaigns.update_one(
+        {"id": cid, "personalized_emails.lead_id": lead_id},
+        {"$set": {"personalized_emails.$.status": "rejected"}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(404, "Personalized email not found")
+    await _audit(user, "campaign.lead.email_rejected", {"campaign_id": cid, "lead_id": lead_id})
+    return {"status": "rejected"}
+
+
+@api.post("/campaigns/{cid}/leads/approve-all")
+async def approve_all_campaign_emails(cid: str, user=Depends(current_user)):
+    """Approve all draft personalized emails in one call."""
+    wid = user["workspace_id"]
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(404, "not found")
+    result = await db.campaigns.update_one(
+        {"id": cid},
+        {"$set": {"personalized_emails.$[elem].status": "approved"}},
+        array_filters=[{"elem.status": {"$in": ["draft", None]}}],
+    )
+    count = result.modified_count
+    await _audit(user, "campaign.leads.email_approved_all", {"campaign_id": cid, "count": count})
+    return {"approved": count}
+
+
+@api.post("/campaigns/{cid}/leads/{lead_id}/update-opener")
+async def update_lead_opener(cid: str, lead_id: str, body: Dict[str, Any], user=Depends(current_user)):
+    """Manually update the personalized opener for a lead (from user edit)."""
+    wid = user["workspace_id"]
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(404, "Campaign not found")
+    new_opener = body.get("opener", "")
+    if not new_opener:
+        raise HTTPException(400, "opener is required")
+    step_template = (campaign.get("steps") or [{}])[0]
+    template_body = step_template.get("body", "")
+    template_html = step_template.get("body_html", "")
+    merged_body = template_body.replace("{{personalized_opener}}", new_opener)
+    merged_html = template_html.replace("{{personalized_opener}}", new_opener) if template_html else ""
+    result = await db.campaigns.update_one(
+        {"id": cid, "personalized_emails.lead_id": lead_id},
+        {"$set": {
+            "personalized_emails.$.personalized_opener": new_opener,
+            "personalized_emails.$.body": merged_body,
+            "personalized_emails.$.body_html": merged_html,
+            "personalized_emails.$.status": "draft",
+        }}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(404, "Personalized email not found")
+    await _audit(user, "campaign.lead.opener_updated", {"campaign_id": cid, "lead_id": lead_id})
+    return {"status": "draft", "personalized_opener": new_opener, "body": merged_body}
+
+
+# ----------------------------- Signature Management ----------------------------
+@api.post("/signatures")
+async def create_signature(body: SignatureIn, user=Depends(current_user)):
+    sig = body.model_dump()
+    sig.update({
+        "id": new_id(),
+        "workspace_id": user["workspace_id"],
+        "created_at": now_iso(),
+    })
+    await db.signatures.insert_one(sig)
+    sig.pop("_id", None)
+    return sig
+
+
+@api.get("/signatures")
+async def list_signatures(user=Depends(current_user)):
+    sigs = await db.signatures.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return sigs
+
+
+@api.delete("/signatures/{sid}")
+async def delete_signature(sid: str, user=Depends(current_user)):
+    result = await db.signatures.delete_one({"id": sid, "workspace_id": user["workspace_id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Signature not found")
+    return {"ok": True}
+
+
 # ---- Open / click tracking (PUBLIC — called by the recipient's mail client) ----
 _PIXEL = base64.b64decode(
     b"R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
@@ -691,7 +1098,8 @@ _PIXEL = base64.b64decode(
 
 
 @api.get("/t/o/{queue_id}")
-async def track_open(queue_id: str):
+@limiter.limit("60/minute")
+async def track_open(request: Request, queue_id: str):
     """1x1 beacon. An 'opened' event now means the recipient's client actually
     loaded this image — it is no longer a coin flip on a hash of the row index."""
     row = await db.send_queue.find_one({"id": queue_id}, {"_id": 0})
@@ -711,7 +1119,8 @@ async def track_open(queue_id: str):
 
 
 @api.get("/t/c/{queue_id}")
-async def track_click(queue_id: str, u: str = ""):
+@limiter.limit("60/minute")
+async def track_click(request: Request, queue_id: str, u: str = ""):
     row = await db.send_queue.find_one({"id": queue_id}, {"_id": 0})
     if row and u:
         await db.events.insert_one({
@@ -786,82 +1195,140 @@ async def reply(cid: str, body: ReplyIn, user=Depends(current_user)):
     return {"ok": True}
 
 
-# ----------------------------- CRM -------------------------------------------
-STAGES = ["new", "qualified", "meeting", "proposal", "won", "lost"]
-
-
-@api.get("/deals")
-async def list_deals(user=Depends(current_user)):
-    deals = await db.deals.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(1000)
-    for d in deals:
-        d["lead"] = await db.leads.find_one({"id": d["lead_id"]}, {"_id": 0})
-    return deals
-
-
-@api.get("/deals/{did}")
-async def get_deal(did: str, user=Depends(current_user)):
-    d = await db.deals.find_one({"id": did, "workspace_id": user["workspace_id"]}, {"_id": 0})
-    if not d:
-        raise HTTPException(404, "not found")
-    d["lead"] = await db.leads.find_one({"id": d["lead_id"]}, {"_id": 0})
-    return d
-
-
-@api.post("/deals")
-async def create_deal(body: DealIn, user=Depends(current_user)):
-    d = body.model_dump()
-    d.update({"id": new_id(), "workspace_id": user["workspace_id"], "created_at": now_iso()})
-    if d["stage"] not in STAGES:
-        d["stage"] = "new"
-    await db.deals.insert_one(d)
-    d.pop("_id", None)
-    return d
-
-
-@api.put("/deals/{did}")
-async def update_deal(did: str, body: Dict[str, Any], user=Depends(current_user)):
-    allowed = {k: v for k, v in body.items() if k in {"stage", "value", "title", "notes"}}
-    if "stage" in allowed and allowed["stage"] not in STAGES:
-        raise HTTPException(400, "invalid stage")
-    await db.deals.update_one(
-        {"id": did, "workspace_id": user["workspace_id"]},
-        {"$set": allowed},
-    )
-    return {"ok": True}
+# ----------------------------- CRM (deals) ------------------------------------
+# Moved to crm.py (mounted below), STAGES re-exported from there for voice_eq.py.
 
 
 # ----------------------------- AI --------------------------------------------
+# ----------------------------- AI --------------------------------------------
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL = "claude-sonnet-5"
+ANTHROPIC_MODEL = "claude-sonnet-4-6"
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "")
+if PERPLEXITY_API_KEY:
+    ANTHROPIC_API_KEY = PERPLEXITY_API_KEY
+PERPLEXITY_MODEL = "sonar-pro"
+
+
+def _fix_json(candidate: str) -> Optional[Dict[str, Any]]:
+    """Parse LLM JSON with state-machine repair for common LLM errors:
+    - single-quoted strings
+    - missing opening quotes on string values
+    - stray quotes after numbers
+    - trailing/double commas
+    """
+    if not candidate:
+        return None
+    try:
+        return json.loads(candidate)
+    except Exception:
+        pass
+    fixed = _walk_and_fix(candidate)
+    fixed = re.sub(r'(?<=[0-9])"(?=\s*[,}\]\n])', '', fixed)
+    fixed = re.sub(r',\s*([}\]])', r'\1', fixed)
+    fixed = re.sub(r',{2,}', ',', fixed)
+    try:
+        return json.loads(fixed)
+    except json.JSONDecodeError:
+        pass
+    # Final fallback — try the brace block alone
+    m = re.search(r"\{[\s\S]*\}", candidate)
+    if m:
+        block = _walk_and_fix(m.group(0))
+        block = re.sub(r'(?<=[0-9])"(?=\s*[,}\]\n])', '', block)
+        block = re.sub(r',\s*([}\]])', r'\1', block)
+        block = re.sub(r',{2,}', ',', block)
+        try:
+            return json.loads(block)
+        except Exception:
+            pass
+    return None
+
+
+def _walk_and_fix(text: str) -> str:
+    """State-machine that walks char-by-char tracking string boundaries."""
+    out = []
+    i, n = 0, len(text)
+    in_string = in_single = escape = False
+    need_string_value = False
+    while i < n:
+        ch = text[i]
+        if escape:
+            out.append(ch); escape = False; i += 1; continue
+        if ch == '\\' and in_string:
+            escape = True; out.append(ch); i += 1; continue
+        if in_string:
+            if in_single:
+                if ch == "'":
+                    out.append('"'); in_string = in_single = False
+                else:
+                    out.append(ch)
+            else:
+                if ch == '"':
+                    out.append('"'); in_string = False
+                else:
+                    out.append(ch)
+            i += 1; continue
+        if ch == '"':
+            in_string = True; out.append('"'); need_string_value = False
+        elif ch == "'":
+            prev = text[max(0,i-20):i].rstrip()
+            if prev and prev[-1] in ':,([]{':
+                in_string = True; in_single = True; out.append('"')
+            else:
+                out.append("'")
+            need_string_value = False
+        elif ch == ':':
+            out.append(':'); need_string_value = True
+        elif need_string_value:
+            if ch in ' \t\n\r':
+                out.append(ch)
+            elif ch in '{}[]"\'0123456789-tfn':
+                out.append(ch); need_string_value = False
+            else:
+                out.append('"' + ch); in_string = True; need_string_value = False
+        else:
+            out.append(ch)
+        i += 1
+    return ''.join(out)
 
 
 def _extract_json(text: str) -> Optional[Dict[str, Any]]:
-    """Pull the first JSON object out of an LLM response (handles ```json fences)."""
+    """Pull the first JSON object out of an LLM response."""
     if not text:
         return None
     m = re.search(r"\{[\s\S]*\}", text)
     if not m:
         return None
-    try:
-        return json.loads(m.group(0))
-    except Exception:
-        return None
+    return _fix_json(m.group(0))
 
 
-async def _llm_chat(system: str, user_text: str, session_id: str, user: Optional[Dict[str, Any]] = None) -> str:
-    if not ANTHROPIC_API_KEY:
-        raise RuntimeError("ANTHROPIC_API_KEY not configured")
+async def _llm_chat(system: str, user_text: str, session_id: str, user: Optional[Dict[str, Any]] = None, max_tokens: int = 2048) -> str:
+    if not PERPLEXITY_API_KEY:
+        raise RuntimeError("PERPLEXITY_API_KEY not configured")
     if user and not await _rate_ok(user):
         raise RuntimeError("daily LLM quota exceeded")
-    resp = await anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY).messages.create(
-        model=ANTHROPIC_MODEL,
-        max_tokens=2048,
-        system=system,
-        messages=[{"role": "user", "content": user_text}],
-    )
-    return "".join(block.text for block in resp.content if block.type == "text")
+    import openai
+    client = openai.AsyncOpenAI(api_key=PERPLEXITY_API_KEY, base_url="https://api.perplexity.ai")
+    last_err = None
+    for attempt in range(3):
+        try:
+            resp = await client.chat.completions.create(
+                model=PERPLEXITY_MODEL,
+                max_tokens=max_tokens,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_text},
+                ],
+            )
+            return resp.choices[0].message.content or ""
+        except openai.RateLimitError as ex:
+            last_err = ex
+            await asyncio.sleep(2 ** attempt)
+        except Exception as ex:
+            raise RuntimeError(f"LLM call failed: {ex}") from ex
+    raise RuntimeError(f"LLM call failed after retries: {last_err}")
 
 
 @api.post("/ai/score")
@@ -1232,9 +1699,11 @@ class ProspectSearchIn(BaseModel):
     industries: List[str] = []
     locations: List[str] = []
     company_sizes: List[str] = []
+    seniority: List[str] = []
     keywords: List[str] = []
     domain: Optional[str] = None
-    limit: int = 20
+    limit: int = 25
+    include_mobile: bool = False
 
 
 class ProspectImportIn(BaseModel):
@@ -1289,7 +1758,7 @@ def _resolve_domain_from_keywords(keywords: List[str], override: Optional[str]) 
     for k in keywords or []:
         if "." in k:
             return k.strip().lower()
-    return "example.com"
+    return ""
 
 
 @api.post("/prospect/search")
@@ -1301,35 +1770,52 @@ async def prospect_search(body: ProspectSearchIn, user=Depends(current_user)):
     if body.icp_id:
         icp = await db.icps.find_one({"id": body.icp_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
         if icp:
-            for k in ("titles", "industries", "locations", "company_sizes", "keywords"):
+            for k in ("titles", "industries", "locations", "company_sizes", "seniority", "keywords"):
                 filters[k] = list({*(filters.get(k) or []), *(icp.get(k) or [])})
 
     domain = _resolve_domain_from_keywords(filters["keywords"], body.domain)
     try:
-        prospects = await lead_sources.domain_search(domain, limit=body.limit)
+        prospects = await lead_sources.person_search(
+            domain=domain,
+            titles=filters.get("titles"),
+            locations=filters.get("locations"),
+            industries=filters.get("industries"),
+            company_sizes=filters.get("company_sizes"),
+            seniority=filters.get("seniority"),
+            include_mobile=body.include_mobile,
+            limit=body.limit,
+        )
     except lead_sources.ProviderError as ex:
-        raise HTTPException(502, f"Prospeo search failed: {ex}")
+        msg = str(ex)
+        # Map Prospeo error codes to user-friendly messages
+        if "NO_RESULTS" in msg:
+            raise HTTPException(404, "No results found for the given filters. Try broadening your search.")
+        if "INVALID_FILTERS" in msg:
+            raise HTTPException(422, "One or more filter values are invalid. Check titles, locations, and seniority values.")
+        if "INSUFFICIENT_CREDITS" in msg:
+            from billing import get_balance
+            bal = await get_balance(user["workspace_id"])
+            raise HTTPException(402, {
+                "error": "insufficient_credits", "action": "lead_enrichment",
+                "needed": 5, "balance": bal,
+            })
+        if "INVALID_API_KEY" in msg:
+            raise HTTPException(502, "Lead provider API key is invalid. Contact support.")
+        if "PLAN_REQUIRED" in msg or "company_industry" in msg:
+            raise HTTPException(422, "Some filters require a higher Prospeo plan. Try using fewer or simpler filters.")
+        raise HTTPException(502, f"Search failed: {str(ex)[:200]}")
 
-    # normalize_prospect() returns linkedin_url; the rest of this route (and
-    # prospect_import below) has always used the shorter "linkedin" key.
-    for p in prospects:
-        p["linkedin"] = p.pop("linkedin_url", "")
-
-    # Apply title/seniority filter locally when Prospeo returns broader lists
-    wanted_titles = [t.lower() for t in filters.get("titles", [])]
-    if wanted_titles:
-        prospects = [p for p in prospects if not p.get("title") or any(t in p.get("title", "").lower() for t in wanted_titles)]
-
-    # Verify in-flight. A single provider hiccup here shouldn't discard an
-    # otherwise-real, already-found list of prospects — mark that one contact
-    # "risky" (unverified) rather than failing the whole search.
-    for p in prospects:
-        try:
-            v = await lead_sources.verify_email(p.get("email", ""))
-        except lead_sources.ProviderError as ex:
-            v = {"status": "risky", "score": 0.5, "provider": "icypeas", "error": str(ex)}
-        p["verification"] = v
-        p["verified"] = v.get("status") == "valid"
+    # Verify in-flight with Icypeas (preferred for email verification).
+    # Batch-verify concurrently — sequential verification of 25 prospects would
+    # take minutes even with the per-call concurrency semaphore.
+    emails = [(i, p.get("email")) for i, p in enumerate(prospects) if p.get("email")]
+    if emails:
+        indices = [e[0] for e in emails]
+        addrs = [e[1] for e in emails]
+        results = await lead_sources.verify_many(addrs)
+        for idx, v in zip(indices, results):
+            prospects[idx]["verification"] = v
+            prospects[idx]["verified"] = v.get("status") == "valid"
 
     # Enrichment is billed per contact actually returned — the third-party lookup
     # cost is already incurred by this point, so it settles even if it overdraws.
@@ -1340,9 +1826,7 @@ async def prospect_search(body: ProspectSearchIn, user=Depends(current_user)):
 
     return {
         "filters": filters,
-        "domain": domain,
         "prospects": prospects,
-        "providers": lead_sources.provider_status(),
     }
 
 
@@ -1369,7 +1853,7 @@ async def prospect_import(body: ProspectImportIn, user=Depends(current_user)):
                 )
                 resp = await _llm_chat(
                     system,
-                    json.dumps({k: p.get(k) for k in ("first_name","last_name","title","company","domain","linkedin")}),
+                    json.dumps({k: p.get(k) for k in ("first_name","last_name","title","company","domain","linkedin_url")}),
                     f"icebr-{user['id']}", user=user,
                 )
                 parsed = _extract_json(resp)
@@ -1381,24 +1865,34 @@ async def prospect_import(body: ProspectImportIn, user=Depends(current_user)):
         if not icebreaker:
             icebreaker = f"Hi {p.get('first_name','')}, noticed {p.get('company','')} — curious how you're thinking about {p.get('title','your role')} priorities this quarter."
 
-        await db.leads.insert_one({
+        doc = {
             "id": new_id(), "workspace_id": wid,
             "first_name": p.get("first_name", ""),
             "last_name": p.get("last_name", ""),
             "email": email,
+            "phone": p.get("phone", ""),
             "company": p.get("company", ""),
             "title": p.get("title", ""),
-            "linkedin": p.get("linkedin", ""),
-            "tags": ["prospeo"],
+            "headline": p.get("headline", ""),
+            "linkedin_url": p.get("linkedin_url", ""),
+            "company_website": p.get("company_website", ""),
+            "company_industry": p.get("company_industry", ""),
+            "company_size": p.get("company_size", ""),
+            "company_description": p.get("company_description", ""),
+            "company_logo": p.get("company_logo", ""),
+            "location": p.get("location", {}),
+            "skills": p.get("skills", []),
+            "tags": ["imported"],
             "status": "new",
             "verified": (p.get("verification") or {}).get("status") == "valid",
             "verification": p.get("verification"),
             "icp_score": 70,
             "icebreaker": icebreaker,
             "persona_hypothesis": p.get("persona_hypothesis", ""),
-            "source": "prospeo",
+            "source": "imported",
             "created_at": now_iso(),
-        })
+        }
+        await db.leads.insert_one(doc)
         added += 1
     await _audit(user, "prospect.import", {"added": added, "skipped": skipped})
     return {"added": added, "skipped": skipped}
@@ -1406,7 +1900,7 @@ async def prospect_import(body: ProspectImportIn, user=Depends(current_user)):
 
 @api.get("/prospect/providers")
 async def prospect_providers(user=Depends(current_user)):
-    return lead_sources.provider_status()
+    return {"search": "enabled", "verify": "enabled"}
 
 
 # ----------------------------- Create EQ: Google Fonts ------------------------
@@ -1491,6 +1985,7 @@ class CarouselGenIn(BaseModel):
     slide_count: int = 6
     brand: Optional[BrandKit] = None
     tone: str = "confident, punchy"
+    source_url: Optional[str] = None
 
 
 class CarouselEditIn(BaseModel):
@@ -1516,6 +2011,16 @@ async def carousel_generate(body: CarouselGenIn, user=Depends(current_user)):
     if body.platform not in PLATFORM_DIMS:
         raise HTTPException(400, "invalid platform")
     slides: List[Dict[str, Any]] = []
+    source_summary = ""
+    if body.source_url:
+        try:
+            from company_intel import _deep_crawl
+            pages = await _deep_crawl(body.source_url, max_pages=10)
+            if pages:
+                snippet = " ".join(p.get("text", "")[:2000] for p in pages if p.get("text"))
+                source_summary = f"\n\nSource URL content summary:\n{snippet[:6000]}"
+        except Exception as ex:
+            logging.warning("source_url crawl error: %s", ex)
     if ANTHROPIC_API_KEY:
         from billing import charge_credits
         await charge_credits(user["workspace_id"], "carousel_generate",
@@ -1529,8 +2034,9 @@ async def carousel_generate(body: CarouselGenIn, user=Depends(current_user)):
             f"{body.tone}. STRICT JSON only: "
             '{"slides":[{"kind":"hook|body|cta","title":str,"subtitle":str,"body":str,"cta":str}]}'
         )
+        user_text = f"Topic: {body.topic}{source_summary}"
         try:
-            resp = await _llm_chat(system, f"Topic: {body.topic}", f"creq-gen-{user['id']}", user=user)
+            resp = await _llm_chat(system, user_text, f"creq-gen-{user['id']}", user=user)
             parsed = _extract_json(resp)
             if parsed and parsed.get("slides"):
                 slides = parsed["slides"][: body.slide_count]
@@ -1668,16 +2174,19 @@ def _closest_gemini_aspect(width: int, height: int) -> str:
     return min(_GEMINI_ASPECT_RATIOS.items(), key=lambda kv: abs(kv[1] - target))[0]
 
 
-@api.post("/carousel/ai-image")
-async def carousel_ai_image(body: AiImageIn, user=Depends(current_user)):
-    """Generate an AI image and return it as base64. The frontend embeds this as a
-    `data:image/png;base64,...` URL directly on the canvas — no external storage needed."""
-    prompt = (body.prompt or "").strip()
+async def generate_ai_image(user: Dict[str, Any], prompt: str, provider: str = "nano-banana",
+                            size: Optional[str] = "1080x1350", aspect: Optional[str] = "portrait") -> Dict[str, Any]:
+    """Core image-gen call: charges credits, rate-checks, calls the provider,
+    returns raw bytes + mime type. Shared by the /carousel/ai-image route
+    (which base64-encodes the result for the canvas) and social_eq.py's
+    bulk-import pipeline (which writes the bytes straight to disk for
+    Instagram's publicly-fetchable-URL requirement) — one generation path,
+    two consumers, instead of duplicating the OpenAI/Gemini calls."""
+    prompt = (prompt or "").strip()
     if not prompt:
         raise HTTPException(400, "prompt is required")
 
-    provider = (body.provider or "nano-banana").lower()
-
+    provider = (provider or "nano-banana").lower()
     if provider == "gpt-image-1":
         if not OPENAI_API_KEY:
             raise HTTPException(500, "OPENAI_API_KEY not configured")
@@ -1696,9 +2205,9 @@ async def carousel_ai_image(body: AiImageIn, user=Depends(current_user)):
             resp = await client.images.generate(model="gpt-image-1", prompt=prompt, n=1)
             if not resp.data:
                 raise HTTPException(502, "gpt-image-1 returned no image")
-            b64 = resp.data[0].b64_json
+            img_bytes = base64.b64decode(resp.data[0].b64_json)
             await _audit(user, "ai_image.generate", {"provider": "gpt-image-1", "prompt": prompt[:120]})
-            return {"image_base64": b64, "mime_type": "image/png", "provider": "gpt-image-1"}
+            return {"image_bytes": img_bytes, "mime_type": "image/png", "provider": "gpt-image-1"}
         except HTTPException:
             raise
         except Exception as ex:
@@ -1708,14 +2217,14 @@ async def carousel_ai_image(body: AiImageIn, user=Depends(current_user)):
     # default: Gemini Nano Banana
     try:
         req_w, req_h = 1080, 1350
-        if body.size and "x" in body.size:
+        if size and "x" in size:
             try:
-                w_str, h_str = body.size.lower().split("x", 1)
+                w_str, h_str = size.lower().split("x", 1)
                 req_w, req_h = int(w_str), int(h_str)
             except ValueError:
                 pass
         aspect_ratio = _closest_gemini_aspect(req_w, req_h)
-        style_hint = f"Composition: {body.size} {body.aspect}, high quality, suitable for a social media carousel."
+        style_hint = f"Composition: {size} {aspect}, high quality, suitable for a social media carousel."
         client = genai.Client(api_key=GEMINI_API_KEY)
         resp = await client.aio.models.generate_content(
             model="gemini-3.1-flash-image-preview",
@@ -1731,18 +2240,27 @@ async def carousel_ai_image(body: AiImageIn, user=Depends(current_user)):
             raise HTTPException(502, "nano-banana returned no image")
         img_bytes = image_part.inline_data.data
         mime_type = image_part.inline_data.mime_type or "image/png"
-        b64 = base64.b64encode(img_bytes).decode("utf-8") if isinstance(img_bytes, (bytes, bytearray)) else img_bytes
+        if not isinstance(img_bytes, (bytes, bytearray)):
+            img_bytes = base64.b64decode(img_bytes)
         await _audit(user, "ai_image.generate", {"provider": "nano-banana", "prompt": prompt[:120]})
-        return {
-            "image_base64": b64,
-            "mime_type": mime_type,
-            "provider": "nano-banana",
-        }
+        return {"image_bytes": bytes(img_bytes), "mime_type": mime_type, "provider": "nano-banana"}
     except HTTPException:
         raise
     except Exception as ex:
         logging.warning("nano-banana gen error: %s", ex)
         raise HTTPException(502, f"nano-banana failed: {ex}")
+
+
+@api.post("/carousel/ai-image")
+async def carousel_ai_image(body: AiImageIn, user=Depends(current_user)):
+    """Generate an AI image and return it as base64. The frontend embeds this as a
+    `data:image/png;base64,...` URL directly on the canvas — no external storage needed."""
+    result = await generate_ai_image(user, body.prompt, body.provider, body.size, body.aspect)
+    return {
+        "image_base64": base64.b64encode(result["image_bytes"]).decode("utf-8"),
+        "mime_type": result["mime_type"],
+        "provider": result["provider"],
+    }
 
 
 # ----------------------------- Webhooks: Airtable / Notion → Carousel -------
@@ -1824,7 +2342,8 @@ def _extract_field(payload: Any, path: str) -> Any:
 
 
 @api.post("/hooks/carousel/{token}")
-async def webhook_carousel(token: str, payload: Dict[str, Any]):
+@limiter.limit("20/minute")
+async def webhook_carousel(request: Request, token: str, payload: Dict[str, Any]):
     """PUBLIC (no JWT). Airtable / Notion / any webhook fires here → carousel generated."""
     hook = await db.webhooks.find_one({"token": token}, {"_id": 0})
     if not hook or not hook.get("active", True):
@@ -2001,49 +2520,12 @@ async def hubspot_oauth_callback(code: str, state: str):
 
 
 
-# ----------------------------- Pitch EQ: Research pass + Verify gate --------
-@api.post("/leads/{lead_id}/research")
-async def lead_research(lead_id: str, user=Depends(current_user)):
-    lead = await db.leads.find_one(
-        {"id": lead_id, "workspace_id": user["workspace_id"]}, {"_id": 0}
-    )
-    if not lead:
-        raise HTTPException(404, "not found")
-    domain = ""
-    if lead.get("email") and "@" in lead["email"]:
-        domain = lead["email"].split("@", 1)[1]
-    site_text = _fetch_url(f"https://{domain}") if domain else ""
-    triggers: List[str] = []
-    persona = ""
-    if ANTHROPIC_API_KEY and site_text:
-        system = (
-            "You are Pitch EQ's research agent. Given a lead and a snippet of their company website, "
-            "return STRICT JSON only: "
-            '{"triggers": ["2-4 short outbound-worthy triggers (funding, hiring, tech shift, PR, product)"], '
-            '"persona_hypothesis": "one-sentence guess about what this person cares about right now"}'
-        )
-        prompt = f"Lead: {json.dumps({k: lead.get(k) for k in ('first_name','last_name','title','company')})}\nWebsite: {site_text[:4000]}"
-        try:
-            resp = await _llm_chat(system, prompt, f"research-{user['id']}", user=user)
-            parsed = _extract_json(resp)
-            if parsed:
-                triggers = parsed.get("triggers", [])[:5]
-                persona = parsed.get("persona_hypothesis", "")
-        except Exception as ex:
-            logging.warning("research fallback: %s", ex)
-    research = {
-        "triggers": triggers or [
-            f"Company '{lead.get('company','')}' active domain: {domain}",
-            "Right-fit persona based on title/seniority",
-        ],
-        "persona_hypothesis": persona or f"{lead.get('title','Leader')} likely cares about growth and cost-efficiency.",
-        "researched_at": now_iso(),
-    }
-    await db.leads.update_one({"id": lead_id}, {"$set": {"research": research}})
-    await _audit(user, "lead.research", {"lead_id": lead_id, "domain": domain})
-    return research
-
-
+# ----------------------------- Quarantine helpers -----------------------------
+# The dead, unused, unbilled `/leads/{id}/research` route that used to live here
+# was removed — LeadDetail.jsx actually calls Pitch EQ's `/pitch-eq/leads/{id}/
+# research` + `/enrich` (pitch_eq.py), a completely separate, real implementation.
+# `GET /quarantine` moved to crm.py; these two helpers stay here since sender.py
+# imports them directly from server.
 def _verify_email_syntax(email: str) -> bool:
     return bool(re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email or ""))
 
@@ -2053,13 +2535,6 @@ async def _quarantine_lead(wid: str, lead: Dict[str, Any], reason: str):
         "id": new_id(), "workspace_id": wid, "lead_id": lead.get("id"),
         "email": lead.get("email"), "reason": reason, "at": now_iso(),
     })
-
-
-@api.get("/quarantine")
-async def list_quarantine(user=Depends(current_user)):
-    return await db.quarantine.find(
-        {"workspace_id": user["workspace_id"]}, {"_id": 0}
-    ).sort("at", -1).to_list(500)
 
 
 # ----------------------------- Templates -------------------------------------
@@ -2215,22 +2690,6 @@ async def _log_activity(workspace_id: str, lead_id: str, agent: str, type_: str,
         })
     except Exception:
         pass
-
-
-@api.get("/leads/{lead_id}")
-async def get_lead(lead_id: str, user=Depends(current_user)):
-    lead = await db.leads.find_one({"id": lead_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
-    if not lead:
-        raise HTTPException(404, "not found")
-    lead["deal"] = await db.deals.find_one({"lead_id": lead_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
-    return lead
-
-
-@api.get("/leads/{lead_id}/timeline")
-async def lead_timeline(lead_id: str, user=Depends(current_user)):
-    return await db.activities.find(
-        {"lead_id": lead_id, "workspace_id": user["workspace_id"]}, {"_id": 0}
-    ).sort("at", -1).to_list(500)
 
 
 # ----------------------------- Suite command center --------------------------
@@ -2402,24 +2861,507 @@ async def impersonate(uid: str, admin=Depends(require_admin)):
 
 
 # ----------------------------- Mount -----------------------------------------
+# crm's STAGES must be imported before voice_eq (which does `from server import
+# ..., STAGES, ...` at its own module scope) — otherwise voice_eq's import of a
+# still-partially-initialized `server` module would fail to find STAGES.
+from crm import crm_router, STAGES
 from voice_eq import voice_router, voice_public_router
 from voice_ws_bridge import voice_ws_router
+from voice_google_provider import voice_google_router
 from schedule_eq import schedule_router, schedule_public_router
 from proposal_eq import proposal_router
-from social_eq import social_router
+from social_eq import social_router, social_public_router
+from site_eq import site_router, site_public_router
 from billing import billing_router, billing_public_router
 from pitch_eq import pitch_router, pitch_public_router
+from company_intel import router as company_intel_router
+from service_library import router as service_library_router
+from campaign_engine import router as campaign_engine_router
 api.include_router(pitch_router)
+api.include_router(crm_router)
 api.include_router(pitch_public_router)
 api.include_router(voice_router)
 api.include_router(voice_public_router)
 api.include_router(voice_ws_router)
+api.include_router(voice_google_router)
 api.include_router(schedule_router)
 api.include_router(schedule_public_router)
 api.include_router(proposal_router)
 api.include_router(social_router)
+api.include_router(social_public_router)
+api.include_router(site_router)
+api.include_router(site_public_router)
 api.include_router(billing_router)
 api.include_router(billing_public_router)
+api.include_router(company_intel_router)
+api.include_router(service_library_router)
+api.include_router(campaign_engine_router)
+
+# ── Lead Intelligence Provider Manager ──────────────────────────────
+from lead_intelligence import ProviderManager, ProspeoAdapter, IcypeasAdapter
+from lead_intelligence.schema import UnifiedSearchFilters, RevealRequest
+lead_manager = ProviderManager(db=db)
+lead_manager.register(ProspeoAdapter(db=db))
+lead_manager.register(IcypeasAdapter(db=db))
+
+
+@api.post("/lead-intelligence/search")
+async def li_search(body: dict, user=Depends(current_user)):
+    filters = UnifiedSearchFilters(**body)
+    from billing import check_credits
+    await check_credits(user["workspace_id"], "lead_enrichment")
+    result = await lead_manager.search(
+        filters, workspace_id=user["workspace_id"], user_id=user.get("id", ""),
+    )
+    return result.model_dump(mode="json")
+
+
+@api.post("/lead-intelligence/reveal/estimate")
+async def li_reveal_estimate(body: dict, user=Depends(current_user)):
+    req = RevealRequest(**body)
+    est = await lead_manager.estimate_reveal_cost(req, workspace_id=user["workspace_id"])
+    return est.model_dump()
+
+
+@api.post("/lead-intelligence/reveal")
+async def li_reveal(body: dict, user=Depends(current_user)):
+    req = RevealRequest(**body)
+    from billing import check_credits, charge_credits
+    est = await lead_manager.estimate_reveal_cost(req, workspace_id=user["workspace_id"])
+    if est.total_credits > 0:
+        await check_credits(user["workspace_id"], "lead_reveal", units=est.total_credits)
+    results = await lead_manager.reveal_leads(
+        req, workspace_id=user["workspace_id"], user_id=user.get("id", ""),
+    )
+    if est.total_credits > 0:
+        await charge_credits(user["workspace_id"], "lead_reveal", units=est.total_credits, allow_overdraft=False)
+    return [r.model_dump() for r in results]
+
+
+def _normalize_lead(d):
+    """Convert flat lead dict to nested LeadRecord-compatible dict."""
+    person_fields = ["first_name","last_name","full_name","title","headline","seniority","department","management_level"]
+    company_fields = ["name","domain","website","industry","founded_year"]
+    contact_fields = ["email","phone","linkedin_url","email_status","phone_status"]
+    loc_fields = ["country","state","city","zip","region","timezone"]
+
+    def _pick(src, keys, target=None):
+        t = {} if target is None else target
+        for k in keys:
+            if k in src and src[k] not in (None, "", []):
+                t[k] = src[k]
+        return t
+
+    person = _pick(d, person_fields)
+    company = _pick(d, company_fields)
+    contact = _pick(d, contact_fields)
+
+    for flat, nested in [("company_name","name"),("company_domain","domain"),
+                          ("company_industry","industry")]:
+        if flat in d and d[flat] not in (None, "", []):
+            company[nested] = d[flat]
+
+    # company_size -> employee_count: only if parseable as int
+    if "company_size" in d and d["company_size"] not in (None, "", []):
+        try:
+            company["employee_count"] = int(d["company_size"])
+        except (ValueError, TypeError):
+            # Try extracting first number from ranges like "50-200"
+            import re as _re
+            m = _re.search(r"\d+", str(d["company_size"]))
+            if m:
+                company["employee_count"] = int(m.group())
+
+    location = _pick(d, loc_fields)
+    if d.get("city"):
+        location["city"] = d["city"]
+
+    if d.get("technologies"):
+        techs = d["technologies"]
+        company["technologies"] = techs if isinstance(techs, list) else [techs]
+
+    if d.get("skills"):
+        sk = d["skills"]
+        person["skills"] = sk if isinstance(sk, list) else [sk]
+
+    if d.get("years_experience"):
+        person["years_experience"] = d["years_experience"]
+
+    if d.get("company"):
+        if not company.get("name"):
+            company["name"] = d["company"]
+
+    out = {}
+    skip = set(person_fields + company_fields + contact_fields + loc_fields +
+               ["company","company_name","company_domain","company_industry","company_size",
+                "technologies","skills","years_experience"])
+    for k, v in d.items():
+        if k in skip:
+            continue
+        # Drop None values that Pydantic strict types reject
+        if v is None:
+            continue
+        out[k] = v
+    out["person"] = person
+    out["company"] = company
+    out["contact"] = contact
+    if location:
+        out["person"]["location"] = location
+    return out
+
+
+@api.post("/lead-intelligence/import")
+async def li_import(body: dict, user=Depends(current_user)):
+    leads_data = body.get("leads", [])
+    merge_strategy = body.get("merge_strategy", "skip")
+    from lead_intelligence.schema import LeadRecord
+    leads = [LeadRecord(**(_normalize_lead(l) if "person" not in l else l)) for l in leads_data]
+    result = await lead_manager.import_leads(
+        leads, workspace_id=user["workspace_id"], user_id=user.get("id", ""),
+        merge_strategy=merge_strategy,
+    )
+    return result
+
+
+@api.post("/lead-intelligence/enrich/{lead_id}")
+async def li_enrich(lead_id: str, user=Depends(current_user)):
+    from billing import check_credits, charge_credits
+    await check_credits(user["workspace_id"], "lead_enrichment")
+    result = await lead_manager.enrich_lead(
+        lead_id, workspace_id=user["workspace_id"], user_id=user.get("id", ""),
+    )
+    if result:
+        await charge_credits(user["workspace_id"], "lead_enrichment", units=1, allow_overdraft=True)
+    return result.model_dump(mode="json") if result else {"error": "Lead not found"}
+
+
+@api.post("/lead-intelligence/verify-emails")
+async def li_verify_emails(body: dict, user=Depends(current_user)):
+    emails = body.get("emails", [])
+    results = await lead_manager.verify_emails(emails, workspace_id=user["workspace_id"])
+    return results
+
+
+@api.post("/lead-intelligence/natural-search")
+async def li_natural_search(body: dict, user=Depends(current_user)):
+    query = body.get("query", "")
+    if not query:
+        raise HTTPException(422, "query is required")
+    from billing import check_credits
+    await check_credits(user["workspace_id"], "lead_enrichment")
+    result = await lead_manager.natural_search(
+        query, workspace_id=user["workspace_id"], user_id=user.get("id", ""),
+    )
+    return result.model_dump(mode="json")
+
+
+@api.get("/lead-intelligence/providers")
+async def li_providers(user=Depends(current_user)):
+    statuses = await lead_manager.get_provider_statuses()
+    caps = await lead_manager.get_provider_capabilities()
+    return {
+        "providers": [
+            {"name": name, "status": status.model_dump(),
+             "capabilities": caps.get(name).model_dump() if caps.get(name) else {}}
+            for name, status in statuses.items()
+        ]
+    }
+
+
+@api.get("/lead-intelligence/providers/{provider}/stats")
+async def li_provider_stats(provider: str, _: Any = Depends(require_admin)):
+    stats = await lead_manager._audit.provider_stats(provider)
+    return stats
+
+
+@api.get("/lead-intelligence/credits")
+async def li_credits(user=Depends(current_user)):
+    from billing import get_balance
+    bal = await get_balance(user["workspace_id"])
+    rows = await db.credit_ledger.find(
+        {"workspace_id": user["workspace_id"], "delta": {"$lt": 0}},
+    ).to_list(2000)
+    by_action = {}
+    for r in rows:
+        a = r.get("action", "other")
+        b = by_action.setdefault(a, {"credits": 0, "count": 0})
+        b["credits"] += abs(r["delta"])
+        b["count"] += 1
+    return {"balance": bal, "usage": by_action}
+
+
+@api.get("/lead-intelligence/filters")
+async def li_filters(user=Depends(current_user)):
+    all_filters = []
+    for name, adapter in lead_manager._adapters.items():
+        for f in adapter.available_filters():
+            f_copy = dict(f)
+            f_copy["provider"] = name
+            all_filters.append(f_copy)
+    return {"filters": all_filters}
+
+
+@api.get("/lead-intelligence/audit-log")
+async def li_audit_log(user=Depends(require_admin), action: str = "",
+                        limit: int = 100, offset: int = 0):
+    entries = await lead_manager._audit.query(
+        workspace_id=user["workspace_id"],
+        limit=min(limit, 500),
+        offset=offset,
+        action=action or None,
+    )
+    return {"entries": entries}
+
+
+# ── Saved Searches ──────────────────────────────────────────────────────
+
+@api.post("/lead-intelligence/searches")
+async def li_save_search(body: dict, user=Depends(current_user)):
+    name = body.get("name", "").strip()
+    filters = body.get("filters", {})
+    if not name:
+        raise HTTPException(422, "name is required")
+    search_id = new_id()
+    doc = {
+        "id": search_id, "workspace_id": user["workspace_id"],
+        "created_by": user.get("id", ""), "created_at": now_iso(),
+        "name": name, "filters": filters,
+    }
+    await db.lead_searches.insert_one({**doc, "_id": search_id})
+    return doc
+
+
+@api.get("/lead-intelligence/searches")
+async def li_list_searches(user=Depends(current_user)):
+    cursor = db.lead_searches.find(
+        {"workspace_id": user["workspace_id"]},
+        {"_id": 0},
+    ).sort("created_at", -1).limit(100)
+    return {"searches": await cursor.to_list(length=100)}
+
+
+@api.get("/lead-intelligence/searches/{search_id}")
+async def li_get_search(search_id: str, user=Depends(current_user)):
+    doc = await db.lead_searches.find_one(
+        {"id": search_id, "workspace_id": user["workspace_id"]},
+        {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(404, "Search not found")
+    return doc
+
+
+@api.delete("/lead-intelligence/searches/{search_id}")
+async def li_delete_search(search_id: str, user=Depends(current_user)):
+    r = await db.lead_searches.delete_one(
+        {"id": search_id, "workspace_id": user["workspace_id"]},
+    )
+    if not r.deleted_count:
+        raise HTTPException(404, "Search not found")
+    return {"deleted": True}
+
+
+# ── Lead Lists ──────────────────────────────────────────────────────
+
+@api.post("/lead-intelligence/lists")
+async def li_create_list(body: dict, user=Depends(current_user)):
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(422, "name is required")
+    lid = uuid.uuid4().hex[:12]
+    doc = {
+        "id": lid,
+        "workspace_id": user["workspace_id"],
+        "name": name,
+        "description": (body.get("description") or "").strip(),
+        "lead_ids": [],
+        "lead_count": 0,
+        "created_by": user.get("id", ""),
+        "created_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    await db.lead_lists.insert_one(doc)
+    doc["_id"] = str(doc["_id"])
+    return doc
+
+
+@api.get("/lead-intelligence/lists")
+async def li_list_lists(user=Depends(current_user)):
+    cursor = db.lead_lists.find(
+        {"workspace_id": user["workspace_id"]},
+    ).sort("updated_at", -1)
+    lists = await cursor.to_list(None)
+    # Convert ObjectId to string
+    for lst in lists:
+        lst["_id"] = str(lst["_id"])
+    return {"lists": lists}
+
+
+@api.get("/lead-intelligence/lists/{list_id}")
+async def li_get_list(list_id: str, page: int = 1, page_size: int = 25, user=Depends(current_user)):
+    lst = await db.lead_lists.find_one(
+        {"id": list_id, "workspace_id": user["workspace_id"]},
+        {"_id": 0},
+    )
+    if not lst:
+        raise HTTPException(404, "List not found")
+    # Fetch the actual leads
+    lead_ids = lst.get("lead_ids", [])
+    total = len(lead_ids)
+    # Paginate
+    start = (page - 1) * page_size
+    paginated_ids = lead_ids[start:start + page_size]
+    leads_cursor = db.leads.find(
+        {"id": {"$in": paginated_ids}, "workspace_id": user["workspace_id"]},
+        {"_id": 0},
+    )
+    leads = await leads_cursor.to_list(None)
+    # Re-sort to match paginated_ids order
+    lead_map = {l["id"]: l for l in leads}
+    ordered = [lead_map[lid] for lid in paginated_ids if lid in lead_map]
+    return {"list": lst, "leads": ordered, "total": total, "page": page, "page_size": page_size}
+
+
+@api.put("/lead-intelligence/lists/{list_id}")
+async def li_update_list(list_id: str, body: dict, user=Depends(current_user)):
+    update = {}
+    if "name" in body and body["name"].strip():
+        update["name"] = body["name"].strip()
+    if "description" in body:
+        update["description"] = body["description"].strip()
+    update["updated_at"] = datetime.utcnow().isoformat()
+    r = await db.lead_lists.update_one(
+        {"id": list_id, "workspace_id": user["workspace_id"]},
+        {"$set": update},
+    )
+    if not r.matched_count:
+        raise HTTPException(404, "List not found")
+    return {"updated": True}
+
+
+@api.delete("/lead-intelligence/lists/{list_id}")
+async def li_delete_list(list_id: str, user=Depends(current_user)):
+    r = await db.lead_lists.delete_one(
+        {"id": list_id, "workspace_id": user["workspace_id"]},
+    )
+    if not r.deleted_count:
+        raise HTTPException(404, "List not found")
+    return {"deleted": True}
+
+
+@api.post("/lead-intelligence/lists/{list_id}/leads")
+async def li_add_leads(list_id: str, body: dict, user=Depends(current_user)):
+    lead_ids = body.get("lead_ids", [])
+    if not lead_ids:
+        raise HTTPException(422, "lead_ids is required")
+    r = await db.lead_lists.update_one(
+        {"id": list_id, "workspace_id": user["workspace_id"]},
+        {"$addToSet": {"lead_ids": {"$each": lead_ids}},
+         "$set": {"updated_at": datetime.utcnow().isoformat()},
+         "$inc": {"lead_count": len(lead_ids)}},
+    )
+    if not r.matched_count:
+        raise HTTPException(404, "List not found")
+    # Recalculate actual lead_count
+    lst = await db.lead_lists.find_one(
+        {"id": list_id, "workspace_id": user["workspace_id"]},
+        {"lead_ids": 1},
+    )
+    actual_count = len(lst.get("lead_ids", []))
+    await db.lead_lists.update_one(
+        {"id": list_id},
+        {"$set": {"lead_count": actual_count}},
+    )
+    return {"added": len(lead_ids), "lead_count": actual_count}
+
+
+@api.delete("/lead-intelligence/lists/{list_id}/leads")
+async def li_remove_leads(list_id: str, body: dict, user=Depends(current_user)):
+    lead_ids = body.get("lead_ids", [])
+    if not lead_ids:
+        raise HTTPException(422, "lead_ids is required")
+    r = await db.lead_lists.update_one(
+        {"id": list_id, "workspace_id": user["workspace_id"]},
+        {"$pullAll": {"lead_ids": lead_ids},
+         "$set": {"updated_at": datetime.utcnow().isoformat()}},
+    )
+    if not r.matched_count:
+        raise HTTPException(404, "List not found")
+    lst = await db.lead_lists.find_one(
+        {"id": list_id},
+        {"lead_ids": 1},
+    )
+    actual_count = len(lst.get("lead_ids", []))
+    await db.lead_lists.update_one(
+        {"id": list_id},
+        {"$set": {"lead_count": actual_count}},
+    )
+    return {"removed": len(lead_ids), "lead_count": actual_count}
+
+
+# ── Bulk Operations ─────────────────────────────────────────────────
+
+@api.post("/lead-intelligence/bulk/tags")
+async def li_bulk_tags(body: dict, user=Depends(current_user)):
+    lead_ids = body.get("lead_ids", [])
+    action = body.get("action", "add")  # "add" or "remove"
+    tags = body.get("tags", [])
+    if not lead_ids or not tags:
+        raise HTTPException(422, "lead_ids and tags are required")
+    q = {"id": {"$in": lead_ids}, "workspace_id": user["workspace_id"]}
+    if action == "add":
+        r = await db.leads.update_many(q, {"$addToSet": {"tags": {"$each": tags}}, "$set": {"updated_at": now_iso()}})
+    elif action == "remove":
+        r = await db.leads.update_many(q, {"$pullAll": {"tags": tags}, "$set": {"updated_at": now_iso()}})
+    else:
+        raise HTTPException(422, "action must be 'add' or 'remove'")
+    return {"matched": r.matched_count, "modified": r.modified_count}
+
+
+@api.post("/lead-intelligence/bulk/status")
+async def li_bulk_status(body: dict, user=Depends(current_user)):
+    lead_ids = body.get("lead_ids", [])
+    status = body.get("status", "")
+    if not lead_ids or not status:
+        raise HTTPException(422, "lead_ids and status are required")
+    q = {"id": {"$in": lead_ids}, "workspace_id": user["workspace_id"]}
+    r = await db.leads.update_many(q, {"$set": {"crm_status": status, "status": status, "updated_at": now_iso()}})
+    return {"matched": r.matched_count, "modified": r.modified_count}
+
+
+@api.post("/lead-intelligence/bulk/assign-campaign")
+async def li_bulk_assign_campaign(body: dict, user=Depends(current_user)):
+    lead_ids = body.get("lead_ids", [])
+    campaign_id = body.get("campaign_id", "")
+    if not lead_ids or not campaign_id:
+        raise HTTPException(422, "lead_ids and campaign_id are required")
+    # Verify campaign exists
+    camp = await db.campaigns.find_one({"id": campaign_id, "workspace_id": user["workspace_id"]}, {"_id": 0, "id": 1})
+    if not camp:
+        raise HTTPException(404, "Campaign not found")
+    # Add leads to campaign
+    await db.campaigns.update_one(
+        {"id": campaign_id},
+        {"$addToSet": {"lead_ids": {"$each": lead_ids}}}
+    )
+    # Tag leads with campaign reference
+    r = await db.leads.update_many(
+        {"id": {"$in": lead_ids}, "workspace_id": user["workspace_id"]},
+        {"$addToSet": {"campaign_ids": campaign_id}, "$set": {"updated_at": now_iso()}},
+    )
+    return {"matched": r.matched_count, "campaign_id": campaign_id}
+
+
+@api.get("/lead-intelligence/bulk/campaigns")
+async def li_bulk_campaigns(user=Depends(current_user)):
+    cursor = db.campaigns.find(
+        {"workspace_id": user["workspace_id"]},
+        {"_id": 0, "id": 1, "name": 1, "status": 1},
+    ).sort("created_at", -1).limit(50)
+    camps = await cursor.to_list(None)
+    return {"campaigns": camps}
+
+
 app.include_router(api)
 
 
@@ -2433,11 +3375,21 @@ async def _create_indexes():
         for col in ("leads", "campaigns", "mailboxes", "conversations", "deals", "events", "suppressions",
                     "voice_agents", "voice_campaigns", "calls", "voice_numbers",
                     "event_types", "bookings", "calendar_integrations",
-                    "proposals", "pricing_catalog", "social_posts", "social_integrations"):
+                    "proposals", "pricing_catalog", "social_posts", "social_integrations",
+                    "company_intel", "service_library", "campaign_engine"):
             await db[col].create_index([("workspace_id", 1), ("id", 1)])
+        await db.company_intel.create_index([("workspace_id", 1), ("domain", 1)])
         await db.proposals.create_index([("workspace_id", 1), ("lead_id", 1)])
         await db.social_integrations.create_index([("workspace_id", 1), ("provider", 1)], unique=True)
         await db.social_posts.create_index([("workspace_id", 1), ("platform", 1), ("status", 1)])
+        await db.sites.create_index([("workspace_id", 1), ("id", 1)])
+        await db.site_kb_chunks.create_index([("site_id", 1)])
+        # Site EQ's v1 retrieval — a Mongo text index, not vector search (see
+        # site_eq.py docstring for why). One text index per collection max,
+        # so this is the only $text-searchable field on site_kb_chunks.
+        await db.site_kb_chunks.create_index([("content", "text")])
+        await db.site_conversations.create_index([("workspace_id", 1), ("status", 1), ("updated_at", -1)])
+        await db.site_conversations.create_index([("site_id", 1)])
         await db.credit_accounts.create_index("workspace_id", unique=True)
         await db.credit_ledger.create_index([("workspace_id", 1), ("at", -1)])
         await db.subscriptions.create_index("workspace_id", unique=True)
@@ -2455,15 +3407,23 @@ async def _create_indexes():
         await db.bookings.create_index([("workspace_id", 1), ("event_type_id", 1), ("status", 1)])
         await db.bookings.create_index([("workspace_id", 1), ("lead_id", 1)])
         await db.oauth_states.create_index("state", unique=True)
-        await db.leads.create_index([("workspace_id", 1), ("email", 1)], unique=False)
+        # Was unique=False (app-side dedupe check only, race-prone). Every insert
+        # path (create_lead, bulk_leads, lead-list bulk-import in crm.py) now
+        # also catches DuplicateKeyError, so this can be a real constraint.
+        await db.leads.create_index([("workspace_id", 1), ("email", 1)], unique=True)
+        await db.lead_notes.create_index([("workspace_id", 1), ("lead_id", 1), ("created_at", -1)])
+        await db.lead_tasks.create_index([("workspace_id", 1), ("status", 1), ("due_at", 1)])
+        await db.lead_tasks.create_index([("workspace_id", 1), ("lead_id", 1)])
         await db.events.create_index([("workspace_id", 1), ("type", 1)])
         await db.events.create_index([("workspace_id", 1), ("at", -1)])
         await db.suppressions.create_index([("workspace_id", 1), ("email", 1)], unique=True)
         await db.calls.create_index([("workspace_id", 1), ("created_at", -1)])
         await db.calls.create_index([("workspace_id", 1), ("lead_id", 1)])
         await db.calls.create_index([("workspace_id", 1), ("campaign_id", 1)])
-        await db.calls.create_index("retell_call_id")
+        await db.calls.create_index("twilio_call_sid")
         await db.activities.create_index([("workspace_id", 1), ("lead_id", 1), ("at", -1)])
+        await db.lead_lists.create_index([("workspace_id", 1), ("id", 1)])
+        await db.lead_lists.create_index([("workspace_id", 1), ("updated_at", -1)])
         logger.info("indexes ensured")
     except Exception as ex:
         logger.warning("index setup: %s", ex)
@@ -2481,6 +3441,8 @@ async def _start_scheduler():
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         from schedule_eq import run_reminder_tick
         from sender import run_send_tick, run_reply_tick
+        from social_eq import run_social_publish_tick, run_social_engagement_tick, run_rss_poll_tick
+        from site_eq import run_site_recrawl_tick
 
         scheduler = AsyncIOScheduler(timezone="UTC")
         # Every 15 min: any confirmed booking ~24h out gets one reminder. The job
@@ -2494,16 +3456,39 @@ async def _start_scheduler():
         # Poll sent threads for real replies (this is what feeds the unified inbox).
         scheduler.add_job(run_reply_tick, "interval", minutes=10,
                           id="reply_polling", max_instances=1, coalesce=True)
+        # Auto-publish approved social posts once their scheduled time arrives
+        # (or shortly after approval if none was set) — the "automatic" half of
+        # the bulk-import -> email-approval -> auto-publish pipeline.
+        scheduler.add_job(run_social_publish_tick, "interval", minutes=2,
+                          id="social_publish", max_instances=1, coalesce=True)
+        # Pulls real comments + refreshes real engagement from connected
+        # (non-mocked) platforms only — never touches simulated posts.
+        scheduler.add_job(run_social_engagement_tick, "interval", minutes=10,
+                          id="social_engagement", max_instances=1, coalesce=True)
+        # Polls subscribed RSS feeds for new entries and drafts posts from
+        # them through the same pipeline bulk-import uses.
+        scheduler.add_job(run_rss_poll_tick, "interval", minutes=30,
+                          id="social_rss_poll", max_instances=1, coalesce=True)
+        # Keeps each site's knowledge base from going stale without the user
+        # having to remember to hit "re-crawl" — daily check, only re-crawls
+        # sites whose last crawl is 7+ days old.
+        scheduler.add_job(run_site_recrawl_tick, "interval", hours=24,
+                          id="site_recrawl", max_instances=1, coalesce=True)
         scheduler.start()
-        logger.info("scheduler started (reminders 15m, sends 2m, reply polling 10m)")
+        logger.info("scheduler started (reminders 15m, sends 2m, reply polling 10m, "
+                   "social publish 2m, social engagement 10m, RSS poll 30m, site recrawl 24h)")
     except Exception as ex:
         logger.warning("scheduler failed to start: %s", ex)
 
 
+# ── Lead Intelligence Provider Manager ──────────────────────────────
+cors_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
+if APP_ENV != "dev" and cors_origins == ["*"]:
+    raise RuntimeError("FATAL: CORS_ORIGINS is '*' but ENV=%s. Set explicit origins in production." % APP_ENV)
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_credentials=cors_origins != ["*"],
+    allow_origins=cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

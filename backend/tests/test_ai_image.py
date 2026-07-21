@@ -4,9 +4,18 @@ import base64
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://saas-platform-109.preview.emergentagent.com").rstrip("/")
-EMAIL = "demo@innoira.ai"
-PASSWORD = "Demo@1234"
+def _read_frontend_env():
+    tests_dir = os.path.dirname(os.path.abspath(__file__))
+    env_path = os.path.join(tests_dir, "..", "..", "frontend", ".env")
+    with open(env_path) as f:
+        for line in f:
+            if line.startswith("REACT_APP_BACKEND_URL="):
+                return line.split("=", 1)[1].strip()
+    raise RuntimeError("REACT_APP_BACKEND_URL not found")
+
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL") or _read_frontend_env().rstrip("/")
+EMAIL = "test@test.com"
+PASSWORD = "TempPw@98765"
 
 
 @pytest.fixture(scope="session")

@@ -1,35 +1,16 @@
 """Lead sourcing + email verification — typed provider clients.
 
-Replaces the inline Prospeo/Icypeas calls that lived in server.py. Two things
-change beyond the move:
-
-1. **A failing real provider now raises.** The old code caught every exception and
-   returned mock people while still reporting `providers.prospeo: "live"` — so a
-   revoked key, a quota wall, or a 500 all looked like a successful search with
-   ten fictional prospects. That is the worst possible failure mode for a lead
-   tool: you'd email people who don't exist. Mock data is now returned *only*
-   when there is no key at all (the deliberate, advertised test mode).
-
-2. **Retry + rate limiting.** Every call goes through `_request()`, which retries
-   429/5xx with exponential backoff and caps concurrency, so a burst of
-   verifications can't hammer the provider.
+Calls Prospeo (search-person + bulk-enrich-person) for people data,
+Icypeas for email verification. Mock data is returned *only* when
+there is no API key configured — never on a real provider error.
 """
-
-import os
-import re
-import asyncio
-import logging
+import os, re, asyncio, logging
 from typing import Any, Dict, List, Optional
-
 import httpx
 
 log = logging.getLogger(__name__)
 
 PROSPEO_API_KEY = os.environ.get("PROSPEO_API_KEY", "")
-# Icypeas' REST API authenticates with the raw API key only (Authorization: <key>,
-# no "Bearer" prefix, no account/user id) — verified against api-doc.icypeas.com's
-# own curl example. ICYPEAS_API_SECRET isn't used by the endpoints this module
-# calls; kept as an env var only in case a future bulk/webhook endpoint needs it.
 ICYPEAS_API_KEY = os.environ.get("ICYPEAS_API_KEY", "")
 ICYPEAS_API_SECRET = os.environ.get("ICYPEAS_API_SECRET", "")
 
@@ -40,32 +21,27 @@ PROSPEO_MOCKED = not bool(PROSPEO_API_KEY)
 ICYPEAS_MOCKED = not bool(ICYPEAS_API_KEY)
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[a-zA-Z]{2,}$")
-
-# Providers meter per call; don't let a 50-lead verify open 50 sockets at once.
 _CONCURRENCY = asyncio.Semaphore(5)
 
 
 class ProviderError(RuntimeError):
-    """A real provider call failed. Surfaced to the caller — never silently
-    downgraded to mock data."""
-
     def __init__(self, provider: str, message: str, status: Optional[int] = None):
         super().__init__(f"{provider}: {message}")
         self.provider = provider
         self.status = status
 
 
-async def _request(provider: str, method: str, url: str, *, headers: Dict[str, str],
-                    json: Dict[str, Any], attempts: int = 3) -> Dict[str, Any]:
-    """One HTTP call with backoff on 429/5xx. Raises ProviderError on give-up."""
+async def _request(provider: str, method: str, url: str, *,
+                   headers: Dict[str, str], json: Dict[str, Any],
+                   attempts: int = 3) -> Dict[str, Any]:
     delay = 1.0
     last = ""
     for attempt in range(1, attempts + 1):
         try:
             async with _CONCURRENCY:
-                async with httpx.AsyncClient(timeout=15) as client:
+                async with httpx.AsyncClient(timeout=120) as client:
                     r = await client.request(method, url, headers=headers, json=json)
-            if r.status_code == 429 or r.status_code >= 500:
+            if r.status_code in (429,) or r.status_code >= 500:
                 last = f"HTTP {r.status_code}"
                 if attempt < attempts:
                     await asyncio.sleep(delay)
@@ -73,8 +49,7 @@ async def _request(provider: str, method: str, url: str, *, headers: Dict[str, s
                     continue
                 raise ProviderError(provider, f"{last} after {attempts} attempts", r.status_code)
             if r.status_code >= 400:
-                # 401/403/422 won't fix themselves — fail immediately and loudly.
-                raise ProviderError(provider, f"HTTP {r.status_code}: {r.text[:200]}", r.status_code)
+                raise ProviderError(provider, f"HTTP {r.status_code}: {r.text[:300]}", r.status_code)
             return r.json()
         except httpx.HTTPError as ex:
             last = str(ex)
@@ -86,38 +61,69 @@ async def _request(provider: str, method: str, url: str, *, headers: Dict[str, s
     raise ProviderError(provider, last or "unknown error")
 
 
-# ----------------------------- Normalisation ---------------------------------
+# ── Normalisation ──────────────────────────────────────────────────────
+
 def _extract_email(val: Any) -> str:
-    """Prospeo's `person.email` shape differs between endpoints — a plain
-    string on some, `{"email": "..."}` on others. Masked previews
-    ("eoghan.*****@intercom.com") mean the caller didn't actually pay to
-    reveal it; treat those as no email."""
-    email = val.get("email") if isinstance(val, dict) else val
-    email = (email or "").strip()
-    return "" if "*" in email else email
+    if isinstance(val, dict):
+        e = (val.get("email") or "").strip()
+    else:
+        e = (val or "").strip()
+    return "" if "*" in e else e
 
 
-def normalize_prospect(person: Dict[str, Any], domain: str, company: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _extract_phone(mobile: Any) -> str:
+    if isinstance(mobile, dict):
+        if mobile.get("revealed") and mobile.get("mobile"):
+            return mobile["mobile"]
+        return mobile.get("mobile_international") or mobile.get("mobile") or ""
+    return str(mobile or "")
+
+
+def _extract_location(loc: Any) -> Dict[str, str]:
+    if isinstance(loc, dict):
+        return {k: str(v or "") for k, v in loc.items()
+                if v and k in ("country", "state", "city", "country_code")}
+    return {}
+
+
+def normalize_prospect(person: Dict[str, Any], domain: str,
+                       company: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     company = company or {}
     name = person.get("name") or person.get("full_name") or ""
     first = person.get("first_name") or (name.split(" ", 1)[0] if name else "")
     last = person.get("last_name") or (name.split(" ", 1)[-1] if " " in name else "")
     title = (person.get("job_title") or person.get("current_job_title")
              or (person.get("current_job") or {}).get("job_title") or "")
+    email = _extract_email(person.get("email")).lower()
+    mobile = _extract_phone(person.get("mobile"))
+    loc = _extract_location(person.get("location"))
     return {
         "first_name": first,
         "last_name": last,
-        "email": _extract_email(person.get("email")).lower(),
+        "full_name": person.get("full_name") or f"{first} {last}",
+        "email": email,
+        "phone": mobile,
         "title": title,
+        "headline": person.get("headline") or "",
         "company": company.get("name") or domain.split(".")[0].title(),
+        "company_website": company.get("website") or "",
+        "company_domain": company.get("domain") or domain,
+        "company_industry": company.get("industry") or "",
+        "company_size": company.get("employee_range") or "",
+        "company_description": (company.get("description_ai") or company.get("description") or ""),
+        "company_logo": company.get("logo_url") or "",
+        "company_linkedin": company.get("linkedin_url") or "",
         "domain": domain,
         "linkedin_url": person.get("linkedin_url") or "",
+        "location": loc,
+        "skills": person.get("skills") or [],
         "source": "prospeo",
         "confidence": 0.85,
     }
 
 
-# ----------------------------- Mock (test mode only) ---------------------------
+# ── Mock ───────────────────────────────────────────────────────────────
+
 _MOCK_NAMES = [
     ("Alex", "Rivera", "VP Sales"), ("Priya", "Shah", "Head of Growth"),
     ("Marcus", "Chen", "Founder"), ("Sofia", "Nunez", "Director of RevOps"),
@@ -129,16 +135,23 @@ _MOCK_NAMES = [
 
 def _mock_domain_search(domain: str, limit: int) -> List[Dict[str, Any]]:
     d = clean_domain(domain) or "example.com"
-    company = d.split(".")[0].title()
     slug = d.split(".")[0]
+    company_name = slug.title()
     return [{
-        "first_name": fn, "last_name": ln, "title": title,
+        "first_name": fn, "last_name": ln, "full_name": f"{fn} {ln}",
         "email": f"{fn.lower()}.{ln.lower()}@{d}",
-        "company": company, "domain": d,
-        # Namespaced by domain: two different companies must not produce the same
-        # LinkedIn URL, or the (correct) dedupe-on-linkedin_url rule would treat
-        # them as the same person.
+        "phone": f"+1-555-{hash(fn+ln)%9000+1000:04d}",
+        "title": title,
+        "headline": f"{title} at {company_name}",
+        "company": company_name,
+        "company_website": f"https://{d}", "company_domain": d,
+        "company_industry": "Software", "company_size": "51-200",
+        "company_description": "Mock company for testing.",
+        "company_logo": "", "company_linkedin": f"https://linkedin.com/company/{slug}",
+        "domain": d,
         "linkedin_url": f"https://linkedin.com/in/{fn.lower()}-{ln.lower()}-{slug}",
+        "location": {"country": "United States", "state": "California", "city": "San Francisco"},
+        "skills": ["Sales", "CRM", "Outreach"],
         "source": "prospeo", "confidence": 0.5, "mocked": True,
     } for fn, ln, title in _MOCK_NAMES[:limit]]
 
@@ -152,48 +165,137 @@ def clean_domain(domain: Optional[str]) -> str:
     return d[4:] if d.startswith("www.") else d
 
 
-# ----------------------------- Prospeo ----------------------------------------
-# Prospeo retired the old single-call `/domain-search` + `/email-finder` pair —
-# calling them now returns HTTP 400 "DEPRECATED". The current model is
-# search-then-enrich: `/search-person` finds people at a company but masks
-# contact info, `/bulk-enrich-person` spends credits to reveal verified emails
-# for a batch of person_ids from that search (only charged for matches).
+# ── Prospeo ────────────────────────────────────────────────────────────
+
 _PROSPEO_HEADERS = {"X-KEY": PROSPEO_API_KEY, "Content-Type": "application/json"}
 
 
-async def domain_search(domain: str, limit: int = 20) -> List[Dict[str, Any]]:
-    """People at a company domain. Raises ProviderError if a real call fails."""
-    d = clean_domain(domain)
-    if not d:
-        raise ValueError("a company domain is required")
+async def _search_and_enrich(filters: Dict[str, Any], domain: str, limit: int,
+                             *, include_mobile: bool = False) -> List[Dict[str, Any]]:
+    """Search Prospeo with filters, then bulk-enrich to reveal emails/mobiles.
 
-    if PROSPEO_MOCKED:
-        return _mock_domain_search(d, limit)
+    Per Prospeo docs (2026):
+      - /search-person returns person objects with email/mobile as masked objects
+      - /bulk-enrich-person reveals them; accepts only_verified_email, enrich_mobile
+      - enrich_mobile=true costs 10 credits/mobile found (email included free)
+    """
+    try:
+        search_data = await _request(
+            "prospeo", "POST", f"{PROSPEO_BASE}/search-person",
+            headers=_PROSPEO_HEADERS,
+            json={"page": 1, "filters": filters},
+        )
+    except ProviderError as e:
+        if "NO_RESULTS" in str(e):
+            return []
+        raise
 
-    search_data = await _request(
-        "prospeo", "POST", f"{PROSPEO_BASE}/search-person",
-        headers=_PROSPEO_HEADERS,
-        json={"page": 1, "filters": {"company": {"websites": {"include": [d]}}}},
-    )
     hits = search_data.get("results") or []
     ids = [(h.get("person") or {}).get("person_id") for h in hits[:limit]]
     ids = [pid for pid in ids if pid]
     if not ids:
         return []
 
+    # Build enrich params per Prospeo docs:
+    #   only_verified_email=true  → only return records with verified email
+    #   enrich_mobile=true        → reveal mobile (costs 10 credits ea)
+    enrich_opts: Dict[str, Any] = {"data": [{"identifier": pid, "person_id": pid} for pid in ids]}
+    if include_mobile:
+        enrich_opts["only_verified_email"] = False
+        enrich_opts["enrich_mobile"] = True
+    else:
+        enrich_opts["only_verified_email"] = True
+
     enrich_data = await _request(
         "prospeo", "POST", f"{PROSPEO_BASE}/bulk-enrich-person",
         headers=_PROSPEO_HEADERS,
-        json={"only_verified_email": True,
-              "data": [{"identifier": pid, "person_id": pid} for pid in ids]},
+        json=enrich_opts,
     )
     matched = enrich_data.get("matched") or []
-    out = [normalize_prospect(m.get("person") or {}, d, m.get("company")) for m in matched]
+    out = [normalize_prospect(m.get("person") or {}, domain, m.get("company"))
+           for m in matched]
+
+    if include_mobile:
+        return [p for p in out if p["email"] or p["phone"]][:limit]
     return [p for p in out if p["email"]][:limit]
 
 
+def _build_prospeo_filters(*, domain: str = "", titles=None, locations=None,
+                            industries=None, company_sizes=None,
+                            seniority=None) -> Dict[str, Any]:
+    """Build Prospeo filter object from user-supplied values.
+
+    Per docs:
+      - person_job_title accepts include/exclude/match_mode (CONTAINS recommended)
+      - person_seniority uses enum values: C-Suite, Vice President, Director, etc.
+      - company_industry uses industry enum values
+      - company_headcount_custom uses min/max integers
+      - company.websites.include uses root domains
+    """
+    filters: Dict[str, Any] = {}
+
+    if titles:
+        filters["person_job_title"] = {"include": titles, "match_mode": "CONTAINS"}
+    if locations:
+        filters["person_location_search"] = {"include": locations}
+    if industries:
+        filters["company_industry"] = {"include": industries}
+    if seniority:
+        filters["person_seniority"] = {"include": seniority}
+    if company_sizes:
+        mins, maxs = [], []
+        for s in company_sizes:
+            s = s.strip()
+            if "+" in s:
+                mins.append(int(s.replace("+", "")))
+            elif "-" in s:
+                parts = s.split("-", 1)
+                mins.append(int(parts[0]))
+                maxs.append(int(parts[1]))
+        if mins or maxs:
+            headcount: Dict[str, int] = {}
+            if mins:
+                headcount["min"] = min(mins)
+            if maxs:
+                headcount["max"] = max(maxs)
+            filters["company_headcount_custom"] = headcount
+    d = clean_domain(domain)
+    if d:
+        filters["company"] = {"websites": {"include": [d]}}
+    return filters
+
+
+async def person_search(*, domain: str = "", titles=None, locations=None,
+                         industries=None, company_sizes=None, seniority=None,
+                         include_mobile: bool = False,
+                         limit: int = 25) -> List[Dict[str, Any]]:
+    """Search Prospeo by titles, location, industry, domain, company size, etc."""
+    filters = _build_prospeo_filters(
+        domain=domain, titles=titles, locations=locations,
+        industries=industries, company_sizes=company_sizes,
+        seniority=seniority,
+    )
+    if not filters:
+        return []
+
+    if PROSPEO_MOCKED:
+        d = clean_domain(domain) or "example.com"
+        return _mock_domain_search(d, limit)
+
+    return await _search_and_enrich(
+        filters, clean_domain(domain) or "prospeo", limit,
+        include_mobile=include_mobile,
+    )
+
+
+async def domain_search(domain: str, limit: int = 20) -> List[Dict[str, Any]]:
+    d = clean_domain(domain)
+    if not d:
+        raise ValueError("a company domain is required")
+    return await person_search(domain=d, limit=limit)
+
+
 async def email_finder(first_name: str, last_name: str, domain: str) -> Optional[str]:
-    """Guess-and-verify a single person's address."""
     d = clean_domain(domain)
     if PROSPEO_MOCKED:
         return f"{first_name.lower()}.{last_name.lower()}@{d}"
@@ -205,48 +307,76 @@ async def email_finder(first_name: str, last_name: str, domain: str) -> Optional
     return _extract_email((data.get("person") or {}).get("email")) or None
 
 
-# ----------------------------- Icypeas ----------------------------------------
+# ── Icypeas ────────────────────────────────────────────────────────────
+
 def _syntax_ok(email: str) -> bool:
     return bool(EMAIL_RE.match(email or "")) and not any(c in email for c in " ,;")
 
 
 _ICYPEAS_HEADERS = {"Authorization": ICYPEAS_API_KEY, "Content-Type": "application/json"}
-# email-verification is async: the POST just queues a "search item" and returns
-# its _id; the real result (found/not-found) only shows up once you poll
-# bulk-single-searchs/read for that id. These are the terminal statuses —
-# NONE/SCHEDULED/IN_PROGRESS mean "keep polling."
-_ICYPEAS_DONE = {"FOUND", "DEBITED", "NOT_FOUND", "DEBITED_NOT_FOUND", "BAD_INPUT", "ABORTED", "INSUFFICIENT_FUNDS"}
+
+# Terminal statuses for Icypeas email verification (async flow).
+# NONE/SCHEDULED/IN_PROGRESS mean keep polling.
+_ICYPEAS_DONE = {"FOUND", "DEBITED", "NOT_FOUND", "DEBITED_NOT_FOUND",
+                 "BAD_INPUT", "ABORTED", "INSUFFICIENT_FUNDS"}
 
 
-async def _icypeas_poll(item_id: str, *, attempts: int = 8, interval: float = 2.0) -> Dict[str, Any]:
+async def _icypeas_poll(item_id: str, *, attempts: int = 8,
+                        interval: float = 2.0) -> Dict[str, Any]:
     item: Dict[str, Any] = {}
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx.AsyncClient(timeout=30) as client:
         for _ in range(attempts):
             await asyncio.sleep(interval)
-            r = await client.post(f"{ICYPEAS_BASE}/bulk-single-searchs/read",
-                                   headers=_ICYPEAS_HEADERS, json={"id": item_id})
+            r = await client.post(
+                f"{ICYPEAS_BASE}/bulk-single-searchs/read",
+                headers=_ICYPEAS_HEADERS, json={"id": item_id},
+            )
             if r.status_code >= 400:
-                raise ProviderError("icypeas", f"HTTP {r.status_code}: {r.text[:200]}", r.status_code)
+                raise ProviderError("icypeas", f"HTTP {r.status_code}: {r.text[:200]}",
+                                    r.status_code)
             items = r.json().get("items") or []
             item = items[0] if items else {}
             if item.get("status") in _ICYPEAS_DONE:
                 return item
-    return item  # still processing after our poll budget — caller treats as inconclusive
+    return item
 
 
 async def verify_email(email: str) -> Dict[str, Any]:
-    """Deliverability check. In test mode this is a syntax screen and says so."""
+    """Deliverability check via Icypeas (async flow)."""
     if ICYPEAS_MOCKED:
         ok = _syntax_ok(email)
         return {"status": "valid" if ok else "invalid",
                 "score": 0.9 if ok else 0.0, "provider": "syntax_only", "mocked": True}
 
+    # Try the sync endpoint first (returns immediately on some plans)
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            sr = await client.post(
+                f"{ICYPEAS_BASE}/sync/email-verification",
+                headers=_ICYPEAS_HEADERS, json={"email": email},
+            )
+            if sr.status_code == 200:
+                body = sr.json()
+                status = body.get("status", "")
+                if status in ("VALID", "FOUND"):
+                    return {"status": "valid", "score": 0.9,
+                            "provider": "icypeas", "mocked": False}
+                if status in ("INVALID", "NOT_FOUND"):
+                    return {"status": "invalid", "score": 0.1,
+                            "provider": "icypeas", "mocked": False}
+        except Exception:
+            pass  # sync endpoint may not be available — fall through to async
+
+    # Async flow
     async with _CONCURRENCY:
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.post(f"{ICYPEAS_BASE}/email-verification",
-                                   headers=_ICYPEAS_HEADERS, json={"email": email})
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(
+                f"{ICYPEAS_BASE}/email-verification",
+                headers=_ICYPEAS_HEADERS, json={"email": email},
+            )
         if r.status_code >= 400:
-            raise ProviderError("icypeas", f"HTTP {r.status_code}: {r.text[:200]}", r.status_code)
+            raise ProviderError("icypeas", f"HTTP {r.status_code}: {r.text[:200]}",
+                                r.status_code)
         item_id = (r.json().get("item") or {}).get("_id")
         if not item_id:
             raise ProviderError("icypeas", "no search item id returned")
@@ -259,14 +389,16 @@ async def verify_email(email: str) -> Dict[str, Any]:
         return {"status": "valid", "score": 0.9, "provider": "icypeas", "mocked": False}
     if status in ("NOT_FOUND", "DEBITED_NOT_FOUND", "BAD_INPUT", "ABORTED"):
         return {"status": "invalid", "score": 0.1, "provider": "icypeas", "mocked": False}
-    # Timed out still mid-processing — inconclusive, not a hard failure.
     return {"status": "risky", "score": 0.5, "provider": "icypeas", "mocked": False}
 
 
 async def verify_many(emails: List[str]) -> List[Dict[str, Any]]:
-    """Verify concurrently (bounded by the semaphore) rather than one at a time —
-    the old code did N sequential HTTP calls inside the request handler."""
-    return await asyncio.gather(*(verify_email(e) for e in emails))
+    async def _safe(e: str) -> Dict[str, Any]:
+        try:
+            return await verify_email(e)
+        except ProviderError:
+            return {"status": "risky", "score": 0.5, "provider": "error"}
+    return await asyncio.gather(*(_safe(e) for e in emails))
 
 
 def provider_status() -> Dict[str, str]:

@@ -9,12 +9,15 @@ import os
 import re
 import json
 import secrets
+import logging
 from datetime import datetime, timedelta, timezone, time as dtime
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
+
+log = logging.getLogger(__name__)
 
 from server import (
     db, current_user, now_iso, new_id, _audit, _log_activity,
@@ -44,6 +47,36 @@ class QualifyingQuestion(BaseModel):
     type: str = "string"
 
 
+class FormField(BaseModel):
+    key: str
+    label: str
+    type: str = "string"  # string | text | phone | email | dropdown | checkbox
+    required: bool = True
+    options: List[str] = []  # for dropdown/checkbox
+
+
+class ReminderConfig(BaseModel):
+    enabled: bool = True
+    minutes_before: List[int] = [1440]  # default 24h
+
+
+class BrandingSettings(BaseModel):
+    primary_color: str = "#141414"
+    logo_url: str = ""
+    page_title: str = ""
+    custom_message: str = ""
+    confirmation_message: str = ""
+    button_text: str = "Confirm booking"
+    hide_calendar_photo: bool = False
+    custom_domain: str = ""
+    favicon_url: str = ""
+
+
+class DurationOption(BaseModel):
+    label: str = ""
+    minutes: int = 30
+
+
 class EventTypeIn(BaseModel):
     name: str
     duration_minutes: int = 30
@@ -57,6 +90,17 @@ class EventTypeIn(BaseModel):
     qualifying_questions: List[QualifyingQuestion] = []
     low_score_threshold: int = 0  # 0 = disabled; below this routes to low_score_redirect_url
     low_score_redirect_url: Optional[str] = None
+    # Calendly-like enhancements
+    branding: BrandingSettings = BrandingSettings()
+    reminder_config: ReminderConfig = ReminderConfig()
+    form_fields: List[FormField] = []
+    duration_options: List[DurationOption] = []
+    webhook_url: Optional[str] = None
+    allow_rescheduling: bool = True
+    allow_cancellation: bool = True
+    require_confirmation: bool = True
+    send_confirmation_email: bool = True
+    send_reminder_email: bool = True
 
 
 class WorkingWindow(BaseModel):
@@ -76,6 +120,12 @@ class BookingIn(BaseModel):
     guest_phone: Optional[str] = None
     start_at: str  # ISO, must match a currently-open slot
     qualifying_answers: Dict[str, str] = {}
+    form_answers: Dict[str, str] = {}
+    selected_duration_minutes: Optional[int] = None
+    timezone: str = "UTC"
+    utm_source: Optional[str] = None
+    utm_medium: Optional[str] = None
+    utm_campaign: Optional[str] = None
 
 
 # ----------------------------- Event types --------------------------------------
@@ -323,10 +373,31 @@ async def _notify(kind: str, workspace_id: str, booking: Dict[str, Any],
         for to, (subject, html), ics_body in pairs:
             if not to:
                 continue
-            result = await send_email(to, subject, html, ics=ics_body, reply_to=host["email"] or None)
+            result = await send_email(to, subject, html, ics=ics_body, reply_to=host["email"] or None, workspace_id=workspace_id)
             await _record_email(workspace_id, booking["id"], kind, to, subject, html, result)
     except Exception:
         pass
+
+
+def _fire_webhook(url: str, event: str, payload: Dict[str, Any]) -> None:
+    """Fire a webhook asynchronously — never block or raise on failure."""
+    import httpx
+    import asyncio
+    try:
+        client = httpx.AsyncClient(timeout=10)
+        asyncio.ensure_future(_do_webhook(client, url, event, payload))
+    except Exception:
+        pass
+
+
+async def _do_webhook(client, url: str, event: str, payload: Dict[str, Any]) -> None:
+    try:
+        safe = {k: v for k, v in payload.items() if k not in ("prep_brief",)}
+        await client.post(url, json={"event": event, "data": safe})
+    except Exception as ex:
+        log.warning("webhook %s -> %s failed: %s", event, url, ex)
+    finally:
+        await client.aclose()
 
 
 def _fmt_when(booking: Dict[str, Any]) -> str:
@@ -381,6 +452,8 @@ async def reschedule_booking(token: str, body: RescheduleIn):
     b, et = await _booking_by_token(token)
     if b["status"] != "confirmed":
         raise HTTPException(400, "this meeting is no longer active")
+    if not et.get("allow_rescheduling", True):
+        raise HTTPException(403, "rescheduling is not allowed for this event type")
 
     open_slots = await _compute_open_slots(b["workspace_id"], et)
     if body.start_at not in open_slots:
@@ -423,6 +496,8 @@ async def guest_cancel_booking(token: str):
     b, et = await _booking_by_token(token)
     if b["status"] == "cancelled":
         return {"ok": True, "already": True}
+    if not et.get("allow_cancellation", True):
+        raise HTTPException(403, "cancellation is not allowed for this event type")
 
     integration = await db.calendar_integrations.find_one({"workspace_id": b["workspace_id"]}, {"_id": 0})
     google_calendar_client.delete_event(integration, b.get("google_event_id"))
@@ -450,7 +525,8 @@ async def public_event_type(workspace_id: str, event_type_slug: str):
     if not ws or not et:
         raise HTTPException(404, "not found")
     slots = await _compute_open_slots(workspace_id, et)
-    return {"workspace_name": ws.get("name"), "event_type": et, "open_slots": slots, "mocked": GOOGLE_MOCKED}
+    public_et = {k: v for k, v in et.items() if k not in ("webhook_url",)}
+    return {"workspace_name": ws.get("name"), "event_type": public_et, "open_slots": slots, "mocked": GOOGLE_MOCKED}
 
 
 @schedule_public_router.post("/book/{workspace_id}/{event_type_slug}")
@@ -460,7 +536,20 @@ async def create_booking(workspace_id: str, event_type_slug: str, body: BookingI
     if not et:
         raise HTTPException(404, "event type not found")
 
-    open_slots = await _compute_open_slots(workspace_id, et)
+    # Resolve duration: custom selected or event type default
+    duration_minutes = body.selected_duration_minutes or et.get("duration_minutes", 30)
+    duration_options = et.get("duration_options", [])
+    if duration_options:
+        valid_durs = [d["minutes"] for d in duration_options]
+        if body.selected_duration_minutes and body.selected_duration_minutes not in valid_durs:
+            raise HTTPException(400, "invalid duration selection")
+    else:
+        if body.selected_duration_minutes and body.selected_duration_minutes != et["duration_minutes"]:
+            raise HTTPException(400, "this event type does not support custom durations")
+
+    # Compute slots at the resolved duration to validate
+    working_et = {**et, "duration_minutes": duration_minutes}
+    open_slots = await _compute_open_slots(workspace_id, working_et)
     if body.start_at not in open_slots:
         raise HTTPException(400, "that slot is no longer available — please pick another")
 
@@ -483,7 +572,7 @@ async def create_booking(workspace_id: str, event_type_slug: str, body: BookingI
         lead.pop("_id", None)
 
     start_dt = datetime.fromisoformat(body.start_at)
-    end_dt = start_dt + timedelta(minutes=et["duration_minutes"])
+    end_dt = start_dt + timedelta(minutes=duration_minutes)
     availability = await db.availability.find_one({"workspace_id": workspace_id}, {"_id": 0}) or {"timezone": "UTC"}
 
     integration = await db.calendar_integrations.find_one({"workspace_id": workspace_id}, {"_id": 0})
@@ -500,12 +589,13 @@ async def create_booking(workspace_id: str, event_type_slug: str, body: BookingI
     booking = {
         "id": new_id(), "workspace_id": workspace_id, "event_type_id": et["id"], "lead_id": lead["id"],
         "guest_name": body.guest_name, "guest_email": email, "guest_phone": body.guest_phone,
-        "start_at": start_dt.isoformat(), "end_at": end_dt.isoformat(), "timezone": availability.get("timezone", "UTC"),
+        "start_at": start_dt.isoformat(), "end_at": end_dt.isoformat(), "timezone": body.timezone or availability.get("timezone", "UTC"),
         "status": "confirmed", "google_event_id": cal_result.get("event_id"), "meet_link": cal_result.get("meet_link"),
         "qualifying_answers": body.qualifying_answers, "qualification_score": score,
+        "form_answers": body.form_answers,
+        "selected_duration_minutes": duration_minutes,
         "no_show_risk_score": risk_score, "prep_brief": prep_brief,
-        # The guest's only credential for self-service reschedule/cancel. Random
-        # rather than signed, so cancelling can burn it.
+        "utm_source": body.utm_source, "utm_medium": body.utm_medium, "utm_campaign": body.utm_campaign,
         "manage_token": secrets.token_urlsafe(32),
         "ics_sequence": 0, "reminder_sent_at": None,
         "created_at": now_iso(), "cancelled_at": None,
@@ -513,7 +603,8 @@ async def create_booking(workspace_id: str, event_type_slug: str, body: BookingI
     await db.bookings.insert_one(booking)
     booking.pop("_id", None)
 
-    await _notify("confirmation", workspace_id, booking, et)
+    if et.get("send_confirmation_email", True):
+        await _notify("confirmation", workspace_id, booking, et)
 
     await _log_activity(workspace_id, lead["id"], "scheduler", "meeting_booked",
                          f"Booked “{et['name']}” for {start_dt.strftime('%b %d, %Y %H:%M')}",
@@ -529,6 +620,11 @@ async def create_booking(workspace_id: str, event_type_slug: str, body: BookingI
             "value": 5000, "stage": "meeting", "created_at": now_iso(),
             "source_booking_id": booking["id"],
         })
+
+    # Webhook trigger
+    webhook_url = et.get("webhook_url")
+    if webhook_url:
+        _fire_webhook(webhook_url, "booking.created", booking)
 
     return {"ok": True, **booking, "mocked": cal_result.get("mocked", GOOGLE_MOCKED)}
 
@@ -622,15 +718,21 @@ async def run_reminder_tick() -> int:
 
     sent = 0
     for b in due:
+        et = await db.event_types.find_one({"id": b["event_type_id"]}, {"_id": 0})
+        if not et:
+            continue
+        # Respect per-event-type reminder settings
+        rc = et.get("reminder_config", {})
+        if rc.get("enabled", True) is False:
+            continue
+        if et.get("send_reminder_email", True) is False:
+            continue
         # Claim it first: only the caller that flips None -> timestamp may send.
         claimed = await db.bookings.find_one_and_update(
             {"id": b["id"], "reminder_sent_at": None},
             {"$set": {"reminder_sent_at": now_iso()}},
         )
         if not claimed:
-            continue
-        et = await db.event_types.find_one({"id": b["event_type_id"]}, {"_id": 0})
-        if not et:
             continue
         await _notify("reminder", b["workspace_id"], b, et)
         sent += 1

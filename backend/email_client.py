@@ -4,13 +4,13 @@ Deliberately not Schedule-EQ-specific: this is the first real email sender in
 the product (Pitch EQ's campaign sends are still simulated in server.py), so it
 lives here for every agent to reuse.
 
-Mocked-first, same convention as retell_client / google_calendar_client: with no
-RESEND_API_KEY the message is fully rendered and recorded to the `sent_emails`
-collection but never leaves the building, so the whole booking → confirm →
-remind → reschedule → cancel flow is demoable with zero credentials.
+Mocked-first: with no RESEND_API_KEY, falls back to the workspace's connected
+mailbox. If no mailbox is connected either, the message is fully rendered and
+recorded to the `sent_emails` collection but never leaves the building.
 """
 
 import os
+import re
 import base64
 import logging
 from typing import Any, Dict, List, Optional
@@ -31,6 +31,7 @@ async def send_email(
     ics: Optional[str] = None,
     reply_to: Optional[str] = None,
     from_addr: Optional[str] = None,
+    workspace_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Send one email. Returns {"id", "mocked"}. Never raises — a failed send must
     not roll back a booking that already happened."""
@@ -47,6 +48,31 @@ async def send_email(
             "content": base64.b64encode(ics.encode("utf-8")).decode("ascii"),
             "content_type": "text/calendar; method=REQUEST",
         }]
+
+    # Fallback: when Resend is not configured, try the workspace's connected mailbox
+    if EMAIL_MOCKED and workspace_id:
+        try:
+            from server import db
+            import mailbox_client
+            mailboxes = await db.mailboxes.find(
+                {"workspace_id": workspace_id, "status": "connected"},
+                {"_id": 0},
+            ).to_list(20)
+            if mailboxes:
+                text = re.sub(r"<[^>]+>", "", html).strip()
+                result = await mailbox_client.send(
+                    mailboxes[0],
+                    to_addr=to, subject=subject, html=html, text=text,
+                    reply_to=reply,
+                )
+                # Even if the mailbox send is mocked, record it as mocked=False
+                # since a real mailbox was actually configured
+                return {
+                    "id": result.get("provider_message_id"),
+                    "mocked": result.get("mocked", True),
+                }
+        except Exception as ex:
+            log.warning("mailbox fallback send failed to=%s subject=%s err=%s", to, subject, ex)
 
     if EMAIL_MOCKED:
         log.info("[email:mocked] to=%s subject=%s ics=%s", to, subject, bool(ics))

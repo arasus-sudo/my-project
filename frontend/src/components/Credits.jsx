@@ -37,18 +37,18 @@ export function CreditPill({ compact = false }) {
       data-testid="credit-pill"
       title={`${fmt(balance)} of ${fmt(sub.allowance)} credits left on ${sub.plan.name}`}
       className={`flex items-center gap-2 rounded-full border px-3 py-1.5 transition-colors ${
-        low ? "border-amber-300 bg-amber-50 hover:bg-amber-100" : "border-line bg-white hover:bg-surfacehover"
+        low ? "border-warning/40 bg-warning/10 hover:bg-warning/20" : "border-line bg-white hover:bg-surfacehover"
       }`}
     >
-      <Coins size={14} className={low ? "text-amber-600" : "text-neutral-500"} />
-      <div className="leading-tight">
-        <div className={`text-xs font-medium tabular-nums ${low ? "text-amber-800" : ""}`} data-testid="credit-balance">
-          {fmt(balance)}
-        </div>
-        {!compact && (
-          <div className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider">{sub.plan.name}</div>
-        )}
-      </div>
+      <Coins size={13} className={`shrink-0 ${low ? "text-warning" : "text-neutral-500"}`} />
+      <span className={`text-xs font-semibold tabular-nums leading-none ${low ? "text-warning" : "text-ink"}`} data-testid="credit-balance">
+        {fmt(balance)}
+      </span>
+      {!compact && (
+        <span className="text-[10px] text-neutral-400 font-mono uppercase tracking-wider leading-none border-l border-line pl-2">
+          {sub.plan.name}
+        </span>
+      )}
     </Link>
   );
 }
