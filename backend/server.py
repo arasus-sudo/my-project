@@ -58,6 +58,20 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 # be publicly reachable for tracking to work at all — on localhost it won't be.
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "")
 
+# Error tracking — mocked-first like every other integration: off when
+# SENTRY_DSN is unset (local dev), active the moment a real DSN is added.
+SENTRY_DSN = os.environ.get("SENTRY_DSN", "")
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.pymongo import PyMongoIntegration
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=APP_ENV,
+        integrations=[FastApiIntegration(), PyMongoIntegration()],
+        traces_sample_rate=0.1,
+    )
+
 app = FastAPI(title="Pitch EQ API")
 api = APIRouter(prefix="/api")
 bearer = HTTPBearer(auto_error=False)
@@ -941,29 +955,84 @@ async def add_leads_to_campaign(cid: str, body: Dict[str, Any], user=Depends(cur
 
 @api.post("/campaigns/{cid}/run-engine")
 async def run_campaign_engine(cid: str, user=Depends(current_user)):
-    """
-    Run the campaign engine to generate personalized openers for ALL assigned leads.
-    This is the bulk personalization step — generates unique opener per lead and merges into template.
-    """
+    """Start background generation of personalized emails for all leads."""
     if not await _rate_ok(user):
         raise HTTPException(429, "Daily AI quota exceeded")
     wid = user["workspace_id"]
     campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
     if not campaign:
         raise HTTPException(404, "Campaign not found")
-    
     lead_ids = campaign.get("lead_ids", [])
     if not lead_ids:
         raise HTTPException(400, "No leads assigned to campaign. Add leads first.")
-    
-    # Check if already has personalized emails — allow re-run with force flag
     personalized = campaign.get("personalized_emails", [])
-    if personalized:
-        # Allow re-running by clearing existing first
-        pass  # generate_all_lead_emails handles skipping already-done leads
-    
-    # Use the existing generate-all logic
-    return await generate_all_lead_emails(cid, user)
+    to_generate = [lid for lid in lead_ids if lid not in {p["lead_id"] for p in personalized}]
+    if not to_generate:
+        return {"generated": 0, "job_id": "", "message": "All leads already have personalized emails"}
+
+    gen_id = new_id()
+    await db.campaigns.update_one({"id": cid}, {"$set": {f"generation_{gen_id}": {"status": "running", "total": len(to_generate), "done": 0, "errors": []}}})
+    asyncio.create_task(_run_generation_background(cid, wid, to_generate, campaign, user, gen_id))
+    return {"job_id": gen_id, "generating": len(to_generate), "message": f"Generating emails for {len(to_generate)} leads in background"}
+
+async def _run_generation_background(cid: str, wid: str, to_generate: list, campaign: dict, user: dict, gen_id: str):
+    """Background task: generate personalized emails, update campaign doc with progress."""
+    from research_worker import get_research, summarize_for_prompt
+    campaign_steps = campaign.get("steps", [])
+    step_template = campaign_steps[0] if campaign_steps else {}
+    ai_meta = campaign.get("ai_meta", {})
+    campaign_name = ai_meta.get("service_name", campaign.get("goal", ""))
+    campaign_goal = campaign.get("goal", "")
+    campaign_tone = campaign.get("tone", "professional")
+    sem = asyncio.Semaphore(4)
+    done_count = 0
+
+    async def _gen_one(lid: str):
+        nonlocal done_count
+        async with sem:
+            try:
+                lead = await db.leads.find_one({"id": lid, "workspace_id": wid}, {"_id": 0})
+                if not lead:
+                    return
+                lead_context = {k: lead.get(k) for k in ("first_name", "last_name", "title", "company", "email", "linkedin_url")}
+                research_pack = await get_research(wid, lead)
+                research_summary = summarize_for_prompt(research_pack)
+                opener_raw = await _llm_chat(
+                    "You are Pitch EQ's personalization agent. Generate ONLY a personalized ice-breaker opener. Rules: 1) Use real details from research — never invent. 2) 1-2 sentences max. 3) Conversational, not salesy. 4) No greeting, pitch, or CTA. Return STRICT JSON: {\"opener\": \"...\"}",
+                    f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\nLEAD RESEARCH:\n{research_summary}\n\nCAMPAIGN SERVICE: {campaign_name}\nCAMPAIGN GOAL: {campaign_goal}\nCAMPAIGN TONE: {campaign_tone}\n\nGenerate a personalized ice-breaker opener for this specific lead.",
+                    f"gen-{lid[:8]}", user=user, max_tokens=512
+                )
+                opener_data = _extract_json(opener_raw) or {}
+                personalized_opener = opener_data.get("opener", "")
+                merged_body = (step_template.get("body", "") or "").replace("{{personalized_opener}}", personalized_opener)
+                merged_html = (step_template.get("body_html", "") or "").replace("{{personalized_opener}}", personalized_opener) if step_template.get("body_html") else ""
+                await db.campaigns.update_one(
+                    {"id": cid},
+                    {"$push": {"personalized_emails": {
+                        "lead_id": lid, "subject": step_template.get("subject", ""),
+                        "body": merged_body, "body_html": merged_html,
+                        "personalized_opener": personalized_opener,
+                        "research": {"summary": research_summary, "has_signal": research_pack.get("has_signal", False)},
+                        "status": "draft", "generated_at": now_iso(),
+                    }}}
+                )
+            except Exception as ex:
+                await db.campaigns.update_one({"id": cid}, {"$push": {f"generation_{gen_id}.errors": {"lead_id": lid, "error": str(ex)}}})
+            finally:
+                done_count += 1
+                await db.campaigns.update_one({"id": cid}, {"$set": {f"generation_{gen_id}.done": done_count}})
+
+    await asyncio.gather(*(_gen_one(lid) for lid in to_generate), return_exceptions=True)
+    await db.campaigns.update_one({"id": cid}, {"$set": {f"generation_{gen_id}.status": "complete"}})
+
+@api.get("/campaigns/{cid}/generation-status")
+async def campaign_generation_status(cid: str, user=Depends(current_user)):
+    """Check the status of a background generation job."""
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(404, "not found")
+    jobs = {k: v for k, v in campaign.items() if k.startswith("generation_")}
+    return {"jobs": jobs}
 
 
 @api.post("/campaigns/{cid}/leads/{lead_id}/regenerate-opener")
@@ -2804,6 +2873,63 @@ async def activities_summary(user=Depends(current_user)):
     today_count = await db.activities.count_documents({"workspace_id": wid, "at": {"$gte": today}})
     total = await db.activities.count_documents({"workspace_id": wid})
     return {"by_agent": by_agent, "today": today_count, "total": total}
+
+
+@api.get("/search")
+async def global_search(q: str = "", user=Depends(current_user)):
+    """Cross-agent search for the suite's Cmd+K palette — leads, campaigns,
+    social posts, bookings, proposals, and Create EQ projects, fanned out to
+    each agent's own collection rather than a new search index."""
+    q = (q or "").strip()
+    if len(q) < 2:
+        return []
+    wid = user["workspace_id"]
+    rx = {"$regex": re.escape(q), "$options": "i"}
+    results: List[Dict[str, Any]] = []
+
+    for l in await db.leads.find(
+        {"workspace_id": wid, "$or": [{"first_name": rx}, {"last_name": rx}, {"email": rx}, {"company": rx}]},
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "company": 1, "email": 1},
+    ).to_list(8):
+        title = f"{l.get('first_name','')} {l.get('last_name','')}".strip() or l.get("email", "Lead")
+        results.append({"type": "lead", "id": l["id"], "title": title,
+                         "subtitle": l.get("company") or l.get("email") or "Lead",
+                         "url": f"/app/crm/leads/{l['id']}"})
+
+    for c in await db.campaigns.find(
+        {"workspace_id": wid, "name": rx}, {"_id": 0, "id": 1, "name": 1},
+    ).to_list(8):
+        results.append({"type": "campaign", "id": c["id"], "title": c["name"], "subtitle": "Campaign",
+                         "url": f"/app/campaigns/{c['id']}"})
+
+    for p in await db.social_posts.find(
+        {"workspace_id": wid, "$or": [{"headline": rx}, {"topic": rx}]},
+        {"_id": 0, "id": 1, "headline": 1, "topic": 1, "platform": 1},
+    ).to_list(8):
+        results.append({"type": "post", "id": p["id"], "title": p.get("headline") or p.get("topic") or "Post",
+                         "subtitle": f"Social · {p.get('platform','')}".rstrip(" ·"),
+                         "url": "/app/social-eq/queue"})
+
+    for b in await db.bookings.find(
+        {"workspace_id": wid, "$or": [{"guest_name": rx}, {"guest_email": rx}]},
+        {"_id": 0, "id": 1, "guest_name": 1, "guest_email": 1},
+    ).to_list(8):
+        results.append({"type": "booking", "id": b["id"], "title": b.get("guest_name") or b.get("guest_email") or "Booking",
+                         "subtitle": "Booking", "url": "/app/schedule-eq/bookings"})
+
+    for p in await db.proposals.find(
+        {"workspace_id": wid, "title": rx}, {"_id": 0, "id": 1, "title": 1},
+    ).to_list(8):
+        results.append({"type": "proposal", "id": p["id"], "title": p["title"], "subtitle": "Proposal",
+                         "url": f"/app/proposal-eq/{p['id']}"})
+
+    for c in await db.carousels.find(
+        {"workspace_id": wid, "name": rx}, {"_id": 0, "id": 1, "name": 1},
+    ).to_list(8):
+        results.append({"type": "project", "id": c["id"], "title": c["name"], "subtitle": "Create EQ project",
+                         "url": f"/app/create-eq/{c['id']}"})
+
+    return results[:40]
 
 
 @api.get("/audit-log")
