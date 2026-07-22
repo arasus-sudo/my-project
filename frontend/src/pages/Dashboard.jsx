@@ -5,6 +5,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowRight } from "lucide-react";
+import { SkeletonKpiGrid } from "../components/ui/loading-states";
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
@@ -16,7 +17,16 @@ export default function Dashboard() {
     catch { toast.error("Could not seed"); }
   };
 
-  if (!data)     return <div className="p-6 sm:p-8 text-body text-ink-muted animate-fade-in">Loading…</div>;
+  if (!data) {
+    return (
+      <div className="animate-fade-in">
+        <PageHeader title="Overview" subtitle="Your outbound engine at a glance." />
+        <div className="p-6 sm:p-8">
+          <SkeletonKpiGrid count={4} />
+        </div>
+      </div>
+    );
+  }
   const { kpis, counts, trend } = data;
 
   return (

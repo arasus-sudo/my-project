@@ -270,7 +270,7 @@ export default function CampaignWizard() {
           <div className="mt-3">
             <div className="ui-label mb-1">Strengths</div>
             {score.strengths.map((s, i) => (
-              <div key={i} className="text-caption text-success flex items-center gap-1"><CheckCircle2 size={10} />{s}</div>
+              <div key={i} className="text-caption text-success flex items-center gap-1"><CheckCircle2 size={12} />{s}</div>
             ))}
           </div>
         )}
@@ -278,7 +278,7 @@ export default function CampaignWizard() {
           <div className="mt-2">
             <div className="ui-label mb-1">To Improve</div>
             {score.weaknesses_to_improve.map((w, i) => (
-              <div key={i} className="text-caption text-warning flex items-center gap-1"><AlertTriangle size={10} />{w}</div>
+              <div key={i} className="text-caption text-warning flex items-center gap-1"><AlertTriangle size={12} />{w}</div>
             ))}
           </div>
         )}
@@ -642,7 +642,7 @@ export default function CampaignWizard() {
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
                       form.channels.includes(ch.value) ? "bg-accent text-white" : "bg-ash text-ink-muted"
                     }`}>
-                      <ch.icon size={18} />
+                      <ch.icon size={16} />
                     </div>
                     <div>
                       <div className="font-medium text-body">{ch.label}</div>

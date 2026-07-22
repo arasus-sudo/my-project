@@ -171,7 +171,7 @@ export default function VoiceCampaignBuilder() {
             {callableLeads.length === 0 ? (
               <div className="p-4 text-body text-ink-muted">No leads with a phone number yet — add one from the Leads page.</div>
             ) : callableLeads.map((l) => (
-              <label key={l.id} className="flex items-center gap-3 px-3 py-2 border-b border-line last:border-0 hover:bg-surfacehover cursor-pointer">
+              <label key={l.id} className="flex items-center gap-3 px-3 py-2 border-b border-line last:border-0 hover:bg-surfacehover cursor-pointer transition-colors duration-150">
                 <input type="checkbox" checked={campaign.lead_ids.includes(l.id)} onChange={() => toggleLead(l.id)} />
                 <span className="flex-1 text-body">{l.first_name} {l.last_name}</span>
                 <span className="text-tiny font-mono text-ink-muted">{l.phone}</span>

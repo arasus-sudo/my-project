@@ -8,6 +8,7 @@ import {
   CalendarClock, FileText, MessageSquare, ArrowRight, Share2, Search,
   CheckSquare, ShieldAlert, ChevronDown, ChevronUp,
 } from "lucide-react";
+import { SkeletonKpiGrid, SkeletonListRows } from "../components/ui/loading-states";
 
 const QUARANTINE_REASON_LABEL = {
   invalid_syntax: "Invalid email — fix it on the lead",
@@ -68,7 +69,7 @@ export default function CRM() {
     <Link to={to} className="shadow-card p-5 rounded-2xl hover:shadow-card-hover transition-all bg-white">
       <div className="flex items-center justify-between">
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}>
-          <Icon size={18} className="text-white" />
+          <Icon size={16} className="text-white" />
         </div>
         <ArrowRight size={14} className="text-neutral-300" />
       </div>
@@ -89,6 +90,18 @@ export default function CRM() {
     research: "bg-violet-500", transfer: "bg-orange-500",
   };
 
+  if (!stats) {
+    return (
+      <div>
+        <PageHeader title="CRM" subtitle="Shared lead repository, lists, and activity timeline — accessible by every agent." />
+        <div className="px-6 sm:px-8 space-y-8">
+          <SkeletonKpiGrid count={4} />
+          <SkeletonListRows rows={4} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader
@@ -97,13 +110,13 @@ export default function CRM() {
         right={
           <div className="flex items-center gap-2">
             <Link to="/app/crm/leads" className="btn-secondary text-xs">
-              <Users size={13} /> Leads
+              <Users size={14} /> Leads
             </Link>
             <Link to="/app/crm/lists" className="btn-secondary text-xs">
-              <ListChecks size={13} /> Lists
+              <ListChecks size={14} /> Lists
             </Link>
             <Link to="/app/crm/pipeline" className="btn-secondary text-xs">
-              <Kanban size={13} /> Pipeline
+              <Kanban size={14} /> Pipeline
             </Link>
           </div>
         }
@@ -184,7 +197,7 @@ export default function CRM() {
 
         {/* Open tasks */}
         <div>
-          <h2 className="ui-label mb-3 flex items-center gap-1.5"><CheckSquare size={13} /> Open tasks</h2>
+          <h2 className="ui-label mb-3 flex items-center gap-1.5"><CheckSquare size={14} /> Open tasks</h2>
           {tasks.length === 0 ? (
             <div className="shadow-card p-4 rounded-2xl text-caption text-ink-muted bg-white">
               Nothing due — add a task from any lead's detail page.
@@ -216,8 +229,8 @@ export default function CRM() {
         {quarantine.length > 0 && (
           <div>
             <button onClick={() => setQuarantineOpen((o) => !o)} className="ui-label mb-3 flex items-center gap-1.5 w-full">
-              <ShieldAlert size={13} /> Quarantined leads ({quarantine.length})
-              {quarantineOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              <ShieldAlert size={14} /> Quarantined leads ({quarantine.length})
+              {quarantineOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
             {quarantineOpen && (
               <div className="space-y-2">

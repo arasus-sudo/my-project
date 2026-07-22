@@ -281,7 +281,7 @@ export default function VoiceAgentBuilder() {
                   <Phone size={12} className="shrink-0 text-ink-muted" />
                   <span className="flex-1 truncate">{inboundUrl}</span>
                   <button onClick={copyInboundUrl} className="shrink-0 text-ink-muted hover:text-ink" title="Copy webhook URL">
-                    {copied ? <Check size={13} className="text-success" /> : <Copy size={13} />}
+                    {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
                   </button>
                 </div>
               )}

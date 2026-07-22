@@ -253,7 +253,7 @@ export default function LeadSearch() {
             )}
             <button onClick={() => setSidebarOpen(!sidebarOpen)}
               className="btn-secondary text-caption py-1.5 px-3">
-              <SlidersHorizontal size={13} /> {sidebarOpen ? "Hide Filters" : "Show Filters"}
+              <SlidersHorizontal size={14} /> {sidebarOpen ? "Hide Filters" : "Show Filters"}
             </button>
           </div>
         </div>
@@ -262,7 +262,7 @@ export default function LeadSearch() {
         <div className="px-5 pb-3">
           <div className="relative">
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted flex items-center gap-1.5">
-              <Bot size={15} className="text-accent" />
+              <Bot size={16} className="text-accent" />
             </div>
             <input value={query} onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") aiSearch(); }}
@@ -270,7 +270,7 @@ export default function LeadSearch() {
               className="w-full pl-10 pr-36 py-3 border border-line rounded-xl text-input bg-ash/30 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1.5">
               <button onClick={() => setShowAiExamples(!showAiExamples)}
-                className="btn-ghost text-caption py-1.5 px-2 text-ink-muted"><Lightbulb size={13} /></button>
+                className="btn-ghost text-caption py-1.5 px-2 text-ink-muted"><Lightbulb size={14} /></button>
               <button onClick={aiSearch} disabled={aiBusy || !query.trim()}
                 className="btn-primary text-caption py-1.5 px-3 disabled:opacity-50 flex items-center gap-1.5">
                 {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
@@ -345,9 +345,9 @@ export default function LeadSearch() {
                 leadIds={results.filter((_, i) => selected.has(i)).map((r) => r.id || r.email).filter(Boolean)}
                 onDone={() => setSelected(new Set())} />
               <button onClick={() => { results.filter((_, i) => selected.has(i)).forEach((l) => revealContact(l, "email")); }}
-                className="btn-secondary text-caption py-1.5 flex items-center gap-1"><Mail size={11} /> Reveal Emails</button>
+                className="btn-secondary text-caption py-1.5 flex items-center gap-1"><Mail size={12} /> Reveal Emails</button>
               <button onClick={() => { results.filter((_, i) => selected.has(i)).forEach((l) => revealContact(l, "phone")); }}
-                className="btn-secondary text-caption py-1.5 flex items-center gap-1"><Phone size={11} /> Reveal Phones</button>
+                className="btn-secondary text-caption py-1.5 flex items-center gap-1"><Phone size={12} /> Reveal Phones</button>
               <button onClick={() => setSelected(new Set())} className="btn-ghost text-caption py-1.5 ml-auto text-ink-muted">Clear</button>
             </div>
           )}
@@ -355,7 +355,7 @@ export default function LeadSearch() {
           {isBusy && !hasResults ? (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
-                <Loader2 size={28} className="animate-spin text-accent mx-auto mb-3" />
+                <Loader2 size={24} className="animate-spin text-accent mx-auto mb-3" />
                 <p className="text-caption text-ink-muted">{aiBusy ? "AI is analyzing your request…" : "Searching across providers…"}</p>
               </div>
             </div>

@@ -53,7 +53,7 @@ export default function CallLogs() {
               <tbody>
                 {calls.map((c) => (
                   <tr key={c.id} onClick={() => setDetail(c)}
-                    className="border-b border-line hover:bg-surfacehover cursor-pointer">
+                    className="border-b border-line hover:bg-surfacehover cursor-pointer transition-colors duration-150">
                     <td className="p-3 font-medium">{c.lead ? `${c.lead.first_name} ${c.lead.last_name || ""}` : "—"}</td>
                     <td className="p-3 font-mono text-tiny text-ink-muted">{c.to_number}</td>
                     <td className="p-3"><span className={`ui-label inline-block px-2 py-0.5 border ${STATUS_COLOR[c.status] || STATUS_COLOR.registered}`}>{c.status}</span></td>
@@ -76,7 +76,7 @@ export default function CallLogs() {
                 <div className="text-section font-display font-semibold">{detail.lead ? `${detail.lead.first_name} ${detail.lead.last_name || ""}` : detail.to_number}</div>
                 <div className="text-tiny text-ink-muted font-mono mt-1">{detail.to_number} · {detail.status}</div>
               </div>
-              <button onClick={() => setDetail(null)} className="text-ink-muted hover:text-ink"><X size={18} /></button>
+              <button onClick={() => setDetail(null)} className="text-ink-muted hover:text-ink"><X size={16} /></button>
             </div>
 
             {detail.summary && (

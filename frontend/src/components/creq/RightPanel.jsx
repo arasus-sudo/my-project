@@ -85,20 +85,20 @@ function RightPanel({
         <div>
           <div className="ui-label mb-2">Align</div>
           <div className="grid grid-cols-3 gap-1.5">
-            <AlignBtn onClick={() => onAlign("left")} title="Align left" testid="align-left"><AlignStartVertical size={15} /></AlignBtn>
-            <AlignBtn onClick={() => onAlign("hcenter")} title="Align center" testid="align-hcenter"><AlignCenterVertical size={15} /></AlignBtn>
-            <AlignBtn onClick={() => onAlign("right")} title="Align right" testid="align-right"><AlignEndVertical size={15} /></AlignBtn>
-            <AlignBtn onClick={() => onAlign("top")} title="Align top" testid="align-top"><AlignStartHorizontal size={15} /></AlignBtn>
-            <AlignBtn onClick={() => onAlign("vcenter")} title="Align middle" testid="align-vcenter"><AlignCenterHorizontal size={15} /></AlignBtn>
-            <AlignBtn onClick={() => onAlign("bottom")} title="Align bottom" testid="align-bottom"><AlignEndHorizontal size={15} /></AlignBtn>
+            <AlignBtn onClick={() => onAlign("left")} title="Align left" testid="align-left"><AlignStartVertical size={16} /></AlignBtn>
+            <AlignBtn onClick={() => onAlign("hcenter")} title="Align center" testid="align-hcenter"><AlignCenterVertical size={16} /></AlignBtn>
+            <AlignBtn onClick={() => onAlign("right")} title="Align right" testid="align-right"><AlignEndVertical size={16} /></AlignBtn>
+            <AlignBtn onClick={() => onAlign("top")} title="Align top" testid="align-top"><AlignStartHorizontal size={16} /></AlignBtn>
+            <AlignBtn onClick={() => onAlign("vcenter")} title="Align middle" testid="align-vcenter"><AlignCenterHorizontal size={16} /></AlignBtn>
+            <AlignBtn onClick={() => onAlign("bottom")} title="Align bottom" testid="align-bottom"><AlignEndHorizontal size={16} /></AlignBtn>
           </div>
         </div>
         {selectedCount > 2 && (
           <div>
             <div className="ui-label mb-2">Distribute</div>
             <div className="grid grid-cols-2 gap-1.5">
-              <AlignBtn onClick={() => onAlign("dist-h")} title="Distribute horizontally" testid="dist-h"><AlignHorizontalSpaceAround size={15} /></AlignBtn>
-              <AlignBtn onClick={() => onAlign("dist-v")} title="Distribute vertically" testid="dist-v"><AlignVerticalSpaceAround size={15} /></AlignBtn>
+              <AlignBtn onClick={() => onAlign("dist-h")} title="Distribute horizontally" testid="dist-h"><AlignHorizontalSpaceAround size={16} /></AlignBtn>
+              <AlignBtn onClick={() => onAlign("dist-v")} title="Distribute vertically" testid="dist-v"><AlignVerticalSpaceAround size={16} /></AlignBtn>
             </div>
           </div>
         )}
@@ -116,7 +116,7 @@ function RightPanel({
           <div className="flex items-center gap-2 mb-2">
             <span className="ui-label">Palette</span>
             <button onClick={createCustomPalette} title="Create custom palette"
-              className="ml-auto btn-ghost text-xs py-0.5 px-1.5"><Plus size={10} /> New</button>
+              className="ml-auto btn-ghost text-xs py-0.5 px-1.5"><Plus size={12} /> New</button>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {allPalettes.map((p) => (
@@ -313,7 +313,7 @@ function RightPanel({
 
       {/* Z-order — jump-to plus one-step, Canva-style */}
       <div className="flex items-center gap-1" data-testid="z-order-group">
-        <span className="ui-label mr-1"><Layers size={11} className="inline -mt-0.5" /> Layer</span>
+        <span className="ui-label mr-1"><Layers size={12} className="inline -mt-0.5" /> Layer</span>
         <button onClick={onBack} data-testid="z-back" title="Send to back" className="btn-ghost text-tiny py-0.5 px-2 border border-line rounded-lg">⇤ Back</button>
         <button onClick={onBackward} data-testid="z-backward" title="Send backward one step" className="btn-ghost text-tiny py-0.5 px-2 border border-line rounded-lg">←</button>
         <button onClick={onForward} data-testid="z-forward" title="Bring forward one step" className="btn-ghost text-tiny py-0.5 px-2 border border-line rounded-lg">→</button>
@@ -346,11 +346,11 @@ function RightPanel({
               </select></label>
           </div>
           <div className="flex gap-1">
-            <ToggleBtn active={el.italic} onClick={() => onEditElement({ italic: !el.italic })}><Italic size={13} /></ToggleBtn>
+            <ToggleBtn active={el.italic} onClick={() => onEditElement({ italic: !el.italic })}><Italic size={14} /></ToggleBtn>
             <ToggleBtn active={el.uppercase} onClick={() => onEditElement({ uppercase: !el.uppercase })}>ABC</ToggleBtn>
-            <ToggleBtn active={el.align === "left"} onClick={() => onEditElement({ align: "left" })}><AlignLeft size={13} /></ToggleBtn>
-            <ToggleBtn active={el.align === "center"} onClick={() => onEditElement({ align: "center" })}><AlignCenter size={13} /></ToggleBtn>
-            <ToggleBtn active={el.align === "right"} onClick={() => onEditElement({ align: "right" })}><AlignRight size={13} /></ToggleBtn>
+            <ToggleBtn active={el.align === "left"} onClick={() => onEditElement({ align: "left" })}><AlignLeft size={14} /></ToggleBtn>
+            <ToggleBtn active={el.align === "center"} onClick={() => onEditElement({ align: "center" })}><AlignCenter size={14} /></ToggleBtn>
+            <ToggleBtn active={el.align === "right"} onClick={() => onEditElement({ align: "right" })}><AlignRight size={14} /></ToggleBtn>
           </div>
           <label className="block"><span className="ui-label">Letter spacing</span>
             <input type="range" min={-0.05} max={0.3} step={0.01} value={el.letter_spacing || 0} onChange={(e) => onEditElement({ letter_spacing: Number(e.target.value) })} className="w-full" />
@@ -395,7 +395,7 @@ function RightPanel({
 
           {onAiAssist && (
             <div className="pt-3 border-t border-line">
-              <div className="ui-label mb-2 flex items-center gap-1"><PenLine size={11} /> Copy assist</div>
+              <div className="ui-label mb-2 flex items-center gap-1"><PenLine size={12} /> Copy assist</div>
               <div className="grid grid-cols-2 gap-1">
                 {[["punchier","Punchier"],["shorter","Shorter"],["catchier","Hook it"],["formal","Formal"]].map(([k,l]) => (
                   <button key={k} onClick={() => onAiAssist(k)} data-testid={`ai-assist-${k}`}
@@ -583,8 +583,8 @@ function RightPanel({
             <input type="range" min={0} max={480} value={el.radius || 0} onChange={(e) => onEditElement({ radius: Number(e.target.value) })} className="w-full" />
           </label>
           <div className="flex gap-1">
-            <ToggleBtn active={el.flip_h} onClick={() => onEditElement({ flip_h: !el.flip_h })}><FlipHorizontal2 size={13} /></ToggleBtn>
-            <ToggleBtn active={el.flip_v} onClick={() => onEditElement({ flip_v: !el.flip_v })}><FlipVertical2 size={13} /></ToggleBtn>
+            <ToggleBtn active={el.flip_h} onClick={() => onEditElement({ flip_h: !el.flip_h })}><FlipHorizontal2 size={14} /></ToggleBtn>
+            <ToggleBtn active={el.flip_v} onClick={() => onEditElement({ flip_v: !el.flip_v })}><FlipVertical2 size={14} /></ToggleBtn>
           </div>
           <label className="flex items-center gap-2 form-label">
             <input type="checkbox" checked={el.role === "logo"} data-testid="el-treat-as-logo"
@@ -869,7 +869,7 @@ function PanoramaManualControls({ proj, palette, activeSlide, onChange, onReset,
   return (
     <div className="border-t border-line pt-4 space-y-3" data-testid="panorama-manual-controls">
       <div className="flex items-center gap-2">
-        <Mountain size={13} />
+        <Mountain size={14} />
         <div className="ui-label m-0">Panorama · slide {activeSlide + 1}</div>
       </div>
 
@@ -916,7 +916,7 @@ function PanoramaManualControls({ proj, palette, activeSlide, onChange, onReset,
       <div className="grid grid-cols-2 gap-2 pt-1">
         <button onClick={onReset} data-testid="pano-reset-slide"
           className="text-tiny py-1.5 rounded-full border border-line hover:border-ink flex items-center justify-center gap-1">
-          <RotateCcw size={11} /> Reset slide
+          <RotateCcw size={12} /> Reset slide
         </button>
         <button onClick={onApplyAll} data-testid="pano-apply-all"
           className="text-tiny py-1.5 rounded-full border border-ink bg-ink text-white hover:bg-neutral-800">

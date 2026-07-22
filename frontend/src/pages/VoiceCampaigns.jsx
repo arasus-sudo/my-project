@@ -56,7 +56,7 @@ export default function VoiceCampaigns() {
               </thead>
               <tbody>
                 {items.map((c) => (
-                  <tr key={c.id} className="border-b border-line hover:bg-surfacehover">
+                  <tr key={c.id} className="border-b border-line hover:bg-surfacehover transition-colors duration-150">
                     <td className="p-4">
                       <Link to={`/app/voice-eq/campaigns/${c.id}`} className="font-medium hover:text-sanguine">{c.name}</Link>
                       <div className="text-tiny text-ink-muted font-mono">{c.lead_ids?.length || 0} leads · {c.send_window_start}–{c.send_window_end} {c.timezone}</div>

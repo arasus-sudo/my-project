@@ -186,7 +186,7 @@ export default function LeadDetail() {
         subtitle={lead.company || lead.email}
         right={
           <div className="flex items-center gap-2">
-            <button onClick={startEdit} className="btn-secondary text-xs"><Edit2 size={13} /> Edit</button>
+            <button onClick={startEdit} className="btn-secondary text-xs"><Edit2 size={14} /> Edit</button>
             <Link to="/app/crm/leads" data-testid="back-to-leads" className="btn-secondary">
               <ArrowLeft size={14} /> Leads
             </Link>
@@ -233,14 +233,14 @@ export default function LeadDetail() {
                   {intent ? (
                     <span data-testid="lead-intent"
                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-tiny font-mono font-medium ${BAND_STYLE[intent.band]}`}>
-                      <Flame size={10} /> {intent.score} {intent.band}
+                      <Flame size={12} /> {intent.score} {intent.band}
                     </span>
                   ) : (
                     <span className="text-caption font-mono text-ink-muted">not scored yet</span>
                   )}
                   {lead.dnc && (
                     <span className="inline-flex items-center gap-1 text-tiny font-mono bg-danger/10 text-danger px-2 py-0.5 rounded-full">
-                      <ShieldOff size={9} /> Do not contact
+                      <ShieldOff size={12} /> Do not contact
                     </span>
                   )}
                 </div>
@@ -253,7 +253,7 @@ export default function LeadDetail() {
                   </select>
                   <button onClick={toggleDnc} data-testid="toggle-dnc"
                     className={`text-caption inline-flex items-center gap-1 mt-1 ${lead.dnc ? "text-danger" : "text-ink-muted hover:text-ink"}`}>
-                    <ShieldOff size={11} /> {lead.dnc ? "Clear do-not-contact" : "Mark do not contact"}
+                    <ShieldOff size={12} /> {lead.dnc ? "Clear do-not-contact" : "Mark do not contact"}
                   </button>
                 </div>
               </>
@@ -262,7 +262,7 @@ export default function LeadDetail() {
               <div className="flex flex-wrap gap-1 pt-1 border-t border-line/50">
                 {lead.campaign_names.map((cn) => (
                   <span key={cn} className="inline-flex items-center gap-1 text-tiny font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                    <Megaphone size={9} /> {cn}
+                    <Megaphone size={12} /> {cn}
                   </span>
                 ))}
               </div>
@@ -271,13 +271,13 @@ export default function LeadDetail() {
 
           {/* Tags */}
           <div className="shadow-card p-4 rounded-2xl">
-            <div className="ui-label mb-2 flex items-center gap-1.5"><Tag size={11} /> Tags</div>
+            <div className="ui-label mb-2 flex items-center gap-1.5"><Tag size={12} /> Tags</div>
             <div className="flex flex-wrap gap-1.5 mb-2">
               {(lead.tags || []).length === 0 && <p className="text-caption text-ink-muted">No tags yet.</p>}
               {(lead.tags || []).map((t) => (
                 <span key={t} className="inline-flex items-center gap-1 text-tiny font-mono bg-ash text-ink-tertiary px-2 py-0.5 rounded-full">
                   {t}
-                  <button onClick={() => removeTag(t)} data-testid={`remove-tag-${t}`} className="hover:text-danger"><X size={9} /></button>
+                  <button onClick={() => removeTag(t)} data-testid={`remove-tag-${t}`} className="hover:text-danger"><X size={12} /></button>
                 </span>
               ))}
             </div>
@@ -300,7 +300,7 @@ export default function LeadDetail() {
                 {lists.filter((l) => (l.lead_ids || []).includes(lead.id)).map((l) => (
                   <Link key={l.id} to="/app/crm/lists"
                     className="inline-flex items-center gap-1 text-tiny font-mono bg-ash text-ink-tertiary px-2 py-0.5 rounded-full hover:bg-neutral-200">
-                    <ListChecks size={9} /> {l.name}
+                    <ListChecks size={12} /> {l.name}
                   </Link>
                 ))}
               </div>
@@ -348,7 +348,7 @@ export default function LeadDetail() {
           {voiceCalls.length > 0 && (
             <div className="shadow-card p-4 sm:p-6 rounded-2xl">
               <div className="flex items-center gap-2 ui-label mb-3">
-                <Phone size={13} /> Recent calls ({voiceCalls.length})
+                <Phone size={14} /> Recent calls ({voiceCalls.length})
               </div>
               <div className="space-y-2">
                 {voiceCalls.slice(0, 5).map((c) => (
@@ -401,7 +401,7 @@ export default function LeadDetail() {
                 {pack.perplexity?.summary && (
                   <div data-testid="perplexity-summary">
                     <div className="flex items-center gap-1.5 ui-label mb-1">
-                      <Search size={11} /> Current research
+                      <Search size={12} /> Current research
                       <span className="text-ink-muted normal-case font-normal">
                         · {pack.perplexity.citations?.length || 0} cited sources
                       </span>
@@ -412,7 +412,7 @@ export default function LeadDetail() {
                         {pack.perplexity.citations.slice(0, 4).map((url, i) => (
                           <a key={i} href={url} target="_blank" rel="noreferrer"
                             className="text-tiny text-ink-muted hover:text-ink inline-flex items-center gap-0.5">
-                            source {i + 1} <ExternalLink size={9} />
+                            source {i + 1} <ExternalLink size={12} />
                           </a>
                         ))}
                       </div>
@@ -423,7 +423,7 @@ export default function LeadDetail() {
                 {pack.site_summary && (
                   <div>
                     <div className="flex items-center gap-1.5 ui-label mb-1">
-                      <Globe size={11} /> What they do
+                      <Globe size={12} /> What they do
                     </div>
                     <p className="text-caption text-ink-secondary line-clamp-3">{pack.site_summary}</p>
                   </div>
@@ -448,7 +448,7 @@ export default function LeadDetail() {
                 {pack.news?.length > 0 && (
                   <div>
                     <div className="flex items-center gap-1.5 ui-label mb-1.5">
-                      <Newspaper size={11} /> Recent news
+                      <Newspaper size={12} /> Recent news
                     </div>
                     <ul className="space-y-1">
                       {pack.news.slice(0, 4).map((n, i) => (
@@ -456,7 +456,7 @@ export default function LeadDetail() {
                           <a href={n.url} target="_blank" rel="noreferrer"
                             className="text-ink-secondary hover:text-ink inline-flex items-start gap-1">
                             <span>{n.title}</span>
-                            <ExternalLink size={9} className="mt-0.5 shrink-0 opacity-50" />
+                            <ExternalLink size={12} className="mt-0.5 shrink-0 opacity-50" />
                           </a>
                           {n.published && <span className="text-ink-muted font-mono ml-1">{n.published}</span>}
                         </li>
@@ -468,7 +468,7 @@ export default function LeadDetail() {
                 {pack.github?.languages?.length > 0 && (
                   <div>
                     <div className="flex items-center gap-1.5 ui-label mb-1.5">
-                      <Github size={11} /> Public tech stack
+                      <Github size={12} /> Public tech stack
                     </div>
                     <div className="flex flex-wrap gap-1">
                       {pack.github.languages.map((l) => <span key={l} className="kbd">{l}</span>)}
@@ -481,7 +481,7 @@ export default function LeadDetail() {
 
           {/* Tasks */}
           <div className="shadow-card p-4 sm:p-6 rounded-2xl">
-            <div className="ui-label mb-3 flex items-center gap-1.5"><CheckSquare size={13} /> Tasks</div>
+            <div className="ui-label mb-3 flex items-center gap-1.5"><CheckSquare size={14} /> Tasks</div>
             <div className="space-y-2 mb-3">
               {tasks.length === 0 && <p className="text-caption text-ink-muted">No tasks yet.</p>}
               {tasks.map((t) => {
@@ -489,7 +489,7 @@ export default function LeadDetail() {
                 return (
                   <div key={t.id} data-testid={`task-${t.id}`} className="flex items-start gap-2 text-body">
                     <button onClick={() => toggleTask(t)} data-testid={`toggle-task-${t.id}`} className="mt-0.5 text-ink-muted hover:text-ink">
-                      {t.status === "done" ? <CheckSquare size={15} className="text-success" /> : <Square size={15} />}
+                      {t.status === "done" ? <CheckSquare size={16} className="text-success" /> : <Square size={16} />}
                     </button>
                     <div className="flex-1 min-w-0">
                       <div className={t.status === "done" ? "line-through text-ink-muted" : ""}>{t.title}</div>
@@ -523,7 +523,7 @@ export default function LeadDetail() {
 
           {/* Notes */}
           <div className="shadow-card p-4 sm:p-6 rounded-2xl">
-            <div className="ui-label mb-3 flex items-center gap-1.5"><StickyNote size={13} /> Notes</div>
+            <div className="ui-label mb-3 flex items-center gap-1.5"><StickyNote size={14} /> Notes</div>
             <div className="flex gap-2 mb-3">
               <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} rows={2}
                 placeholder="Add a note…" data-testid="new-note-text"
@@ -560,7 +560,7 @@ export default function LeadDetail() {
                 return (
                   <div key={a.id} data-testid={`timeline-item-${a.id}`} className="pl-5 pb-5 relative">
                     <div className="absolute -left-[9px] top-0.5 w-4 h-4 rounded-full bg-white border border-line flex items-center justify-center">
-                      <Icon size={9} />
+                      <Icon size={12} />
                     </div>
                     <div className="text-caption text-ink-muted font-mono">
                       {AGENT_LABEL[a.agent] || a.agent} · {formatDistanceToNow(new Date(a.at), { addSuffix: true })}

@@ -52,7 +52,7 @@ export default function Landing() {
             <Link to="/login" data-testid="nav-login" className="btn-ghost hidden sm:inline-flex">Sign in</Link>
             <Link to="/signup" data-testid="nav-signup" className="btn-primary py-2 px-4 sm:px-5 text-sm">Start free <ArrowUpRight size={14} /></Link>
             <button onClick={() => setMobileNav(!mobileNav)} className="md:hidden p-2 text-ink-muted hover:text-ink rounded-xl">
-              {mobileNav ? <X size={18} /> : <Menu size={18} />}
+              {mobileNav ? <X size={16} /> : <Menu size={16} />}
             </button>
           </div>
         </div>
@@ -133,7 +133,7 @@ export default function Landing() {
                 className="bg-ink text-white border border-white/10 rounded-2xl p-6 sm:p-8 hover:border-white/30 hover:shadow-card-hover transition-all shadow-card">
                 <div className="flex items-center justify-between">
                   <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
-                    <a.icon size={18} strokeWidth={1.75} />
+                    <a.icon size={16} strokeWidth={1.75} />
                   </div>
                   <span className="pill bg-white/10 text-white/70"><span className="w-1.5 h-1.5 rounded-full bg-success" /> Live</span>
                 </div>
@@ -169,7 +169,7 @@ export default function Landing() {
             ].map((f) => (
               <div key={f.t} className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8 hover:border-white/30 hover:bg-white/10 transition-all">
                 <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
-                  <f.icon size={18} strokeWidth={1.75} />
+                  <f.icon size={16} strokeWidth={1.75} />
                 </div>
                 <div className="mt-4 sm:mt-5 font-display font-semibold text-base sm:text-lg text-white">{f.t}</div>
                 <div className="mt-2 text-xs sm:text-sm text-white/60 leading-relaxed">{f.d}</div>

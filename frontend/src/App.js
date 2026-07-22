@@ -1,76 +1,92 @@
 import "./App.css";
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { Toaster } from "sonner";
+import { Loader2 } from "lucide-react";
 import ErrorBoundary from "./components/ErrorBoundary";
-import Landing from "./pages/Landing";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import SuiteHome from "./pages/SuiteHome";
 import AppLayout from "./components/AppLayout";
-import Dashboard from "./pages/Dashboard";
-import Campaigns from "./pages/Campaigns";
-import CampaignBuilder from "./pages/CampaignBuilder";
-import Leads from "./pages/Leads";
-import LeadDetail from "./pages/LeadDetail";
-import Mailboxes from "./pages/Mailboxes";
-import Inbox from "./pages/Inbox";
-import UnifiedInbox from "./pages/UnifiedInbox";
-import CRM from "./pages/CRM";
-import Pipeline from "./pages/Pipeline";
-import LeadLists from "./pages/LeadLists";
-import LeadSearch from "./pages/LeadSearch";
-import Admin from "./pages/Admin";
-import Analytics from "./pages/Analytics";
-import AuditLog from "./pages/AuditLog";
-import CreateEQEditor from "./pages/CreateEQEditor";
-import CreateEQProjects from "./pages/CreateEQProjects";
-import Onboarding from "./pages/Onboarding";
-import Team from "./pages/Team";
-import Templates from "./pages/Templates";
-import Settings from "./pages/Settings";
-import Billing from "./pages/Billing";
 import { OutOfCreditsWatcher } from "./components/Credits";
-import Webhooks from "./pages/Webhooks";
-import HubSpotSettings from "./pages/HubSpotSettings";
-import CompanyIntel from "./pages/CompanyIntel";
 
-import ServiceLibrary from "./pages/ServiceLibrary";
-import CampaignWizard from "./pages/CampaignWizard";
-import VoiceEQOverview from "./pages/VoiceEQOverview";
-import VoiceAgents from "./pages/VoiceAgents";
-import VoiceAgentBuilder from "./pages/VoiceAgentBuilder";
-import VoiceCampaigns from "./pages/VoiceCampaigns";
-import VoiceCampaignBuilder from "./pages/VoiceCampaignBuilder";
-import CallLogs from "./pages/CallLogs";
-import VoiceLiveDashboard from "./pages/VoiceLiveDashboard";
-import VoiceSettings from "./pages/VoiceSettings";
-import ScheduleEQOverview from "./pages/ScheduleEQOverview";
-import EventTypes from "./pages/EventTypes";
-import EventTypeBuilder from "./pages/EventTypeBuilder";
-import Bookings from "./pages/Bookings";
-import ScheduleSettings from "./pages/ScheduleSettings";
-import BookingPage from "./pages/BookingPage";
-import ManageBooking from "./pages/ManageBooking";
-import Proposals from "./pages/Proposals";
-import ProposalBuilder from "./pages/ProposalBuilder";
-import PricingCatalog from "./pages/PricingCatalog";
-import SocialEQOverview from "./pages/SocialEQOverview";
-import PostComposer from "./pages/PostComposer";
-import PostQueue from "./pages/PostQueue";
-import SocialSettings from "./pages/SocialSettings";
-import SocialCalendar from "./pages/SocialCalendar";
-import BulkImportDrawer from "./pages/BulkImportDrawer";
-import SocialAnalytics from "./pages/SocialAnalytics";
-import SocialInbox from "./pages/SocialInbox";
-import SiteEQOverview from "./pages/SiteEQOverview";
-import SiteList from "./pages/SiteList";
-import SiteInbox from "./pages/SiteInbox";
-import SiteAnalytics from "./pages/SiteAnalytics";
+// Every page is its own chunk — previously all ~60 pages (including the
+// Create EQ canvas editor and every chart-heavy Analytics page) shipped in
+// one bundle, so a visitor landing on the public site downloaded the whole
+// authenticated app before anything painted. Route-level lazy() splits each
+// page into its own request, fetched only when actually navigated to.
+const Landing = lazy(() => import("./pages/Landing"));
+const Login = lazy(() => import("./pages/Login"));
+const Signup = lazy(() => import("./pages/Signup"));
+const SuiteHome = lazy(() => import("./pages/SuiteHome"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Campaigns = lazy(() => import("./pages/Campaigns"));
+const CampaignBuilder = lazy(() => import("./pages/CampaignBuilder"));
+const Leads = lazy(() => import("./pages/Leads"));
+const LeadDetail = lazy(() => import("./pages/LeadDetail"));
+const Mailboxes = lazy(() => import("./pages/Mailboxes"));
+const Inbox = lazy(() => import("./pages/Inbox"));
+const UnifiedInbox = lazy(() => import("./pages/UnifiedInbox"));
+const CRM = lazy(() => import("./pages/CRM"));
+const Pipeline = lazy(() => import("./pages/Pipeline"));
+const LeadLists = lazy(() => import("./pages/LeadLists"));
+const LeadSearch = lazy(() => import("./pages/LeadSearch"));
+const Admin = lazy(() => import("./pages/Admin"));
+const Analytics = lazy(() => import("./pages/Analytics"));
+const AuditLog = lazy(() => import("./pages/AuditLog"));
+const CreateEQEditor = lazy(() => import("./pages/CreateEQEditor"));
+const CreateEQProjects = lazy(() => import("./pages/CreateEQProjects"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const Team = lazy(() => import("./pages/Team"));
+const Templates = lazy(() => import("./pages/Templates"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Billing = lazy(() => import("./pages/Billing"));
+const Webhooks = lazy(() => import("./pages/Webhooks"));
+const HubSpotSettings = lazy(() => import("./pages/HubSpotSettings"));
+const CompanyIntel = lazy(() => import("./pages/CompanyIntel"));
+
+const ServiceLibrary = lazy(() => import("./pages/ServiceLibrary"));
+const CampaignWizard = lazy(() => import("./pages/CampaignWizard"));
+const VoiceEQOverview = lazy(() => import("./pages/VoiceEQOverview"));
+const VoiceAgents = lazy(() => import("./pages/VoiceAgents"));
+const VoiceAgentBuilder = lazy(() => import("./pages/VoiceAgentBuilder"));
+const VoiceCampaigns = lazy(() => import("./pages/VoiceCampaigns"));
+const VoiceCampaignBuilder = lazy(() => import("./pages/VoiceCampaignBuilder"));
+const CallLogs = lazy(() => import("./pages/CallLogs"));
+const VoiceLiveDashboard = lazy(() => import("./pages/VoiceLiveDashboard"));
+const VoiceSettings = lazy(() => import("./pages/VoiceSettings"));
+const ScheduleEQOverview = lazy(() => import("./pages/ScheduleEQOverview"));
+const EventTypes = lazy(() => import("./pages/EventTypes"));
+const EventTypeBuilder = lazy(() => import("./pages/EventTypeBuilder"));
+const Bookings = lazy(() => import("./pages/Bookings"));
+const ScheduleSettings = lazy(() => import("./pages/ScheduleSettings"));
+const BookingPage = lazy(() => import("./pages/BookingPage"));
+const ManageBooking = lazy(() => import("./pages/ManageBooking"));
+const Proposals = lazy(() => import("./pages/Proposals"));
+const ProposalBuilder = lazy(() => import("./pages/ProposalBuilder"));
+const PricingCatalog = lazy(() => import("./pages/PricingCatalog"));
+const SocialEQOverview = lazy(() => import("./pages/SocialEQOverview"));
+const PostComposer = lazy(() => import("./pages/PostComposer"));
+const PostQueue = lazy(() => import("./pages/PostQueue"));
+const SocialSettings = lazy(() => import("./pages/SocialSettings"));
+const SocialCalendar = lazy(() => import("./pages/SocialCalendar"));
+const BulkImportDrawer = lazy(() => import("./pages/BulkImportDrawer"));
+const SocialAnalytics = lazy(() => import("./pages/SocialAnalytics"));
+const SocialInbox = lazy(() => import("./pages/SocialInbox"));
+const SiteEQOverview = lazy(() => import("./pages/SiteEQOverview"));
+const SiteList = lazy(() => import("./pages/SiteList"));
+const SiteInbox = lazy(() => import("./pages/SiteInbox"));
+const SiteAnalytics = lazy(() => import("./pages/SiteAnalytics"));
+
+export function RouteLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-bone">
+      <Loader2 size={22} className="animate-spin text-accent" />
+    </div>
+  );
+}
 
 function Private({ children }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="p-10 text-neutral-500">Loading…</div>;
+  if (loading) return <RouteLoader />;
   if (!user) return <Navigate to="/login" replace />;
   return children;
 }
@@ -83,6 +99,7 @@ function App() {
         <BrowserRouter>
           <Toaster position="top-right" theme="light" />
           <OutOfCreditsWatcher />
+          <Suspense fallback={<RouteLoader />}>
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
@@ -160,6 +177,7 @@ function App() {
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
         </BrowserRouter>
       </AuthProvider>
       </ErrorBoundary>

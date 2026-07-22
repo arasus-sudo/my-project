@@ -164,7 +164,7 @@ export default function Webhooks() {
                           <div key={e.id} className="bg-white border border-line rounded-lg p-2 flex items-center gap-2">
                             {e.status === "ok" ? <CheckCircle2 size={12} className="text-success flex-shrink-0" /> : <XCircle size={12} className="text-danger flex-shrink-0" />}
                             <div className="flex-1 min-w-0 truncate">{e.topic || e.reason || "—"}</div>
-                            <div className="text-ink-muted font-mono flex items-center gap-1"><Clock size={10} /> {new Date(e.at).toLocaleTimeString()}</div>
+                            <div className="text-ink-muted font-mono flex items-center gap-1"><Clock size={12} /> {new Date(e.at).toLocaleTimeString()}</div>
                           </div>
                         ))}
                       </div>

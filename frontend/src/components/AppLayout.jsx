@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useAuth } from "../lib/auth";
 import { CreditPill } from "./Credits";
 import InnoiraLogo from "./InnoiraLogo";
@@ -9,7 +9,7 @@ import {
   LayoutDashboard, Send, Users, Inbox as InboxIcon, Kanban, Mail, Settings as SettingsIcon, LogOut, Info, Shield,
   FileText, BarChart3, UsersRound, ShieldCheck, Image as ImageIcon, ChevronDown, Layers, Webhook, Link2,
   Bot, PhoneCall, History, Radio, CalendarClock, CalendarCheck, CalendarRange, FileBarChart, Tags,
-  Share2, PenSquare, ListChecks, LayoutGrid, Menu, X, Search, Upload, Globe,
+  Share2, PenSquare, ListChecks, LayoutGrid, Menu, X, Search, Upload, Globe, Loader2,
 } from "lucide-react";
 
 const FONT_FAMILIES = {
@@ -129,7 +129,7 @@ export default function AppLayout() {
     <div className="min-h-screen flex bg-bone">
       <button onClick={() => setSidebarOpen(true)} data-testid="sidebar-open"
         className="lg:hidden fixed top-4 left-4 z-50 p-2.5 bg-white/80 backdrop-blur-xl border border-line rounded-xl shadow-card hover:shadow-card-hover transition-all">
-        <Menu size={18} className="text-ink" />
+        <Menu size={20} className="text-ink" />
       </button>
 
       {sidebarOpen && (
@@ -175,7 +175,7 @@ export default function AppLayout() {
           <button onClick={() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
             data-testid="open-command-palette"
             className="flex-1 flex items-center gap-2 px-3 py-2 text-caption text-ink-muted bg-ash hover:bg-line/40 rounded-xl transition-colors">
-            <Search size={13} />
+            <Search size={14} />
             <span className="flex-1 text-left">Search…</span>
             <kbd className="text-tiny font-mono">⌘K</kbd>
           </button>
@@ -235,10 +235,23 @@ export default function AppLayout() {
       </aside>
       <main className="flex-1 min-w-0">
         <div className="min-h-screen animate-fade-in">
-          <Outlet />
+          <Suspense fallback={<ContentLoader />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
       <CommandPalette />
+    </div>
+  );
+}
+
+function ContentLoader() {
+  // Shown only inside the content area while a lazy-loaded page chunk
+  // fetches — nav/sidebar/chrome stay put so switching agents never flashes
+  // a full blank screen, just a brief in-place loading state.
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center">
+      <Loader2 size={20} className="animate-spin text-ink-muted" />
     </div>
   );
 }
@@ -254,7 +267,7 @@ export function PageHeader({ title, subtitle, right, badge }) {
             <h1 className="text-xl sm:text-page-title font-display font-semibold truncate">{title}</h1>
             {badge && (
               <span className="badge-info">
-                <Info size={10} /> {badge}
+                <Info size={12} /> {badge}
               </span>
             )}
           </div>

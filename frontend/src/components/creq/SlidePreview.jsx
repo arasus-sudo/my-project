@@ -74,7 +74,7 @@ export default function SlidePreview({ proj, palette, startIndex = 0, onClose })
         {total > 1 && (
           <button onClick={prev} data-testid="preview-prev" title="Previous (←)"
             className="absolute left-3 sm:left-8 z-10 p-3 rounded-full bg-white/5 hover:bg-white/15 text-white transition-colors">
-            <ChevronLeft size={22} />
+            <ChevronLeft size={20} />
           </button>
         )}
 
@@ -97,7 +97,7 @@ export default function SlidePreview({ proj, palette, startIndex = 0, onClose })
         {total > 1 && (
           <button onClick={next} data-testid="preview-next" title="Next (→)"
             className="absolute right-3 sm:right-8 z-10 p-3 rounded-full bg-white/5 hover:bg-white/15 text-white transition-colors">
-            <ChevronRight size={22} />
+            <ChevronRight size={20} />
           </button>
         )}
       </div>
@@ -123,7 +123,7 @@ export default function SlidePreview({ proj, palette, startIndex = 0, onClose })
           </div>
           <button onClick={() => setPlaying((p) => (idx >= total - 1 ? (goTo(0), true) : !p))} data-testid="preview-play-toggle"
             className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition-colors">
-            {playing ? <Pause size={13} /> : <Play size={13} />}
+            {playing ? <Pause size={14} /> : <Play size={14} />}
             {playing ? "Pause" : idx >= total - 1 ? "Replay" : "Play"}
           </button>
         </div>

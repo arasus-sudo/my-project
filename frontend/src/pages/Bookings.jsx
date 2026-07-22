@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import { X, UserX, Info } from "lucide-react";
+import { SkeletonTableRows } from "../components/ui/loading-states";
 
 const STATUS_COLOR = {
   confirmed: "text-success border-success",
@@ -34,7 +35,22 @@ export default function Bookings() {
     <div>
       <PageHeader title="Bookings" subtitle="Every meeting booked through Schedule EQ." />
       <div className="animate-fade-in px-6 sm:px-8">
-        {loading ? <div className="text-body text-ink-muted">Loading…</div> : items.length === 0 ? (
+        {loading ? (
+          <div className="shadow-card rounded-2xl border border-line bg-white overflow-x-auto">
+            <table className="w-full text-table">
+              <thead>
+                <tr className="border-b border-line">
+                  <th className="table-header text-left p-3">Guest</th>
+                  <th className="table-header text-left p-3">Event type</th>
+                  <th className="table-header text-left p-3">When</th>
+                  <th className="table-header text-left p-3">Status</th>
+                  <th className="table-header text-right p-3">No-show risk</th>
+                </tr>
+              </thead>
+              <tbody><SkeletonTableRows rows={5} cols={5} /></tbody>
+            </table>
+          </div>
+        ) : items.length === 0 ? (
           <div className="shadow-card rounded-2xl p-10 text-center text-body text-ink-muted">No bookings yet.</div>
         ) : (
           <div className="shadow-card rounded-2xl border border-line bg-white overflow-x-auto">
@@ -51,7 +67,7 @@ export default function Bookings() {
               <tbody>
                 {items.map((b) => (
                   <tr key={b.id} onClick={() => setDetail(b)} data-testid={`booking-row-${b.id}`}
-                    className="border-b border-line hover:bg-surfacehover cursor-pointer">
+                    className="border-b border-line hover:bg-surfacehover cursor-pointer transition-colors duration-150">
                     <td className="p-3 font-medium">{b.guest_name}</td>
                     <td className="p-3 text-ink-tertiary">{b.event_type?.name}</td>
                     <td className="p-3 text-tiny text-ink-muted">{(b.start_at || "").slice(0, 16).replace("T", " ")}</td>
@@ -75,7 +91,7 @@ export default function Bookings() {
                 <div className="text-section font-display font-semibold">{detail.guest_name}</div>
                 <div className="text-tiny text-ink-muted font-mono">{detail.guest_email}</div>
               </div>
-              <button onClick={() => setDetail(null)} className="text-ink-muted hover:text-ink"><X size={18} /></button>
+              <button onClick={() => setDetail(null)} className="text-ink-muted hover:text-ink"><X size={16} /></button>
             </div>
             <div className="text-body text-ink-tertiary">{detail.event_type?.name} · {(detail.start_at || "").slice(0, 16).replace("T", " ")}</div>
             {detail.meet_link && <a href={detail.meet_link} target="_blank" rel="noreferrer" className="text-body text-ink hover:underline block">Join video call</a>}

@@ -202,7 +202,7 @@ export default function ProposalBuilder() {
                     <div key={s.key} className="flex items-center gap-1.5 flex-1">
                       <span className={`text-tiny font-mono uppercase tracking-wider flex items-center gap-1 ${
                         active ? "text-ink font-semibold" : done ? "text-ink-muted" : "text-ink-disabled"}`}>
-                        {done ? <Check size={10} /> : active ? <Loader2 size={10} className="animate-spin" /> : <span className="w-2.5" />}
+                        {done ? <Check size={12} /> : active ? <Loader2 size={12} className="animate-spin" /> : <span className="w-2.5" />}
                         {s.label}
                       </span>
                       {i < CHAIN_STEPS.length - 1 && <div className="flex-1 h-px bg-line" />}
@@ -247,7 +247,7 @@ export default function ProposalBuilder() {
         {!!(proposal.missing || []).length && (
           <div className="shadow-card rounded-2xl p-4 border-warning/30 bg-warning/10" data-testid="missing-banner">
             <div className="flex items-start gap-2 text-body text-warning">
-              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
               <div>
                 <div className="font-medium">Some inputs are missing.</div>
                 <div className="text-caption mt-0.5">
@@ -321,7 +321,7 @@ function PricingEditor({ pricing, catalog, onAdd, onRemove, onQty, onDiscount })
                 <td className="py-1.5 text-right tabular-nums font-medium">{money(li.line_total, cur)}</td>
                 <td className="py-1.5 text-right">
                   <button onClick={() => onRemove(i)} data-testid={`remove-line-${i}`}
-                    className="text-ink-muted hover:text-danger"><Trash2 size={13} /></button>
+                    className="text-ink-muted hover:text-danger"><Trash2 size={14} /></button>
                 </td>
               </tr>
             ))}
@@ -358,7 +358,7 @@ function PricingEditor({ pricing, catalog, onAdd, onRemove, onQty, onDiscount })
             {unused.map((c) => <option key={c.id} value={c.id}>{c.name} — {money(c.unit_price, c.currency)}{c.unit ? `/${c.unit}` : ""}</option>)}
           </select>
           <button onClick={() => { if (pick) { onAdd(pick); setPick(""); } }} disabled={!pick}
-            data-testid="add-line-btn" className="btn-secondary text-xs disabled:opacity-40"><Plus size={13} /> Add</button>
+            data-testid="add-line-btn" className="btn-secondary text-xs disabled:opacity-40"><Plus size={14} /> Add</button>
         </div>
       )}
 

@@ -67,7 +67,7 @@ export default function GoogleFontPicker({ value, onChange, testid }) {
           data-testid="font-picker-panel">
           <div className="p-2 border-b border-line">
             <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400" />
               <input
                 autoFocus
                 value={q}
@@ -96,12 +96,12 @@ export default function GoogleFontPicker({ value, onChange, testid }) {
                 type="button"
                 onClick={() => pick(f.family, f.weights)}
                 data-testid={`font-option-${f.family}`}
-                className="w-full text-left px-3 py-2 hover:bg-surfacehover flex items-center justify-between gap-2"
+                className="w-full text-left px-3 py-2 hover:bg-surfacehover flex items-center justify-between gap-2 transition-colors duration-150"
               >
                 <span style={{ fontFamily: `"${f.family}", sans-serif` }} className="text-[15px] truncate">
                   {f.family}
                 </span>
-                {value === f.family && <Check size={13} className="text-sanguine shrink-0" />}
+                {value === f.family && <Check size={14} className="text-sanguine shrink-0" />}
               </button>
             ))}
           </div>

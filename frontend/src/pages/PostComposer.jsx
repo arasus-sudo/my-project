@@ -62,7 +62,7 @@ export default function PostComposer() {
             <div className="flex flex-wrap gap-2">
               {PLATFORMS.map((p) => (
                 <button key={p.id} type="button" onClick={() => setPlatform(p.id)} data-testid={`platform-${p.id}`}
-                  className={`px-3 py-1.5 rounded-xl text-body border ${platform === p.id ? "bg-accent text-white border-transparent" : "border-line hover:bg-surfacehover"}`}>
+                  className={`px-3 py-1.5 rounded-xl text-body border transition-colors duration-150 ${platform === p.id ? "bg-accent text-white border-transparent" : "border-line hover:bg-surfacehover"}`}>
                   {p.label}
                 </button>
               ))}
@@ -73,8 +73,8 @@ export default function PostComposer() {
             <div className="flex flex-wrap gap-2">
               {CONTENT_TYPES.map((c) => (
                 <button key={c.id} type="button" onClick={() => setContentType(c.id)} data-testid={`content-type-${c.id}`}
-                  className={`px-3 py-1.5 rounded-xl text-body border inline-flex items-center gap-1.5 ${contentType === c.id ? "bg-accent text-white border-transparent" : "border-line hover:bg-surfacehover"}`}>
-                  <c.icon size={13} /> {c.label}
+                  className={`px-3 py-1.5 rounded-xl text-body border inline-flex items-center gap-1.5 transition-colors duration-150 ${contentType === c.id ? "bg-accent text-white border-transparent" : "border-line hover:bg-surfacehover"}`}>
+                  <c.icon size={14} /> {c.label}
                 </button>
               ))}
             </div>
@@ -119,10 +119,10 @@ export default function PostComposer() {
             )}
             {hashtagGroups.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                <span className="text-tiny text-ink-muted inline-flex items-center gap-1"><Tags size={11} /> Add group:</span>
+                <span className="text-tiny text-ink-muted inline-flex items-center gap-1"><Tags size={12} /> Add group:</span>
                 {hashtagGroups.map((g) => (
                   <button key={g.id} onClick={() => applyHashtagGroup(g)} data-testid={`apply-hashtag-group-${g.id}`}
-                    className="text-tiny px-2 py-0.5 rounded-full border border-line hover:border-accent hover:bg-surfacehover">
+                    className="text-tiny px-2 py-0.5 rounded-full border border-line hover:border-accent hover:bg-surfacehover transition-colors duration-150">
                     {g.name}
                   </button>
                 ))}

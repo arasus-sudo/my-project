@@ -51,7 +51,12 @@ module.exports = {
       colors: {
         bone: "#F5F5F7",
         ash: "#FAFAFA",
-        line: "#E5E5E7",
+        // Was #E5E5E7 — near-invisible against white/near-white surfaces
+        // (~1.1:1 contrast), reading as "flat/absent" rather than "crisp
+        // minimal" once borders became the primary structural/grouping tool
+        // (per the enterprise redesign's near-invisible-shadow direction).
+        // Nudged for a real hairline edge; still far short of a heavy border.
+        line: "#DCDCE0",
         // Text-color hierarchy. `DEFAULT` is unchanged (#1D1D1F) so every
         // existing text-ink/bg-ink/border-ink call site keeps rendering
         // identically — the secondary/tertiary/muted/disabled steps are

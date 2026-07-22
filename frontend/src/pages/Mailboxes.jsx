@@ -81,7 +81,7 @@ export default function Mailboxes() {
 
       <div className="animate-fade-in px-6 sm:px-8 pt-6">
         <div className="shadow-card p-4 flex items-start gap-2.5 text-caption text-ink-muted rounded-2xl">
-          <ShieldCheck size={15} className="text-ink-muted mt-0.5 shrink-0" />
+          <ShieldCheck size={16} className="text-ink-muted mt-0.5 shrink-0" />
           <p>
             Outbound is sent through your connected Google or Microsoft mailbox, never a
             transactional provider — cold email through one of those violates their terms and gets
@@ -134,7 +134,7 @@ export default function Mailboxes() {
               {!connected && (
                 <button onClick={() => connect(m.id)} data-testid={`connect-${m.id}`}
                   className="btn-primary text-xs w-full justify-center mt-4">
-                  <Link2 size={13} /> Authorise sending
+                  <Link2 size={14} /> Authorise sending
                 </button>
               )}
               {connected && mocked && (
@@ -147,7 +147,7 @@ export default function Mailboxes() {
               <div className="mt-6 ui-label mb-2">Domain authentication</div>
               {!m.dns?.checked ? (
                 <div className="flex items-center gap-2 text-caption text-ink-muted border border-line rounded-2xl px-3 py-2">
-                  <AlertTriangle size={13} className="text-warning" />
+                  <AlertTriangle size={14} className="text-warning" />
                   Not checked yet — we won't guess. Run a check to see the real records.
                 </div>
               ) : (
@@ -160,8 +160,8 @@ export default function Mailboxes() {
                                     : "border-danger/30 bg-danger/10 text-danger"
                       }`}>
                       <div className="font-mono uppercase text-tiny">{k}</div>
-                      {m.dns?.[k] ? <CheckCircle2 size={15} className="inline mt-1" />
-                                   : <XCircle size={15} className="inline mt-1" />}
+                      {m.dns?.[k] ? <CheckCircle2 size={16} className="inline mt-1" />
+                                   : <XCircle size={16} className="inline mt-1" />}
                     </div>
                   ))}
                 </div>

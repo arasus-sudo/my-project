@@ -44,7 +44,7 @@ export default function Proposals() {
               </thead>
               <tbody>
                 {items.map((p) => (
-                  <tr key={p.id} className="border-b border-line hover:bg-surfacehover">
+                  <tr key={p.id} className="border-b border-line hover:bg-surfacehover transition-colors duration-150">
                     <td className="p-3">
                       <Link to={`/app/proposal-eq/${p.id}`} data-testid={`proposal-row-${p.id}`} className="font-medium hover:text-ink">{p.topic}</Link>
                     </td>

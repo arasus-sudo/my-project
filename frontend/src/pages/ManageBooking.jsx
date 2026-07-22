@@ -124,11 +124,11 @@ export default function ManageBooking() {
             </a>
           )}
           <a href={calUrl} target="_blank" rel="noreferrer" data-testid="add-to-calendar"
-            className="border border-line rounded-xl py-2 text-button font-medium font-display flex items-center justify-center gap-1.5 hover:bg-surfacehover">
+            className="border border-line rounded-xl py-2 text-button font-medium font-display flex items-center justify-center gap-1.5 hover:bg-surfacehover transition-colors duration-150">
             <CalendarPlus size={14} /> Add to calendar
           </a>
           <button onClick={() => setMode("reschedule")} data-testid="reschedule-btn"
-            className="border border-line rounded-xl py-2 text-button font-medium font-display hover:bg-surfacehover">
+            className="border border-line rounded-xl py-2 text-button font-medium font-display hover:bg-surfacehover transition-colors duration-150">
             Reschedule
           </button>
           <button onClick={() => setMode("confirmCancel")} data-testid="cancel-btn"

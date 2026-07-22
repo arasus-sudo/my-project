@@ -83,14 +83,14 @@ export default function Billing() {
       <div className="border-b border-line bg-white">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-3 flex items-center justify-between">
           <Link to="/suite" data-testid="billing-back" className="flex items-center gap-2 text-caption text-ink-muted hover:text-ink">
-            <ArrowLeft size={15} /> Command center
+            <ArrowLeft size={16} /> Command center
           </Link>
           <div className="flex items-center gap-3">
             <div className="text-right leading-tight">
               <div className="text-caption font-medium">{user?.name}</div>
               <div className="text-tiny text-ink-muted">{workspace?.name}</div>
             </div>
-            <button onClick={logout} className="p-1.5 text-ink-muted hover:text-ink hover:bg-surfacehover rounded-xl">
+            <button onClick={logout} className="p-1.5 text-ink-muted hover:text-ink hover:bg-surfacehover rounded-xl transition-colors duration-150">
               <LogOut size={14} />
             </button>
           </div>
@@ -127,7 +127,7 @@ export default function Billing() {
               </div>
               {sub.plan.id !== "trial" && (
                 <button onClick={openPortal} className="text-caption text-ink-muted hover:text-ink mt-1 inline-flex items-center gap-1">
-                  Manage payment <ExternalLink size={11} />
+                  Manage payment <ExternalLink size={12} />
                 </button>
               )}
             </div>

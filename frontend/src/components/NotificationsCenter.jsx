@@ -77,7 +77,7 @@ export default function NotificationsCenter() {
                   <Link key={a.id} to={a.lead?.id ? `/app/crm/leads/${a.lead.id}` : "#"} onClick={() => setOpen(false)}
                     className="flex items-start gap-2.5 p-3 border-b border-line/60 last:border-b-0 hover:bg-surfacehover transition-colors">
                     <div className="w-7 h-7 rounded-lg bg-ash flex items-center justify-center shrink-0">
-                      <Icon size={13} className="text-ink-muted" />
+                      <Icon size={14} className="text-ink-muted" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-caption text-ink leading-snug">{a.summary}</div>

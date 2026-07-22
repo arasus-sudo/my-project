@@ -60,7 +60,7 @@ export default function Team() {
                   <td className="p-3 text-right">
                     {m.id !== user?.id && (
                       <button onClick={() => remove(m.id)} data-testid={`remove-member-${m.id}`} className="text-xs text-danger hover:underline">
-                        <Trash2 size={11} className="inline" /> remove
+                        <Trash2 size={12} className="inline" /> remove
                       </button>
                     )}
                   </td>

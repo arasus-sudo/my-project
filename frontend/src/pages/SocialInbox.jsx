@@ -59,7 +59,7 @@ export default function SocialInbox() {
             {[["all", "All"], ["new", "New"], ["replied", "Replied"], ["ignored", "Ignored"]].map(([k, t]) => (
               <li key={k}>
                 <button onClick={() => setFilter(k)} data-testid={`inbox-filter-${k}`}
-                  className={`w-full text-left px-2 py-1.5 rounded-xl ${filter === k ? "bg-accent text-white" : "hover:bg-surfacehover"}`}>
+                  className={`w-full text-left px-2 py-1.5 rounded-xl transition-colors duration-150 ${filter === k ? "bg-accent text-white" : "hover:bg-surfacehover"}`}>
                   {t}
                 </button>
               </li>
@@ -76,7 +76,7 @@ export default function SocialInbox() {
           )}
           {filtered.map((c) => (
             <button key={c.id} onClick={() => select(c)} data-testid={`comment-${c.id}`}
-              className={`w-full text-left p-4 border-b border-line block ${active?.id === c.id ? "bg-surfacehover border-l-2 border-l-accent" : "hover:bg-surfacehover"}`}>
+              className={`w-full text-left p-4 border-b border-line block transition-colors duration-150 ${active?.id === c.id ? "bg-surfacehover border-l-2 border-l-accent" : "hover:bg-surfacehover"}`}>
               <div className="flex items-center justify-between">
                 <div className="text-body font-medium truncate">{c.author || "Someone"}</div>
                 <span className={`ui-label border px-1.5 py-0.5 ${STATUS_META[c.status]?.c || STATUS_META.new.c}`}>
@@ -115,7 +115,7 @@ export default function SocialInbox() {
                 <div className="p-4 border-t border-line bg-white space-y-2">
                   {active.ai_suggested_reply && reply === active.ai_suggested_reply && (
                     <div className="flex items-center gap-1.5 text-tiny text-accent">
-                      <Lightbulb size={11} /> Suggested reply — edit before sending
+                      <Lightbulb size={12} /> Suggested reply — edit before sending
                     </div>
                   )}
                   <textarea value={reply} onChange={(e) => setReply(e.target.value)} data-testid="inbox-reply-body"

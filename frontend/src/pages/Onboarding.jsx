@@ -130,7 +130,7 @@ export default function Onboarding() {
                 <div className="flex flex-wrap gap-2">
                   {services.map((s, i) => (
                     <span key={s} className="pill bg-accent text-white border-transparent" data-testid={`onboarding-service-${i}`}>{s}
-                      <button onClick={() => setServices(services.filter((_, x) => x !== i))} className="ml-1 opacity-70 hover:opacity-100"><X size={11} /></button>
+                      <button onClick={() => setServices(services.filter((_, x) => x !== i))} className="ml-1 opacity-70 hover:opacity-100"><X size={12} /></button>
                     </span>
                   ))}
                   {services.length < 3 && (
@@ -194,7 +194,7 @@ export default function Onboarding() {
                             <span>Step {si + 1} · day {s.day}</span>
                             <button onClick={() => setEditing(isEdit ? null : { ci, si })}
                               data-testid={`onboarding-edit-${ci}-${si}`}
-                              className="text-ink-muted hover:text-ink"><Pencil size={11} /></button>
+                              className="text-ink-muted hover:text-ink"><Pencil size={12} /></button>
                           </div>
                           {isEdit ? (
                             <div className="mt-2 space-y-2">

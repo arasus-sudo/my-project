@@ -79,7 +79,7 @@ export default function SocialCalendar() {
             return (
               <button key={i} disabled={!day} onClick={() => day && dayPosts.length > 0 && setDayModal(day)}
                 data-testid={day ? `cal-day-${day}` : undefined}
-                className={`bg-white min-h-[92px] p-2 text-left align-top ${day ? "hover:bg-surfacehover" : "bg-ash/40"} ${dayPosts.length ? "cursor-pointer" : "cursor-default"}`}>
+                className={`bg-white min-h-[92px] p-2 text-left align-top transition-colors duration-150 ${day ? "hover:bg-surfacehover" : "bg-ash/40"} ${dayPosts.length ? "cursor-pointer" : "cursor-default"}`}>
                 {day && (
                   <>
                     <div className={`text-tiny font-mono ${isToday(day) ? "text-white bg-ink rounded-full w-5 h-5 flex items-center justify-center" : "text-ink-muted"}`}>{day}</div>
@@ -107,12 +107,12 @@ export default function SocialCalendar() {
               <div className="text-card-title font-display font-semibold">
                 {new Date(year, month, dayModal).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
               </div>
-              <button onClick={() => setDayModal(null)} className="text-ink-muted hover:text-ink"><X size={18} /></button>
+              <button onClick={() => setDayModal(null)} className="text-ink-muted hover:text-ink"><X size={16} /></button>
             </div>
             <div className="space-y-2">
               {(byDay[dayModal] || []).map((p) => (
                 <button key={p.id} onClick={() => nav(`/app/social-eq/queue?post=${p.id}`)}
-                  className="w-full text-left border border-line rounded-xl p-3 hover:bg-surfacehover">
+                  className="w-full text-left border border-line rounded-xl p-3 hover:bg-surfacehover transition-colors duration-150">
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${STATUS_DOT[p.status] || STATUS_DOT.draft}`} />
                     <span className="ui-label capitalize">{p.platform}</span>

@@ -172,7 +172,7 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
                 <ElementBtn key={kind} onClick={() => onAddShape(kind)}
                   title={kind === "rect" ? "Rectangle" : kind === "circle" ? "Circle" : SHAPE_KINDS[kind].label}
                   testid={`add-shape-${kind}`}>
-                  <ShapePreview kind={kind} size={18} />
+                  <ShapePreview kind={kind} size={16} />
                 </ElementBtn>
               ))}
             </div>
@@ -184,7 +184,7 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
                 <ElementBtn key={kind} onClick={() => onAddShape(kind)}
                   title={SHAPE_KINDS[kind]?.label || kind}
                   testid={`add-shape-${kind}`}>
-                  <ShapePreview kind={kind} size={18} />
+                  <ShapePreview kind={kind} size={16} />
                 </ElementBtn>
               ))}
             </div>
@@ -195,7 +195,7 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
               <ElementBtn onClick={() => onAddLine()} title="Line / divider" testid="add-line"><LineIcon size={16} /></ElementBtn>
               <ElementBtn onClick={() => onAddLine({ cap_end: "arrow" })} title="Arrow" testid="add-line-arrow"><MoveRight size={16} /></ElementBtn>
               <ElementBtn onClick={() => onAddLine({ cap_start: "arrow", cap_end: "arrow" })} title="Double arrow" testid="add-line-double"><ArrowLeftRight size={16} /></ElementBtn>
-              <ElementBtn onClick={() => onAddLine({ cap_start: "dot", cap_end: "dot" })} title="Dotted ends" testid="add-line-dots"><DotIcon size={10} /></ElementBtn>
+              <ElementBtn onClick={() => onAddLine({ cap_start: "dot", cap_end: "dot" })} title="Dotted ends" testid="add-line-dots"><DotIcon size={12} /></ElementBtn>
             </div>
           </div>
           <div>

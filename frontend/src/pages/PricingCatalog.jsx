@@ -91,7 +91,7 @@ export default function PricingCatalog() {
                     <span className="font-mono text-body tabular-nums">
                       {money(it.unit_price, it.currency)}{it.unit ? <span className="text-ink-muted">/{it.unit}</span> : ""}
                     </span>
-                    <button onClick={() => startEdit(it)} data-testid={`edit-pricing-${it.id}`} className="text-ink-muted hover:text-ink"><Pencil size={13} /></button>
+                    <button onClick={() => startEdit(it)} data-testid={`edit-pricing-${it.id}`} className="text-ink-muted hover:text-ink"><Pencil size={14} /></button>
                     <button onClick={() => remove(it.id)} data-testid={`delete-pricing-${it.id}`} className="text-ink-muted hover:text-danger"><Trash2 size={14} /></button>
                   </div>
                 </div>

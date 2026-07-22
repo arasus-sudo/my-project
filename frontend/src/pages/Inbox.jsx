@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
+import { SkeletonListRows } from "../components/ui/loading-states";
 
 const LABELS = {
   interested: { t: "Interested", c: "text-success border-success" },
@@ -17,11 +18,13 @@ export default function Inbox() {
   const [active, setActive] = useState(null);
   const [filter, setFilter] = useState("all");
   const [reply, setReply] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const load = async () => {
     const { data } = await api.get("/inbox");
     setConvos(data);
     if (data.length && !active) setActive(data[0]);
+    setLoading(false);
   };
   useEffect(() => { load(); }, []);
 
@@ -50,7 +53,7 @@ export default function Inbox() {
             {[["all", "All"], ["interested", "Interested"], ["referral", "Referral"], ["ooo", "OOO"], ["not_interested", "Not interested"], ["unsubscribe", "Unsubscribe"]].map(([k, t]) => (
               <li key={k}>
                 <button onClick={() => setFilter(k)} data-testid={`filter-${k}`}
-                  className={`w-full text-left px-2 py-1.5 rounded-xl ${filter === k ? "bg-ink text-bone" : "hover:bg-surfacehover"}`}>
+                  className={`w-full text-left px-2 py-1.5 rounded-xl transition-colors duration-150 ${filter === k ? "bg-ink text-bone" : "hover:bg-surfacehover"}`}>
                   {t}
                 </button>
               </li>
@@ -60,10 +63,11 @@ export default function Inbox() {
 
         {/* List */}
         <div className="col-span-full md:col-span-4 border-r border-line overflow-y-auto">
-          {filtered.length === 0 && <div className="p-6 text-body text-ink-muted">No conversations. Launch a campaign to receive replies.</div>}
-          {filtered.map((c) => (
+          {loading && <div className="p-3"><SkeletonListRows rows={5} /></div>}
+          {!loading && filtered.length === 0 && <div className="p-6 text-body text-ink-muted">No conversations. Launch a campaign to receive replies.</div>}
+          {!loading && filtered.map((c) => (
             <button key={c.id} onClick={() => setActive(c)} data-testid={`convo-${c.id}`}
-              className={`w-full text-left p-4 border-b border-line block ${active?.id === c.id ? "bg-surfacehover border-l-2 border-l-ink" : "hover:bg-surfacehover"}`}>
+              className={`w-full text-left p-4 border-b border-line block transition-colors duration-150 ${active?.id === c.id ? "bg-surfacehover border-l-2 border-l-ink" : "hover:bg-surfacehover"}`}>
               <div className="flex items-center justify-between">
                 <div className="font-medium truncate">{c.lead?.first_name} {c.lead?.last_name}</div>
                 <span className={`ui-label border px-1.5 py-0.5 ${LABELS[c.classification]?.c || LABELS.other.c}`}>

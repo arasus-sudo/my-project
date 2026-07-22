@@ -50,7 +50,7 @@ export default function CompanyIntel() {
   const ProfileCard = ({ label, value, icon: Icon }) => (
     value ? (
       <div className="flex items-start gap-2.5 p-3 rounded-xl bg-ash border border-line">
-        {Icon && <Icon size={15} className="text-ink-muted mt-0.5 shrink-0" />}
+        {Icon && <Icon size={16} className="text-ink-muted mt-0.5 shrink-0" />}
         <div className="min-w-0">
           <div className="ui-label">{label}</div>
           <div className="text-body mt-0.5">{value}</div>
@@ -194,7 +194,7 @@ export default function CompanyIntel() {
                           <div className="grid sm:grid-cols-2 gap-2">
                             {selected.profile.products_services.map((ps, i) => (
                               <div key={i} className="flex items-center gap-2 text-body p-2.5 rounded-xl bg-ash border border-line">
-                                <CheckCircle2 size={13} className="text-success shrink-0" />
+                                <CheckCircle2 size={14} className="text-success shrink-0" />
                                 {ps}
                               </div>
                             ))}
@@ -231,7 +231,7 @@ export default function CompanyIntel() {
                       {(selected.profile.case_studies_summary) && (
                         <div className="card-floating p-6">
                           <div className="flex items-start gap-2.5">
-                            <BookOpen size={15} className="text-ink-muted mt-0.5 shrink-0" />
+                            <BookOpen size={16} className="text-ink-muted mt-0.5 shrink-0" />
                             <div>
                               <div className="ui-label">Case Studies</div>
                               <div className="text-body mt-1 text-ink-tertiary">{selected.profile.case_studies_summary}</div>
@@ -243,7 +243,7 @@ export default function CompanyIntel() {
                       {(selected.profile.blogs_summary) && (
                         <div className="card-floating p-6">
                           <div className="flex items-start gap-2.5">
-                            <FileText size={15} className="text-ink-muted mt-0.5 shrink-0" />
+                            <FileText size={16} className="text-ink-muted mt-0.5 shrink-0" />
                             <div>
                               <div className="ui-label">Blog / Resources</div>
                               <div className="text-body mt-1 text-ink-tertiary">{selected.profile.blogs_summary}</div>

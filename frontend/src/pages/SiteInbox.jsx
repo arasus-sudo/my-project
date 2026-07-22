@@ -49,7 +49,7 @@ export default function SiteInbox() {
             {[["all", "All"], ["needs_human", "Needs you"], ["open", "Open"], ["resolved", "Resolved"]].map(([k, t]) => (
               <li key={k}>
                 <button onClick={() => setFilter(k)} data-testid={`site-inbox-filter-${k}`}
-                  className={`w-full text-left px-2 py-1.5 rounded-xl ${filter === k ? "bg-accent text-white" : "hover:bg-surfacehover"}`}>
+                  className={`w-full text-left px-2 py-1.5 rounded-xl transition-colors duration-150 ${filter === k ? "bg-accent text-white" : "hover:bg-surfacehover"}`}>
                   {t}
                 </button>
               </li>
@@ -61,7 +61,7 @@ export default function SiteInbox() {
           {filtered.length === 0 && <div className="p-6 text-body text-ink-muted">No conversations yet. Embed the widget on a site to start receiving chats.</div>}
           {filtered.map((c) => (
             <button key={c.id} onClick={() => setActive(c)} data-testid={`site-convo-${c.id}`}
-              className={`w-full text-left p-4 border-b border-line block ${active?.id === c.id ? "bg-surfacehover border-l-2 border-l-accent" : "hover:bg-surfacehover"}`}>
+              className={`w-full text-left p-4 border-b border-line block transition-colors duration-150 ${active?.id === c.id ? "bg-surfacehover border-l-2 border-l-accent" : "hover:bg-surfacehover"}`}>
               <div className="flex items-center justify-between">
                 <div className="text-body font-medium truncate flex items-center gap-1.5"><Globe size={12} className="text-ink-muted" /> {c.site_name || "Site"}</div>
                 <span className={`ui-label border px-1.5 py-0.5 ${STATUS_META[c.status]?.c || STATUS_META.open.c}`}>

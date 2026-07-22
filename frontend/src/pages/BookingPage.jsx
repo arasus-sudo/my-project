@@ -102,7 +102,7 @@ export default function BookingPage() {
               </div>
             )}
             <div className="p-8 text-center space-y-4">
-              <CheckCircle2 size={40} className="mx-auto text-success" />
+              <CheckCircle2 size={32} className="mx-auto text-success" />
               <div>
                 <div className="text-page-title font-display font-semibold" style={{ color: primaryColor }}>
                   {branding.confirmation_message || "You're booked!"}
@@ -141,7 +141,7 @@ export default function BookingPage() {
                 )}
                 <a href={calUrl} target="_blank" rel="noreferrer"
                   data-testid="add-to-calendar"
-                  className="border border-line rounded-xl py-2 text-button font-medium font-display flex items-center justify-center gap-1.5 hover:bg-surfacehover">
+                  className="border border-line rounded-xl py-2 text-button font-medium font-display flex items-center justify-center gap-1.5 hover:bg-surfacehover transition-colors duration-150">
                   <CalendarPlus size={14} /> Add to calendar
                 </a>
                 {confirmed.manage_token && (

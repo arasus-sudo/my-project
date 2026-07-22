@@ -93,7 +93,7 @@ export default function CreateEQProjects() {
         >
           <div className="relative">
             <div className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-sanguine mb-2">
-              <Sparkles size={11} /> Create with AI
+              <Sparkles size={12} /> Create with AI
             </div>
             <h2 className="font-display font-bold text-xl sm:text-2xl leading-[1.15] tracking-tight max-w-xl">
               Describe your idea. We&apos;ll design the deck.
@@ -294,7 +294,7 @@ function HistoryDrawer({ items, onClose, onDelete }) {
                           </span>
                         </Link>
                         <button onClick={() => onDelete(p.id)} data-testid={`carousel-delete-${p.id}`}
-                          className="text-neutral-300 hover:text-danger shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={13} /></button>
+                          className="text-neutral-300 hover:text-danger shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
                       </div>
                     );
                   })}

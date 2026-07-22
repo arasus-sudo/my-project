@@ -158,7 +158,7 @@ export default function SuiteHome() {
               <div className="text-tiny text-ink-muted">{user?.email}</div>
             </div>
             <button onClick={logout} data-testid="suite-logout-btn" className="p-1.5 text-ink-muted hover:text-danger hover:bg-danger/10 rounded-lg transition-colors">
-              <LogOut size={13} />
+              <LogOut size={14} />
             </button>
           </div>
         </div>
@@ -185,7 +185,7 @@ export default function SuiteHome() {
         {attention.length > 0 && (
           <div className="mt-4 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3" data-testid="needs-attention">
             <div className="flex items-center gap-1.5 text-warning mb-1.5">
-              <AlertCircle size={13} />
+              <AlertCircle size={14} />
               <span className="ui-label">Needs your attention</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -214,7 +214,7 @@ export default function SuiteHome() {
                     className="relative text-left bg-white border border-line rounded-xl p-4 shadow-card hover:shadow-card-lg hover:border-accent/30 transition-all duration-200 group overflow-hidden">
                     <div className="relative flex items-start justify-between">
                       <div className="w-8 h-8 rounded-xl bg-accent flex items-center justify-center text-white shadow-sm">
-                        <Icon size={15} />
+                        <Icon size={16} />
                       </div>
                       {s === undefined ? null : (
                         <span className={`inline-flex items-center gap-1 text-tiny font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${s?.active ? "text-success border-success/30 bg-success/10" : "text-ink-muted border-line"}`}>
@@ -236,7 +236,7 @@ export default function SuiteHome() {
                       ))}
                       {s?.needs > 0 && (
                         <div className="ml-auto text-tiny text-warning font-medium flex items-center gap-1">
-                          <AlertCircle size={11} /> {s.needs} {s.needsLabel}
+                          <AlertCircle size={12} /> {s.needs} {s.needsLabel}
                         </div>
                       )}
                       {(!s || !s.needs) && <span className="ml-auto text-ink-disabled group-hover:text-accent transition-colors"><ArrowRight size={14} /></span>}
@@ -271,7 +271,7 @@ export default function SuiteHome() {
                     return (
                       <div key={a.id} data-testid={`activity-${a.id}`} className="p-2.5 flex gap-2.5 hover:bg-ash/60 transition-colors">
                         <div className="w-6 h-6 rounded-lg bg-accent flex items-center justify-center text-white shrink-0 shadow-sm">
-                          <Icon size={11} />
+                          <Icon size={12} />
                         </div>
                         <div className="min-w-0">
                           <div className="text-tiny text-ink-muted font-mono uppercase tracking-wide">

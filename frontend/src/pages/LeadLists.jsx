@@ -83,12 +83,12 @@ export default function LeadLists() {
         subtitle="Organize leads into lists that any agent can reference."
         right={
           <div className="flex items-center gap-2">
-            <Link to="/app/crm" className="btn-secondary text-xs"><ArrowLeft size={13} /> CRM</Link>
+            <Link to="/app/crm" className="btn-secondary text-xs"><ArrowLeft size={14} /> CRM</Link>
             <button onClick={() => setImporter({ mode: "new-list" })} data-testid="upload-leads-btn" className="btn-secondary text-xs">
-              <Upload size={13} /> Upload leads
+              <Upload size={14} /> Upload leads
             </button>
             <button onClick={() => setCreating(true)} className="btn-primary text-xs">
-              <Plus size={13} /> New List
+              <Plus size={14} /> New List
             </button>
           </div>
         }

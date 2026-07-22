@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import { Phone, Plus, X, Save } from "lucide-react";
+import { SkeletonKanban } from "../components/ui/loading-states";
 
 const STAGES = [
   { k: "new", t: "New" },
@@ -22,8 +23,9 @@ export default function Pipeline() {
   const [editForm, setEditForm] = useState({});
   const [creating, setCreating] = useState(false);
   const [newDeal, setNewDeal] = useState({ lead_id: "", title: "", value: "", stage: "new" });
+  const [loading, setLoading] = useState(true);
 
-  const load = () => api.get("/deals").then((r) => setDeals(r.data));
+  const load = () => api.get("/deals").then((r) => { setDeals(r.data); setLoading(false); });
   useEffect(() => {
     load();
     api.get("/leads?page_size=2000").then((r) => setLeads(r.data.items || r.data)).catch(() => {});
@@ -78,12 +80,17 @@ export default function Pipeline() {
           <div className="flex items-center gap-2">
             <button onClick={exportCsv} className="btn-secondary text-xs">Export CSV</button>
             <button onClick={() => setCreating(true)} data-testid="add-deal-btn" className="btn-primary text-xs">
-              <Plus size={13} /> Add deal
+              <Plus size={14} /> Add deal
             </button>
           </div>
         }
       />
       <div className="animate-fade-in px-6 sm:px-8 overflow-x-auto">
+        {loading ? (
+          <div className="card-floating p-4 border border-line bg-white rounded-2xl min-w-[1100px]">
+            <SkeletonKanban columns={6} cardsPerColumn={2} />
+          </div>
+        ) : (
         <div className="card-floating p-4 grid grid-cols-6 gap-0 min-w-[1100px] border border-line bg-white rounded-2xl">
           {STAGES.map((s) => {
             const stageDeals = deals.filter((d) => d.stage === s.k);
@@ -141,6 +148,7 @@ export default function Pipeline() {
             );
           })}
         </div>
+        )}
       </div>
 
       {/* Deal detail drawer */}
@@ -149,7 +157,7 @@ export default function Pipeline() {
           <div className="bg-white border border-line p-6 rounded-2xl w-full max-w-md space-y-3">
             <div className="flex items-center justify-between">
               <div className="text-section font-display font-semibold">Edit deal</div>
-              <button onClick={() => setActive(null)} className="text-ink-muted hover:text-ink"><X size={18} /></button>
+              <button onClick={() => setActive(null)} className="text-ink-muted hover:text-ink"><X size={16} /></button>
             </div>
             <p className="text-caption text-ink-muted">
               {active.lead?.first_name} {active.lead?.last_name} · {active.lead?.company}
@@ -168,7 +176,7 @@ export default function Pipeline() {
               rows={4} placeholder="Notes…" data-testid="edit-deal-notes" className="w-full border border-line px-3 py-2 rounded-sm text-input" />
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => setActive(null)} className="btn-secondary">Cancel</button>
-              <button onClick={saveDeal} data-testid="save-deal-btn" className="btn-primary"><Save size={13} /> Save</button>
+              <button onClick={saveDeal} data-testid="save-deal-btn" className="btn-primary"><Save size={14} /> Save</button>
             </div>
           </div>
         </div>
@@ -180,7 +188,7 @@ export default function Pipeline() {
           <div className="bg-white border border-line p-6 rounded-2xl w-full max-w-md space-y-3">
             <div className="flex items-center justify-between">
               <div className="text-section font-display font-semibold">Add deal</div>
-              <button onClick={() => setCreating(false)} className="text-ink-muted hover:text-ink"><X size={18} /></button>
+              <button onClick={() => setCreating(false)} className="text-ink-muted hover:text-ink"><X size={16} /></button>
             </div>
             <select value={newDeal.lead_id} onChange={(e) => setNewDeal({ ...newDeal, lead_id: e.target.value })}
               data-testid="new-deal-lead" className="w-full border border-line px-3 py-2 rounded-sm">

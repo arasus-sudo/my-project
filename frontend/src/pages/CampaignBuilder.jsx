@@ -605,7 +605,7 @@ export default function CampaignBuilder() {
                 <button
                   onClick={() => setActiveStep(i)}
                   data-testid={`step-${i}`}
-                  className={`w-full text-left p-3 border ${i === activeStep ? "border-ink bg-surfacehover" : "border-line hover:bg-surfacehover"} rounded-xl`}
+                  className={`w-full text-left p-3 border transition-colors duration-150 ${i === activeStep ? "border-ink bg-surfacehover" : "border-line hover:bg-surfacehover"} rounded-xl`}
                 >
                   <div className="flex justify-between items-center">
                     <div className="ui-label">Step {i + 1}</div>
@@ -614,7 +614,7 @@ export default function CampaignBuilder() {
                   <div className="text-body font-medium mt-1 truncate">{s.subject || "(no subject)"}</div>
                   {steps.length > 1 && (
                     <button onClick={(e) => { e.stopPropagation(); removeStep(i); }} data-testid={`remove-step-${i}`} className="text-caption text-ink-muted hover:text-danger mt-2">
-                      <Trash2 size={11} className="inline" /> remove
+                      <Trash2 size={12} className="inline" /> remove
                     </button>
                   )}
                 </button>
@@ -669,20 +669,20 @@ export default function CampaignBuilder() {
               ))}
               {selectedTags.length > 0 && (
                 <button onClick={() => setSelectedTags([])} className="text-tiny text-ink-muted hover:text-ink">
-                  <X size={10} />
+                  <X size={12} />
                 </button>
               )}
             </div>
           )}
           <div className="relative mb-2">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
             <input value={leadSearch} onChange={(e) => setLeadSearch(e.target.value)}
               placeholder="Search leads..."
               className="w-full border border-line rounded-xl pl-7 pr-3 py-1.5 text-caption font-mono" />
           </div>
           <div className="border border-line rounded-xl max-h-64 overflow-y-auto">
             {filteredLeads.map((l) => (
-              <label key={l.id} className="flex items-start gap-2 p-2 border-b border-line last:border-b-0 text-caption cursor-pointer hover:bg-surfacehover">
+              <label key={l.id} className="flex items-start gap-2 p-2 border-b border-line last:border-b-0 text-caption cursor-pointer hover:bg-surfacehover transition-colors duration-150">
                 <input type="checkbox" className="mt-0.5"
                   checked={selectedLeads.includes(l.id)}
                   onChange={(e) => setSelectedLeads(e.target.checked ? [...selectedLeads, l.id] : selectedLeads.filter((x) => x !== l.id))}
@@ -756,7 +756,7 @@ export default function CampaignBuilder() {
                       <div className="flex items-center gap-2">
                         {current.personalized_opener && (
                           <button onClick={() => setEditingOpener({ leadId: current.id, opener: current.personalized_opener })} className="btn-ghost text-xs flex items-center gap-1">
-                            <Edit2 size={11} /> Edit Opener
+                            <Edit2 size={12} /> Edit Opener
                           </button>
                         )}
                       </div>
@@ -779,7 +779,7 @@ export default function CampaignBuilder() {
                     {/* Write from real research */}
                     <div className="shadow-card p-4 rounded-2xl">
                       <div className="flex items-center gap-1.5 mb-2">
-                        <FileSearch size={13} className="text-ink" />
+                        <FileSearch size={14} className="text-ink" />
                         <div className="text-caption font-semibold">Write from real research</div>
                       </div>
                       <div className="flex items-center gap-2 mb-2">
@@ -797,7 +797,7 @@ export default function CampaignBuilder() {
                         </select>
                         <button onClick={writeWithAI} disabled={busy || !leads.length}
                           className="btn-primary text-xs disabled:opacity-50 shrink-0">
-                          {chainStep ? <Loader2 size={11} className="animate-spin" /> : <FileSearch size={11} />}
+                          {chainStep ? <Loader2 size={12} className="animate-spin" /> : <FileSearch size={12} />}
                           {chainStep ? "Writing…" : "Draft with research"}
                         </button>
                       </div>
@@ -812,7 +812,7 @@ export default function CampaignBuilder() {
                                 <div className={`flex items-center gap-1 text-tiny font-mono uppercase tracking-wider ${
                                   active ? "text-ink font-semibold" : done ? "text-ink-muted" : "text-ink-disabled"
                                 }`}>
-                                  {done ? <Check size={9} /> : active ? <Loader2 size={9} className="animate-spin" /> : <span className="w-[9px]" />}
+                                  {done ? <Check size={12} /> : active ? <Loader2 size={12} className="animate-spin" /> : <span className="w-[9px]" />}
                                   {s.label}
                                 </div>
                                 {i < CHAIN_STEPS.length - 1 && <div className="flex-1 h-px bg-line" />}
@@ -825,7 +825,7 @@ export default function CampaignBuilder() {
                         <div className="space-y-1">
                           {draftMeta.has_angle ? (
                             <div className="flex items-start gap-1.5 text-tiny bg-bone border border-line rounded-xl px-2 py-1.5">
-                              <Flame size={11} className="text-ink mt-0.5 shrink-0" />
+                              <Flame size={12} className="text-ink mt-0.5 shrink-0" />
                               <div>
                                 <div className="font-medium">{draftMeta.angle?.angle}</div>
                                 {draftMeta.angle?.trigger && (
@@ -835,7 +835,7 @@ export default function CampaignBuilder() {
                             </div>
                           ) : (
                             <div className="flex items-start gap-1.5 text-tiny bg-warning/10 border border-warning/30 rounded-xl px-2 py-1.5 text-warning">
-                              <AlertTriangle size={11} className="mt-0.5 shrink-0" />
+                              <AlertTriangle size={12} className="mt-0.5 shrink-0" />
                               <div>
                                 <div className="font-medium">
                                   {draftMeta.has_signal
@@ -861,7 +861,7 @@ export default function CampaignBuilder() {
                     {/* Signature */}
                     <div className="shadow-card p-4 rounded-2xl">
                       <div className="flex items-center gap-1.5 mb-2">
-                        <Signature size={13} className="text-ink" />
+                        <Signature size={14} className="text-ink" />
                         <div className="text-caption font-semibold">Signature</div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -873,12 +873,12 @@ export default function CampaignBuilder() {
                           ))}
                         </select>
                         <button onClick={() => setShowSignatureModal(true)} className="btn-ghost text-xs shrink-0" title="New signature">
-                          <Plus size={11} />
+                          <Plus size={12} />
                         </button>
                         {signatureId && (
                           <button onClick={() => { const s = signatures.find((x) => x.id === signatureId); if (s) deleteSignature(s.id); }}
                             className="btn-ghost text-xs text-danger/70 shrink-0" title="Delete signature">
-                            <Trash2 size={11} />
+                            <Trash2 size={12} />
                           </button>
                         )}
                       </div>
@@ -897,7 +897,7 @@ export default function CampaignBuilder() {
                       <div className="shadow-card p-4 rounded-2xl">
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-1.5">
-                            <Mail size={13} className="text-ink" />
+                            <Mail size={14} className="text-ink" />
                             <div className="text-caption font-semibold">Personalized Emails</div>
                           </div>
                           <span className="text-caption text-ink-muted">{campaignLeads.filter((l) => l.personalized).length}/{campaignLeads.length}</span>
@@ -907,26 +907,26 @@ export default function CampaignBuilder() {
                             <div className="flex items-center gap-1 mb-2">
                               {campaignLeads.some(l => !l.personalized) && (
                                 <button onClick={runCampaignEngine} disabled={engineRunning} className="btn-primary text-xs flex items-center gap-1">
-                                  {engineRunning ? <Loader2 size={11} className="animate-spin" /> : <Zap size={11} />}
+                                  {engineRunning ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
                                   {engineRunning ? "Engine…" : "Generate All"}
                                 </button>
                               )}
                               {campaignLeads.some(l => l.personalized && l.email_status !== "approved") && (
                                 <button onClick={approveAllEmails} className="btn-secondary text-xs flex items-center gap-1">
-                                  <ThumbsUp size={11} />
+                                  <ThumbsUp size={12} />
                                   Approve All
                                 </button>
                               )}
                               {campaignLeads.every(l => l.personalized) && campaignLeads.length > 0 && (
                                 <button onClick={startReview} className="btn-secondary text-xs flex items-center gap-1">
-                                  <Eye size={11} />
+                                  <Eye size={12} />
                                   Review
                                 </button>
                               )}
                             </div>
                             <div className="max-h-48 overflow-y-auto space-y-1">
                               {campaignLeads.map((cl, idx) => (
-                                <div key={cl.id} className="flex items-center gap-1.5 px-1 py-1 rounded-lg hover:bg-surfacehover cursor-pointer"
+                                <div key={cl.id} className="flex items-center gap-1.5 px-1 py-1 rounded-lg hover:bg-surfacehover cursor-pointer transition-colors duration-150"
                                   onClick={() => { setReviewIndex(idx); setReviewMode(true); }}>
                                   <div className="flex-1 min-w-0">
                                     <div className="text-caption font-medium truncate">{cl.first_name} {cl.last_name}</div>
@@ -939,12 +939,12 @@ export default function CampaignBuilder() {
                                           {cl.email_status === "approved" ? "Approved" : cl.email_status === "rejected" ? "Rejected" : "Draft"}
                                         </span>
                                         {cl.email_status !== "approved" && (
-                                          <button onClick={(e) => { e.stopPropagation(); approveEmail(cl.id); }} className="btn-ghost text-success p-0.5" title="Approve"><ThumbsUp size={10} /></button>
+                                          <button onClick={(e) => { e.stopPropagation(); approveEmail(cl.id); }} className="btn-ghost text-success p-0.5" title="Approve"><ThumbsUp size={12} /></button>
                                         )}
                                       </>
                                     ) : (
                                       <button onClick={(e) => { e.stopPropagation(); generateLeadEmail(cl.id); }} disabled={generatingEmail === cl.id} className="btn-primary text-tiny px-1.5 py-0.5">
-                                        {generatingEmail === cl.id ? <Loader2 size={9} className="animate-spin" /> : <Zap size={9} />}
+                                        {generatingEmail === cl.id ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
                                       </button>
                                     )}
                                   </div>
@@ -969,10 +969,10 @@ export default function CampaignBuilder() {
                         />
                         <div className="flex justify-end gap-2 mt-2">
                           <button onClick={() => regenerateOpener(current.id)} className="btn-ghost text-xs flex items-center gap-1">
-                            <RotateCw size={11} /> Regenerate
+                            <RotateCw size={12} /> Regenerate
                           </button>
                           <button onClick={() => saveOpener(current.id, editingOpener.opener)} className="btn-primary text-xs flex items-center gap-1">
-                            <Check size={11} /> Save Opener
+                            <Check size={12} /> Save Opener
                           </button>
                         </div>
                       </div>

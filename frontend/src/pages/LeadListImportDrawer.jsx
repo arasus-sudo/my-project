@@ -64,7 +64,7 @@ export default function LeadListImportDrawer({ mode = "general", listId = null, 
           <div className="text-card-title font-display font-semibold">
             {mode === "new-list" ? "Upload leads into a new list" : mode === "existing-list" ? "Upload leads into this list" : "Import leads"}
           </div>
-          <button onClick={onClose} className="text-ink-muted hover:text-ink"><X size={18} /></button>
+          <button onClick={onClose} className="text-ink-muted hover:text-ink"><X size={16} /></button>
         </div>
 
         <div className="p-5 space-y-4">
@@ -87,7 +87,7 @@ export default function LeadListImportDrawer({ mode = "general", listId = null, 
               linked into the list instead of duplicated.
             </p>
             <button onClick={downloadTemplate} className="btn-secondary text-xs">
-              <Download size={13} /> Download CSV template
+              <Download size={14} /> Download CSV template
             </button>
           </div>
 
@@ -118,7 +118,7 @@ export default function LeadListImportDrawer({ mode = "general", listId = null, 
                 <div className="space-y-1 max-h-32 overflow-y-auto">
                   {result.errors.map((e, i) => (
                     <div key={i} className="flex items-start gap-1.5 text-caption text-warning">
-                      <AlertTriangle size={11} className="mt-0.5 shrink-0" /> {e}
+                      <AlertTriangle size={12} className="mt-0.5 shrink-0" /> {e}
                     </div>
                   ))}
                 </div>

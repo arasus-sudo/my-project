@@ -61,7 +61,7 @@ export default function HubSpotSettings() {
 
       <div className="p-6 sm:p-8 space-y-6 max-w-3xl">
         <div className="card-flat shadow-card p-4 flex items-start gap-2.5 text-caption text-ink-tertiary">
-          <ShieldCheck size={15} className="text-ink-muted mt-0.5 shrink-0" />
+          <ShieldCheck size={16} className="text-ink-muted mt-0.5 shrink-0" />
           <p>
             {mocked
               ? <>No HubSpot app is configured, so this runs in <strong>test mode</strong>: connecting works and returns sample contacts and engagements, but nothing contacts hubapi.com. Add <span className="font-mono">HUBSPOT_CLIENT_ID/SECRET/REDIRECT_URI</span> to go live.</>

@@ -22,7 +22,7 @@ export default function SocialAnalytics() {
       <div className="animate-fade-in px-6 sm:px-8 space-y-6">
         {data.mocked_count > 0 && (
           <div className="flex items-start gap-2 text-caption text-warning bg-warning/10 border border-warning/30 rounded-xl px-4 py-2.5">
-            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
             {data.real_count} of {data.total_posts} posts are on connected, real platforms — the rest ({data.mocked_count}) are
             in test mode, so their engagement numbers are simulated, not real audience data.
           </div>

@@ -43,7 +43,7 @@ export default function Templates() {
             {t.tags?.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1">{t.tags.map((tg) => <span key={tg} className="pill">{tg}</span>)}</div>
             )}
-            <button onClick={() => del(t.id)} data-testid={`delete-template-${t.id}`} className="mt-4 text-xs text-danger hover:underline"><Trash2 size={11} className="inline" /> delete</button>
+            <button onClick={() => del(t.id)} data-testid={`delete-template-${t.id}`} className="mt-4 text-xs text-danger hover:underline"><Trash2 size={12} className="inline" /> delete</button>
           </div>
         ))}
       </div>

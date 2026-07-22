@@ -81,7 +81,7 @@ export default function SiteList() {
                 className="text-left card-flat p-6 hover:border-accent/30 transition-all shadow-card hover:shadow-card-hover">
                 <div className="flex items-center justify-between">
                   <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center text-white">
-                    <Globe size={18} />
+                    <Globe size={16} />
                   </div>
                   <span className={`ui-label px-2 py-0.5 border rounded-full ${s.status === "ready" ? "text-success border-success" : s.status === "crawling" ? "text-warning border-warning" : "text-ink-muted border-line"}`}>
                     {s.status}
@@ -136,7 +136,7 @@ export default function SiteList() {
                 <div className="text-card-title font-display font-semibold">{detail.name}</div>
                 <div className="text-caption text-ink-muted font-mono">{detail.domain}</div>
               </div>
-              <button onClick={() => setDetail(null)} className="text-ink-muted hover:text-ink"><X size={18} /></button>
+              <button onClick={() => setDetail(null)} className="text-ink-muted hover:text-ink"><X size={16} /></button>
             </div>
 
             <div>

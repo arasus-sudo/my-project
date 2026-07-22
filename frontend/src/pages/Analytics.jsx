@@ -1,17 +1,33 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
+import { SkeletonKpiGrid, SkeletonCards } from "../components/ui/loading-states";
 
 export default function Analytics() {
   const [campaigns, setCampaigns] = useState([]);
   const [mailboxes, setMailboxes] = useState([]);
   const [quota, setQuota] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get("/analytics/campaigns").then((r) => setCampaigns(r.data));
-    api.get("/analytics/mailboxes").then((r) => setMailboxes(r.data));
-    api.get("/quota").then((r) => setQuota(r.data)).catch(() => {});
+    Promise.allSettled([
+      api.get("/analytics/campaigns").then((r) => setCampaigns(r.data)),
+      api.get("/analytics/mailboxes").then((r) => setMailboxes(r.data)),
+      api.get("/quota").then((r) => setQuota(r.data)),
+    ]).then(() => setLoading(false));
   }, []);
+
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="Analytics" subtitle="Step performance, mailbox health, and LLM quota." />
+        <div className="animate-fade-in px-6 sm:px-8 space-y-6">
+          <SkeletonKpiGrid count={3} />
+          <SkeletonCards count={3} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

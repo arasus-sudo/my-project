@@ -88,7 +88,7 @@ export default function BulkImportDrawer() {
               <div className="space-y-1">
                 {result.errors.map((e, i) => (
                   <div key={i} className="flex items-start gap-1.5 text-caption text-warning">
-                    <AlertTriangle size={11} className="mt-0.5 shrink-0" /> {e}
+                    <AlertTriangle size={12} className="mt-0.5 shrink-0" /> {e}
                   </div>
                 ))}
               </div>

@@ -5,6 +5,7 @@ import { PageHeader } from "../components/AppLayout";
 import LeadListImportDrawer from "./LeadListImportDrawer";
 import { toast } from "sonner";
 import { Plus, Upload, Download, Phone, ArrowUpDown, ArrowDown, Tag, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { SkeletonTableRows } from "../components/ui/loading-states";
 
 const BAND_STYLE = {
   hot: "bg-sanguine text-white",
@@ -62,12 +63,14 @@ export default function Leads() {
   const [form, setForm] = useState({ first_name: "", last_name: "", email: "", company: "", title: "", phone: "" });
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
   const pageSize = 25;
 
   const load = (p) => api.get(`/leads?page=${p || page}&page_size=${pageSize}`).then((r) => {
     setLeads(r.data.items);
     setTotal(r.data.total);
     setPage(r.data.page);
+    setLoading(false);
   });
   useEffect(() => {
     load(1);
@@ -257,7 +260,26 @@ export default function Leads() {
           </div>
         )}
 
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="card-floating p-4 border border-line bg-white overflow-hidden overflow-x-auto rounded-2xl">
+            <table className="w-full text-table min-w-[900px]">
+              <thead>
+                <tr className="border-b border-line">
+                  <th className="p-3 w-8"></th>
+                  <th className="table-header text-left p-3">Name</th>
+                  <th className="table-header text-left p-3">Email</th>
+                  <th className="table-header text-left p-3">Company</th>
+                  <th className="table-header text-left p-3">Tags</th>
+                  <th className="table-header text-left p-3">Owner</th>
+                  <th className="table-header text-left p-3">Phone</th>
+                  <th className="table-header text-right p-3">Intent</th>
+                  <th className="p-3"></th>
+                </tr>
+              </thead>
+              <tbody><SkeletonTableRows rows={8} cols={9} /></tbody>
+            </table>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="shadow-card p-10 text-center rounded-2xl">
             <div className="text-section font-display font-semibold">No leads yet</div>
             <p className="text-body text-ink-muted mt-2">Import a CSV/XLSX or add leads manually.</p>
@@ -280,7 +302,7 @@ export default function Leads() {
                   <th className="table-header text-right p-3">
                     <button onClick={() => setSortByIntent((s) => !s)} data-testid="sort-intent"
                       className={`inline-flex items-center gap-1 hover:text-ink ${sortByIntent ? "text-ink" : ""}`}>
-                      Intent {sortByIntent ? <ArrowDown size={11} /> : <ArrowUpDown size={11} />}
+                      Intent {sortByIntent ? <ArrowDown size={12} /> : <ArrowUpDown size={12} />}
                     </button>
                   </th>
                   <th className="p-3"></th>
@@ -288,7 +310,7 @@ export default function Leads() {
               </thead>
               <tbody>
                 {filtered.map((l) => (
-                  <tr key={l.id} className="border-b border-line hover:bg-surfacehover">
+                  <tr key={l.id} className="border-b border-line hover:bg-surfacehover transition-colors duration-150">
                     <td className="p-3">
                       <input type="checkbox" checked={selected.has(l.id)} onChange={() => toggleSelect(l.id)} data-testid={`select-${l.id}`} />
                     </td>

@@ -190,16 +190,16 @@ export default function ServiceLibrary() {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button onClick={() => editItem(item)} className="p-1.5 text-ink-muted hover:text-ink rounded-lg transition-colors" title="Edit">
-                      <Edit3 size={13} />
+                      <Edit3 size={14} />
                     </button>
                     <button onClick={() => duplicate(item.id)} className="p-1.5 text-ink-muted hover:text-ink rounded-lg transition-colors" title="Duplicate">
-                      <Copy size={13} />
+                      <Copy size={14} />
                     </button>
                     <button onClick={() => toggleArchive(item.id)} className="p-1.5 text-ink-muted hover:text-ink rounded-lg transition-colors" title="Archive">
-                      <Archive size={13} />
+                      <Archive size={14} />
                     </button>
                     <button onClick={() => deleteItem(item.id, item.name)} className="p-1.5 text-ink-muted hover:text-danger rounded-lg transition-colors" title="Delete">
-                      <Trash2 size={13} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
@@ -219,7 +219,7 @@ export default function ServiceLibrary() {
                   {item.cta && <span className="text-caption font-medium text-ink">{item.cta}</span>}
                   <button onClick={() => setShowImprove(showImprove === item.id ? null : item.id)}
                     className="text-caption text-ink-muted hover:text-ink flex items-center gap-1 transition-colors">
-                    <RefreshCw size={11} /> Improve
+                    <RefreshCw size={12} /> Improve
                   </button>
                 </div>
 
@@ -269,7 +269,7 @@ export default function ServiceLibrary() {
           <form onSubmit={save} className="bg-white border border-line p-6 rounded-2xl w-full max-w-2xl space-y-4 animate-scale-in my-8">
             <div className="flex items-center justify-between">
               <div className="text-section font-display font-semibold">{editing ? "Edit Service" : "New Service"}</div>
-              <button type="button" onClick={() => setShowForm(false)} className="p-1 text-ink-muted hover:text-ink rounded-lg"><X size={18} /></button>
+              <button type="button" onClick={() => setShowForm(false)} className="p-1 text-ink-muted hover:text-ink rounded-lg"><X size={16} /></button>
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <label className="sm:col-span-2 block">
@@ -327,11 +327,11 @@ export default function ServiceLibrary() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-card-title font-display font-semibold flex items-center gap-2">
-                  <Zap size={18} /> Generate Service
+                  <Zap size={16} /> Generate Service
                 </div>
                 <p className="text-caption text-ink-muted mt-1">Describe your service in a sentence, paste a brochure, or enter a website URL.</p>
               </div>
-              <button onClick={() => setShowAiGen(false)} className="p-1 text-ink-muted hover:text-ink rounded-lg"><X size={18} /></button>
+              <button onClick={() => setShowAiGen(false)} className="p-1 text-ink-muted hover:text-ink rounded-lg"><X size={16} /></button>
             </div>
             <div className="flex gap-2 pb-2">
               {["description", "website"].map((m) => (

@@ -4,6 +4,7 @@ import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import { CheckCircle2, Send, Trash2, X, XCircle, Pencil, Save } from "lucide-react";
+import { SkeletonTableRows } from "../components/ui/loading-states";
 
 const STATUS_COLOR = {
   draft: "text-ink-muted border-neutral-300",
@@ -90,7 +91,22 @@ export default function PostQueue() {
     <div>
       <PageHeader title="Queue" subtitle="Every draft, scheduled, pending-approval, approved, and published post." />
       <div className="animate-fade-in px-6 sm:px-8">
-        {loading ? <div className="text-ink-muted text-body">Loading…</div> : posts.length === 0 ? (
+        {loading ? (
+          <div className="card-floating p-4 border border-line bg-white overflow-x-auto">
+            <table className="w-full text-table">
+              <thead>
+                <tr className="border-b border-line">
+                  <th className="table-header text-left p-3">Platform</th>
+                  <th className="table-header text-left p-3">Headline</th>
+                  <th className="table-header text-left p-3">Scheduled</th>
+                  <th className="table-header text-left p-3">Status</th>
+                  <th className="table-header text-right p-3">Engagement</th>
+                </tr>
+              </thead>
+              <tbody><SkeletonTableRows rows={5} cols={5} /></tbody>
+            </table>
+          </div>
+        ) : posts.length === 0 ? (
           <div className="shadow-card p-6 sm:p-10 text-center text-body text-ink-muted rounded-2xl">No posts yet.</div>
         ) : (
           <div className="card-floating p-4 border border-line bg-white overflow-x-auto">
@@ -107,7 +123,7 @@ export default function PostQueue() {
               <tbody>
                 {posts.map((p) => (
                   <tr key={p.id} onClick={() => openDetail(p)} data-testid={`post-row-${p.id}`}
-                    className="border-b border-line hover:bg-surfacehover cursor-pointer">
+                    className="border-b border-line hover:bg-surfacehover cursor-pointer transition-colors duration-150">
                     <td className="p-3 capitalize text-ink-muted">{p.platform}</td>
                     <td className="p-3 font-medium">{p.headline}</td>
                     <td className="p-3 text-tiny text-ink-muted font-mono">{p.scheduled_for ? p.scheduled_for.slice(0, 10) : "—"}</td>
@@ -140,7 +156,7 @@ export default function PostQueue() {
                   <div className="text-card-title font-display font-semibold truncate">{detail.headline}</div>
                 )}
               </div>
-              <button onClick={() => setDetail(null)} className="text-ink-muted hover:text-ink shrink-0 ml-2"><X size={18} /></button>
+              <button onClick={() => setDetail(null)} className="text-ink-muted hover:text-ink shrink-0 ml-2"><X size={16} /></button>
             </div>
 
             {detail.media_url && (

@@ -69,7 +69,7 @@ export default function ScheduleSettings() {
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div>
               <div className="text-card-title font-display font-semibold flex items-center gap-2">
-                <Mail size={15} /> Email notifications
+                <Mail size={16} /> Email notifications
               </div>
               <p className="text-caption text-ink-muted mt-1">
                 {emailStatus?.mocked === false
