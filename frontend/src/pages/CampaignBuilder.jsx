@@ -8,7 +8,7 @@ import {
   Sparkles, Save, Play, Plus, Trash2, Loader2, Check, AlertTriangle, Flame,
   Mail, Eye, ThumbsUp, Signature, Search, Megaphone,
   Zap, ChevronLeft, ChevronRight,
-  Edit2, RotateCw, Flag,
+  Edit2, RotateCw, Flag, List, Tag, X,
 } from "lucide-react";
 
 const stepKey = () => `s_${Math.random().toString(36).slice(2, 10)}`;
@@ -70,6 +70,10 @@ export default function CampaignBuilder() {
   const [sigPhone, setSigPhone] = useState("");
   const [savingSignature, setSavingSignature] = useState(false);
   
+  const [leadLists, setLeadLists] = useState([]);
+  const [selectedListId, setSelectedListId] = useState("");
+  const [selectedTags, setSelectedTags] = useState([]);
+
   const [sendWindowStart, setSendWindowStart] = useState("09:00");
   const [sendWindowEnd, setSendWindowEnd] = useState("17:00");
   const [timezone, setTimezone] = useState("UTC");
@@ -87,6 +91,7 @@ export default function CampaignBuilder() {
 
   useEffect(() => {
     api.get("/leads").then((r) => setLeads(r.data));
+    api.get("/crm/lists").then((r) => setLeadLists(r.data || [])).catch(() => {});
     if (id) {
       api.get(`/campaigns/${id}`).then((r) => {
         const c = r.data;
@@ -331,6 +336,34 @@ export default function CampaignBuilder() {
 
   // Assigned-leads / review-progress summary, driven by the same data the
   // server's launch gate checks — so the button and the 400 never disagree.
+  const allTags = useMemo(() => {
+    const set = new Set();
+    leads.forEach((l) => (l.tags || []).forEach((t) => set.add(t)));
+    return [...set].sort();
+  }, [leads]);
+
+  const listLeadIds = useMemo(() => {
+    if (!selectedListId) return null;
+    const list = leadLists.find((l) => l.id === selectedListId);
+    return list ? new Set(list.lead_ids || []) : null;
+  }, [selectedListId, leadLists]);
+
+  const filteredLeads = useMemo(() => {
+    return leads.filter((l) => {
+      if (leadSearch) {
+        const q = leadSearch.toLowerCase();
+        const match = [l.first_name, l.last_name, l.company, l.email, l.title].some((f) => f?.toLowerCase().includes(q));
+        if (!match) return false;
+      }
+      if (listLeadIds && !listLeadIds.has(l.id)) return false;
+      if (selectedTags.length > 0) {
+        const leadTags = new Set(l.tags || []);
+        if (!selectedTags.some((t) => leadTags.has(t))) return false;
+      }
+      return true;
+    });
+  }, [leads, leadSearch, listLeadIds, selectedTags]);
+
   const leadStats = useMemo(() => {
     const total = campaignLeads.length;
     const approved = campaignLeads.filter((l) => l.email_status === "approved").length;
@@ -566,6 +599,32 @@ export default function CampaignBuilder() {
           </div>
 
           <div className="ui-label mt-6 mb-2">Leads ({selectedLeads.length}/{leads.length})</div>
+          {leadLists.length > 0 && (
+            <div className="mb-2">
+              <select value={selectedListId} onChange={(e) => setSelectedListId(e.target.value)}
+                className="w-full border border-line rounded-lg px-2 py-1.5 text-xs font-mono bg-white">
+                <option value="">All lists</option>
+                {leadLists.map((lst) => (
+                  <option key={lst.id} value={lst.id}>{lst.name} ({lst.lead_count || (lst.lead_ids || []).length})</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {allTags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {allTags.map((t) => (
+                <button key={t} onClick={() => setSelectedTags((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t])}
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full border ${selectedTags.includes(t) ? "bg-primary/10 border-primary text-primary" : "border-line text-neutral-400 hover:border-neutral-300"}`}>
+                  {t}
+                </button>
+              ))}
+              {selectedTags.length > 0 && (
+                <button onClick={() => setSelectedTags([])} className="text-[10px] text-neutral-400 hover:text-ink">
+                  <X size={10} />
+                </button>
+              )}
+            </div>
+          )}
           <div className="relative mb-2">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
             <input value={leadSearch} onChange={(e) => setLeadSearch(e.target.value)}
@@ -573,11 +632,7 @@ export default function CampaignBuilder() {
               className="w-full border border-line rounded-xl pl-7 pr-3 py-1.5 text-xs font-mono" />
           </div>
           <div className="border border-line rounded-xl max-h-64 overflow-y-auto">
-            {leads.filter((l) => {
-              if (!leadSearch) return true;
-              const q = leadSearch.toLowerCase();
-              return [l.first_name, l.last_name, l.company, l.email, l.title].some((f) => f?.toLowerCase().includes(q));
-            }).map((l) => (
+            {filteredLeads.map((l) => (
               <label key={l.id} className="flex items-start gap-2 p-2 border-b border-line last:border-b-0 text-xs cursor-pointer hover:bg-surfacehover">
                 <input type="checkbox" className="mt-0.5"
                   checked={selectedLeads.includes(l.id)}
@@ -588,6 +643,13 @@ export default function CampaignBuilder() {
                   <div className="font-medium truncate">{l.first_name} {l.last_name}</div>
                   <div className="text-neutral-400 truncate">{l.company}{l.title ? ` · ${l.title}` : ""}</div>
                   <div className="text-[10px] text-neutral-300 font-mono truncate">{l.email}</div>
+                  {l.tags?.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {l.tags.map((t) => (
+                        <span key={t} className="text-[9px] font-mono bg-ink/5 text-ink-muted px-1.5 py-0.5 rounded-full">{t}</span>
+                      ))}
+                    </div>
+                  )}
                   {l.campaign_names?.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
                       {l.campaign_names.map((cn) => (
@@ -598,8 +660,11 @@ export default function CampaignBuilder() {
                 </div>
               </label>
             ))}
+            {filteredLeads.length === 0 && (
+              <div className="text-xs text-neutral-400 text-center py-6">No leads match the selected filters</div>
+            )}
           </div>
-          <button onClick={() => setSelectedLeads(leads.map((l) => l.id))} className="text-xs text-sanguine mt-2 hover:underline" data-testid="select-all-leads">Select all</button>
+          <button onClick={() => setSelectedLeads(filteredLeads.map((l) => l.id))} className="text-xs text-sanguine mt-2 hover:underline" data-testid="select-all-leads">Select all</button>
           <button onClick={() => setSelectedLeads([])} className="text-xs text-neutral-400 mt-2 hover:underline ml-3" data-testid="deselect-all-leads">Deselect all</button>
           {selectedLeads.length > 0 && (
             <button onClick={save} disabled={busy} className="btn-primary w-full mt-3 text-sm flex items-center justify-center gap-1">
@@ -797,7 +862,7 @@ export default function CampaignBuilder() {
                                   {engineRunning ? "Engine…" : "Generate All"}
                                 </button>
                               )}
-                              {campaignLeads.some(l => l.personalized && l.email_status !== "approved") && campaignLeads.every(l => l.personalized) && (
+                              {campaignLeads.some(l => l.personalized && l.email_status !== "approved") && (
                                 <button onClick={approveAllEmails} className="btn-secondary text-xs flex items-center gap-1">
                                   <ThumbsUp size={11} />
                                   Approve All
