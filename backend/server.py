@@ -6,6 +6,7 @@ heuristic EQ Score engine (real LLM to be plugged in later).
 """
 
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.responses import Response, RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
@@ -75,6 +76,11 @@ if SENTRY_DSN:
 app = FastAPI(title="Pitch EQ API")
 api = APIRouter(prefix="/api")
 bearer = HTTPBearer(auto_error=False)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error("Unhandled exception: %s", exc, exc_info=True)
+    return JSONResponse(status_code=500, content={"detail": f"Internal server error: {exc}"})
 
 limiter = Limiter(key_func=get_remote_address, default_limits=[])
 app.state.limiter = limiter
@@ -685,10 +691,14 @@ async def launch_campaign(cid: str, skip_pending: bool = False, user=Depends(cur
                     "Every lead must be approved or rejected before launch.",
                 )
 
+    from traceback import format_exc as _tb
     try:
         result = await enqueue_campaign(user["workspace_id"], c)
     except ValueError as ex:
         raise HTTPException(400, str(ex))
+    except Exception as ex:
+        logger.error("enqueue_campaign crashed\n%s", _tb())
+        raise HTTPException(500, f"Campaign engine error: {ex}")
 
     await db.campaigns.update_one({"id": cid}, {"$set": {"status": "active", "launched_at": now_iso()}})
     await _audit(user, "campaign.launch", {"campaign_id": cid, **result})
