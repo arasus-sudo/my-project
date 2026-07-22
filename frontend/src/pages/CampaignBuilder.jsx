@@ -542,7 +542,8 @@ export default function CampaignBuilder() {
       });
       nav("/app/campaigns");
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Launch failed", {
+      console.error("Launch error:", err);
+      toast.error(err?.response?.data?.detail || err?.message || "Launch failed", {
         action: { label: "Mailboxes", onClick: () => nav("/app/mailboxes") },
       });
     } finally { setBusy(false); }

@@ -32,7 +32,7 @@ export default function Campaigns() {
       return;
     }
     try { await api.post(`/campaigns/${id}/launch?skip_pending=true`); toast.success("Campaign launched"); load(); }
-    catch (err) { toast.error(err?.response?.data?.detail || "Launch failed"); }
+    catch (err) { console.error("Launch error:", err); toast.error(err?.response?.data?.detail || err?.message || "Launch failed"); }
   };
   const pause = async (id) => {
     try { await api.post(`/campaigns/${id}/pause`); toast.success("Paused"); load(); }
