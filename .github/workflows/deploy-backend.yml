@@ -1,0 +1,47 @@
+name: Deploy Backend to Azure
+
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**', '.github/workflows/deploy-backend.yml']
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build deployment package
+        run: |
+          pip install zipfile36 2>/dev/null || true
+          cd backend
+          python -c "
+import zipfile, os
+z = zipfile.ZipFile('../deploy.zip', 'w', zipfile.ZIP_DEFLATED)
+skip = {'__pycache__', 'venv', '.venv', 'antenv', 'node_modules', '.git', '__pypackages__'}
+for r, dirs, fs in os.walk('.'):
+    dirs[:] = [d for d in dirs if d not in skip]
+    for f in fs:
+        path = os.path.join(r, f)
+        z.write(path, os.path.relpath(path, '.'))
+z.close()
+print(f'Created deploy.zip ({os.path.getsize(\"../deploy.zip\")} bytes)')
+          "
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: innoira-api
+          slot-name: production
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}
+          package: deploy.zip
