@@ -35,17 +35,7 @@ jobs:
       - name: Package and deploy backend
         run: |
           cd backend
-          python -c "
-import zipfile, os
-z = zipfile.ZipFile('/tmp/deploy.zip', 'w', zipfile.ZIP_DEFLATED)
-for r, dirs, fs in os.walk('.'):
-    dirs[:] = [d for d in dirs if d != '__pycache__']
-    for f in fs:
-        path = os.path.join(r, f)
-        arcname = os.path.relpath(path, '.').replace('\\', '/')
-        z.write(path, arcname)
-z.close()
-"
+          zip -r /tmp/deploy.zip . -x "*__pycache__*" "*venv*" "*.venv*" ".git*"
           az webapp deploy \
             --resource-group ${{ env.AZURE_RG }} \
             --name ${{ env.BACKEND_NAME }} \
