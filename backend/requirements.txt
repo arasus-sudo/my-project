@@ -36,6 +36,7 @@ stripe==14.4.1
 resend==2.33.0
 icalendar==7.2.0
 apscheduler==3.11.3
+httpx>=0.28.1
 feedparser==6.0.12
 dnspython==2.7.0
 python-docx==1.2.0
@@ -45,3 +46,4 @@ python-dateutil>=2.9.0
 gunicorn>=21.0
 
 slowapi>=0.1.9
+sentry-sdk[fastapi]>=2.0.0
