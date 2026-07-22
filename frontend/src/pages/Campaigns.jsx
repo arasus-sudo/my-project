@@ -15,7 +15,7 @@ export default function Campaigns() {
 
   const launch = async (id) => {
     try { await api.post(`/campaigns/${id}/launch`); toast.success("Campaign launched"); load(); }
-    catch { toast.error("Launch failed"); }
+    catch (err) { toast.error(err?.response?.data?.detail || "Launch failed", { action: { label: "Open", onClick: () => nav(`/app/campaigns/${id}`) } }); }
   };
   const pause = async (id) => {
     try { await api.post(`/campaigns/${id}/pause`); toast.success("Paused"); load(); }
