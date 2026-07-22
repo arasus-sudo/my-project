@@ -83,8 +83,7 @@ jobs:
           app_location: frontend
           output_location: build
           skip_app_build: true
-          skip_api_build: true
-          config_file_location: frontend/public/staticwebapp.config.json
+          routes_location: frontend/public
 
       - name: Verify deployment
         run: |
