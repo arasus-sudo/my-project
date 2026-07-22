@@ -1,0 +1,27 @@
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  \.venv
+  | venv
+  | antenv
+  | __pycache__
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 120
+skip = [".venv", "venv", "antenv", "__pycache__"]
+
+[tool.flake8]
+max-line-length = 120
+max-complexity = 15
+extend-ignore = ["E203", "W503"]
+exclude = [".venv", "venv", "antenv", "__pycache__"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+timeout = 60
