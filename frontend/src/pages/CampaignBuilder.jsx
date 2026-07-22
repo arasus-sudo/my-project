@@ -639,12 +639,26 @@ export default function CampaignBuilder() {
                   className="w-full border border-line px-2 py-1.5 rounded-lg text-caption" />
               </div>
             </div>
-            <div className="mt-2">
-              <label className="form-label">Timezone</label>
-              <input value={timezone} onChange={(e) => setTimezone(e.target.value)}
-                className="w-full border border-line px-2 py-1.5 rounded-lg text-caption font-mono"
-                placeholder="UTC" />
-            </div>
+      <div className="mt-2">
+        <label className="form-label">Timezone</label>
+        <div className="relative">
+          <select value={timezone} onChange={(e) => setTimezone(e.target.value)}
+            className="w-full border border-line px-2 py-1.5 rounded-lg text-caption font-mono appearance-none pr-8">
+            <option value="UTC">UTC</option>
+            <option value="US/Eastern">US Eastern</option>
+            <option value="US/Central">US Central</option>
+            <option value="US/Mountain">US Mountain</option>
+            <option value="US/Pacific">US Pacific</option>
+            <option value="Europe/London">London</option>
+            <option value="Europe/Paris">Paris</option>
+            <option value="Europe/Berlin">Berlin</option>
+            <option value="Asia/Tokyo">Tokyo</option>
+            <option value="Australia/Sydney">Sydney</option>
+            <option value="Asia/Shanghai">Shanghai</option>
+          </select>
+          <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-ink-muted pointer-events-none" size={14} />
+        </div>
+      </div>
           </div>
 
           <div className="ui-label mt-6 mb-2">Leads ({selectedLeads.length}/{leads.length})</div>
