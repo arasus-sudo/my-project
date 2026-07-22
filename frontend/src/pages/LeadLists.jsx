@@ -20,10 +20,10 @@ export default function LeadLists() {
   const load = async () => {
     const [listsRes, leadsRes] = await Promise.all([
       api.get("/crm/lists").catch(() => ({ data: [] })),
-      api.get("/leads").catch(() => ({ data: [] })),
+      api.get("/leads?page_size=2000").catch(() => ({ data: { items: [] } })),
     ]);
     setLists(listsRes.data);
-    setLeads(leadsRes.data);
+    setLeads(leadsRes.data.items || leadsRes.data);
   };
 
   useEffect(() => { load(); }, []);

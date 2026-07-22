@@ -49,7 +49,7 @@ export default function ProposalBuilder() {
 
   useEffect(() => {
     if (isNew) {
-      api.get("/leads").then((r) => setLeads(r.data));
+      api.get("/leads?page_size=2000").then((r) => setLeads(r.data.items || r.data));
       api.get("/proposal-eq/templates").then((r) => {
         setTemplates(r.data);
         if (r.data.length) setTemplateId(r.data.find((t) => t.service === "custom")?.id || r.data[0].id);

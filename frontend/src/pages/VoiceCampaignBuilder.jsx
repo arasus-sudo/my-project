@@ -36,7 +36,7 @@ export default function VoiceCampaignBuilder() {
 
   useEffect(() => {
     api.get("/voice-eq/agents").then((r) => setAgents(r.data));
-    api.get("/leads").then((r) => setLeads(r.data));
+    api.get("/leads?page_size=2000").then((r) => setLeads(r.data.items || r.data));
     if (id && id !== "new") {
       api.get(`/voice-eq/campaigns/${id}`).then((r) => {
         const { stats, ...c } = r.data;

@@ -90,7 +90,7 @@ export default function CampaignBuilder() {
   };
 
   useEffect(() => {
-    api.get("/leads").then((r) => setLeads(r.data));
+    api.get("/leads?page_size=2000").then((r) => setLeads(r.data.items || r.data));
     api.get("/crm/lists").then((r) => setLeadLists(r.data || [])).catch(() => {});
     if (id) {
       api.get(`/campaigns/${id}`).then((r) => {

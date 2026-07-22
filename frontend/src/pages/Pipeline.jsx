@@ -26,7 +26,7 @@ export default function Pipeline() {
   const load = () => api.get("/deals").then((r) => setDeals(r.data));
   useEffect(() => {
     load();
-    api.get("/leads").then((r) => setLeads(r.data)).catch(() => {});
+    api.get("/leads?page_size=2000").then((r) => setLeads(r.data.items || r.data)).catch(() => {});
   }, []);
 
   const move = async (id, stage) => {

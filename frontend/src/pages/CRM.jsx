@@ -26,14 +26,14 @@ export default function CRM() {
 
   const load = async () => {
     const [leadsRes, dealsRes, listsRes, activityRes, tasksRes, quarantineRes] = await Promise.all([
-      api.get("/leads").catch(() => ({ data: [] })),
+      api.get("/leads?page_size=2000").catch(() => ({ data: { items: [] } })),
       api.get("/deals").catch(() => ({ data: [] })),
       api.get("/crm/lists").catch(() => ({ data: [] })),
       api.get("/activities").catch(() => ({ data: [] })),
       api.get("/crm/tasks", { params: { status: "open" } }).catch(() => ({ data: [] })),
       api.get("/quarantine").catch(() => ({ data: [] })),
     ]);
-    const leads = leadsRes.data;
+    const leads = leadsRes.data.items || leadsRes.data;
     const deals = dealsRes.data;
     setLists(listsRes.data);
     setRecentActivity((activityRes.data || []).slice(0, 10));
