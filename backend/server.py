@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 import asyncio
+import secrets as _secrets
 import anthropic
 import openai
 from google import genai
@@ -105,6 +106,21 @@ async def current_user(cred: HTTPAuthorizationCredentials = Depends(bearer)):
     user = await db.users.find_one({"id": payload["uid"]}, {"_id": 0})
     if not user:
         raise HTTPException(401, "User not found")
+    user["workspace_id"] = payload["wid"]
+    return user
+
+
+async def current_user_optional(cred: HTTPAuthorizationCredentials = Depends(bearer)):
+    """Like current_user but returns None instead of raising 401."""
+    if not cred:
+        return None
+    try:
+        payload = jwt.decode(cred.credentials, JWT_SECRET, algorithms=[JWT_ALG])
+    except jwt.PyJWTError:
+        return None
+    user = await db.users.find_one({"id": payload["uid"]}, {"_id": 0})
+    if not user:
+        return None
     user["workspace_id"] = payload["wid"]
     return user
 
@@ -2253,45 +2269,83 @@ async def generate_ai_image(user: Dict[str, Any], prompt: str, provider: str = "
 
 @api.post("/carousel/ai-image")
 async def carousel_ai_image(body: AiImageIn, user=Depends(current_user)):
-    """Generate an AI image, save to MongoDB as binary, return a reference URL.
-    The frontend stores the image_url in the element instead of an inline base64
-    data URL — this keeps the carousel document small enough to stay under MongoDB's
-    16 MB limit even with dozens of images."""
+    """Generate an AI image, save to MongoDB as binary, return both a
+    reference URL (for persistent use) and a base64 data URL (for immediate
+    preview).  The reference URL includes a short-lived access_token so the
+    image renders in plain <img> tags on the canvas without auth headers."""
     result = await generate_ai_image(user, body.prompt, body.provider, body.size, body.aspect)
     image_id = new_id()
+    access_token = _secrets.token_urlsafe(24)
     await db.carousel_images.insert_one({
         "id": image_id,
         "workspace_id": user["workspace_id"],
+        "created_by": user["id"],
         "data": result["image_bytes"],
         "mime_type": result["mime_type"],
+        "provider": result["provider"],
+        "prompt": body.prompt,
+        "size": body.size,
+        "aspect": body.aspect,
+        "access_token": access_token,
         "created_at": now_iso(),
     })
     base = (PUBLIC_BASE_URL or FRONTEND_URL).rstrip("/")
     return {
         "image_id": image_id,
-        "image_url": f"{base}/api/carousel/image/{image_id}",
+        "image_url": f"{base}/api/carousel/image/{image_id}?t={access_token}",
+        "image_base64": base64.b64encode(result["image_bytes"]).decode("utf-8"),
         "mime_type": result["mime_type"],
         "provider": result["provider"],
     }
 
 
 @api.get("/carousel/image/{image_id}")
-async def carousel_image_get(image_id: str, user=Depends(current_user)):
-    """Serve a saved carousel image by ID."""
-    doc = await db.carousel_images.find_one(
-        {"id": image_id, "workspace_id": user["workspace_id"]},
-    )
+async def carousel_image_get(image_id: str, t: Optional[str] = None,
+                             user: Optional[Dict[str, Any]] = Depends(current_user_optional)):
+    """Serve a saved carousel image by ID.
+    Access is allowed either via:
+    - authenticated user in the same workspace (Authorization header), or
+    - a valid ?t=access_token query parameter (for direct <img> rendering)."""
+    doc = await db.carousel_images.find_one({"id": image_id})
     if not doc:
         raise HTTPException(404, "image not found")
+    authed = (user and user.get("workspace_id") == doc.get("workspace_id"))
+    token_match = t and t == doc.get("access_token")
+    if not authed and not token_match:
+        raise HTTPException(403, "forbidden")
     from fastapi.responses import Response
     return Response(
         content=doc["data"],
         media_type=doc.get("mime_type", "image/png"),
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
     )
 
 
+@api.get("/carousel/images")
+async def carousel_images_list(user=Depends(current_user)):
+    """List all AI-generated images for the user's workspace."""
+    cursor = db.carousel_images.find(
+        {"workspace_id": user["workspace_id"]},
+        {"data": 0, "_id": 0},
+    ).sort("created_at", -1).limit(200)
+    items = await cursor.to_list(None)
+    base = (PUBLIC_BASE_URL or FRONTEND_URL).rstrip("/")
+    for item in items:
+        item["image_url"] = f"{base}/api/carousel/image/{item['id']}?t={item.get('access_token', '')}"
+    return items
+
+
+@api.delete("/carousel/image/{image_id}")
+async def carousel_image_delete(image_id: str, user=Depends(current_user)):
+    """Delete a generated image."""
+    doc = await db.carousel_images.find_one({"id": image_id, "workspace_id": user["workspace_id"]})
+    if not doc:
+        raise HTTPException(404, "image not found")
+    await db.carousel_images.delete_one({"id": image_id})
+    return {"ok": True}
+
+
 # ----------------------------- Webhooks: Airtable / Notion → Carousel -------
-import secrets
 
 
 class WebhookIn(BaseModel):

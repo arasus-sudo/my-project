@@ -1,0 +1,396 @@
+2026-07-22T05:33:23  Welcome, you are now connected to log-streaming service.
+Starting Log Tail -n 10 of existing logs ----
+/home/LogFiles/StartupLogs/README.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/StartupLogs/README.txt)
+
+File naming: {date}_{machine}_{success|failure}.log
+
+  date     ??? The date the startup occurred (yyyy_MM_dd)
+  machine  ??? The VM instance that ran the container
+  success  ??? The container started and passed health checks
+  failure  ??? The container failed to start or did not pass health checks
+
+To disable these logs, add this app setting:
+  WEBSITE_DISABLE_CONTAINER_STARTUP_LOGS = true
+/home/LogFiles/kudu/deployment/5f5326074a25-1182e4bc-8af6-4ef8-8f1c-106d3b38d196.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/deployment/5f5326074a25-1182e4bc-8af6-4ef8-8f1c-106d3b38d196.txt)
+2026-07-21T18:46:41  Parsing the build logs
+2026-07-21T18:46:41  Found 0 issue(s)
+2026-07-21T18:46:41  
+2026-07-21T18:46:41  Build Summary :
+2026-07-21T18:46:42  ===============
+2026-07-21T18:46:42  Errors (0)
+2026-07-21T18:46:42  Warnings (0)
+2026-07-21T18:46:42  
+2026-07-21T18:46:42  Triggering container recycle for OneDeploy by adding/updating restartTrigger.txt to the site root path
+2026-07-21T18:46:42  Deployment successful. deployer = OneDeploy deploymentPath = OneDeploy
+/home/LogFiles/kudu/deployment/5f5326074a25-8aea3499-3c58-4c72-8399-ca58d998f059.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/deployment/5f5326074a25-8aea3499-3c58-4c72-8399-ca58d998f059.txt)
+2026-07-21T18:36:44  Parsing the build logs
+2026-07-21T18:36:44  Found 0 issue(s)
+2026-07-21T18:36:44  
+2026-07-21T18:36:44  Build Summary :
+2026-07-21T18:36:44  ===============
+2026-07-21T18:36:44  Errors (0)
+2026-07-21T18:36:44  Warnings (0)
+2026-07-21T18:36:44  
+2026-07-21T18:36:44  Triggering container recycle for OneDeploy by adding/updating restartTrigger.txt to the site root path
+2026-07-21T18:36:45  Deployment successful. deployer = OneDeploy deploymentPath = OneDeploy
+/home/LogFiles/kudu/deployment/61ac011694b6-e6aa1a32-0a45-41a0-9cb1-2ffc2c993376.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/deployment/61ac011694b6-e6aa1a32-0a45-41a0-9cb1-2ffc2c993376.txt)
+2026-07-21T21:44:56    Total bytes received: 164
+2026-07-21T21:44:56    
+2026-07-21T21:44:56    sent 11.11K bytes  received 164 bytes  7.51K bytes/sec
+2026-07-21T21:44:56    total size is 85.19K  speedup is 7.56
+2026-07-21T21:44:56    Attempt 1: Rsync for filelist /tmp//splits/split.af completed with exit code 0
+2026-07-21T21:44:56    Completed successfully in 1 seconds
+2026-07-21T21:44:57  Build completed succesfully.
+2026-07-21T21:44:57  Running post deployment command(s)...
+2026-07-21T21:44:57  Triggering container recycle for OneDeploy by adding/updating restartTrigger.txt to the site root path
+2026-07-21T21:44:57  Deployment successful. deployer = OneDeploy deploymentPath = OneDeploy
+/home/LogFiles/kudu/deployment/6568570fa91d-ac64ddaf-83a5-4175-acbb-e1baa8454007.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/deployment/6568570fa91d-ac64ddaf-83a5-4175-acbb-e1baa8454007.txt)
+2026-07-21T21:39:04  Generating summary of Oryx build
+2026-07-21T21:39:04  Parsing the build logs
+2026-07-21T21:39:04  Found 0 issue(s)
+2026-07-21T21:39:05  
+2026-07-21T21:39:05  Build Summary :
+2026-07-21T21:39:05  ===============
+2026-07-21T21:39:05  Errors (0)
+2026-07-21T21:39:06  Warnings (0)
+2026-07-21T21:39:06  
+2026-07-21T21:39:09  Deployment Failed. deployer = OneDeploy deploymentPath = OneDeploy
+/home/LogFiles/kudu/deployment/6568570fa91d-e6195f96-ddb3-4abf-aab4-aa562fc6d351.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/deployment/6568570fa91d-e6195f96-ddb3-4abf-aab4-aa562fc6d351.txt)
+2026-07-21T21:36:59     + yarl==1.24.5
+2026-07-21T21:36:59    uv pip install done in 287 sec(s).
+2026-07-21T21:36:59    Not a vso image, so not writing build commands
+2026-07-21T21:37:00    
+2026-07-21T21:37:00    Copying 'requirements.txt' to destination directory...
+2026-07-21T21:37:00    Done copying requirements.txt to destination directory.
+2026-07-21T21:37:00    Build script snippets done in 308 sec(s).
+2026-07-21T21:37:00    Preparing output...
+2026-07-21T21:37:00    Compressing source directory directly to destination (optimized path)...
+2026-07-21T21:37:00    Using zstd for compression
+/home/LogFiles/kudu/deployment/6eb94a057468-7524cddf-cdc5-417e-beca-0043914f6c9e.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/deployment/6eb94a057468-7524cddf-cdc5-417e-beca-0043914f6c9e.txt)
+2026-07-21T17:56:37    rsync: [generator] recv_generator: failed to stat "/home/site/wwwroot/venv\Lib\site-packages\pptx\shapes\autoshape.py": Invalid argument (22)
+2026-07-21T17:56:37    rsync: [generator] recv_generator: failed to stat "/home/site/wwwroot/venv\Lib\site-packages\pptx\shapes\base.py": Invalid argument (22)
+2026-07-21T17:56:37    rsync: [generator] recv_generator: failed to stat "/home/site/wwwroot/venv\Lib\site-packages\dns\rdtypes\ANY\TKEY.py": Invalid argument (22)
+2026-07-21T17:56:37    rsync: [generator] recv_generator: failed to stat "/home/site/wwwroot/venv\Lib\site-packages\dns\rdtypes\ANY\TLSA.py": Invalid argument (22)
+2026-07-21T17:56:38    rsync: [generator] recv_generator: failed to stat "/home/site/wwwroot/venv\Lib\site-packages\dns\rdtypes\ANY\TSIG.py": Invalid argument (22)
+2026-07-21T17:56:38    rsync: [generator] recv_generator: failed to stat "/home/site/wwwroot/venv\Lib\site-packages\dns\rdtypes\ANY\TXT.py": Invalid argument (22)
+2026-07-21T17:56:38    rsync: [generator] recv_generator: failed to stat "/home/site/wwwroot/venv\Lib\site-packages\dns\rdtypes\ANY\URI.py": Invalid argument (22)
+2026-07-21T17:56:38    rsync: [generator] recv_generator: failed to stat "/home/site/wwwroot/venv\Lib\site-packages\dns\rdtypes\ANY\WALLET.py": Invalid argument (22)
+2026-07-21T17:56:38    rsync: [generator] recv_generator: failed to stat "/home/site/wwwroot/venv\Lib\site-packages\dns\rdtypes\ANY\X25.py": Invalid argument (22)
+2026-07-21T17:56:38    rsync: [generator] recv_generator: failed to stat "/home/site/wwwroot/venv\Lib\site-packages\dns\rdtypes\ANY\ZONEMD.py": Invalid argument (22)
+/home/LogFiles/kudu/deployment/6eb94a057468-e140c03f-8f24-402d-9ae0-a6135f05ee50.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/deployment/6eb94a057468-e140c03f-8f24-402d-9ae0-a6135f05ee50.txt)
+2026-07-21T17:56:06  Fetching changes.
+2026-07-21T17:56:06    Starting  LocalZipHandler
+2026-07-21T17:56:06    Cleaning up temp folders from previous zip deployments and extracting pushed zip file /tmp/zipdeploy/d6268876-ad21-47c8-92fb-68700a71554a.zip (164.49 MB) to /tmp/zipdeploy/extracted
+/home/LogFiles/kudu/deployment/acd66f4f4192-843005e0-d782-409b-8b02-0af4a634054e.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/deployment/acd66f4f4192-843005e0-d782-409b-8b02-0af4a634054e.txt)
+2026-07-22T05:17:01  Parsing the build logs
+2026-07-22T05:17:01  Found 0 issue(s)
+2026-07-22T05:17:02  
+2026-07-22T05:17:02  Build Summary :
+2026-07-22T05:17:02  ===============
+2026-07-22T05:17:03  Errors (0)
+2026-07-22T05:17:03  Warnings (0)
+2026-07-22T05:17:03  
+2026-07-22T05:17:03  Triggering container recycle for OneDeploy by adding/updating restartTrigger.txt to the site root path
+2026-07-22T05:17:03  Deployment successful. deployer = OneDeploy deploymentPath = OneDeploy
+/home/LogFiles/kudu/deployment/acd66f4f4192-d5dd066e-b65e-4257-a52b-42c440257e5f.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/deployment/acd66f4f4192-d5dd066e-b65e-4257-a52b-42c440257e5f.txt)
+2026-07-22T05:24:13  Parsing the build logs
+2026-07-22T05:24:13  Found 0 issue(s)
+2026-07-22T05:24:13  
+2026-07-22T05:24:13  Build Summary :
+2026-07-22T05:24:14  ===============
+2026-07-22T05:24:14  Errors (0)
+2026-07-22T05:24:14  Warnings (0)
+2026-07-22T05:24:14  
+2026-07-22T05:24:14  Triggering container recycle for OneDeploy by adding/updating restartTrigger.txt to the site root path
+2026-07-22T05:24:14  Deployment successful. deployer = OneDeploy deploymentPath = OneDeploy
+/home/LogFiles/kudu/deployment/acd66f4f4192-d7b65cb6-7c1d-4540-b4d9-211cfd14a040.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/deployment/acd66f4f4192-d7b65cb6-7c1d-4540-b4d9-211cfd14a040.txt)
+2026-07-22T04:58:49  Parsing the build logs
+2026-07-22T04:58:49  Found 0 issue(s)
+2026-07-22T04:58:49  
+2026-07-22T04:58:49  Build Summary :
+2026-07-22T04:58:49  ===============
+2026-07-22T04:58:50  Errors (0)
+2026-07-22T04:58:50  Warnings (0)
+2026-07-22T04:58:50  
+2026-07-22T04:58:50  Triggering container recycle for OneDeploy by adding/updating restartTrigger.txt to the site root path
+2026-07-22T04:58:50  Deployment successful. deployer = OneDeploy deploymentPath = OneDeploy
+/home/LogFiles/kudu/deployment/acd66f4f4192-f1cb78bd-c0c1-4057-aed6-5271c37d4769.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/deployment/acd66f4f4192-f1cb78bd-c0c1-4057-aed6-5271c37d4769.txt)
+2026-07-22T05:02:11  Parsing the build logs
+2026-07-22T05:02:12  Found 0 issue(s)
+2026-07-22T05:02:12  
+2026-07-22T05:02:12  Build Summary :
+2026-07-22T05:02:13  ===============
+2026-07-22T05:02:13  Errors (0)
+2026-07-22T05:02:13  Warnings (0)
+2026-07-22T05:02:13  
+2026-07-22T05:02:14  Triggering container recycle for OneDeploy by adding/updating restartTrigger.txt to the site root path
+2026-07-22T05:02:14  Deployment successful. deployer = OneDeploy deploymentPath = OneDeploy
+/home/LogFiles/kudu/deployment/ddca2993b2b7-5030f52e-06a7-45f3-bc0c-2f17f8aff886.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/deployment/ddca2993b2b7-5030f52e-06a7-45f3-bc0c-2f17f8aff886.txt)
+2026-07-21T19:27:31  Parsing the build logs
+2026-07-21T19:27:32  Found 0 issue(s)
+2026-07-21T19:27:32  
+2026-07-21T19:27:32  Build Summary :
+2026-07-21T19:27:32  ===============
+2026-07-21T19:27:32  Errors (0)
+2026-07-21T19:27:32  Warnings (0)
+2026-07-21T19:27:32  
+2026-07-21T19:27:32  Triggering container recycle for OneDeploy by adding/updating restartTrigger.txt to the site root path
+2026-07-21T19:27:33  Deployment successful. deployer = OneDeploy deploymentPath = OneDeploy
+/home/LogFiles/kudu/deployment/ddca2993b2b7-b33723f0-4460-4c37-8830-98fcbfaf3605.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/deployment/ddca2993b2b7-b33723f0-4460-4c37-8830-98fcbfaf3605.txt)
+2026-07-21T19:16:52  Parsing the build logs
+2026-07-21T19:16:53  Found 0 issue(s)
+2026-07-21T19:16:53  
+2026-07-21T19:16:53  Build Summary :
+2026-07-21T19:16:53  ===============
+2026-07-21T19:16:53  Errors (0)
+2026-07-21T19:16:53  Warnings (0)
+2026-07-21T19:16:53  
+2026-07-21T19:16:53  Triggering container recycle for OneDeploy by adding/updating restartTrigger.txt to the site root path
+2026-07-21T19:16:54  Deployment successful. deployer = OneDeploy deploymentPath = OneDeploy
+/home/LogFiles/kudu/deployment/ddca2993b2b7-e0e1c98c-c425-4291-b75b-787e70f74260.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/deployment/ddca2993b2b7-e0e1c98c-c425-4291-b75b-787e70f74260.txt)
+2026-07-21T19:05:32  Parsing the build logs
+2026-07-21T19:05:33  Found 0 issue(s)
+2026-07-21T19:05:33  
+2026-07-21T19:05:33  Build Summary :
+2026-07-21T19:05:33  ===============
+2026-07-21T19:05:33  Errors (0)
+2026-07-21T19:05:33  Warnings (0)
+2026-07-21T19:05:33  
+2026-07-21T19:05:33  Triggering container recycle for OneDeploy by adding/updating restartTrigger.txt to the site root path
+2026-07-21T19:05:34  Deployment successful. deployer = OneDeploy deploymentPath = OneDeploy
+/home/LogFiles/kudu/trace/3a67ab2d942e-6530d2f9-d90d-49bd-ad7d-d9678bdcc6d3.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/trace/3a67ab2d942e-6530d2f9-d90d-49bd-ad7d-d9678bdcc6d3.txt)
+2026-07-21T19:45:47  Startup Request, url: /dump, method: GET, type: request, pid: 831,1,7, ScmType: None, SCM_DO_BUILD_DURING_DEPLOYMENT: true
+/home/LogFiles/kudu/trace/48a93d66b982-c94dd606-70ec-421e-a100-2c71ef3e1488.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/trace/48a93d66b982-c94dd606-70ec-421e-a100-2c71ef3e1488.txt)
+2026-07-21T19:40:16  Startup Request, url: /dump, method: GET, type: request, pid: 833,1,5, SCM_DO_BUILD_DURING_DEPLOYMENT: true, ScmType: None
+/home/LogFiles/kudu/trace/5f5326074a25-2c7573d3-0892-405a-b59a-7247e6374377.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/trace/5f5326074a25-2c7573d3-0892-405a-b59a-7247e6374377.txt)
+2026-07-21T18:32:31  Startup Request, url: /dump, method: GET, type: request, pid: 833,1,7, SCM_DO_BUILD_DURING_DEPLOYMENT: true, ScmType: None
+/home/LogFiles/kudu/trace/61879b176102-b9803292-2784-48fa-8a36-89c4ca49c2cf.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/trace/61879b176102-b9803292-2784-48fa-8a36-89c4ca49c2cf.txt)
+2026-07-21T21:40:24  Startup Request, url: /logstream, method: GET, type: request, pid: 839,1,5, ScmType: None, SCM_DO_BUILD_DURING_DEPLOYMENT: true
+2026-07-21T21:41:25    Error occurred, type: error, text: LogStreamManager: ProcessRequest end
+2026-07-21T21:41:25  Error occurred, type: error, text: LogStreamManager: Inside Reset
+/home/LogFiles/kudu/trace/61ac011694b6-8411da84-9b1a-457e-9da2-581a92c23f6c.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/trace/61ac011694b6-8411da84-9b1a-457e-9da2-581a92c23f6c.txt)
+2026-07-21T21:44:40  Startup Request, url: /api/deployments?warmup=true, method: GET, type: request, pid: 834,1,15, ScmType: None
+/home/LogFiles/kudu/trace/6568570fa91d-7126f049-7695-4634-ad6e-ea6647702e05.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/trace/6568570fa91d-7126f049-7695-4634-ad6e-ea6647702e05.txt)
+2026-07-21T21:29:27  Startup Request, url: /api/deployments?warmup=true, method: GET, type: request, pid: 832,1,5, ScmType: None, SCM_DO_BUILD_DURING_DEPLOYMENT: true
+/home/LogFiles/kudu/trace/6568570fa91d-ac64ddaf-83a5-4175-acbb-e1baa8454007.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/trace/6568570fa91d-ac64ddaf-83a5-4175-acbb-e1baa8454007.txt)
+2026-07-21T21:39:08              Error occurred, type: error, text: [notice] A new release of pip is available: 24.0 -> 26.1.2
+[notice] To update, run: pip install --upgrade pip
+rm: cannot remove '/tmp/zipdeploy/extracted/oryx-build-commands.txt': No such file or directory
+/bin/bash -c "oryx build /tmp/zipdeploy/extracted -o /home/site/wwwroot --platform python --platform-version 3.11 -p virtualenv_name=antenv --log-file /tmp/build-debug.log  -i /tmp/8dee76f9b7241ea --compress-destination-dir | tee /tmp/oryx-build.log ; exit $PIPESTATUS ", stackTrace:    at Kudu.Core.Infrastructure.Executable.ExecuteInternal(ITracer tracer, Func`2 onWriteOutput, Func`2 onWriteError, CancellationToken token, Encoding encoding, String arguments, Object[] args) in /tmp/KuduLite/Kudu.Core/Infrastructure/Executable.cs:line 239
+   at Kudu.Core.Infrastructure.Executable.ExecuteWithProgressWriter(ILogger logger, ITracer tracer, CancellationToken token, String arguments, Object[] args) in /tmp/KuduLite/Kudu.Core/Infrastructure/Executable.cs:line 118
+   at Kudu.Core.Deployment.Generator.ExternalCommandBuilder.RunCommand(DeploymentContext context, String command, Boolean ignoreManifest, CancellationToken token, String message, ILogger internalLogger) in /tmp/KuduLite/Kudu.Core/Deployment/Generator/ExternalCommandBuilder.cs:line 145
+   at Kudu.Core.Deployment.Generator.OryxBuilder.RunBuildCommand(IOryxArguments args, DeploymentContext context, CancellationToken token) in /tmp/KuduLite/Kudu.Core/Deployment/Generator/OryxBuilder.cs:line 295
+   at Kudu.Core.Deployment.Generator.OryxBuilder.Build(DeploymentContext context, CancellationToken token) in /tmp/KuduLite/Kudu.Core/Deployment/Generator/OryxBuilder.cs:line 136
+   at Kudu.Core.Deployment.DeploymentManager.Build(ChangeSet changeSet, ITracer tracer, IDisposable deployStep, IRepository repository, DeploymentInfoBase deploymentInfo, DeploymentAnalytics deploymentAnalytics, Boolean fullBuildByDefault, CancellationToken cancellationToken) in /tmp/KuduLite/Kudu.Core/Deployment/DeploymentManager.cs:line 771
+   at Kudu.Core.Deployment.DeploymentManager.Build(ChangeSet changeSet, ITracer tracer, IDisposable deployStep, IRepository repository, DeploymentInfoBase deploymentInfo, DeploymentAnalytics deploymentAnalytics, Boolean fullBuildByDefault, CancellationToken cancellationToken) in /tmp/KuduLite/Kudu.Core/Deployment/DeploymentManager.cs:line 840
+/home/LogFiles/kudu/trace/68ec6bb66276-399f062a-ed59-4f8c-8176-378a81b96f18.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/trace/68ec6bb66276-399f062a-ed59-4f8c-8176-378a81b96f18.txt)
+2026-07-21T21:45:02  Startup Request, url: /api/deployments/latest, method: GET, type: request, pid: 831,1,5, SCM_DO_BUILD_DURING_DEPLOYMENT: true, ScmType: None
+/home/LogFiles/kudu/trace/68ec6bb66276-6bdd44b8-85d0-4ce4-b96a-2a9bf3db2ade.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/trace/68ec6bb66276-6bdd44b8-85d0-4ce4-b96a-2a9bf3db2ade.txt)
+2026-07-22T04:46:33    Error occurred, type: error, text: LogStreamManager: ProcessRequest end
+2026-07-22T04:46:33  Error occurred, type: error, text: LogStreamManager: Inside Reset
+/home/LogFiles/kudu/trace/6eb94a057468-7524cddf-cdc5-417e-beca-0043914f6c9e.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/trace/6eb94a057468-7524cddf-cdc5-417e-beca-0043914f6c9e.txt)
+2026-07-21T17:49:06  Startup Request, url: /api/publish?type=zip, method: POST, type: request, pid: 834,1,7, ScmType: None
+/home/LogFiles/kudu/trace/acd66f4f4192-0db066bf-488f-436d-9e42-f380416bac6c.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/trace/acd66f4f4192-0db066bf-488f-436d-9e42-f380416bac6c.txt)
+2026-07-22T04:54:44  Startup Request, url: /api/deployments?warmup=true, method: GET, type: request, pid: 833,1,7, SCM_DO_BUILD_DURING_DEPLOYMENT: true, ScmType: None
+/home/LogFiles/kudu/trace/acd66f4f4192-dc23ab2b-489a-4783-aa9b-9b7ff37de7f8.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/trace/acd66f4f4192-dc23ab2b-489a-4783-aa9b-9b7ff37de7f8.txt)
+2026-07-22T05:10:34    Error occurred, type: error, text: LogStreamManager: ProcessRequest end
+2026-07-22T05:10:34  Error occurred, type: error, text: LogStreamManager: Inside Reset
+/home/LogFiles/kudu/trace/bf51d24c57eb-465cbe4c-8a98-4c14-9056-fb03ce6d872e.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/trace/bf51d24c57eb-465cbe4c-8a98-4c14-9056-fb03ce6d872e.txt)
+2026-07-21T18:00:03  Startup Request, url: /api/deployments/?$orderby=ReceivedTime%20desc&$top=20&api-version=2022-03-01, method: GET, type: request, pid: 835,1,5, SCM_DO_BUILD_DURING_DEPLOYMENT: true, ScmType: None
+/home/LogFiles/kudu/trace/ddca2993b2b7-3fbd61b9-263a-4622-a616-181fe4245931.txt  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/kudu/trace/ddca2993b2b7-3fbd61b9-263a-4622-a616-181fe4245931.txt)
+2026-07-21T18:54:38  Startup Request, url: /dump, method: GET, type: request, pid: 830,1,5, SCM_DO_BUILD_DURING_DEPLOYMENT: true, ScmType: None
+/home/LogFiles/2026_07_21_lw1sdlwk000AH9_containerStream.log  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/2026_07_21_lw1sdlwk000AH9_containerStream.log)
+/home/LogFiles/2026_07_21_lw1sdlwk000AH9_docker.log  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/2026_07_21_lw1sdlwk000AH9_docker.log)
+2026-07-21T21:45:42.8032450Z Container spec TerminationMessagePolicy  path 
+2026-07-21T21:45:42.8118635Z Container is terminated. Total time elapsed: 323 ms.
+2026-07-21T21:45:42.8121750Z Site container: innoira-api terminated during site startup.
+2026-07-21T21:45:42.8123716Z State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:44:12, LastErrorDetails: Container did not start within expected time limit of 230s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-21T21:45:42.9348643Z Site startup probe failed after 28.2978775 seconds.
+2026-07-21T21:45:43.1844375Z State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-21T21:45:43.1858077Z Failed to start site. Revert by stopping site.
+2026-07-21T21:45:43.1861088Z State: Stopping, Action: StoppingSite, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-21T21:45:43.2145950Z State: Stopping, Action: StoppingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-21T21:45:43.2146230Z Site: innoira-api stopped.
+/home/LogFiles/2026_07_21_lw1sdlwk000AH9_status.log  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/2026_07_21_lw1sdlwk000AH9_status.log)
+/home/LogFiles/2026_07_22_lw1sdlwk000AH9_containerStream.log  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/2026_07_22_lw1sdlwk000AH9_containerStream.log)
+2026-07-22T05:32:42.8180463Z Found zstd-compressed tarball.
+2026-07-22T05:32:42.8204060Z Extracting '/home/site/wwwroot/output.tar.zst' to directory '/tmp/8dee7b0f725a93c'...
+2026-07-22T05:32:42.8280990Z Using zstd for decompression of file: /home/site/wwwroot/output.tar.zst
+2026-07-22T05:33:07.1332381Z zstd tar Successfully extracted '/home/site/wwwroot/output.tar.zst' to '/tmp/8dee7b0f725a93c'
+2026-07-22T05:33:07.1334688Z App path is set to '/tmp/8dee7b0f725a93c'
+2026-07-22T05:33:07.2362580Z Writing output script to '/opt/startup/startup.sh'
+2026-07-22T05:33:07.4473772Z Using packages from virtual environment antenv located at /tmp/8dee7b0f725a93c/antenv.
+2026-07-22T05:33:07.4651085Z Updated PYTHONPATH to '/opt/startup/app_logs:/tmp/8dee7b0f725a93c/antenv/lib/python3.11/site-packages'
+2026-07-22T05:33:08.1405210Z INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2026-07-22T05:33:08.1415177Z INFO:     Started parent process [1886]
+/home/LogFiles/2026_07_22_lw1sdlwk000AH9_docker.log  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/2026_07_22_lw1sdlwk000AH9_docker.log)
+2026-07-22T05:32:16.9858666Z Successfully removed non-blocking flag from /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000.
+2026-07-22T05:32:16.9874706Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.6:13209 and fully qualified image name: 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T05:32:18.7962129Z Starting container: f17b51c0d732_innoira-api.
+2026-07-22T05:32:19.0584939Z Starting watchers and probes.
+2026-07-22T05:32:19.0674444Z Starting metrics collection.
+2026-07-22T05:32:19.0988511Z Container is running.
+2026-07-22T05:32:19.1091352Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:32:19.2498620Z Container start method finished after 4656 ms.
+2026-07-22T05:32:19.2791743Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:32:19.3193796Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+/home/LogFiles/2026_07_22_lw1sdlwk000AH9_status.log  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/2026_07_22_lw1sdlwk000AH9_status.log)
+2026-07-22T05:32:16.9858666Z Successfully removed non-blocking flag from /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000.
+2026-07-22T05:32:16.9874706Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.6:13209 and fully qualified image name: 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T05:32:18.7962129Z Starting container: f17b51c0d732_innoira-api.
+2026-07-22T05:32:19.0584939Z Starting watchers and probes.
+2026-07-22T05:32:19.0674444Z Starting metrics collection.
+2026-07-22T05:32:19.0988511Z Container is running.
+2026-07-22T05:32:19.1091352Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:32:19.2498620Z Container start method finished after 4656 ms.
+2026-07-22T05:32:19.2791743Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:32:19.3193796Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+/home/LogFiles/StartupLogs/2026_07_21_lw1sdlwk000AH9_failure.log  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/StartupLogs/2026_07_21_lw1sdlwk000AH9_failure.log)
+2026-07-21T21:45:42.8032450+00:00 ContainerStatus: Container spec TerminationMessagePolicy  path 
+2026-07-21T21:45:42.8118635+00:00 ContainerStatus: Container is terminated. Total time elapsed: 323 ms.
+2026-07-21T21:45:42.8121750+00:00 ContainerStatus: Site container: innoira-api terminated during site startup.
+2026-07-21T21:45:42.8123716+00:00 ContainerStatus: State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:44:12, LastErrorDetails: Container did not start within expected time limit of 230s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-21T21:45:42.9348643+00:00 ContainerStatus: Site startup probe failed after 28.2978775 seconds.
+2026-07-21T21:45:43.1844375+00:00 ContainerStatus: State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-21T21:45:43.1858077+00:00 ContainerStatus: Failed to start site. Revert by stopping site.
+2026-07-21T21:45:43.1861088+00:00 ContainerStatus: State: Stopping, Action: StoppingSite, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-21T21:45:43.2145950+00:00 ContainerStatus: State: Stopping, Action: StoppingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-21T21:45:43.2146230+00:00 ContainerStatus: Site: innoira-api stopped.
+/home/LogFiles/StartupLogs/2026_07_21_lw1sdlwk000AH9_success.log  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/StartupLogs/2026_07_21_lw1sdlwk000AH9_success.log)
+2026-07-21T21:03:58.9763693+00:00 ContainerStream: 2026-07-21 21:03:58,976 INFO Scheduler started
+2026-07-21T21:03:58.9769913+00:00 ContainerStream: 2026-07-21 21:03:58,976 INFO scheduler started (reminders 15m, sends 2m, reply polling 10m, social publish 2m, social engagement 10m, RSS poll 30m, site recrawl 24h)
+2026-07-21T21:03:58.9777399+00:00 ContainerStream: INFO:     Application startup complete.
+2026-07-21T21:03:59.6572377+00:00 ContainerStream: INFO:     169.254.130.1:18235 - "GET /robots933456.txt HTTP/1.1" 404 Not Found
+2026-07-21T21:03:59.6976364+00:00 ContainerStatus: Site startup probe succeeded after 102.0591797 seconds.
+2026-07-21T21:03:59.8631006+00:00 ContainerStatus: State: Starting, Action: WarmUpProbeSucceeded, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:00:26, LastErrorDetails: Container did not start within expected time limit of 230s. Please inspect your container logs for more details., Details: Site startup probe succeeded after 102.0591797 seconds., DetailsLevel: INFO
+2026-07-21T21:04:00.3829801+00:00 ContainerStatus: Site is running with deployment version: c6cbdebe-6da0-4e47-80aa-af2b794c789c
+2026-07-21T21:04:00.3840353+00:00 ContainerStatus: Site started.
+2026-07-21T21:04:00.3844907+00:00 ContainerStatus: State: Started, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:00:26, LastErrorDetails: Container did not start within expected time limit of 230s. Please inspect your container logs for more details., Details: Site started at 07/21/2026 21:04:00 (UTC), DetailsLevel: INFO
+2026-07-21T21:04:00.4040825+00:00 ContainerStatus: Site is running with patch version PYTHON-3.11.15
+/home/LogFiles/StartupLogs/2026_07_22_lw1sdlwk000AH9_failure.log  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/StartupLogs/2026_07_22_lw1sdlwk000AH9_failure.log)
+2026-07-22T04:53:02.9654370+00:00 ContainerStatus: Container spec TerminationMessagePolicy  path 
+2026-07-22T04:53:02.9667369+00:00 ContainerStatus: Container is terminated. Total time elapsed: 632 ms.
+2026-07-22T04:53:02.9674827+00:00 ContainerStatus: Site container: innoira-api terminated during site startup.
+2026-07-22T04:53:02.9769139+00:00 ContainerStatus: State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:53:02.9877204+00:00 ContainerStatus: Site startup probe failed after 24.2838531 seconds.
+2026-07-22T04:53:03.1464437+00:00 ContainerStatus: State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:53:03.1590253+00:00 ContainerStatus: Failed to start site. Revert by stopping site.
+2026-07-22T04:53:03.1659015+00:00 ContainerStatus: State: Stopping, Action: StoppingSite, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:53:03.1668215+00:00 ContainerStatus: State: Stopping, Action: StoppingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:53:03.1668487+00:00 ContainerStatus: Site: innoira-api stopped.
+/home/LogFiles/StartupLogs/2026_07_22_lw1sdlwk000AH9_success.log  (https://innoira-api.scm.azurewebsites.net/api/vfs/LogFiles/StartupLogs/2026_07_22_lw1sdlwk000AH9_success.log)
+2026-07-22T05:12:59.7636408+00:00 ContainerStream: 2026-07-22 05:12:59,763 INFO Scheduler started
+2026-07-22T05:12:59.7708521+00:00 ContainerStream: 2026-07-22 05:12:59,763 INFO scheduler started (reminders 15m, sends 2m, reply polling 10m, social publish 2m, social engagement 10m, RSS poll 30m, site recrawl 24h)
+2026-07-22T05:12:59.7711344+00:00 ContainerStream: INFO:     Application startup complete.
+2026-07-22T05:12:59.8451853+00:00 ContainerStream: INFO:     169.254.130.1:19905 - "GET /robots933456.txt HTTP/1.1" 404 Not Found
+2026-07-22T05:12:59.9049725+00:00 ContainerStatus: Site startup probe succeeded after 120.0794237 seconds.
+2026-07-22T05:13:00.0756476+00:00 ContainerStatus: State: Starting, Action: WarmUpProbeSucceeded, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site startup probe succeeded after 120.0794237 seconds., DetailsLevel: INFO
+2026-07-22T05:13:00.6095123+00:00 ContainerStatus: Site is running with deployment version: a1c58086-1246-40b2-8380-dd105c3b3205
+2026-07-22T05:13:00.6113788+00:00 ContainerStatus: Site started.
+2026-07-22T05:13:00.6191120+00:00 ContainerStatus: State: Started, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site started at 07/22/2026 05:13:00 (UTC), DetailsLevel: INFO
+2026-07-22T05:13:00.7491036+00:00 ContainerStatus: Site is running with patch version PYTHON-3.11.15
+Ending Log Tail of existing logs ---
+Starting Live Log Stream ---
+2026-07-22T05:32:22.7820775Z Starting OpenBSD Secure Shell server: sshd.
+2026-07-22T05:32:22.8026249Z WEBSITES_INCLUDE_CLOUD_CERTS is not set to true.
+2026-07-22T05:32:22.9428055Z Updating certificates in /etc/ssl/certs...
+2026-07-22T05:32:41.6993203Z rehash: warning: skipping ca-certificates.crt,it does not contain exactly one certificate or CRL
+2026-07-22T05:32:41.7410270Z rehash: warning: skipping duplicate certificate in azl_SSL.com_TLS_RSA_Root_CA_2022.pem
+2026-07-22T05:32:41.7598366Z rehash: warning: skipping duplicate certificate in azl_SSL.com_TLS_ECC_Root_CA_2022.pem
+2026-07-22T05:32:41.7899684Z 4 added, 0 removed; done.
+2026-07-22T05:32:41.8499146Z Running hooks in /etc/ca-certificates/update.d...
+2026-07-22T05:32:41.8609061Z done.
+2026-07-22T05:32:41.8805669Z CA certificates copied and updated successfully.
+2026-07-22T05:32:42.0003344Z Site's appCommandLine: uvicorn server:app --host 0.0.0.0 --port 8000 --workers 2
+2026-07-22T05:32:42.5197461Z Starting periodic command scheduler: cron.
+2026-07-22T05:32:42.5288296Z Launching oryx with: create-script -appPath /home/site/wwwroot -output /opt/startup/startup.sh -virtualEnvName antenv -defaultApp /opt/defaultsite -userStartupCommand 'uvicorn server:app --host 0.0.0.0 --port 8000 --workers 2'
+2026-07-22T05:32:42.7891793Z Found build manifest file at '/home/site/wwwroot/oryx-manifest.toml'. Deserializing it...
+2026-07-22T05:32:42.8001144Z Build Operation ID: 85c5fcac718b6539
+2026-07-22T05:32:42.8103744Z Oryx Version: 0.2.20260504.2, Commit: a776ec9f2fd225b305599e35443ecb3533bcdb26, ReleaseTagName: 20260504.2
+2026-07-22T05:32:42.8104430Z Output is compressed. Extracting it...
+2026-07-22T05:32:42.8180463Z Found zstd-compressed tarball.
+2026-07-22T05:32:42.8204060Z Extracting '/home/site/wwwroot/output.tar.zst' to directory '/tmp/8dee7b0f725a93c'...
+2026-07-22T05:32:42.8280990Z Using zstd for decompression of file: /home/site/wwwroot/output.tar.zst
+2026-07-22T05:33:07.1332381Z zstd tar Successfully extracted '/home/site/wwwroot/output.tar.zst' to '/tmp/8dee7b0f725a93c'
+2026-07-22T05:33:07.1334688Z App path is set to '/tmp/8dee7b0f725a93c'
+2026-07-22T05:33:07.2362580Z Writing output script to '/opt/startup/startup.sh'
+2026-07-22T05:33:07.4473772Z Using packages from virtual environment antenv located at /tmp/8dee7b0f725a93c/antenv.
+2026-07-22T05:33:07.4651085Z Updated PYTHONPATH to '/opt/startup/app_logs:/tmp/8dee7b0f725a93c/antenv/lib/python3.11/site-packages'
+2026-07-22T05:33:08.1405210Z INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2026-07-22T05:33:08.1415177Z INFO:     Started parent process [1886]
+2026-07-22T05:32:14.5926749Z State: Starting, Action: StartingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: , DetailsLevel: INFO
+2026-07-22T05:32:14.5934435Z Container start method called.
+2026-07-22T05:32:14.6028042Z State: Starting, Action: PullingImage, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pulling image 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod for innoira-api., DetailsLevel: INFO
+2026-07-22T05:32:14.6115913Z Establishing network.
+2026-07-22T05:32:14.6121651Z Pulling image: appsvc/python:3.11_20260504.4.tuxprod.
+2026-07-22T05:32:15.4665560Z Container is starting.
+2026-07-22T05:32:15.4668497Z State: Starting, Action: MountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Mounting volumes for innoira-api., DetailsLevel: INFO
+2026-07-22T05:32:15.4670073Z Establishing user namespace if not established already.
+2026-07-22T05:32:15.4674406Z Establishing network if not established already.
+2026-07-22T05:32:15.4676030Z Mounting volumes.
+2026-07-22T05:32:15.4763945Z Nested mountpoint 
+2026-07-22T05:32:15.5584709Z Nested mountpoint volatile/logs
+2026-07-22T05:32:15.5884570Z Nested mountpoint 
+2026-07-22T05:32:15.6866889Z Nested mountpoint 
+2026-07-22T05:32:15.6981127Z Nested mountpoint 
+2026-07-22T05:32:15.7979962Z Nested mountpoint 
+2026-07-22T05:32:16.8869724Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Finished pulling container image and mounting volumes for innoira-api. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-07-22T05:32:16.9054550Z Creating container.
+2026-07-22T05:32:16.9065867Z Creating pipes for streaming container io.
+2026-07-22T05:32:16.9072155Z Creating stdout named pipe at /podr/container/pipe/f17b51c0d732_innoira-api/stdout_365004b3c47843acb0e18a87d9c01297.
+2026-07-22T05:32:16.9146745Z Successfully created stdout named pipe at: /podr/container/pipe/f17b51c0d732_innoira-api/stdout_365004b3c47843acb0e18a87d9c01297.
+2026-07-22T05:32:16.9149587Z Opening named pipe /podr/container/pipe/f17b51c0d732_innoira-api/stdout_365004b3c47843acb0e18a87d9c01297 for reading in non-blocking mode.
+2026-07-22T05:32:16.9155438Z Successfully opened named pipe: /podr/container/pipe/f17b51c0d732_innoira-api/stdout_365004b3c47843acb0e18a87d9c01297.
+2026-07-22T05:32:16.9162085Z Successfully removed non-blocking flag from /podr/container/pipe/f17b51c0d732_innoira-api/stdout_365004b3c47843acb0e18a87d9c01297.
+2026-07-22T05:32:16.9467407Z Creating stderr named pipe at /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000.
+2026-07-22T05:32:16.9471761Z Successfully created stderr named pipe at: /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000.
+2026-07-22T05:32:16.9854305Z Opening named pipe /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000 for reading in non-blocking mode.
+2026-07-22T05:32:16.9857675Z Successfully opened named pipe: /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000.
+2026-07-22T05:32:16.9858666Z Successfully removed non-blocking flag from /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000.
+2026-07-22T05:32:16.9874706Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.6:13209 and fully qualified image name: 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T05:32:18.7962129Z Starting container: f17b51c0d732_innoira-api.
+2026-07-22T05:32:19.0584939Z Starting watchers and probes.
+2026-07-22T05:32:19.0674444Z Starting metrics collection.
+2026-07-22T05:32:19.0988511Z Container is running.
+2026-07-22T05:32:19.1091352Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:32:19.2498620Z Container start method finished after 4656 ms.
+2026-07-22T05:32:19.2791743Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:32:19.3193796Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+2026-07-22T05:32:14.5926749Z State: Starting, Action: StartingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: , DetailsLevel: INFO
+2026-07-22T05:32:14.5934435Z Container start method called.
+2026-07-22T05:32:14.6028042Z State: Starting, Action: PullingImage, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pulling image 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod for innoira-api., DetailsLevel: INFO
+2026-07-22T05:32:14.6115913Z Establishing network.
+2026-07-22T05:32:14.6121651Z Pulling image: appsvc/python:3.11_20260504.4.tuxprod.
+2026-07-22T05:32:15.4665560Z Container is starting.
+2026-07-22T05:32:15.4668497Z State: Starting, Action: MountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Mounting volumes for innoira-api., DetailsLevel: INFO
+2026-07-22T05:32:15.4670073Z Establishing user namespace if not established already.
+2026-07-22T05:32:15.4674406Z Establishing network if not established already.
+2026-07-22T05:32:15.4676030Z Mounting volumes.
+2026-07-22T05:32:15.4763945Z Nested mountpoint 
+2026-07-22T05:32:15.5584709Z Nested mountpoint volatile/logs
+2026-07-22T05:32:15.5884570Z Nested mountpoint 
+2026-07-22T05:32:15.6866889Z Nested mountpoint 
+2026-07-22T05:32:15.6981127Z Nested mountpoint 
+2026-07-22T05:32:15.7979962Z Nested mountpoint 
+2026-07-22T05:32:16.8869724Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Finished pulling container image and mounting volumes for innoira-api. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-07-22T05:32:16.9054550Z Creating container.
+2026-07-22T05:32:16.9065867Z Creating pipes for streaming container io.
+2026-07-22T05:32:16.9072155Z Creating stdout named pipe at /podr/container/pipe/f17b51c0d732_innoira-api/stdout_365004b3c47843acb0e18a87d9c01297.
+2026-07-22T05:32:16.9146745Z Successfully created stdout named pipe at: /podr/container/pipe/f17b51c0d732_innoira-api/stdout_365004b3c47843acb0e18a87d9c01297.
+2026-07-22T05:32:16.9149587Z Opening named pipe /podr/container/pipe/f17b51c0d732_innoira-api/stdout_365004b3c47843acb0e18a87d9c01297 for reading in non-blocking mode.
+2026-07-22T05:32:16.9155438Z Successfully opened named pipe: /podr/container/pipe/f17b51c0d732_innoira-api/stdout_365004b3c47843acb0e18a87d9c01297.
+2026-07-22T05:32:16.9162085Z Successfully removed non-blocking flag from /podr/container/pipe/f17b51c0d732_innoira-api/stdout_365004b3c47843acb0e18a87d9c01297.
+2026-07-22T05:32:16.9467407Z Creating stderr named pipe at /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000.
+2026-07-22T05:32:16.9471761Z Successfully created stderr named pipe at: /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000.
+2026-07-22T05:32:16.9854305Z Opening named pipe /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000 for reading in non-blocking mode.
+2026-07-22T05:32:16.9857675Z Successfully opened named pipe: /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000.
+2026-07-22T05:32:16.9858666Z Successfully removed non-blocking flag from /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000.
+2026-07-22T05:32:16.9874706Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.6:13209 and fully qualified image name: 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T05:32:18.7962129Z Starting container: f17b51c0d732_innoira-api.
+2026-07-22T05:32:19.0584939Z Starting watchers and probes.
+2026-07-22T05:32:19.0674444Z Starting metrics collection.
+2026-07-22T05:32:19.0988511Z Container is running.
+2026-07-22T05:32:19.1091352Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:32:19.2498620Z Container start method finished after 4656 ms.
+2026-07-22T05:32:19.2791743Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:32:19.3193796Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO

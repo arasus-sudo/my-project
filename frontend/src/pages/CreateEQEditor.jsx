@@ -6,7 +6,7 @@ import jsPDF from "jspdf";
 import { toast } from "sonner";
 import {
   Save, Download, ChevronLeft, Loader2, Plus, Trash2, Copy,
-  Sparkles, Undo2, Redo2, Wand2, FileText, LayoutGrid, Maximize2, Mountain, Play,
+  Sparkles, Undo2, Redo2, Wand2, FileText, LayoutGrid, Maximize2, Mountain, Play, Image as ImageIcon,
 } from "lucide-react";
 
 import { api, isCreditError } from "../lib/api";
@@ -28,6 +28,7 @@ import PanoramaLayer from "../components/creq/PanoramaLayer";
 import DeckOverlay from "../components/creq/DeckOverlay";
 import BrandKitDrawer from "../components/creq/drawers/BrandKitDrawer";
 import AiImageDrawer from "../components/creq/drawers/AiImageDrawer";
+import ImageGalleryDrawer from "../components/creq/drawers/ImageGalleryDrawer";
 import PanoramaDrawer from "../components/creq/drawers/PanoramaDrawer";
 import PdfExportDialog, { EXPORT_QUALITIES } from "../components/creq/drawers/PdfExportDialog";
 import { newId, renderBackground, renderBackgroundImageCss, stripLocalKeys, elementBounds } from "../components/creq/utils";
@@ -163,6 +164,7 @@ export default function CreateEQEditor() {
   const [brandKits, setBrandKits] = useState([]);
   const [showBrandKit, setShowBrandKit] = useState(false);
   const [showAiImage, setShowAiImage] = useState(false);
+  const [showImageGallery, setShowImageGallery] = useState(false);
   const [showPanorama, setShowPanorama] = useState(false);
   const [showPdfPicker, setShowPdfPicker] = useState(false);
   const [showGenerateContent, setShowGenerateContent] = useState(false);
@@ -1408,6 +1410,7 @@ export default function CreateEQEditor() {
             <button onClick={() => setShowGenerateContent(true)} data-testid="generate-content-open" className="btn-secondary"><Wand2 size={14} /> Generate content</button>
             <button onClick={() => setShowPanorama(true)} data-testid="panorama-open" className="btn-secondary"><Mountain size={14} /> Panorama</button>
             <button onClick={() => setShowAiImage(true)} data-testid="ai-image-open" className="btn-secondary"><Wand2 size={14} /> AI Image</button>
+            <button onClick={() => setShowImageGallery(true)} data-testid="image-gallery-open" className="btn-secondary"><ImageIcon size={14} /> Images</button>
             <button onClick={() => setShowBrandKit(true)} data-testid="brand-kit-open" className="btn-secondary"><Sparkles size={14} /> Brand kit</button>
             <button onClick={exportSlidePng} data-testid="export-png-btn" className="btn-secondary"><Download size={14} /> PNG</button>
             <button onClick={() => setShowPdfPicker(true)} disabled={busy} data-testid="export-pdf-btn" className="btn-secondary"><FileText size={14} /> PDF</button>
@@ -1712,6 +1715,25 @@ export default function CreateEQEditor() {
         />
       )}
 
+      {showImageGallery && (
+        <ImageGalleryDrawer
+          onClose={() => setShowImageGallery(false)}
+          onAddAsElement={(imageUrl) => {
+            addElement({ type: "image", src: imageUrl, x: 120, y: 240, w: 840, h: 840, fit: "cover", radius: 24 });
+            setShowImageGallery(false);
+            toast.success("Image added to slide");
+          }}
+          onAddAsBackground={(imageUrl) => {
+            mutate((n) => {
+              const s = n.slides[activeSlide];
+              s.elements = (s.elements || []).filter((el) => !(el.type === "image" && el.role === "background"));
+              s.elements.unshift({ id: newId(), type: "image", role: "background", src: imageUrl, x: 0, y: 0, w: CANVAS.w, h: CANVAS.h, fit: "cover", radius: 0 });
+            });
+            setShowImageGallery(false);
+            toast.success("Background applied");
+          }}
+        />
+      )}
       {showAiImage && (
         <AiImageDrawer
           onClose={() => setShowAiImage(false)}

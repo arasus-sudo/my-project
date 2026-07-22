@@ -35,7 +35,7 @@ export default function PanoramaDrawer({ onClose, panorama, slideCount, onApply 
         size: isSplit ? `${slideCount * 1080}x1350` : "1080x1350",
         aspect: isSplit ? "landscape" : "portrait",
       });
-      setSrc(`data:${data.mime_type || "image/png"};base64,${data.image_base64}`);
+      setSrc(data.image_url);
       toast.success("Panorama generated");
     } catch (err) {
       if (!isCreditError(err)) toast.error(err?.response?.data?.detail || "Generation failed");

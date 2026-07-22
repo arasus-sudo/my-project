@@ -1,0 +1,750 @@
+2026-07-21T21:45:43.2255880Z State: Stopping, Action: UnmountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-21T21:45:43.5348712Z State: Stopping, Action: StoppingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-21T21:45:43.6572180Z State: Stopped, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site stopped at 07/21/2026 21:45:43 (UTC), DetailsLevel: ERR
+2026-07-21T21:45:44.1399997Z State: Stopped, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site stopped at 07/21/2026 21:45:43 (UTC), DetailsLevel: ERR
+2026-07-22T04:44:53.4979577Z State: Starting, Action: EstablishingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site stopped at 07/21/2026 21:45:43 (UTC), DetailsLevel: ERR
+2026-07-22T04:44:54.9346674Z State: Starting, Action: StartingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site stopped at 07/21/2026 21:45:43 (UTC), DetailsLevel: ERR
+2026-07-22T04:44:54.9356964Z Container start method called.
+2026-07-22T04:44:54.9372302Z State: Starting, Action: PullingImage, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Pulling image 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod for innoira-api., DetailsLevel: INFO
+2026-07-22T04:44:54.9542428Z Establishing network.
+2026-07-22T04:44:54.9558557Z Pulling image: appsvc/python:3.11_20260504.4.tuxprod.
+2026-07-22T04:44:55.1584850Z Container is starting.
+2026-07-22T04:44:55.1589278Z State: Starting, Action: MountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Mounting volumes for innoira-api., DetailsLevel: INFO
+2026-07-22T04:44:55.1592059Z Establishing user namespace if not established already.
+2026-07-22T04:44:55.1600288Z Establishing network if not established already.
+2026-07-22T04:44:55.1672351Z Mounting volumes.
+2026-07-22T04:44:55.1890033Z Nested mountpoint 
+2026-07-22T04:44:55.2675347Z Nested mountpoint volatile/logs
+2026-07-22T04:44:55.3074895Z Nested mountpoint 
+2026-07-22T04:44:55.3490152Z Nested mountpoint 
+2026-07-22T04:44:55.3596275Z Nested mountpoint 
+2026-07-22T04:44:55.4003845Z Nested mountpoint 
+2026-07-22T04:44:55.8308566Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Finished pulling container image and mounting volumes for innoira-api. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-07-22T04:44:55.8317303Z Creating container.
+2026-07-22T04:44:55.8326509Z Creating pipes for streaming container io.
+2026-07-22T04:44:55.8717691Z Creating stdout named pipe at /podr/container/pipe/a71bfa5aac27_innoira-api/stdout_f2b5f081067e48618a6768f90f062156.
+2026-07-22T04:44:55.8810864Z Successfully created stdout named pipe at: /podr/container/pipe/a71bfa5aac27_innoira-api/stdout_f2b5f081067e48618a6768f90f062156.
+2026-07-22T04:44:55.8816162Z Opening named pipe /podr/container/pipe/a71bfa5aac27_innoira-api/stdout_f2b5f081067e48618a6768f90f062156 for reading in non-blocking mode.
+2026-07-22T04:44:55.8820688Z Successfully opened named pipe: /podr/container/pipe/a71bfa5aac27_innoira-api/stdout_f2b5f081067e48618a6768f90f062156.
+2026-07-22T04:44:55.8828945Z Successfully removed non-blocking flag from /podr/container/pipe/a71bfa5aac27_innoira-api/stdout_f2b5f081067e48618a6768f90f062156.
+2026-07-22T04:44:55.8925262Z Creating stderr named pipe at /podr/container/pipe/a71bfa5aac27_innoira-api/stderr_261d2efc906d4912a3620970d91bf557.
+2026-07-22T04:44:55.8930903Z Successfully created stderr named pipe at: /podr/container/pipe/a71bfa5aac27_innoira-api/stderr_261d2efc906d4912a3620970d91bf557.
+2026-07-22T04:44:55.8933751Z Opening named pipe /podr/container/pipe/a71bfa5aac27_innoira-api/stderr_261d2efc906d4912a3620970d91bf557 for reading in non-blocking mode.
+2026-07-22T04:44:55.9011839Z Successfully opened named pipe: /podr/container/pipe/a71bfa5aac27_innoira-api/stderr_261d2efc906d4912a3620970d91bf557.
+2026-07-22T04:44:55.9015010Z Successfully removed non-blocking flag from /podr/container/pipe/a71bfa5aac27_innoira-api/stderr_261d2efc906d4912a3620970d91bf557.
+2026-07-22T04:44:55.9032232Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.6:13209 and fully qualified image name: 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T04:44:56.6874244Z Starting container: a71bfa5aac27_innoira-api.
+2026-07-22T04:44:56.7766923Z Starting watchers and probes.
+2026-07-22T04:44:56.7957151Z Starting metrics collection.
+2026-07-22T04:44:56.8185766Z Container is running.
+2026-07-22T04:44:56.8266515Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T04:44:57.0801158Z Container start method finished after 2144 ms.
+2026-07-22T04:44:57.1291865Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T04:44:57.1300428Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+2026-07-22T04:45:21.5080567Z Container has finished running with exit code: 127.
+2026-07-22T04:45:21.5093182Z Container is terminating. Grace period: 5 seconds.
+2026-07-22T04:45:21.5566617Z Stop and delete container. Retry count = 0
+2026-07-22T04:45:21.5578072Z Stopping container: a71bfa5aac27_innoira-api.
+2026-07-22T04:45:21.7117803Z Deleting container: a71bfa5aac27_innoira-api. Retry count = 0
+2026-07-22T04:45:22.2261084Z Container spec TerminationMessagePolicy  path 
+2026-07-22T04:45:22.2272026Z Container is terminated. Total time elapsed: 678 ms.
+2026-07-22T04:45:22.2276876Z Site container: innoira-api terminated during site startup.
+2026-07-22T04:45:22.2285428Z State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/21/2026 21:45:43, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:45:22.3864800Z Site startup probe failed after 25.1484714 seconds.
+2026-07-22T04:45:22.5600327Z State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:45:22.5728020Z Failed to start site. Revert by stopping site.
+2026-07-22T04:45:22.5778672Z State: Stopping, Action: StoppingSite, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:45:22.5808129Z State: Stopping, Action: StoppingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:45:22.5811417Z Site: innoira-api stopped.
+2026-07-22T04:45:22.5922751Z State: Stopping, Action: UnmountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:45:22.9510381Z State: Stopping, Action: StoppingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:45:23.0726853Z Site: innoira-api will be blocked for 1 minutes till 07/22/2026 04:46:23
+2026-07-22T04:45:23.0804546Z State: Blocked, Action: StoppingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site: innoira-api will be blocked for 1 minutes till 07/22/2026 04:46:23, DetailsLevel: WARN
+2026-07-22T04:45:23.1034765Z State: Stopped, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 04:45:23 (UTC), DetailsLevel: WARN
+2026-07-22T04:45:23.7077718Z State: Stopped, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 04:45:23 (UTC), DetailsLevel: WARN
+2026-07-22T04:46:23.0778378Z Site: innoira-api is unblocked.
+2026-07-22T04:46:48.1434035Z State: Starting, Action: EstablishingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 04:45:23 (UTC), DetailsLevel: WARN
+2026-07-22T04:46:49.4462144Z State: Starting, Action: StartingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 04:45:23 (UTC), DetailsLevel: WARN
+2026-07-22T04:46:49.4520383Z Container start method called.
+2026-07-22T04:46:49.4523140Z State: Starting, Action: PullingImage, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Pulling image 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod for innoira-api., DetailsLevel: INFO
+2026-07-22T04:46:49.4524695Z Establishing network.
+2026-07-22T04:46:49.4525942Z Pulling image: appsvc/python:3.11_20260504.4.tuxprod.
+2026-07-22T04:46:49.6956987Z Container is starting.
+2026-07-22T04:46:49.6960490Z State: Starting, Action: MountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Mounting volumes for innoira-api., DetailsLevel: INFO
+2026-07-22T04:46:49.6961971Z Establishing user namespace if not established already.
+2026-07-22T04:46:49.6964928Z Establishing network if not established already.
+2026-07-22T04:46:49.6966440Z Mounting volumes.
+2026-07-22T04:46:49.7060759Z Nested mountpoint 
+2026-07-22T04:46:49.7250068Z Nested mountpoint volatile/logs
+2026-07-22T04:46:49.7556239Z Nested mountpoint 
+2026-07-22T04:46:49.7561597Z Nested mountpoint 
+2026-07-22T04:46:49.7654758Z Nested mountpoint 
+2026-07-22T04:46:49.8066765Z Nested mountpoint 
+2026-07-22T04:46:50.3493541Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Finished pulling container image and mounting volumes for innoira-api. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-07-22T04:46:50.3499812Z Creating container.
+2026-07-22T04:46:50.3504252Z Creating pipes for streaming container io.
+2026-07-22T04:46:50.3577444Z Creating stdout named pipe at /podr/container/pipe/1eba3fc71cfb_innoira-api/stdout_5102949346b0449aad1c9a81cb2ea3d9.
+2026-07-22T04:46:50.3584901Z Successfully created stdout named pipe at: /podr/container/pipe/1eba3fc71cfb_innoira-api/stdout_5102949346b0449aad1c9a81cb2ea3d9.
+2026-07-22T04:46:50.3676950Z Opening named pipe /podr/container/pipe/1eba3fc71cfb_innoira-api/stdout_5102949346b0449aad1c9a81cb2ea3d9 for reading in non-blocking mode.
+2026-07-22T04:46:50.3685476Z Successfully opened named pipe: /podr/container/pipe/1eba3fc71cfb_innoira-api/stdout_5102949346b0449aad1c9a81cb2ea3d9.
+2026-07-22T04:46:50.3689892Z Successfully removed non-blocking flag from /podr/container/pipe/1eba3fc71cfb_innoira-api/stdout_5102949346b0449aad1c9a81cb2ea3d9.
+2026-07-22T04:46:50.3781140Z Creating stderr named pipe at /podr/container/pipe/1eba3fc71cfb_innoira-api/stderr_b7ab1700b8d046a09306611743c3f9c6.
+2026-07-22T04:46:50.3787333Z Successfully created stderr named pipe at: /podr/container/pipe/1eba3fc71cfb_innoira-api/stderr_b7ab1700b8d046a09306611743c3f9c6.
+2026-07-22T04:46:50.3792305Z Opening named pipe /podr/container/pipe/1eba3fc71cfb_innoira-api/stderr_b7ab1700b8d046a09306611743c3f9c6 for reading in non-blocking mode.
+2026-07-22T04:46:50.3798914Z Successfully opened named pipe: /podr/container/pipe/1eba3fc71cfb_innoira-api/stderr_b7ab1700b8d046a09306611743c3f9c6.
+2026-07-22T04:46:50.3802000Z Successfully removed non-blocking flag from /podr/container/pipe/1eba3fc71cfb_innoira-api/stderr_b7ab1700b8d046a09306611743c3f9c6.
+2026-07-22T04:46:50.3981405Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.6:13209 and fully qualified image name: 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T04:46:50.9660316Z Starting container: 1eba3fc71cfb_innoira-api.
+2026-07-22T04:46:51.0525812Z Starting watchers and probes.
+2026-07-22T04:46:51.0611971Z Starting metrics collection.
+2026-07-22T04:46:51.0614535Z Container is running.
+2026-07-22T04:46:51.0619839Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T04:46:51.2027735Z Container start method finished after 1750 ms.
+2026-07-22T04:46:51.2039447Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T04:46:51.2040250Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+2026-07-22T04:47:13.7139172Z Container has finished running with exit code: 127.
+2026-07-22T04:47:13.7517152Z Container is terminating. Grace period: 5 seconds.
+2026-07-22T04:47:13.7530004Z Stop and delete container. Retry count = 0
+2026-07-22T04:47:13.7536196Z Stopping container: 1eba3fc71cfb_innoira-api.
+2026-07-22T04:47:13.9343719Z Deleting container: 1eba3fc71cfb_innoira-api. Retry count = 0
+2026-07-22T04:47:14.4664006Z Container spec TerminationMessagePolicy  path 
+2026-07-22T04:47:14.4666688Z Container is terminated. Total time elapsed: 714 ms.
+2026-07-22T04:47:14.4668130Z Site container: innoira-api terminated during site startup.
+2026-07-22T04:47:14.4785246Z State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:45:22, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:47:14.6290278Z Site startup probe failed after 23.4244941 seconds.
+2026-07-22T04:47:15.0619175Z State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:47:15.0811135Z Failed to start site. Revert by stopping site.
+2026-07-22T04:47:15.0905583Z State: Stopping, Action: StoppingSite, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:47:15.0909629Z State: Stopping, Action: StoppingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:47:15.0909791Z Site: innoira-api stopped.
+2026-07-22T04:47:15.1307025Z State: Stopping, Action: UnmountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:47:15.5446853Z State: Stopping, Action: StoppingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:47:15.8651668Z Site: innoira-api will be blocked for 1 minutes till 07/22/2026 04:48:15
+2026-07-22T04:47:15.8652843Z State: Blocked, Action: StoppingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site: innoira-api will be blocked for 1 minutes till 07/22/2026 04:48:15, DetailsLevel: WARN
+2026-07-22T04:47:15.8655160Z State: Stopped, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 04:47:15 (UTC), DetailsLevel: WARN
+2026-07-22T04:47:17.0025110Z State: Stopped, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 04:47:15 (UTC), DetailsLevel: WARN
+2026-07-22T04:48:15.8639832Z Site: innoira-api is unblocked.
+2026-07-22T04:48:52.1578358Z State: Starting, Action: EstablishingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 04:47:15 (UTC), DetailsLevel: WARN
+2026-07-22T04:48:53.1351052Z State: Starting, Action: StartingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 04:47:15 (UTC), DetailsLevel: WARN
+2026-07-22T04:48:53.1355755Z Container start method called.
+2026-07-22T04:48:53.1360393Z State: Starting, Action: PullingImage, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Pulling image 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod for innoira-api., DetailsLevel: INFO
+2026-07-22T04:48:53.1432901Z Establishing network.
+2026-07-22T04:48:53.1434671Z Pulling image: appsvc/python:3.11_20260504.4.tuxprod.
+2026-07-22T04:48:53.5280671Z Container is starting.
+2026-07-22T04:48:53.5281470Z State: Starting, Action: MountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Mounting volumes for innoira-api., DetailsLevel: INFO
+2026-07-22T04:48:53.5282359Z Establishing user namespace if not established already.
+2026-07-22T04:48:53.5365435Z Establishing network if not established already.
+2026-07-22T04:48:53.5367398Z Mounting volumes.
+2026-07-22T04:48:53.5368884Z Nested mountpoint 
+2026-07-22T04:48:53.5567160Z Nested mountpoint volatile/logs
+2026-07-22T04:48:53.6082195Z Nested mountpoint 
+2026-07-22T04:48:53.6266105Z Nested mountpoint 
+2026-07-22T04:48:53.6587137Z Nested mountpoint 
+2026-07-22T04:48:53.7196717Z Nested mountpoint 
+2026-07-22T04:48:54.1219107Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Finished pulling container image and mounting volumes for innoira-api. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-07-22T04:48:54.1222042Z Creating container.
+2026-07-22T04:48:54.1302838Z Creating pipes for streaming container io.
+2026-07-22T04:48:54.1304760Z Creating stdout named pipe at /podr/container/pipe/5aab25236d28_innoira-api/stdout_aa04ba4dc5a6439cacc3f907e4fb8802.
+2026-07-22T04:48:54.1307258Z Successfully created stdout named pipe at: /podr/container/pipe/5aab25236d28_innoira-api/stdout_aa04ba4dc5a6439cacc3f907e4fb8802.
+2026-07-22T04:48:54.1308461Z Opening named pipe /podr/container/pipe/5aab25236d28_innoira-api/stdout_aa04ba4dc5a6439cacc3f907e4fb8802 for reading in non-blocking mode.
+2026-07-22T04:48:54.1311402Z Successfully opened named pipe: /podr/container/pipe/5aab25236d28_innoira-api/stdout_aa04ba4dc5a6439cacc3f907e4fb8802.
+2026-07-22T04:48:54.1313009Z Successfully removed non-blocking flag from /podr/container/pipe/5aab25236d28_innoira-api/stdout_aa04ba4dc5a6439cacc3f907e4fb8802.
+2026-07-22T04:48:54.1419440Z Creating stderr named pipe at /podr/container/pipe/5aab25236d28_innoira-api/stderr_467f8114df47497aa3219e3f1b90b54e.
+2026-07-22T04:48:54.1494220Z Successfully created stderr named pipe at: /podr/container/pipe/5aab25236d28_innoira-api/stderr_467f8114df47497aa3219e3f1b90b54e.
+2026-07-22T04:48:54.1496588Z Opening named pipe /podr/container/pipe/5aab25236d28_innoira-api/stderr_467f8114df47497aa3219e3f1b90b54e for reading in non-blocking mode.
+2026-07-22T04:48:54.1500812Z Successfully opened named pipe: /podr/container/pipe/5aab25236d28_innoira-api/stderr_467f8114df47497aa3219e3f1b90b54e.
+2026-07-22T04:48:54.1502441Z Successfully removed non-blocking flag from /podr/container/pipe/5aab25236d28_innoira-api/stderr_467f8114df47497aa3219e3f1b90b54e.
+2026-07-22T04:48:54.1507925Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.6:13209 and fully qualified image name: 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T04:48:55.0557154Z Starting container: 5aab25236d28_innoira-api.
+2026-07-22T04:48:55.1034679Z Starting watchers and probes.
+2026-07-22T04:48:55.1110911Z Starting metrics collection.
+2026-07-22T04:48:55.1114488Z Container is running.
+2026-07-22T04:48:55.1118146Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T04:48:55.2645158Z Container start method finished after 2128 ms.
+2026-07-22T04:48:55.2647399Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T04:48:55.2716926Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+2026-07-22T04:49:17.4146865Z Container has finished running with exit code: 127.
+2026-07-22T04:49:17.4148444Z Container is terminating. Grace period: 5 seconds.
+2026-07-22T04:49:17.4228587Z Stop and delete container. Retry count = 0
+2026-07-22T04:49:17.4231796Z Stopping container: 5aab25236d28_innoira-api.
+2026-07-22T04:49:17.5234492Z Deleting container: 5aab25236d28_innoira-api. Retry count = 0
+2026-07-22T04:49:17.7648638Z Container spec TerminationMessagePolicy  path 
+2026-07-22T04:49:17.7668975Z Container is terminated. Total time elapsed: 351 ms.
+2026-07-22T04:49:17.7755976Z Site container: innoira-api terminated during site startup.
+2026-07-22T04:49:17.7757409Z State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:47:15, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:49:17.8175539Z Site startup probe failed after 22.5350586 seconds.
+2026-07-22T04:49:18.0762605Z State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:49:18, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:49:18.0777257Z Failed to start site. Revert by stopping site.
+2026-07-22T04:49:18.0787361Z State: Stopping, Action: StoppingSite, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:49:18, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:49:18.0790735Z State: Stopping, Action: StoppingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:49:18, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:49:18.0790898Z Site: innoira-api stopped.
+2026-07-22T04:51:46.7338877Z State: Starting, Action: EstablishingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:49:18, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 04:49:18 (UTC), DetailsLevel: WARN
+2026-07-22T04:51:48.4090409Z State: Starting, Action: StartingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:49:18, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 04:49:18 (UTC), DetailsLevel: WARN
+2026-07-22T04:51:48.4091859Z Container start method called.
+2026-07-22T04:51:48.4092200Z State: Starting, Action: PullingImage, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:49:18, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Pulling image 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod for innoira-api., DetailsLevel: INFO
+2026-07-22T04:51:48.4092941Z Establishing network.
+2026-07-22T04:51:48.4093796Z Pulling image: appsvc/python:3.11_20260504.4.tuxprod.
+2026-07-22T04:51:49.4342763Z Container is starting.
+2026-07-22T04:51:49.4355317Z State: Starting, Action: MountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:49:18, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Mounting volumes for innoira-api., DetailsLevel: INFO
+2026-07-22T04:51:49.4361076Z Establishing user namespace if not established already.
+2026-07-22T04:51:49.4365134Z Establishing network if not established already.
+2026-07-22T04:51:49.4447681Z Mounting volumes.
+2026-07-22T04:51:49.4450179Z Nested mountpoint 
+2026-07-22T04:51:49.4866201Z Nested mountpoint volatile/logs
+2026-07-22T04:51:49.5060309Z Nested mountpoint 
+2026-07-22T04:51:49.5165690Z Nested mountpoint 
+2026-07-22T04:51:49.6068530Z Nested mountpoint 
+2026-07-22T04:51:49.6650085Z Nested mountpoint 
+2026-07-22T04:51:49.9262649Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:49:18, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Finished pulling container image and mounting volumes for innoira-api. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-07-22T04:51:49.9575479Z Creating container.
+2026-07-22T04:51:49.9593505Z Creating pipes for streaming container io.
+2026-07-22T04:51:49.9684701Z Creating stdout named pipe at /podr/container/pipe/8ab02a1bb921_innoira-api/stdout_ef3efc7fcefa49e2b55e01d9de36581f.
+2026-07-22T04:51:49.9771254Z Successfully created stdout named pipe at: /podr/container/pipe/8ab02a1bb921_innoira-api/stdout_ef3efc7fcefa49e2b55e01d9de36581f.
+2026-07-22T04:51:49.9777743Z Opening named pipe /podr/container/pipe/8ab02a1bb921_innoira-api/stdout_ef3efc7fcefa49e2b55e01d9de36581f for reading in non-blocking mode.
+2026-07-22T04:51:49.9782243Z Successfully opened named pipe: /podr/container/pipe/8ab02a1bb921_innoira-api/stdout_ef3efc7fcefa49e2b55e01d9de36581f.
+2026-07-22T04:51:49.9785642Z Successfully removed non-blocking flag from /podr/container/pipe/8ab02a1bb921_innoira-api/stdout_ef3efc7fcefa49e2b55e01d9de36581f.
+2026-07-22T04:51:49.9991171Z Creating stderr named pipe at /podr/container/pipe/8ab02a1bb921_innoira-api/stderr_38eae7a8b4f64ea7bc1db295565cfa47.
+2026-07-22T04:51:50.0004606Z Successfully created stderr named pipe at: /podr/container/pipe/8ab02a1bb921_innoira-api/stderr_38eae7a8b4f64ea7bc1db295565cfa47.
+2026-07-22T04:51:50.0010354Z Opening named pipe /podr/container/pipe/8ab02a1bb921_innoira-api/stderr_38eae7a8b4f64ea7bc1db295565cfa47 for reading in non-blocking mode.
+2026-07-22T04:51:50.0011541Z Successfully opened named pipe: /podr/container/pipe/8ab02a1bb921_innoira-api/stderr_38eae7a8b4f64ea7bc1db295565cfa47.
+2026-07-22T04:51:50.0012374Z Successfully removed non-blocking flag from /podr/container/pipe/8ab02a1bb921_innoira-api/stderr_38eae7a8b4f64ea7bc1db295565cfa47.
+2026-07-22T04:51:50.0013585Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.6:13209 and fully qualified image name: 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T04:51:51.3318231Z Starting container: 8ab02a1bb921_innoira-api.
+2026-07-22T04:51:51.5320592Z Starting watchers and probes.
+2026-07-22T04:51:51.5344863Z Starting metrics collection.
+2026-07-22T04:51:51.5516516Z Container is running.
+2026-07-22T04:51:51.5535392Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:49:18, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T04:51:51.8660103Z Container start method finished after 3456 ms.
+2026-07-22T04:51:51.9559146Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:49:18, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T04:51:51.9559935Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:49:18, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+2026-07-22T04:52:22.0061405Z Container has finished running with exit code: 127.
+2026-07-22T04:52:22.0063027Z Container is terminating. Grace period: 5 seconds.
+2026-07-22T04:52:22.0072768Z Stop and delete container. Retry count = 0
+2026-07-22T04:52:22.0367746Z Stopping container: 8ab02a1bb921_innoira-api.
+2026-07-22T04:52:22.5182626Z Deleting container: 8ab02a1bb921_innoira-api. Retry count = 0
+2026-07-22T04:52:23.4429359Z Container spec TerminationMessagePolicy  path 
+2026-07-22T04:52:23.4735427Z Container is terminated. Total time elapsed: 1466 ms.
+2026-07-22T04:52:23.4738995Z Site container: innoira-api terminated during site startup.
+2026-07-22T04:52:23.5446983Z State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:49:18, LastErrorDetails: Container did not start within expected time limit of 360s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:52:23.6031228Z Site startup probe failed after 31.6178527 seconds.
+2026-07-22T04:52:23.9058453Z State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:52:24.2056625Z Failed to start site. Revert by stopping site.
+2026-07-22T04:52:24.2059906Z State: Stopping, Action: StoppingSite, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:52:24.3674974Z State: Stopping, Action: StoppingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:52:24.3675341Z Site: innoira-api stopped.
+2026-07-22T04:52:24.3725693Z State: Stopping, Action: UnmountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:52:24.7657766Z State: Stopping, Action: StoppingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:52:26.1406404Z State: Stopped, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 04:52:26 (UTC), DetailsLevel: ERR
+2026-07-22T04:52:27.0879047Z State: Stopped, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 04:52:26 (UTC), DetailsLevel: ERR
+2026-07-22T04:52:35.2453517Z State: Starting, Action: EstablishingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 04:52:26 (UTC), DetailsLevel: ERR
+2026-07-22T04:52:36.6490070Z State: Starting, Action: StartingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 04:52:26 (UTC), DetailsLevel: ERR
+2026-07-22T04:52:36.6491166Z Container start method called.
+2026-07-22T04:52:36.6491549Z State: Starting, Action: PullingImage, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pulling image 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod for innoira-api., DetailsLevel: INFO
+2026-07-22T04:52:36.6492282Z Establishing network.
+2026-07-22T04:52:36.6493070Z Pulling image: appsvc/python:3.11_20260504.4.tuxprod.
+2026-07-22T04:52:36.9624675Z Container is starting.
+2026-07-22T04:52:36.9625461Z State: Starting, Action: MountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Mounting volumes for innoira-api., DetailsLevel: INFO
+2026-07-22T04:52:36.9626248Z Establishing user namespace if not established already.
+2026-07-22T04:52:36.9628275Z Establishing network if not established already.
+2026-07-22T04:52:36.9629249Z Mounting volumes.
+2026-07-22T04:52:36.9630423Z Nested mountpoint 
+2026-07-22T04:52:37.0129920Z Nested mountpoint volatile/logs
+2026-07-22T04:52:37.0441578Z Nested mountpoint 
+2026-07-22T04:52:37.0645192Z Nested mountpoint 
+2026-07-22T04:52:37.0736412Z Nested mountpoint 
+2026-07-22T04:52:37.0926204Z Nested mountpoint 
+2026-07-22T04:52:37.4649697Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Finished pulling container image and mounting volumes for innoira-api. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-07-22T04:52:37.4651289Z Creating container.
+2026-07-22T04:52:37.4652118Z Creating pipes for streaming container io.
+2026-07-22T04:52:37.4652861Z Creating stdout named pipe at /podr/container/pipe/5a3bf12d18fa_innoira-api/stdout_683c8ef12d214414915ec13c24fb9b89.
+2026-07-22T04:52:37.4670812Z Successfully created stdout named pipe at: /podr/container/pipe/5a3bf12d18fa_innoira-api/stdout_683c8ef12d214414915ec13c24fb9b89.
+2026-07-22T04:52:37.4848210Z Opening named pipe /podr/container/pipe/5a3bf12d18fa_innoira-api/stdout_683c8ef12d214414915ec13c24fb9b89 for reading in non-blocking mode.
+2026-07-22T04:52:37.4853467Z Successfully opened named pipe: /podr/container/pipe/5a3bf12d18fa_innoira-api/stdout_683c8ef12d214414915ec13c24fb9b89.
+2026-07-22T04:52:37.4855414Z Successfully removed non-blocking flag from /podr/container/pipe/5a3bf12d18fa_innoira-api/stdout_683c8ef12d214414915ec13c24fb9b89.
+2026-07-22T04:52:37.4857631Z Creating stderr named pipe at /podr/container/pipe/5a3bf12d18fa_innoira-api/stderr_44c7f16c7f4f403fbf59e2fd335122ec.
+2026-07-22T04:52:37.4860791Z Successfully created stderr named pipe at: /podr/container/pipe/5a3bf12d18fa_innoira-api/stderr_44c7f16c7f4f403fbf59e2fd335122ec.
+2026-07-22T04:52:37.4870527Z Opening named pipe /podr/container/pipe/5a3bf12d18fa_innoira-api/stderr_44c7f16c7f4f403fbf59e2fd335122ec for reading in non-blocking mode.
+2026-07-22T04:52:37.4958755Z Successfully opened named pipe: /podr/container/pipe/5a3bf12d18fa_innoira-api/stderr_44c7f16c7f4f403fbf59e2fd335122ec.
+2026-07-22T04:52:37.4967050Z Successfully removed non-blocking flag from /podr/container/pipe/5a3bf12d18fa_innoira-api/stderr_44c7f16c7f4f403fbf59e2fd335122ec.
+2026-07-22T04:52:37.5043258Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.6:13209 and fully qualified image name: 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T04:52:38.3297917Z Starting container: 5a3bf12d18fa_innoira-api.
+2026-07-22T04:52:38.4627378Z Starting watchers and probes.
+2026-07-22T04:52:38.4719796Z Starting metrics collection.
+2026-07-22T04:52:38.4726705Z Container is running.
+2026-07-22T04:52:38.4727852Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T04:52:38.6928790Z Container start method finished after 1985 ms.
+2026-07-22T04:52:38.7018953Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T04:52:38.7019835Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+2026-07-22T04:53:02.3234719Z Container has finished running with exit code: 127.
+2026-07-22T04:53:02.3318341Z Container is terminating. Grace period: 5 seconds.
+2026-07-22T04:53:02.3418872Z Stop and delete container. Retry count = 0
+2026-07-22T04:53:02.3427056Z Stopping container: 5a3bf12d18fa_innoira-api.
+2026-07-22T04:53:02.7249444Z Deleting container: 5a3bf12d18fa_innoira-api. Retry count = 0
+2026-07-22T04:53:02.9654370Z Container spec TerminationMessagePolicy  path 
+2026-07-22T04:53:02.9667369Z Container is terminated. Total time elapsed: 632 ms.
+2026-07-22T04:53:02.9674827Z Site container: innoira-api terminated during site startup.
+2026-07-22T04:53:02.9769139Z State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:52:23, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:53:02.9877204Z Site startup probe failed after 24.2838531 seconds.
+2026-07-22T04:53:03.1464437Z State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:53:03.1590253Z Failed to start site. Revert by stopping site.
+2026-07-22T04:53:03.1659015Z State: Stopping, Action: StoppingSite, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:53:03.1668215Z State: Stopping, Action: StoppingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T04:53:03.1668487Z Site: innoira-api stopped.
+2026-07-22T05:10:50.8220779Z State: Starting, Action: EstablishingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site is blocked due to multiple, consecutive cold start failures. Site scheduled to be unblocked at 07/22/2026 04:54:03, DetailsLevel: WARN
+2026-07-22T05:10:53.5183000Z State: Starting, Action: StartingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site is blocked due to multiple, consecutive cold start failures. Site scheduled to be unblocked at 07/22/2026 04:54:03, DetailsLevel: WARN
+2026-07-22T05:10:53.5208001Z Container start method called.
+2026-07-22T05:10:53.5288964Z State: Starting, Action: PullingImage, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pulling image 10.1.0.5:13209/appsvc/python:3.11_20260504.4.tuxprod for innoira-api., DetailsLevel: INFO
+2026-07-22T05:10:53.5293092Z Establishing network.
+2026-07-22T05:10:53.5296315Z Pulling image: appsvc/python:3.11_20260504.4.tuxprod.
+2026-07-22T05:10:54.1634459Z Container is starting.
+2026-07-22T05:10:54.1720625Z State: Starting, Action: MountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Mounting volumes for innoira-api., DetailsLevel: INFO
+2026-07-22T05:10:54.1722971Z Establishing user namespace if not established already.
+2026-07-22T05:10:54.1723951Z Establishing network if not established already.
+2026-07-22T05:10:54.1724891Z Mounting volumes.
+2026-07-22T05:10:54.1836893Z Nested mountpoint 
+2026-07-22T05:10:54.3244328Z Nested mountpoint volatile/logs
+2026-07-22T05:10:54.3540596Z Nested mountpoint 
+2026-07-22T05:10:54.3820758Z Nested mountpoint 
+2026-07-22T05:10:54.4023304Z Nested mountpoint 
+2026-07-22T05:10:54.6862420Z Nested mountpoint 
+2026-07-22T05:10:56.8038474Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Finished pulling container image and mounting volumes for innoira-api. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-07-22T05:10:56.8136548Z Creating container.
+2026-07-22T05:10:56.8138966Z Creating pipes for streaming container io.
+2026-07-22T05:10:56.8139986Z Creating stdout named pipe at /podr/container/pipe/55debb74ab4f_innoira-api/stdout_3a24b512563742f3afb2582b14a196bb.
+2026-07-22T05:10:56.8262422Z Successfully created stdout named pipe at: /podr/container/pipe/55debb74ab4f_innoira-api/stdout_3a24b512563742f3afb2582b14a196bb.
+2026-07-22T05:10:56.8263435Z Opening named pipe /podr/container/pipe/55debb74ab4f_innoira-api/stdout_3a24b512563742f3afb2582b14a196bb for reading in non-blocking mode.
+2026-07-22T05:10:56.8264401Z Successfully opened named pipe: /podr/container/pipe/55debb74ab4f_innoira-api/stdout_3a24b512563742f3afb2582b14a196bb.
+2026-07-22T05:10:56.8265321Z Successfully removed non-blocking flag from /podr/container/pipe/55debb74ab4f_innoira-api/stdout_3a24b512563742f3afb2582b14a196bb.
+2026-07-22T05:10:56.8356281Z Creating stderr named pipe at /podr/container/pipe/55debb74ab4f_innoira-api/stderr_6b25b0ca427143f9afff7507d7b2c3a0.
+2026-07-22T05:10:56.8357901Z Successfully created stderr named pipe at: /podr/container/pipe/55debb74ab4f_innoira-api/stderr_6b25b0ca427143f9afff7507d7b2c3a0.
+2026-07-22T05:10:56.8358736Z Opening named pipe /podr/container/pipe/55debb74ab4f_innoira-api/stderr_6b25b0ca427143f9afff7507d7b2c3a0 for reading in non-blocking mode.
+2026-07-22T05:10:56.8360890Z Successfully opened named pipe: /podr/container/pipe/55debb74ab4f_innoira-api/stderr_6b25b0ca427143f9afff7507d7b2c3a0.
+2026-07-22T05:10:56.8364270Z Successfully removed non-blocking flag from /podr/container/pipe/55debb74ab4f_innoira-api/stderr_6b25b0ca427143f9afff7507d7b2c3a0.
+2026-07-22T05:10:56.8457884Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.5:13209 and fully qualified image name: 10.1.0.5:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T05:10:58.7382037Z Starting container: 55debb74ab4f_innoira-api.
+2026-07-22T05:10:59.0915269Z Starting watchers and probes.
+2026-07-22T05:10:59.1077194Z Starting metrics collection.
+2026-07-22T05:10:59.1097139Z Container is running.
+2026-07-22T05:10:59.1106448Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:10:59.7560723Z Container start method finished after 6234 ms.
+2026-07-22T05:10:59.7657516Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:10:59.7662138Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+2026-07-22T05:12:59.9049725Z Site startup probe succeeded after 120.0794237 seconds.
+2026-07-22T05:13:00.0756476Z State: Starting, Action: WarmUpProbeSucceeded, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site startup probe succeeded after 120.0794237 seconds., DetailsLevel: INFO
+2026-07-22T05:13:00.6095123Z Site is running with deployment version: a1c58086-1246-40b2-8380-dd105c3b3205
+2026-07-22T05:13:00.6113788Z Site started.
+2026-07-22T05:13:00.6191120Z State: Started, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site started at 07/22/2026 05:13:00 (UTC), DetailsLevel: INFO
+2026-07-22T05:13:00.7491036Z Site is running with patch version PYTHON-3.11.15
+2026-07-22T05:13:39.0851227Z State: Blocked, Action: None, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: , DetailsLevel: INFO
+2026-07-22T05:13:59.2822804Z State: Stopping, Action: StoppingSite, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site started at 07/22/2026 05:13:00 (UTC), DetailsLevel: INFO
+2026-07-22T05:13:59.3030513Z State: Stopping, Action: StoppingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site started at 07/22/2026 05:13:00 (UTC), DetailsLevel: INFO
+2026-07-22T05:13:59.3121799Z Container is terminating. Grace period: 5 seconds.
+2026-07-22T05:13:59.4391700Z Stop and delete container. Retry count = 0
+2026-07-22T05:13:59.4435518Z Stopping container: 55debb74ab4f_innoira-api.
+2026-07-22T05:14:05.4413609Z Deleting container: 55debb74ab4f_innoira-api. Retry count = 0
+2026-07-22T05:14:08.9067708Z Container spec TerminationMessagePolicy  path 
+2026-07-22T05:14:08.9083784Z Container is terminated. Total time elapsed: 9595 ms.
+2026-07-22T05:14:08.9165789Z Site: innoira-api stopped.
+2026-07-22T05:32:11.5766607Z State: Starting, Action: EstablishingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: , DetailsLevel: INFO
+2026-07-22T05:32:14.5926749Z State: Starting, Action: StartingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: , DetailsLevel: INFO
+2026-07-22T05:32:14.5934435Z Container start method called.
+2026-07-22T05:32:14.6028042Z State: Starting, Action: PullingImage, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pulling image 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod for innoira-api., DetailsLevel: INFO
+2026-07-22T05:32:14.6115913Z Establishing network.
+2026-07-22T05:32:14.6121651Z Pulling image: appsvc/python:3.11_20260504.4.tuxprod.
+2026-07-22T05:32:15.4665560Z Container is starting.
+2026-07-22T05:32:15.4668497Z State: Starting, Action: MountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Mounting volumes for innoira-api., DetailsLevel: INFO
+2026-07-22T05:32:15.4670073Z Establishing user namespace if not established already.
+2026-07-22T05:32:15.4674406Z Establishing network if not established already.
+2026-07-22T05:32:15.4676030Z Mounting volumes.
+2026-07-22T05:32:15.4763945Z Nested mountpoint 
+2026-07-22T05:32:15.5584709Z Nested mountpoint volatile/logs
+2026-07-22T05:32:15.5884570Z Nested mountpoint 
+2026-07-22T05:32:15.6866889Z Nested mountpoint 
+2026-07-22T05:32:15.6981127Z Nested mountpoint 
+2026-07-22T05:32:15.7979962Z Nested mountpoint 
+2026-07-22T05:32:16.8869724Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Finished pulling container image and mounting volumes for innoira-api. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-07-22T05:32:16.9054550Z Creating container.
+2026-07-22T05:32:16.9065867Z Creating pipes for streaming container io.
+2026-07-22T05:32:16.9072155Z Creating stdout named pipe at /podr/container/pipe/f17b51c0d732_innoira-api/stdout_365004b3c47843acb0e18a87d9c01297.
+2026-07-22T05:32:16.9146745Z Successfully created stdout named pipe at: /podr/container/pipe/f17b51c0d732_innoira-api/stdout_365004b3c47843acb0e18a87d9c01297.
+2026-07-22T05:32:16.9149587Z Opening named pipe /podr/container/pipe/f17b51c0d732_innoira-api/stdout_365004b3c47843acb0e18a87d9c01297 for reading in non-blocking mode.
+2026-07-22T05:32:16.9155438Z Successfully opened named pipe: /podr/container/pipe/f17b51c0d732_innoira-api/stdout_365004b3c47843acb0e18a87d9c01297.
+2026-07-22T05:32:16.9162085Z Successfully removed non-blocking flag from /podr/container/pipe/f17b51c0d732_innoira-api/stdout_365004b3c47843acb0e18a87d9c01297.
+2026-07-22T05:32:16.9467407Z Creating stderr named pipe at /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000.
+2026-07-22T05:32:16.9471761Z Successfully created stderr named pipe at: /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000.
+2026-07-22T05:32:16.9854305Z Opening named pipe /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000 for reading in non-blocking mode.
+2026-07-22T05:32:16.9857675Z Successfully opened named pipe: /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000.
+2026-07-22T05:32:16.9858666Z Successfully removed non-blocking flag from /podr/container/pipe/f17b51c0d732_innoira-api/stderr_4bb066ef082f428080f2d354d6473000.
+2026-07-22T05:32:16.9874706Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.6:13209 and fully qualified image name: 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T05:32:18.7962129Z Starting container: f17b51c0d732_innoira-api.
+2026-07-22T05:32:19.0584939Z Starting watchers and probes.
+2026-07-22T05:32:19.0674444Z Starting metrics collection.
+2026-07-22T05:32:19.0988511Z Container is running.
+2026-07-22T05:32:19.1091352Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:32:19.2498620Z Container start method finished after 4656 ms.
+2026-07-22T05:32:19.2791743Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:32:19.3193796Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+2026-07-22T05:34:13.6101441Z Site startup probe succeeded after 114.1427281 seconds.
+2026-07-22T05:34:13.8997697Z State: Starting, Action: WarmUpProbeSucceeded, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site startup probe succeeded after 114.1427281 seconds., DetailsLevel: INFO
+2026-07-22T05:34:14.7389157Z Site is running with deployment version: c9bd7b68-ad89-48c0-8a1c-d1937e891511
+2026-07-22T05:34:14.7400761Z Site started.
+2026-07-22T05:34:14.7401529Z State: Started, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site started at 07/22/2026 05:34:14 (UTC), DetailsLevel: INFO
+2026-07-22T05:34:14.8100355Z Site is running with patch version PYTHON-3.11.15
+2026-07-22T05:37:56.8720173Z State: Starting, Action: EstablishingSiteNetworks, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: , DetailsLevel: INFO
+2026-07-22T05:38:00.3143114Z State: Starting, Action: StartingSiteContainers, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: , DetailsLevel: INFO
+2026-07-22T05:38:00.3144687Z Container start method called.
+2026-07-22T05:38:00.3145041Z State: Starting, Action: PullingImage, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Pulling image 10.1.0.5:13209/appsvc/python:3.11_20260504.4.tuxprod for innoira-api., DetailsLevel: INFO
+2026-07-22T05:38:00.3145930Z Establishing network.
+2026-07-22T05:38:00.3146789Z Pulling image: appsvc/python:3.11_20260504.4.tuxprod.
+2026-07-22T05:38:02.7872400Z Container is starting.
+2026-07-22T05:38:02.7877916Z State: Starting, Action: MountingVolumes, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Mounting volumes for innoira-api., DetailsLevel: INFO
+2026-07-22T05:38:02.7879261Z Establishing user namespace if not established already.
+2026-07-22T05:38:02.8052371Z Establishing network if not established already.
+2026-07-22T05:38:02.8176839Z Mounting volumes.
+2026-07-22T05:38:02.8179458Z Nested mountpoint 
+2026-07-22T05:38:02.8567896Z Nested mountpoint volatile/logs
+2026-07-22T05:38:02.9182966Z Nested mountpoint 
+2026-07-22T05:38:03.0078808Z Nested mountpoint 
+2026-07-22T05:38:03.0177027Z Nested mountpoint 
+2026-07-22T05:38:03.0892600Z Nested mountpoint 
+2026-07-22T05:38:05.1482967Z State: Starting, Action: CreatingContainer, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Finished pulling container image and mounting volumes for innoira-api. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-07-22T05:38:05.1484822Z Creating container.
+2026-07-22T05:38:05.1485649Z Creating pipes for streaming container io.
+2026-07-22T05:38:05.1486504Z Creating stdout named pipe at /podr/container/pipe/2f9fa0034abd_innoira-api/stdout_9f80eb022f6d42fc8bd4e8974e5cdba1.
+2026-07-22T05:38:05.1488298Z Successfully created stdout named pipe at: /podr/container/pipe/2f9fa0034abd_innoira-api/stdout_9f80eb022f6d42fc8bd4e8974e5cdba1.
+2026-07-22T05:38:05.1489009Z Opening named pipe /podr/container/pipe/2f9fa0034abd_innoira-api/stdout_9f80eb022f6d42fc8bd4e8974e5cdba1 for reading in non-blocking mode.
+2026-07-22T05:38:05.1489911Z Successfully opened named pipe: /podr/container/pipe/2f9fa0034abd_innoira-api/stdout_9f80eb022f6d42fc8bd4e8974e5cdba1.
+2026-07-22T05:38:05.1490633Z Successfully removed non-blocking flag from /podr/container/pipe/2f9fa0034abd_innoira-api/stdout_9f80eb022f6d42fc8bd4e8974e5cdba1.
+2026-07-22T05:38:05.1797397Z Creating stderr named pipe at /podr/container/pipe/2f9fa0034abd_innoira-api/stderr_125f0ac34c9c44f49f7663a8cd8be62d.
+2026-07-22T05:38:05.1799575Z Successfully created stderr named pipe at: /podr/container/pipe/2f9fa0034abd_innoira-api/stderr_125f0ac34c9c44f49f7663a8cd8be62d.
+2026-07-22T05:38:05.1874677Z Opening named pipe /podr/container/pipe/2f9fa0034abd_innoira-api/stderr_125f0ac34c9c44f49f7663a8cd8be62d for reading in non-blocking mode.
+2026-07-22T05:38:05.1893933Z Successfully opened named pipe: /podr/container/pipe/2f9fa0034abd_innoira-api/stderr_125f0ac34c9c44f49f7663a8cd8be62d.
+2026-07-22T05:38:05.1895572Z Successfully removed non-blocking flag from /podr/container/pipe/2f9fa0034abd_innoira-api/stderr_125f0ac34c9c44f49f7663a8cd8be62d.
+2026-07-22T05:38:05.1995191Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.5:13209 and fully qualified image name: 10.1.0.5:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T05:38:09.5480860Z Starting container: 2f9fa0034abd_innoira-api.
+2026-07-22T05:38:09.7823599Z Starting watchers and probes.
+2026-07-22T05:38:09.8314506Z Starting metrics collection.
+2026-07-22T05:38:09.8514293Z Container is running.
+2026-07-22T05:38:09.8515474Z State: Starting, Action: CreatingContainer, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:38:11.0880938Z Container start method finished after 10773 ms.
+2026-07-22T05:38:11.0883223Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:38:11.0883451Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+2026-07-22T05:38:18.6394974Z Site startup probe failed after 7.4040404 seconds.
+2026-07-22T05:38:19.2853075Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: ERR
+2026-07-22T05:38:19.3259209Z Failed to start site. Revert by stopping site.
+2026-07-22T05:38:19.3336666Z State: Stopping, Action: StoppingSite, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: ERR
+2026-07-22T05:38:19.3353989Z State: Stopping, Action: StoppingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: ERR
+2026-07-22T05:38:19.3355908Z Container is terminating. Grace period: 5 seconds.
+2026-07-22T05:38:19.3536483Z Stop and delete container. Retry count = 0
+2026-07-22T05:38:19.3537759Z Stopping container: 2f9fa0034abd_innoira-api.
+2026-07-22T05:38:24.5165084Z Deleting container: 2f9fa0034abd_innoira-api. Retry count = 0
+2026-07-22T05:38:24.7388004Z Container spec TerminationMessagePolicy  path 
+2026-07-22T05:38:24.7469743Z Container is terminated. Total time elapsed: 5410 ms.
+2026-07-22T05:38:24.7475126Z Site container: innoira-api terminated during site startup.
+2026-07-22T05:38:24.7480634Z State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T05:38:24.7574681Z Site: innoira-api stopped.
+2026-07-22T05:38:45.6192957Z State: Stopping, Action: StoppingSite, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site started at 07/22/2026 05:34:14 (UTC), DetailsLevel: INFO
+2026-07-22T05:38:45.6199608Z State: Stopping, Action: StoppingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 04:53:03, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site started at 07/22/2026 05:34:14 (UTC), DetailsLevel: INFO
+2026-07-22T05:38:45.6200698Z Container is terminating. Grace period: 5 seconds.
+2026-07-22T05:38:45.6316231Z Stop and delete container. Retry count = 0
+2026-07-22T05:38:45.6512839Z Stopping container: f17b51c0d732_innoira-api.
+2026-07-22T05:38:50.9999561Z Deleting container: f17b51c0d732_innoira-api. Retry count = 0
+2026-07-22T05:38:53.8426249Z Container spec TerminationMessagePolicy  path 
+2026-07-22T05:38:53.8433428Z Container is terminated. Total time elapsed: 8222 ms.
+2026-07-22T05:38:53.8434712Z Site: innoira-api stopped.
+2026-07-22T05:40:31.5990724Z State: Starting, Action: EstablishingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 05:38:25 (UTC), DetailsLevel: ERR
+2026-07-22T05:40:32.7841951Z State: Starting, Action: StartingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 05:38:25 (UTC), DetailsLevel: ERR
+2026-07-22T05:40:32.7843370Z Container start method called.
+2026-07-22T05:40:32.7843983Z State: Starting, Action: PullingImage, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pulling image 10.1.0.5:13209/appsvc/python:3.11_20260504.4.tuxprod for innoira-api., DetailsLevel: INFO
+2026-07-22T05:40:32.7845091Z Establishing network.
+2026-07-22T05:40:32.7861243Z Pulling image: appsvc/python:3.11_20260504.4.tuxprod.
+2026-07-22T05:40:33.1059706Z Container is starting.
+2026-07-22T05:40:33.1060824Z State: Starting, Action: MountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Mounting volumes for innoira-api., DetailsLevel: INFO
+2026-07-22T05:40:33.1062072Z Establishing user namespace if not established already.
+2026-07-22T05:40:33.1063125Z Establishing network if not established already.
+2026-07-22T05:40:33.1064547Z Mounting volumes.
+2026-07-22T05:40:33.1066050Z Nested mountpoint 
+2026-07-22T05:40:33.1171547Z Nested mountpoint volatile/logs
+2026-07-22T05:40:33.1867632Z Nested mountpoint 
+2026-07-22T05:40:33.1879970Z Nested mountpoint 
+2026-07-22T05:40:33.1985319Z Nested mountpoint 
+2026-07-22T05:40:33.2964003Z Nested mountpoint 
+2026-07-22T05:40:33.5487329Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Finished pulling container image and mounting volumes for innoira-api. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-07-22T05:40:33.5488647Z Creating container.
+2026-07-22T05:40:33.5489507Z Creating pipes for streaming container io.
+2026-07-22T05:40:33.5490245Z Creating stdout named pipe at /podr/container/pipe/20906c1aae4a_innoira-api/stdout_91134a99ab624c8b8a9b7f4edc7f147f.
+2026-07-22T05:40:33.5491826Z Successfully created stdout named pipe at: /podr/container/pipe/20906c1aae4a_innoira-api/stdout_91134a99ab624c8b8a9b7f4edc7f147f.
+2026-07-22T05:40:33.5492595Z Opening named pipe /podr/container/pipe/20906c1aae4a_innoira-api/stdout_91134a99ab624c8b8a9b7f4edc7f147f for reading in non-blocking mode.
+2026-07-22T05:40:33.5493453Z Successfully opened named pipe: /podr/container/pipe/20906c1aae4a_innoira-api/stdout_91134a99ab624c8b8a9b7f4edc7f147f.
+2026-07-22T05:40:33.5494143Z Successfully removed non-blocking flag from /podr/container/pipe/20906c1aae4a_innoira-api/stdout_91134a99ab624c8b8a9b7f4edc7f147f.
+2026-07-22T05:40:33.5588823Z Creating stderr named pipe at /podr/container/pipe/20906c1aae4a_innoira-api/stderr_5887bbee68cc4ef09c628929bdab1b6c.
+2026-07-22T05:40:33.5594244Z Successfully created stderr named pipe at: /podr/container/pipe/20906c1aae4a_innoira-api/stderr_5887bbee68cc4ef09c628929bdab1b6c.
+2026-07-22T05:40:33.5600702Z Opening named pipe /podr/container/pipe/20906c1aae4a_innoira-api/stderr_5887bbee68cc4ef09c628929bdab1b6c for reading in non-blocking mode.
+2026-07-22T05:40:33.5602196Z Successfully opened named pipe: /podr/container/pipe/20906c1aae4a_innoira-api/stderr_5887bbee68cc4ef09c628929bdab1b6c.
+2026-07-22T05:40:33.5603057Z Successfully removed non-blocking flag from /podr/container/pipe/20906c1aae4a_innoira-api/stderr_5887bbee68cc4ef09c628929bdab1b6c.
+2026-07-22T05:40:33.5690820Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.5:13209 and fully qualified image name: 10.1.0.5:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T05:40:34.0411295Z Starting container: 20906c1aae4a_innoira-api.
+2026-07-22T05:40:34.1250009Z Starting watchers and probes.
+2026-07-22T05:40:34.1258420Z Starting metrics collection.
+2026-07-22T05:40:34.1347047Z Container is running.
+2026-07-22T05:40:34.1440813Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:40:34.3460331Z Container start method finished after 1561 ms.
+2026-07-22T05:40:34.3462003Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:40:34.3462200Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+2026-07-22T05:41:40.5750350Z Site startup probe succeeded after 66.2284194 seconds.
+2026-07-22T05:41:40.7061328Z State: Starting, Action: WarmUpProbeSucceeded, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site startup probe succeeded after 66.2284194 seconds., DetailsLevel: INFO
+2026-07-22T05:41:41.1023695Z Site is running with deployment version: c9bd7b68-ad89-48c0-8a1c-d1937e891511
+2026-07-22T05:41:41.1085400Z Site started.
+2026-07-22T05:41:41.1097408Z State: Started, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site started at 07/22/2026 05:41:41 (UTC), DetailsLevel: INFO
+2026-07-22T05:41:41.1310525Z Site is running with patch version PYTHON-3.11.15
+2026-07-22T05:42:04.5379308Z State: Stopping, Action: StoppingSite, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site started at 07/22/2026 05:41:41 (UTC), DetailsLevel: INFO
+2026-07-22T05:42:04.5463450Z State: Stopping, Action: StoppingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site started at 07/22/2026 05:41:41 (UTC), DetailsLevel: INFO
+2026-07-22T05:42:04.5477931Z Container is terminating. Grace period: 5 seconds.
+2026-07-22T05:42:04.9612376Z Stop and delete container. Retry count = 0
+2026-07-22T05:42:04.9613715Z Stopping container: 20906c1aae4a_innoira-api.
+2026-07-22T05:42:10.1756951Z Deleting container: 20906c1aae4a_innoira-api. Retry count = 0
+2026-07-22T05:42:20.3730270Z Container get mounts received unexpected exception.
+2026-07-22T05:42:20.4125145Z Container get processes received unexpected exception.
+2026-07-22T05:42:21.3275828Z Container spec TerminationMessagePolicy  path 
+2026-07-22T05:42:21.3278110Z Container is terminated. Total time elapsed: 16779 ms.
+2026-07-22T05:42:21.3279191Z Site: innoira-api stopped.
+2026-07-22T05:42:21.3381447Z State: Stopping, Action: UnmountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site started at 07/22/2026 05:41:41 (UTC), DetailsLevel: INFO
+2026-07-22T05:42:22.1223173Z State: Stopping, Action: StoppingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site started at 07/22/2026 05:41:41 (UTC), DetailsLevel: INFO
+2026-07-22T05:42:22.5665567Z State: Stopped, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 05:42:22 (UTC), DetailsLevel: INFO
+2026-07-22T05:42:22.6676244Z State: Stopped, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 05:42:22 (UTC), DetailsLevel: INFO
+2026-07-22T05:44:23.3219391Z State: Starting, Action: EstablishingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 05:42:22 (UTC), DetailsLevel: INFO
+2026-07-22T05:44:24.4986366Z State: Starting, Action: StartingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 05:42:22 (UTC), DetailsLevel: INFO
+2026-07-22T05:44:24.4987914Z Container start method called.
+2026-07-22T05:44:24.4988340Z State: Starting, Action: PullingImage, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pulling image 10.1.0.5:13209/appsvc/python:3.11_20260504.4.tuxprod for innoira-api., DetailsLevel: INFO
+2026-07-22T05:44:24.5096355Z Establishing network.
+2026-07-22T05:44:24.5098404Z Pulling image: appsvc/python:3.11_20260504.4.tuxprod.
+2026-07-22T05:44:24.7092310Z Container is starting.
+2026-07-22T05:44:24.7096444Z State: Starting, Action: MountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Mounting volumes for innoira-api., DetailsLevel: INFO
+2026-07-22T05:44:24.7100158Z Establishing user namespace if not established already.
+2026-07-22T05:44:24.7105890Z Establishing network if not established already.
+2026-07-22T05:44:24.7109958Z Mounting volumes.
+2026-07-22T05:44:24.7181663Z Nested mountpoint 
+2026-07-22T05:44:24.7398894Z Nested mountpoint volatile/logs
+2026-07-22T05:44:24.7901836Z Nested mountpoint 
+2026-07-22T05:44:24.8501677Z Nested mountpoint 
+2026-07-22T05:44:24.8792248Z Nested mountpoint 
+2026-07-22T05:44:24.9308938Z Nested mountpoint 
+2026-07-22T05:44:25.2526095Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Finished pulling container image and mounting volumes for innoira-api. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-07-22T05:44:25.2533874Z Creating container.
+2026-07-22T05:44:25.2535625Z Creating pipes for streaming container io.
+2026-07-22T05:44:25.2536484Z Creating stdout named pipe at /podr/container/pipe/f1a5945108e1_innoira-api/stdout_5e7b8fed623347c8b0be7e18737a0320.
+2026-07-22T05:44:25.2733609Z Successfully created stdout named pipe at: /podr/container/pipe/f1a5945108e1_innoira-api/stdout_5e7b8fed623347c8b0be7e18737a0320.
+2026-07-22T05:44:25.2739566Z Opening named pipe /podr/container/pipe/f1a5945108e1_innoira-api/stdout_5e7b8fed623347c8b0be7e18737a0320 for reading in non-blocking mode.
+2026-07-22T05:44:25.2817110Z Successfully opened named pipe: /podr/container/pipe/f1a5945108e1_innoira-api/stdout_5e7b8fed623347c8b0be7e18737a0320.
+2026-07-22T05:44:25.2818185Z Successfully removed non-blocking flag from /podr/container/pipe/f1a5945108e1_innoira-api/stdout_5e7b8fed623347c8b0be7e18737a0320.
+2026-07-22T05:44:25.2831415Z Creating stderr named pipe at /podr/container/pipe/f1a5945108e1_innoira-api/stderr_3d9cfa8815f345038bc268ce786d5eba.
+2026-07-22T05:44:25.2844164Z Successfully created stderr named pipe at: /podr/container/pipe/f1a5945108e1_innoira-api/stderr_3d9cfa8815f345038bc268ce786d5eba.
+2026-07-22T05:44:25.2916336Z Opening named pipe /podr/container/pipe/f1a5945108e1_innoira-api/stderr_3d9cfa8815f345038bc268ce786d5eba for reading in non-blocking mode.
+2026-07-22T05:44:25.2922545Z Successfully opened named pipe: /podr/container/pipe/f1a5945108e1_innoira-api/stderr_3d9cfa8815f345038bc268ce786d5eba.
+2026-07-22T05:44:25.2923733Z Successfully removed non-blocking flag from /podr/container/pipe/f1a5945108e1_innoira-api/stderr_3d9cfa8815f345038bc268ce786d5eba.
+2026-07-22T05:44:25.2927587Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.5:13209 and fully qualified image name: 10.1.0.5:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T05:44:25.7476144Z Starting container: f1a5945108e1_innoira-api.
+2026-07-22T05:44:25.8580414Z Starting watchers and probes.
+2026-07-22T05:44:25.8583382Z Starting metrics collection.
+2026-07-22T05:44:25.8584575Z Container is running.
+2026-07-22T05:44:25.8585508Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:44:25.9982973Z Container start method finished after 1499 ms.
+2026-07-22T05:44:25.9984581Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:44:25.9984798Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+2026-07-22T05:45:45.6653644Z Site startup probe succeeded after 79.6645995 seconds.
+2026-07-22T05:45:45.8747372Z State: Starting, Action: WarmUpProbeSucceeded, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site startup probe succeeded after 79.6645995 seconds., DetailsLevel: INFO
+2026-07-22T05:45:46.2107656Z Site is running with deployment version: c9bd7b68-ad89-48c0-8a1c-d1937e891511
+2026-07-22T05:45:46.2119423Z Site started.
+2026-07-22T05:45:46.2126239Z State: Started, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site started at 07/22/2026 05:45:46 (UTC), DetailsLevel: INFO
+2026-07-22T05:45:46.2210153Z Site is running with patch version PYTHON-3.11.15
+2026-07-22T05:46:32.9601176Z State: Starting, Action: EstablishingSiteNetworks, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: , DetailsLevel: INFO
+2026-07-22T05:46:35.7279227Z State: Starting, Action: StartingSiteContainers, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: , DetailsLevel: INFO
+2026-07-22T05:46:35.7280375Z Container start method called.
+2026-07-22T05:46:35.7280707Z State: Starting, Action: PullingImage, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Pulling image 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod for innoira-api., DetailsLevel: INFO
+2026-07-22T05:46:35.7281442Z Establishing network.
+2026-07-22T05:46:35.7282232Z Pulling image: appsvc/python:3.11_20260504.4.tuxprod.
+2026-07-22T05:46:37.7203091Z Container is starting.
+2026-07-22T05:46:37.7287739Z State: Starting, Action: MountingVolumes, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Mounting volumes for innoira-api., DetailsLevel: INFO
+2026-07-22T05:46:37.7303888Z Establishing user namespace if not established already.
+2026-07-22T05:46:37.7311427Z Establishing network if not established already.
+2026-07-22T05:46:37.8008617Z Mounting volumes.
+2026-07-22T05:46:37.8093549Z Nested mountpoint 
+2026-07-22T05:46:37.8811947Z Nested mountpoint volatile/logs
+2026-07-22T05:46:37.9615700Z Nested mountpoint 
+2026-07-22T05:46:38.0219037Z Nested mountpoint 
+2026-07-22T05:46:38.0225428Z Nested mountpoint 
+2026-07-22T05:46:38.1216366Z Nested mountpoint 
+2026-07-22T05:46:39.4598285Z Volume: DiagnosticServer cannot be mounted at /diagServer during container: innoira-api startup. The volume mount is required. Terminate.
+2026-07-22T05:46:39.4709500Z Container start up interrupted. Revert by terminate.
+2026-07-22T05:46:39.4791334Z Container is terminating. Grace period: 5 seconds.
+2026-07-22T05:46:39.4799994Z Container spec TerminationMessagePolicy  path 
+2026-07-22T05:46:39.4804697Z Container is terminated. Total time elapsed: 0 ms.
+2026-07-22T05:46:39.4810661Z Site container: innoira-api terminated during site startup.
+2026-07-22T05:46:39.4888840Z State: Stopping, Action: CancellingStartup, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T05:46:39.7097941Z State: Stopping, Action: CancellingStartup, LastError: SiteStartupCancelled, LastErrorTimestamp: 07/22/2026 05:46:39, LastErrorDetails: , Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: WARN
+2026-07-22T05:46:39.9010517Z State: Stopping, Action: StoppingSite, LastError: SiteStartupCancelled, LastErrorTimestamp: 07/22/2026 05:46:39, LastErrorDetails: , Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: WARN
+2026-07-22T05:46:39.9026224Z State: Stopping, Action: StoppingSiteContainers, LastError: SiteStartupCancelled, LastErrorTimestamp: 07/22/2026 05:46:39, LastErrorDetails: , Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: WARN
+2026-07-22T05:46:39.9026466Z Site: innoira-api stopped.
+2026-07-22T05:47:01.7278715Z State: Stopping, Action: StoppingSite, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site started at 07/22/2026 05:45:46 (UTC), DetailsLevel: INFO
+2026-07-22T05:47:01.7366881Z State: Stopping, Action: StoppingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:38:19, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site started at 07/22/2026 05:45:46 (UTC), DetailsLevel: INFO
+2026-07-22T05:47:01.7372790Z Container is terminating. Grace period: 5 seconds.
+2026-07-22T05:47:01.7925423Z Stop and delete container. Retry count = 0
+2026-07-22T05:47:01.7933319Z Stopping container: f1a5945108e1_innoira-api.
+2026-07-22T05:47:07.1269203Z Deleting container: f1a5945108e1_innoira-api. Retry count = 0
+2026-07-22T05:47:11.4496250Z Container spec TerminationMessagePolicy  path 
+2026-07-22T05:47:11.4502485Z Container is terminated. Total time elapsed: 9712 ms.
+2026-07-22T05:47:11.4519547Z Site: innoira-api stopped.
+2026-07-22T05:46:39.9222054Z State: Stopping, Action: UnmountingVolumes, LastError: SiteStartupCancelled, LastErrorTimestamp: 07/22/2026 05:46:39, LastErrorDetails: , Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: WARN
+2026-07-22T05:46:40.2758207Z State: Stopping, Action: StoppingSiteNetworks, LastError: SiteStartupCancelled, LastErrorTimestamp: 07/22/2026 05:46:39, LastErrorDetails: , Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: WARN
+2026-07-22T05:46:40.6462257Z State: Stopped, Action: None, LastError: SiteStartupCancelled, LastErrorTimestamp: 07/22/2026 05:46:39, LastErrorDetails: , Details: Site stopped at 07/22/2026 05:46:40 (UTC), DetailsLevel: WARN
+2026-07-22T05:46:41.7647312Z State: Stopped, Action: None, LastError: SiteStartupCancelled, LastErrorTimestamp: 07/22/2026 05:46:39, LastErrorDetails: , Details: Site stopped at 07/22/2026 05:46:40 (UTC), DetailsLevel: WARN
+2026-07-22T05:49:55.9636597Z State: Starting, Action: EstablishingSiteNetworks, LastError: SiteStartupCancelled, LastErrorTimestamp: 07/22/2026 05:46:39, LastErrorDetails: , Details: Site stopped at 07/22/2026 05:46:40 (UTC), DetailsLevel: WARN
+2026-07-22T05:49:57.3555940Z State: Starting, Action: StartingSiteContainers, LastError: SiteStartupCancelled, LastErrorTimestamp: 07/22/2026 05:46:39, LastErrorDetails: , Details: Site stopped at 07/22/2026 05:46:40 (UTC), DetailsLevel: WARN
+2026-07-22T05:49:57.3563252Z Container start method called.
+2026-07-22T05:49:57.3564194Z State: Starting, Action: PullingImage, LastError: SiteStartupCancelled, LastErrorTimestamp: 07/22/2026 05:46:39, LastErrorDetails: , Details: Pulling image 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod for innoira-api., DetailsLevel: INFO
+2026-07-22T05:49:57.3565821Z Establishing network.
+2026-07-22T05:49:57.3566814Z Pulling image: appsvc/python:3.11_20260504.4.tuxprod.
+2026-07-22T05:49:57.6316275Z Container is starting.
+2026-07-22T05:49:57.6321238Z State: Starting, Action: MountingVolumes, LastError: SiteStartupCancelled, LastErrorTimestamp: 07/22/2026 05:46:39, LastErrorDetails: , Details: Mounting volumes for innoira-api., DetailsLevel: INFO
+2026-07-22T05:49:57.6405088Z Establishing user namespace if not established already.
+2026-07-22T05:49:57.6409598Z Establishing network if not established already.
+2026-07-22T05:49:57.6413768Z Mounting volumes.
+2026-07-22T05:49:57.6418069Z Nested mountpoint 
+2026-07-22T05:49:57.6810526Z Nested mountpoint volatile/logs
+2026-07-22T05:49:57.7210329Z Nested mountpoint 
+2026-07-22T05:49:57.7217410Z Nested mountpoint 
+2026-07-22T05:49:57.7717395Z Nested mountpoint 
+2026-07-22T05:49:57.8126377Z Nested mountpoint 
+2026-07-22T05:49:58.3755581Z State: Starting, Action: CreatingContainer, LastError: SiteStartupCancelled, LastErrorTimestamp: 07/22/2026 05:46:39, LastErrorDetails: , Details: Finished pulling container image and mounting volumes for innoira-api. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-07-22T05:49:58.3760460Z Creating container.
+2026-07-22T05:49:58.3764136Z Creating pipes for streaming container io.
+2026-07-22T05:49:58.4047823Z Creating stdout named pipe at /podr/container/pipe/6bbd1e2999b6_innoira-api/stdout_f4dc339e65404896a10e77d1bbf0a2ac.
+2026-07-22T05:49:58.4054565Z Successfully created stdout named pipe at: /podr/container/pipe/6bbd1e2999b6_innoira-api/stdout_f4dc339e65404896a10e77d1bbf0a2ac.
+2026-07-22T05:49:58.4057538Z Opening named pipe /podr/container/pipe/6bbd1e2999b6_innoira-api/stdout_f4dc339e65404896a10e77d1bbf0a2ac for reading in non-blocking mode.
+2026-07-22T05:49:58.4063532Z Successfully opened named pipe: /podr/container/pipe/6bbd1e2999b6_innoira-api/stdout_f4dc339e65404896a10e77d1bbf0a2ac.
+2026-07-22T05:49:58.4065728Z Successfully removed non-blocking flag from /podr/container/pipe/6bbd1e2999b6_innoira-api/stdout_f4dc339e65404896a10e77d1bbf0a2ac.
+2026-07-22T05:49:58.4356221Z Creating stderr named pipe at /podr/container/pipe/6bbd1e2999b6_innoira-api/stderr_04261d3f19184270b85b60f2a55d7b82.
+2026-07-22T05:49:58.4361178Z Successfully created stderr named pipe at: /podr/container/pipe/6bbd1e2999b6_innoira-api/stderr_04261d3f19184270b85b60f2a55d7b82.
+2026-07-22T05:49:58.4362538Z Opening named pipe /podr/container/pipe/6bbd1e2999b6_innoira-api/stderr_04261d3f19184270b85b60f2a55d7b82 for reading in non-blocking mode.
+2026-07-22T05:49:58.4368628Z Successfully opened named pipe: /podr/container/pipe/6bbd1e2999b6_innoira-api/stderr_04261d3f19184270b85b60f2a55d7b82.
+2026-07-22T05:49:58.4553616Z Successfully removed non-blocking flag from /podr/container/pipe/6bbd1e2999b6_innoira-api/stderr_04261d3f19184270b85b60f2a55d7b82.
+2026-07-22T05:49:58.4562798Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.6:13209 and fully qualified image name: 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T05:49:58.8878526Z Starting container: 6bbd1e2999b6_innoira-api.
+2026-07-22T05:49:58.9596325Z Starting watchers and probes.
+2026-07-22T05:49:58.9604651Z Starting metrics collection.
+2026-07-22T05:49:58.9606480Z Container is running.
+2026-07-22T05:49:58.9607772Z State: Starting, Action: CreatingContainer, LastError: SiteStartupCancelled, LastErrorTimestamp: 07/22/2026 05:46:39, LastErrorDetails: , Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:49:59.1834070Z Container start method finished after 1766 ms.
+2026-07-22T05:49:59.2419772Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: SiteStartupCancelled, LastErrorTimestamp: 07/22/2026 05:46:39, LastErrorDetails: , Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:49:59.2420277Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: SiteStartupCancelled, LastErrorTimestamp: 07/22/2026 05:46:39, LastErrorDetails: , Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+2026-07-22T05:50:50.5447939Z Container has finished running with exit code: 127.
+2026-07-22T05:50:50.5449751Z Container is terminating. Grace period: 5 seconds.
+2026-07-22T05:50:50.5461081Z Stop and delete container. Retry count = 0
+2026-07-22T05:50:50.5462183Z Stopping container: 6bbd1e2999b6_innoira-api.
+2026-07-22T05:50:50.6169599Z Deleting container: 6bbd1e2999b6_innoira-api. Retry count = 0
+2026-07-22T05:50:59.4876383Z Container spec TerminationMessagePolicy  path 
+2026-07-22T05:50:59.4877824Z Container is terminated. Total time elapsed: 8942 ms.
+2026-07-22T05:50:59.4878631Z Site container: innoira-api terminated during site startup.
+2026-07-22T05:50:59.5071517Z State: Stopping, Action: CancellingStartup, LastError: SiteStartupCancelled, LastErrorTimestamp: 07/22/2026 05:46:39, LastErrorDetails: , Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T05:50:59.6699850Z Site startup probe failed after 60.4179447 seconds.
+2026-07-22T05:51:00.7144637Z State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:51:00, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T05:51:00.7431480Z Failed to start site. Revert by stopping site.
+2026-07-22T05:51:00.7433522Z State: Stopping, Action: StoppingSite, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:51:00, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T05:51:00.7436416Z State: Stopping, Action: StoppingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:51:00, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T05:51:00.7436545Z Site: innoira-api stopped.
+2026-07-22T05:51:00.7744460Z State: Stopping, Action: UnmountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:51:00, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T05:51:02.4747341Z State: Stopping, Action: StoppingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:51:00, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T05:51:03.1070709Z State: Stopped, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:51:00, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 05:51:03 (UTC), DetailsLevel: ERR
+2026-07-22T05:51:03.9415691Z State: Stopped, Action: None, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:51:00, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 05:51:03 (UTC), DetailsLevel: ERR
+2026-07-22T05:54:52.4070138Z State: Starting, Action: EstablishingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:51:00, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 05:51:03 (UTC), DetailsLevel: ERR
+2026-07-22T05:54:53.9526991Z State: Starting, Action: StartingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:51:00, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 05:51:03 (UTC), DetailsLevel: ERR
+2026-07-22T05:54:53.9535370Z Container start method called.
+2026-07-22T05:54:53.9540048Z State: Starting, Action: PullingImage, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:51:00, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pulling image 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod for innoira-api., DetailsLevel: INFO
+2026-07-22T05:54:53.9544129Z Establishing network.
+2026-07-22T05:54:53.9548726Z Pulling image: appsvc/python:3.11_20260504.4.tuxprod.
+2026-07-22T05:54:54.3462720Z Container is starting.
+2026-07-22T05:54:54.3463651Z State: Starting, Action: MountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:51:00, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Mounting volumes for innoira-api., DetailsLevel: INFO
+2026-07-22T05:54:54.3464551Z Establishing user namespace if not established already.
+2026-07-22T05:54:54.3465328Z Establishing network if not established already.
+2026-07-22T05:54:54.3466243Z Mounting volumes.
+2026-07-22T05:54:54.3467320Z Nested mountpoint 
+2026-07-22T05:54:54.3769713Z Nested mountpoint volatile/logs
+2026-07-22T05:54:54.4158078Z Nested mountpoint 
+2026-07-22T05:54:54.4259319Z Nested mountpoint 
+2026-07-22T05:54:54.4266543Z Nested mountpoint 
+2026-07-22T05:54:54.4284661Z Nested mountpoint 
+2026-07-22T05:54:54.7700855Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:51:00, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Finished pulling container image and mounting volumes for innoira-api. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-07-22T05:54:54.7705494Z Creating container.
+2026-07-22T05:54:54.7709398Z Creating pipes for streaming container io.
+2026-07-22T05:54:54.7981474Z Creating stdout named pipe at /podr/container/pipe/22691078ad9e_innoira-api/stdout_e5f6779d739946c1a36a92984abd8028.
+2026-07-22T05:54:54.8106055Z Successfully created stdout named pipe at: /podr/container/pipe/22691078ad9e_innoira-api/stdout_e5f6779d739946c1a36a92984abd8028.
+2026-07-22T05:54:54.8107456Z Opening named pipe /podr/container/pipe/22691078ad9e_innoira-api/stdout_e5f6779d739946c1a36a92984abd8028 for reading in non-blocking mode.
+2026-07-22T05:54:54.8108794Z Successfully opened named pipe: /podr/container/pipe/22691078ad9e_innoira-api/stdout_e5f6779d739946c1a36a92984abd8028.
+2026-07-22T05:54:54.8109900Z Successfully removed non-blocking flag from /podr/container/pipe/22691078ad9e_innoira-api/stdout_e5f6779d739946c1a36a92984abd8028.
+2026-07-22T05:54:54.8790100Z Creating stderr named pipe at /podr/container/pipe/22691078ad9e_innoira-api/stderr_8f0866ea3db04c158542196b42d665ae.
+2026-07-22T05:54:54.8792008Z Successfully created stderr named pipe at: /podr/container/pipe/22691078ad9e_innoira-api/stderr_8f0866ea3db04c158542196b42d665ae.
+2026-07-22T05:54:54.8793170Z Opening named pipe /podr/container/pipe/22691078ad9e_innoira-api/stderr_8f0866ea3db04c158542196b42d665ae for reading in non-blocking mode.
+2026-07-22T05:54:54.8794211Z Successfully opened named pipe: /podr/container/pipe/22691078ad9e_innoira-api/stderr_8f0866ea3db04c158542196b42d665ae.
+2026-07-22T05:54:54.8794996Z Successfully removed non-blocking flag from /podr/container/pipe/22691078ad9e_innoira-api/stderr_8f0866ea3db04c158542196b42d665ae.
+2026-07-22T05:54:54.8796268Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.6:13209 and fully qualified image name: 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T05:54:55.4444475Z Starting container: 22691078ad9e_innoira-api.
+2026-07-22T05:54:55.5170850Z Starting watchers and probes.
+2026-07-22T05:54:55.5259698Z Starting metrics collection.
+2026-07-22T05:54:55.5271649Z Container is running.
+2026-07-22T05:54:55.5340573Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:51:00, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:54:55.7061613Z Container start method finished after 1752 ms.
+2026-07-22T05:54:55.7063232Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:51:00, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T05:54:55.7063443Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 05:51:00, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+2026-07-22T06:04:55.9866546Z Site startup probe failed after 600.2495638 seconds.
+2026-07-22T06:04:56.2466572Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 06:04:56, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: ERR
+2026-07-22T06:04:56.3078924Z Failed to start site. Revert by stopping site.
+2026-07-22T06:04:56.3178300Z State: Stopping, Action: StoppingSite, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 06:04:56, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: ERR
+2026-07-22T06:04:56.3369299Z State: Stopping, Action: StoppingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 06:04:56, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: ERR
+2026-07-22T06:04:56.3473561Z Container is terminating. Grace period: 5 seconds.
+2026-07-22T06:04:56.5787639Z Stop and delete container. Retry count = 0
+2026-07-22T06:04:56.5788709Z Stopping container: 22691078ad9e_innoira-api.
+2026-07-22T06:05:01.7019653Z Deleting container: 22691078ad9e_innoira-api. Retry count = 0
+2026-07-22T06:05:04.8806887Z Container spec TerminationMessagePolicy  path 
+2026-07-22T06:05:04.8875979Z Container is terminated. Total time elapsed: 8532 ms.
+2026-07-22T06:05:04.8885796Z Site container: innoira-api terminated during site startup.
+2026-07-22T06:05:04.8899884Z State: Stopping, Action: CancellingStartup, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 06:04:56, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site container: innoira-api terminated during site startup. Cancelling site startup., DetailsLevel: ERR
+2026-07-22T06:05:04.8980658Z Site: innoira-api stopped.
+2026-07-22T06:05:58.4901387Z State: Starting, Action: EstablishingSiteNetworks, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 06:04:56, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 06:05:05 (UTC), DetailsLevel: WARN
+2026-07-22T06:05:59.8169137Z State: Starting, Action: StartingSiteContainers, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 06:04:56, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Site stopped at 07/22/2026 06:05:05 (UTC), DetailsLevel: WARN
+2026-07-22T06:05:59.8268756Z Container start method called.
+2026-07-22T06:05:59.8269887Z State: Starting, Action: PullingImage, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 06:04:56, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pulling image 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod for innoira-api., DetailsLevel: INFO
+2026-07-22T06:05:59.8271481Z Establishing network.
+2026-07-22T06:05:59.8273556Z Pulling image: appsvc/python:3.11_20260504.4.tuxprod.
+2026-07-22T06:06:00.0689471Z Container is starting.
+2026-07-22T06:06:00.0691220Z State: Starting, Action: MountingVolumes, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 06:04:56, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Mounting volumes for innoira-api., DetailsLevel: INFO
+2026-07-22T06:06:00.0697104Z Establishing user namespace if not established already.
+2026-07-22T06:06:00.0702600Z Establishing network if not established already.
+2026-07-22T06:06:00.0706927Z Mounting volumes.
+2026-07-22T06:06:00.0797879Z Nested mountpoint 
+2026-07-22T06:06:00.1298469Z Nested mountpoint volatile/logs
+2026-07-22T06:06:00.1513496Z Nested mountpoint 
+2026-07-22T06:06:00.1591914Z Nested mountpoint 
+2026-07-22T06:06:00.1894961Z Nested mountpoint 
+2026-07-22T06:06:00.1907514Z Nested mountpoint 
+2026-07-22T06:06:00.7944029Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 06:04:56, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Finished pulling container image and mounting volumes for innoira-api. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-07-22T06:06:00.7951085Z Creating container.
+2026-07-22T06:06:00.8023690Z Creating pipes for streaming container io.
+2026-07-22T06:06:00.8026239Z Creating stdout named pipe at /podr/container/pipe/4c62ec84528b_innoira-api/stdout_37c3fc7918e94c1d902a84b723b62f3c.
+2026-07-22T06:06:00.8028308Z Successfully created stdout named pipe at: /podr/container/pipe/4c62ec84528b_innoira-api/stdout_37c3fc7918e94c1d902a84b723b62f3c.
+2026-07-22T06:06:00.8029083Z Opening named pipe /podr/container/pipe/4c62ec84528b_innoira-api/stdout_37c3fc7918e94c1d902a84b723b62f3c for reading in non-blocking mode.
+2026-07-22T06:06:00.8029980Z Successfully opened named pipe: /podr/container/pipe/4c62ec84528b_innoira-api/stdout_37c3fc7918e94c1d902a84b723b62f3c.
+2026-07-22T06:06:00.8030749Z Successfully removed non-blocking flag from /podr/container/pipe/4c62ec84528b_innoira-api/stdout_37c3fc7918e94c1d902a84b723b62f3c.
+2026-07-22T06:06:00.8034868Z Creating stderr named pipe at /podr/container/pipe/4c62ec84528b_innoira-api/stderr_66ab99db41f0417b9b3623ee690b9690.
+2026-07-22T06:06:00.8037303Z Successfully created stderr named pipe at: /podr/container/pipe/4c62ec84528b_innoira-api/stderr_66ab99db41f0417b9b3623ee690b9690.
+2026-07-22T06:06:00.8038411Z Opening named pipe /podr/container/pipe/4c62ec84528b_innoira-api/stderr_66ab99db41f0417b9b3623ee690b9690 for reading in non-blocking mode.
+2026-07-22T06:06:00.8039661Z Successfully opened named pipe: /podr/container/pipe/4c62ec84528b_innoira-api/stderr_66ab99db41f0417b9b3623ee690b9690.
+2026-07-22T06:06:00.8041871Z Successfully removed non-blocking flag from /podr/container/pipe/4c62ec84528b_innoira-api/stderr_66ab99db41f0417b9b3623ee690b9690.
+2026-07-22T06:06:00.8044263Z Creating container with image: appsvc/python:3.11_20260504.4.tuxprod from registry: 10.1.0.6:13209 and fully qualified image name: 10.1.0.6:13209/appsvc/python:3.11_20260504.4.tuxprod
+2026-07-22T06:06:01.6691089Z Starting container: 4c62ec84528b_innoira-api.
+2026-07-22T06:06:01.9295190Z Starting watchers and probes.
+2026-07-22T06:06:01.9391145Z Starting metrics collection.
+2026-07-22T06:06:01.9394759Z Container is running.
+2026-07-22T06:06:01.9705238Z State: Starting, Action: CreatingContainer, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 06:04:56, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T06:06:02.0906410Z Container start method finished after 2263 ms.
+2026-07-22T06:06:02.0908662Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 06:04:56, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Container innoira-api successfully created and is running., DetailsLevel: INFO
+2026-07-22T06:06:02.1004971Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: ContainerTimeout, LastErrorTimestamp: 07/22/2026 06:04:56, LastErrorDetails: Container did not start within expected time limit of 600s. Please inspect your container logs for more details., Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
