@@ -83,7 +83,6 @@ jobs:
           app_location: frontend
           output_location: build
           skip_app_build: true
-          routes_location: frontend/public
 
       - name: Verify deployment
         run: |
