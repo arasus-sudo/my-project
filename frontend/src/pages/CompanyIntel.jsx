@@ -50,10 +50,10 @@ export default function CompanyIntel() {
   const ProfileCard = ({ label, value, icon: Icon }) => (
     value ? (
       <div className="flex items-start gap-2.5 p-3 rounded-xl bg-ash border border-line">
-        {Icon && <Icon size={15} className="text-neutral-400 mt-0.5 shrink-0" />}
+        {Icon && <Icon size={15} className="text-ink-muted mt-0.5 shrink-0" />}
         <div className="min-w-0">
           <div className="ui-label">{label}</div>
-          <div className="text-sm mt-0.5">{value}</div>
+          <div className="text-body mt-0.5">{value}</div>
         </div>
       </div>
     ) : null
@@ -67,11 +67,11 @@ export default function CompanyIntel() {
       {list?.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {list.map((item, i) => (
-            <span key={i} className="pill text-[10px]">{item}</span>
+            <span key={i} className="pill">{item}</span>
           ))}
         </div>
       ) : (
-        <div className="text-xs text-neutral-400">{emptyText}</div>
+        <div className="text-caption text-ink-muted">{emptyText}</div>
       )}
     </div>
   );
@@ -87,10 +87,10 @@ export default function CompanyIntel() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="company.com"
-              className="input-premium w-48 text-sm py-1.5"
+              className="input-premium w-32 sm:w-48 text-input py-1.5"
             />
             <button type="submit" disabled={crawling || !url.trim()}
-              className="btn-primary text-sm py-1.5 disabled:opacity-50">
+              className="btn-primary py-1.5 disabled:opacity-50">
               {crawling ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
               {crawling ? "Crawling..." : "Crawl"}
             </button>
@@ -105,9 +105,9 @@ export default function CompanyIntel() {
           </div>
         ) : items.length === 0 ? (
           <div className="card-floating p-12 text-center">
-            <Globe size={32} className="mx-auto text-neutral-300 mb-4" />
-            <div className="font-display text-xl sm:text-2xl font-semibold">No companies analysed yet</div>
-            <p className="text-sm text-neutral-400 mt-2 max-w-md mx-auto">
+            <Globe size={32} className="mx-auto text-ink-disabled mb-4" />
+            <div className="text-section font-display font-semibold">No companies analysed yet</div>
+            <p className="text-body text-ink-muted mt-2 max-w-md mx-auto">
               Enter a company website above and we'll crawl every page — homepage, about, services, blog, pricing, case studies, and more — then AI builds a complete intelligence profile.
             </p>
           </div>
@@ -126,14 +126,14 @@ export default function CompanyIntel() {
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <Building2 size={14} className="text-neutral-400 shrink-0" />
-                    <span className="font-medium text-sm truncate flex-1">{item.domain}</span>
+                    <Building2 size={14} className="text-ink-muted shrink-0" />
+                    <span className="font-medium text-body truncate flex-1">{item.domain}</span>
                     <span className={`w-2 h-2 rounded-full ${
                       item.status === "complete" ? "bg-success" :
                       item.status === "error" ? "bg-danger" : "bg-warning"
                     }`} />
                   </div>
-                  <div className="text-2xs text-neutral-400 font-mono mt-1">
+                  <div className="text-tiny text-ink-muted font-mono mt-1">
                     {item.pages_crawled} pages crawled
                   </div>
                 </button>
@@ -144,7 +144,7 @@ export default function CompanyIntel() {
               {selected ? (
                 <div className="space-y-6 animate-fade-in">
                   {selected.status === "error" && (
-                    <div className="flex items-center gap-2 text-sm text-danger bg-danger/5 border border-danger/20 rounded-2xl p-4">
+                    <div className="flex items-center gap-2 text-body text-danger bg-danger/5 border border-danger/20 rounded-2xl p-4">
                       <AlertTriangle size={16} /> Crawl failed: {selected.error || "Unknown error"}
                     </div>
                   )}
@@ -154,20 +154,20 @@ export default function CompanyIntel() {
                       <div className="card-floating p-6 space-y-6">
                         <div className="flex items-start justify-between gap-4">
                           <div>
-                            <div className="font-display text-2xl font-semibold">{selected.profile.name || selected.domain}</div>
+                            <div className="text-page-title font-display font-semibold">{selected.profile.name || selected.domain}</div>
                             {selected.profile.industry && (
                               <div className="pill mt-1.5">{selected.profile.industry}</div>
                             )}
                           </div>
                           <button onClick={() => deleteIntel(selected.domain)}
-                            className="p-2 text-neutral-400 hover:text-danger hover:bg-danger/5 rounded-xl transition-colors"
+                            className="p-2 text-ink-muted hover:text-danger hover:bg-danger/5 rounded-xl transition-colors"
                             title="Remove intelligence">
                             <Trash2 size={14} />
                           </button>
                         </div>
 
                         {selected.profile.description && (
-                          <p className="text-sm text-neutral-500 leading-relaxed">{selected.profile.description}</p>
+                          <p className="text-body text-ink-tertiary leading-relaxed">{selected.profile.description}</p>
                         )}
                       </div>
 
@@ -193,14 +193,14 @@ export default function CompanyIntel() {
                         {selected.profile.products_services?.length > 0 ? (
                           <div className="grid sm:grid-cols-2 gap-2">
                             {selected.profile.products_services.map((ps, i) => (
-                              <div key={i} className="flex items-center gap-2 text-sm p-2.5 rounded-xl bg-ash border border-line">
+                              <div key={i} className="flex items-center gap-2 text-body p-2.5 rounded-xl bg-ash border border-line">
                                 <CheckCircle2 size={13} className="text-success shrink-0" />
                                 {ps}
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <div className="text-sm text-neutral-400">No products/services identified</div>
+                          <div className="text-body text-ink-muted">No products/services identified</div>
                         )}
                       </div>
 
@@ -231,10 +231,10 @@ export default function CompanyIntel() {
                       {(selected.profile.case_studies_summary) && (
                         <div className="card-floating p-6">
                           <div className="flex items-start gap-2.5">
-                            <BookOpen size={15} className="text-neutral-400 mt-0.5 shrink-0" />
+                            <BookOpen size={15} className="text-ink-muted mt-0.5 shrink-0" />
                             <div>
                               <div className="ui-label">Case Studies</div>
-                              <div className="text-sm mt-1 text-neutral-500">{selected.profile.case_studies_summary}</div>
+                              <div className="text-body mt-1 text-ink-tertiary">{selected.profile.case_studies_summary}</div>
                             </div>
                           </div>
                         </div>
@@ -243,10 +243,10 @@ export default function CompanyIntel() {
                       {(selected.profile.blogs_summary) && (
                         <div className="card-floating p-6">
                           <div className="flex items-start gap-2.5">
-                            <FileText size={15} className="text-neutral-400 mt-0.5 shrink-0" />
+                            <FileText size={15} className="text-ink-muted mt-0.5 shrink-0" />
                             <div>
                               <div className="ui-label">Blog / Resources</div>
-                              <div className="text-sm mt-1 text-neutral-500">{selected.profile.blogs_summary}</div>
+                              <div className="text-body mt-1 text-ink-tertiary">{selected.profile.blogs_summary}</div>
                             </div>
                           </div>
                         </div>
@@ -256,17 +256,17 @@ export default function CompanyIntel() {
 
                   {selected.status === "crawling" && (
                     <div className="card-floating p-12 text-center">
-                      <Loader2 size={24} className="mx-auto animate-spin text-neutral-300 mb-3" />
-                      <div className="font-display font-semibold">Crawling {selected.domain}...</div>
-                      <p className="text-sm text-neutral-400 mt-1">Analysing every page on the site. This takes 30-60 seconds.</p>
+                      <Loader2 size={24} className="mx-auto animate-spin text-ink-disabled mb-3" />
+                      <div className="text-card-title font-display font-semibold">Crawling {selected.domain}...</div>
+                      <p className="text-body text-ink-muted mt-1">Analysing every page on the site. This takes 30-60 seconds.</p>
                     </div>
                   )}
                 </div>
               ) : (
                 <div className="card-floating p-12 text-center">
-                  <Building2 size={32} className="mx-auto text-neutral-300 mb-4" />
-                  <div className="font-display text-xl font-semibold">Select a company</div>
-                  <p className="text-sm text-neutral-400 mt-1">Choose a company from the left to view its intelligence profile.</p>
+                  <Building2 size={32} className="mx-auto text-ink-disabled mb-4" />
+                  <div className="text-section font-display font-semibold">Select a company</div>
+                  <p className="text-body text-ink-muted mt-1">Choose a company from the left to view its intelligence profile.</p>
                 </div>
               )}
             </div>

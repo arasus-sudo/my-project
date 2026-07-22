@@ -68,10 +68,10 @@ export default function SiteList() {
         right={<button onClick={() => setModal(true)} data-testid="add-site-btn" className="btn-primary"><Plus size={14} /> Add site</button>}
       />
       <div className="animate-fade-in px-6 sm:px-8">
-        {loading ? <div className="text-neutral-400 text-sm">Loading…</div> : sites.length === 0 ? (
+        {loading ? <div className="text-ink-muted text-body">Loading…</div> : sites.length === 0 ? (
           <div className="shadow-card p-10 text-center rounded-2xl">
-            <div className="font-display text-xl sm:text-2xl font-semibold">No sites yet</div>
-            <p className="text-sm text-neutral-400 mt-2">Add your website's domain to start building its knowledge base.</p>
+            <div className="text-section font-display font-semibold">No sites yet</div>
+            <p className="text-caption text-ink-muted mt-2">Add your website's domain to start building its knowledge base.</p>
             <button onClick={() => setModal(true)} className="btn-primary mt-6 inline-flex">Add site</button>
           </div>
         ) : (
@@ -80,16 +80,16 @@ export default function SiteList() {
               <button key={s.id} onClick={() => openDetail(s)} data-testid={`site-card-${s.id}`}
                 className="text-left card-flat p-6 hover:border-accent/30 transition-all shadow-card hover:shadow-card-hover">
                 <div className="flex items-center justify-between">
-                  <div className="w-10 h-10 rounded-xl bg-brand-gradient flex items-center justify-center text-white">
+                  <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center text-white">
                     <Globe size={18} />
                   </div>
-                  <span className={`ui-label px-2 py-0.5 border rounded-full ${s.status === "ready" ? "text-success border-success" : s.status === "crawling" ? "text-warning border-warning" : "text-neutral-400 border-line"}`}>
+                  <span className={`ui-label px-2 py-0.5 border rounded-full ${s.status === "ready" ? "text-success border-success" : s.status === "crawling" ? "text-warning border-warning" : "text-ink-muted border-line"}`}>
                     {s.status}
                   </span>
                 </div>
-                <div className="font-display font-bold text-lg mt-3">{s.name}</div>
-                <div className="text-xs text-neutral-400 font-mono mt-0.5">{s.domain}</div>
-                <div className="text-xs text-neutral-400 mt-2">{s.pages_crawled} pages indexed</div>
+                <div className="text-card-title font-display font-bold mt-3">{s.name}</div>
+                <div className="text-caption text-ink-muted font-mono mt-0.5">{s.domain}</div>
+                <div className="text-caption text-ink-muted mt-2">{s.pages_crawled} pages indexed</div>
               </button>
             ))}
           </div>
@@ -99,26 +99,26 @@ export default function SiteList() {
       {modal && (
         <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50 p-4" onClick={(e) => e.target === e.currentTarget && setModal(false)}>
           <form onSubmit={create} className="bg-white border border-line p-6 rounded-2xl w-full max-w-md space-y-3">
-            <div className="font-display font-semibold text-xl">Add a site</div>
+            <div className="text-section font-display font-semibold">Add a site</div>
             <label className="block">
-              <span className="ui-label">Name</span>
+              <span className="form-label">Name</span>
               <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                data-testid="site-name-input" className="mt-1 w-full border border-line px-3 py-2 rounded-xl" />
+                data-testid="site-name-input" className="mt-1 w-full border border-line px-3 py-2 rounded-xl text-input" />
             </label>
             <label className="block">
-              <span className="ui-label">Domain</span>
+              <span className="form-label">Domain</span>
               <input required value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })}
-                placeholder="example.com" data-testid="site-domain-input" className="mt-1 w-full border border-line px-3 py-2 rounded-xl" />
+                placeholder="example.com" data-testid="site-domain-input" className="mt-1 w-full border border-line px-3 py-2 rounded-xl text-input" />
             </label>
             <label className="block">
-              <span className="ui-label">Widget color</span>
+              <span className="form-label">Widget color</span>
               <input type="color" value={form.primary_color} onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
                 className="mt-1 w-full h-10 border border-line rounded-xl" />
             </label>
             <label className="block">
-              <span className="ui-label">Welcome message</span>
+              <span className="form-label">Welcome message</span>
               <input value={form.welcome_message} onChange={(e) => setForm({ ...form, welcome_message: e.target.value })}
-                data-testid="site-welcome-input" className="mt-1 w-full border border-line px-3 py-2 rounded-xl" />
+                data-testid="site-welcome-input" className="mt-1 w-full border border-line px-3 py-2 rounded-xl text-input" />
             </label>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>
@@ -133,28 +133,28 @@ export default function SiteList() {
           <div className="bg-white border border-line p-6 rounded-2xl w-full max-w-lg space-y-4 max-h-[85vh] overflow-y-auto">
             <div className="flex items-start justify-between">
               <div>
-                <div className="font-display font-semibold text-lg">{detail.name}</div>
-                <div className="text-xs text-neutral-400 font-mono">{detail.domain}</div>
+                <div className="text-card-title font-display font-semibold">{detail.name}</div>
+                <div className="text-caption text-ink-muted font-mono">{detail.domain}</div>
               </div>
-              <button onClick={() => setDetail(null)} className="text-neutral-400 hover:text-ink"><X size={18} /></button>
+              <button onClick={() => setDetail(null)} className="text-ink-muted hover:text-ink"><X size={18} /></button>
             </div>
 
             <div>
               <div className="ui-label mb-1.5">Embed snippet</div>
-              <div className="bg-ash border border-line rounded-xl p-3 font-mono text-[11px] break-all flex items-start gap-2">
+              <div className="bg-ash border border-line rounded-xl p-3 font-mono text-tiny break-all flex items-start gap-2">
                 <span className="flex-1">{embedSnippet(detail)}</span>
-                <button onClick={() => copyEmbed(detail)} data-testid="copy-embed-btn" className="text-neutral-400 hover:text-ink shrink-0"><Copy size={14} /></button>
+                <button onClick={() => copyEmbed(detail)} data-testid="copy-embed-btn" className="text-ink-muted hover:text-ink shrink-0"><Copy size={14} /></button>
               </div>
-              <p className="text-[11px] text-neutral-400 mt-1.5">Paste this before <code>&lt;/body&gt;</code> on your site.</p>
+              <p className="text-tiny text-ink-muted mt-1.5">Paste this before <code>&lt;/body&gt;</code> on your site.</p>
             </div>
 
             <div>
               <div className="ui-label mb-1.5">Knowledge base — {pages.length} pages</div>
               <div className="max-h-40 overflow-y-auto space-y-1">
                 {pages.map((p) => (
-                  <div key={p.url} className="text-xs text-neutral-500 truncate">{p.title || p.url}</div>
+                  <div key={p.url} className="text-caption text-ink-tertiary truncate">{p.title || p.url}</div>
                 ))}
-                {pages.length === 0 && <div className="text-xs text-neutral-400">Not crawled yet.</div>}
+                {pages.length === 0 && <div className="text-caption text-ink-muted">Not crawled yet.</div>}
               </div>
             </div>
 

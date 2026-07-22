@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import {
-  Plus, Sparkles, Edit3, Trash2, Copy, Archive, RefreshCw,
+  Plus, Edit3, Trash2, Copy, Archive, RefreshCw,
   Loader2, Lightbulb, Target, Users, Search, CheckCircle2,
   ChevronDown, ChevronUp, ExternalLink, X, Zap, Globe,
 } from "lucide-react";
@@ -138,10 +138,10 @@ export default function ServiceLibrary() {
   const TagDisplay = ({ label, items: list }) => (
     list?.length > 0 ? (
       <div className="space-y-1">
-        <div className="ui-label text-[10px]">{label}</div>
+        <div className="ui-label">{label}</div>
         <div className="flex flex-wrap gap-1">
           {list.map((item, i) => (
-            <span key={i} className="pill text-[10px]">{item}</span>
+            <span key={i} className="pill">{item}</span>
           ))}
         </div>
       </div>
@@ -152,11 +152,11 @@ export default function ServiceLibrary() {
     <div>
       <PageHeader
         title="Service Library"
-        subtitle="Define every service your company offers. Each service becomes a reusable campaign template with AI-generated positioning, messaging, and competitor insights."
+        subtitle="Define every service your company offers. Each service becomes a reusable campaign template with automatically generated positioning, messaging, and competitor insights."
         right={
           <div className="flex items-center gap-2">
             <button onClick={() => setShowAiGen(true)} className="btn-secondary text-sm">
-              <Sparkles size={14} /> AI Generate
+              <Zap size={14} /> Generate
             </button>
             <button onClick={() => { setEditing(null); setForm({ ...EMPTY_FORM }); setShowForm(true); }}
               className="btn-primary text-sm">
@@ -173,10 +173,10 @@ export default function ServiceLibrary() {
           </div>
         ) : activeItems.length === 0 ? (
           <div className="card-floating p-12 text-center">
-            <Lightbulb size={32} className="mx-auto text-neutral-300 mb-4" />
-            <div className="font-display text-xl sm:text-2xl font-semibold">No services defined yet</div>
-            <p className="text-sm text-neutral-400 mt-2 max-w-md mx-auto">
-              Define your services so the AI can create targeted outbound campaigns for each one. Use AI to generate a full service profile from a single sentence or your website.
+            <Lightbulb size={32} className="mx-auto text-ink-disabled mb-4" />
+            <div className="text-section font-display font-semibold">No services defined yet</div>
+            <p className="text-body text-ink-muted mt-2 max-w-md mx-auto">
+              Define your services so campaigns can be targeted to each one. Generate a full service profile from a single sentence or your website.
             </p>
           </div>
         ) : (
@@ -185,27 +185,27 @@ export default function ServiceLibrary() {
               <div key={item.id} className="card-floating p-5 flex flex-col">
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="min-w-0 flex-1">
-                    <div className="font-display font-semibold truncate">{item.name}</div>
-                    {item.industry && <div className="pill mt-1 text-[10px]">{item.industry}</div>}
+                    <div className="text-card-title font-display font-semibold truncate">{item.name}</div>
+                    {item.industry && <div className="pill mt-1">{item.industry}</div>}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => editItem(item)} className="p-1.5 text-neutral-400 hover:text-ink rounded-lg transition-colors" title="Edit">
+                    <button onClick={() => editItem(item)} className="p-1.5 text-ink-muted hover:text-ink rounded-lg transition-colors" title="Edit">
                       <Edit3 size={13} />
                     </button>
-                    <button onClick={() => duplicate(item.id)} className="p-1.5 text-neutral-400 hover:text-ink rounded-lg transition-colors" title="Duplicate">
+                    <button onClick={() => duplicate(item.id)} className="p-1.5 text-ink-muted hover:text-ink rounded-lg transition-colors" title="Duplicate">
                       <Copy size={13} />
                     </button>
-                    <button onClick={() => toggleArchive(item.id)} className="p-1.5 text-neutral-400 hover:text-ink rounded-lg transition-colors" title="Archive">
+                    <button onClick={() => toggleArchive(item.id)} className="p-1.5 text-ink-muted hover:text-ink rounded-lg transition-colors" title="Archive">
                       <Archive size={13} />
                     </button>
-                    <button onClick={() => deleteItem(item.id, item.name)} className="p-1.5 text-neutral-400 hover:text-danger rounded-lg transition-colors" title="Delete">
+                    <button onClick={() => deleteItem(item.id, item.name)} className="p-1.5 text-ink-muted hover:text-danger rounded-lg transition-colors" title="Delete">
                       <Trash2 size={13} />
                     </button>
                   </div>
                 </div>
 
                 {item.description && (
-                  <p className="text-xs text-neutral-500 leading-relaxed line-clamp-2 mb-3">{item.description}</p>
+                  <p className="text-caption text-ink-tertiary leading-relaxed line-clamp-2 mb-3">{item.description}</p>
                 )}
 
                 <div className="space-y-2 flex-1">
@@ -216,24 +216,24 @@ export default function ServiceLibrary() {
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-line flex items-center justify-between">
-                  {item.cta && <span className="text-xs font-medium text-ink">{item.cta}</span>}
+                  {item.cta && <span className="text-caption font-medium text-ink">{item.cta}</span>}
                   <button onClick={() => setShowImprove(showImprove === item.id ? null : item.id)}
-                    className="text-xs text-neutral-400 hover:text-ink flex items-center gap-1 transition-colors">
-                    <Sparkles size={11} /> AI Improve
+                    className="text-caption text-ink-muted hover:text-ink flex items-center gap-1 transition-colors">
+                    <RefreshCw size={11} /> Improve
                   </button>
                 </div>
 
                 {showImprove === item.id && (
                   <div className="mt-3 pt-3 border-t border-line space-y-2 animate-fade-in">
-                    <div className="text-xs text-neutral-400">Add competitor URLs (one per line) for context:</div>
+                    <div className="text-caption text-ink-muted">Add competitor URLs (one per line) for context:</div>
                     <textarea value={compUrls} onChange={(e) => setCompUrls(e.target.value)}
                       placeholder="https://competitor1.com&#10;https://competitor2.com"
-                      className="input-premium text-xs py-1.5 h-16" />
+                      className="input-premium text-caption py-1.5 h-16" />
                     <div className="flex gap-2">
                       <button onClick={() => aiImprove(item.id)} disabled={busy}
                         className="btn-primary text-xs py-1 disabled:opacity-50">
-                        {busy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                        Improve with AI
+                        {busy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                        Improve
                       </button>
                       <button onClick={() => setShowImprove(null)} className="btn-ghost text-xs py-1">Cancel</button>
                     </div>
@@ -251,8 +251,8 @@ export default function ServiceLibrary() {
               {archivedItems.map((item) => (
                 <div key={item.id} className="card-flat p-4 opacity-60 flex items-center justify-between">
                   <div>
-                    <div className="text-sm font-medium">{item.name}</div>
-                    <div className="text-xs text-neutral-400">{item.industry || "No industry"}</div>
+                    <div className="text-body font-medium">{item.name}</div>
+                    <div className="text-caption text-ink-muted">{item.industry || "No industry"}</div>
                   </div>
                   <button onClick={() => toggleArchive(item.id)} className="btn-ghost text-xs">Restore</button>
                 </div>
@@ -268,42 +268,42 @@ export default function ServiceLibrary() {
           onClick={(e) => e.target === e.currentTarget && setShowForm(false)}>
           <form onSubmit={save} className="bg-white border border-line p-6 rounded-2xl w-full max-w-2xl space-y-4 animate-scale-in my-8">
             <div className="flex items-center justify-between">
-              <div className="font-display font-semibold text-xl">{editing ? "Edit Service" : "New Service"}</div>
-              <button type="button" onClick={() => setShowForm(false)} className="p-1 text-neutral-400 hover:text-ink rounded-lg"><X size={18} /></button>
+              <div className="text-section font-display font-semibold">{editing ? "Edit Service" : "New Service"}</div>
+              <button type="button" onClick={() => setShowForm(false)} className="p-1 text-ink-muted hover:text-ink rounded-lg"><X size={18} /></button>
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <label className="sm:col-span-2 block">
-                <span className="ui-label">Service Name</span>
+                <span className="form-label">Service Name</span>
                 <input required value={form.name} onChange={(e) => setForm({...form, name: e.target.value})}
                   className="input-premium mt-1" placeholder="e.g. AI Automation Services" />
               </label>
               <label className="sm:col-span-2 block">
-                <span className="ui-label">Description</span>
+                <span className="form-label">Description</span>
                 <textarea value={form.description} onChange={(e) => setForm({...form, description: e.target.value})}
                   className="input-premium mt-1 h-20" placeholder="Describe the service..." />
               </label>
               <label className="block">
-                <span className="ui-label">Industry</span>
+                <span className="form-label">Industry</span>
                 <input value={form.industry} onChange={(e) => setForm({...form, industry: e.target.value})}
                   className="input-premium mt-1" placeholder="e.g. SaaS, Healthcare" />
               </label>
               <label className="block">
-                <span className="ui-label">Target Persona</span>
+                <span className="form-label">Target Persona</span>
                 <input value={form.target_persona} onChange={(e) => setForm({...form, target_persona: e.target.value})}
                   className="input-premium mt-1" placeholder="e.g. VP of Sales, CTO" />
               </label>
               <label className="block">
-                <span className="ui-label">Primary Offer</span>
+                <span className="form-label">Primary Offer</span>
                 <input value={form.primary_offer} onChange={(e) => setForm({...form, primary_offer: e.target.value})}
                   className="input-premium mt-1" placeholder="What's the core offering?" />
               </label>
               <label className="block">
-                <span className="ui-label">CTA</span>
+                <span className="form-label">CTA</span>
                 <input value={form.cta} onChange={(e) => setForm({...form, cta: e.target.value})}
                   className="input-premium mt-1" placeholder="e.g. Book a demo" />
               </label>
               <label className="block">
-                <span className="ui-label">Pricing (optional)</span>
+                <span className="form-label">Pricing (optional)</span>
                 <input value={form.pricing || ""} onChange={(e) => setForm({...form, pricing: e.target.value || null})}
                   className="input-premium mt-1" placeholder="e.g. $500/mo starting" />
               </label>
@@ -326,18 +326,18 @@ export default function ServiceLibrary() {
           <div className="bg-white border border-line p-6 rounded-2xl w-full max-w-lg space-y-4 animate-scale-in">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="font-display font-semibold text-lg flex items-center gap-2">
-                  <Sparkles size={18} /> AI Generate Service
+                <div className="text-card-title font-display font-semibold flex items-center gap-2">
+                  <Zap size={18} /> Generate Service
                 </div>
-                <p className="text-xs text-neutral-400 mt-1">Describe your service in a sentence, paste a brochure, or enter a website URL.</p>
+                <p className="text-caption text-ink-muted mt-1">Describe your service in a sentence, paste a brochure, or enter a website URL.</p>
               </div>
-              <button onClick={() => setShowAiGen(false)} className="p-1 text-neutral-400 hover:text-ink rounded-lg"><X size={18} /></button>
+              <button onClick={() => setShowAiGen(false)} className="p-1 text-ink-muted hover:text-ink rounded-lg"><X size={18} /></button>
             </div>
             <div className="flex gap-2 pb-2">
               {["description", "website"].map((m) => (
                 <button key={m} onClick={() => setAiMethod(m)}
                   className={`px-3 py-1.5 text-xs rounded-xl border transition-all ${
-                    aiMethod === m ? "border-transparent bg-brand-gradient text-white" : "border-line hover:border-ink/20"
+                    aiMethod === m ? "border-transparent bg-accent text-white" : "border-line hover:border-ink/20"
                   }`}>
                   {m === "description" ? "Text Description" : "Website URL"}
                 </button>
@@ -355,7 +355,7 @@ export default function ServiceLibrary() {
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowAiGen(false)} className="btn-secondary">Cancel</button>
               <button onClick={aiGenerate} disabled={busy || !aiInput.trim()} className="btn-primary">
-                {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                {busy ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
                 Generate
               </button>
             </div>

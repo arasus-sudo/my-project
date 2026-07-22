@@ -6,7 +6,7 @@ import jsPDF from "jspdf";
 import { toast } from "sonner";
 import {
   Save, Download, ChevronLeft, Loader2, Plus, Trash2, Copy,
-  Sparkles, Undo2, Redo2, Wand2, FileText, LayoutGrid, Maximize2, Mountain, Play, Image as ImageIcon,
+  Palette, Undo2, Redo2, PenSquare, ImagePlus, FileText, LayoutGrid, Maximize2, Mountain, Play, Image as ImageIcon,
 } from "lucide-react";
 
 import { api, isCreditError } from "../lib/api";
@@ -1391,7 +1391,7 @@ export default function CreateEQEditor() {
     finally { setBusy(false); }
   };
 
-  if (!proj) return <div className="p-6 sm:p-8 text-neutral-400">Loading…</div>;
+  if (!proj) return <div className="p-6 sm:p-8 text-ink-muted">Loading…</div>;
 
   return (
     <div>
@@ -1407,11 +1407,11 @@ export default function CreateEQEditor() {
               {viewMode === "focus" ? <><LayoutGrid size={14} /> Board</> : <><Maximize2 size={14} /> Focus</>}
             </button>
             <button onClick={() => setShowPreview(true)} data-testid="preview-open-btn" className="btn-secondary"><Play size={14} /> Preview</button>
-            <button onClick={() => setShowGenerateContent(true)} data-testid="generate-content-open" className="btn-secondary"><Wand2 size={14} /> Generate content</button>
+            <button onClick={() => setShowGenerateContent(true)} data-testid="generate-content-open" className="btn-secondary"><PenSquare size={14} /> Generate content</button>
             <button onClick={() => setShowPanorama(true)} data-testid="panorama-open" className="btn-secondary"><Mountain size={14} /> Panorama</button>
-            <button onClick={() => setShowAiImage(true)} data-testid="ai-image-open" className="btn-secondary"><Wand2 size={14} /> AI Image</button>
+            <button onClick={() => setShowAiImage(true)} data-testid="ai-image-open" className="btn-secondary"><ImagePlus size={14} /> Generate image</button>
             <button onClick={() => setShowImageGallery(true)} data-testid="image-gallery-open" className="btn-secondary"><ImageIcon size={14} /> Images</button>
-            <button onClick={() => setShowBrandKit(true)} data-testid="brand-kit-open" className="btn-secondary"><Sparkles size={14} /> Brand kit</button>
+            <button onClick={() => setShowBrandKit(true)} data-testid="brand-kit-open" className="btn-secondary"><Palette size={14} /> Brand kit</button>
             <button onClick={exportSlidePng} data-testid="export-png-btn" className="btn-secondary"><Download size={14} /> PNG</button>
             <button onClick={() => setShowPdfPicker(true)} disabled={busy} data-testid="export-pdf-btn" className="btn-secondary"><FileText size={14} /> PDF</button>
             <button onClick={save} disabled={busy} data-testid="save-carousel-btn" className="btn-primary">
@@ -1505,12 +1505,12 @@ export default function CreateEQEditor() {
             onContextMenu={onCanvasContextMenu}>
             {dropHint && (
               <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-                <div className="bg-ink text-white px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest">Drop image to add</div>
+                <div className="bg-ink text-white px-4 py-2 rounded-full font-mono text-caption uppercase tracking-widest">Drop image to add</div>
               </div>
             )}
             {repositionTargetId && (
               <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 pointer-events-none">
-                <div className="bg-indigo-600 text-white px-3 py-1.5 rounded-full font-mono text-[10px] uppercase tracking-widest shadow-lg flex items-center gap-2">
+                <div className="bg-indigo-600 text-white px-3 py-1.5 rounded-full font-mono text-tiny uppercase tracking-widest shadow-lg flex items-center gap-2">
                   <span>Reposition mode</span>
                   <span className="opacity-60">Drag to move · Scroll to zoom</span>
                 </div>
@@ -1616,7 +1616,7 @@ export default function CreateEQEditor() {
             <div className="sticky bottom-0 left-0 right-0 bg-white/90 backdrop-blur border-t border-line px-4 py-2 flex items-center gap-2 text-xs">
               <span className="ui-label">Zoom</span>
               <input type="range" min={0.1} max={1.5} step={0.02} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} data-testid="zoom-slider" className="w-32" />
-              <span className="font-mono text-neutral-400 w-10">{Math.round(zoom * 100)}%</span>
+              <span className="font-mono text-ink-muted w-10">{Math.round(zoom * 100)}%</span>
               <button onClick={zoomToFit} data-testid="zoom-fit" className="btn-ghost text-xs py-1 px-2" title="Fit slide to view (also: Ctrl+scroll to zoom)">Fit</button>
               <button onClick={() => setZoom(0.5)} data-testid="zoom-50" className="btn-ghost text-xs py-1 px-2">50%</button>
               <button onClick={() => setZoom(1)} data-testid="zoom-100" className="btn-ghost text-xs py-1 px-2">100%</button>
@@ -1643,7 +1643,7 @@ export default function CreateEQEditor() {
                       setActiveSlide(toIdx);
                     }}
                     data-testid={`slide-thumb-${i}`}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-mono ${i === activeSlide ? "bg-brand-gradient text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
+                    className={`px-2.5 py-1 rounded-xl text-xs font-mono ${i === activeSlide ? "bg-accent text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
                     {i + 1}
                   </button>
                 ))}
@@ -1816,8 +1816,8 @@ function GenerateContentDialog({ busy, onClose, onGenerate }) {
   return (
     <div className="fixed inset-0 bg-ink/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-lg p-4 sm:p-6" onClick={(e) => e.stopPropagation()} data-testid="generate-content-dialog">
-        <h2 className="font-display font-semibold text-2xl mb-1">Generate content</h2>
-        <p className="text-sm text-neutral-400 mb-4">Describe a topic — we&apos;ll draft new slides and add them to the end of this deck.</p>
+        <h2 className="font-display font-semibold text-section mb-1">Generate content</h2>
+        <p className="text-caption text-ink-muted mb-4">Describe a topic — we&apos;ll draft new slides and add them to the end of this deck.</p>
         <textarea
           autoFocus
           value={topic}
@@ -1828,10 +1828,10 @@ function GenerateContentDialog({ busy, onClose, onGenerate }) {
           className="w-full border border-line rounded-lg px-4 py-3 text-base focus:outline-none focus:border-ink"
         />
         <div className="flex items-center gap-2 mt-3">
-          <span className="text-xs text-neutral-400">Slides to add:</span>
+          <span className="text-caption text-ink-muted">Slides to add:</span>
           {[1, 3, 5, 6].map((n) => (
             <button key={n} onClick={() => setSlideCount(n)} data-testid={`generate-content-count-${n}`}
-              className={`px-3 py-1 rounded-xl text-xs font-mono ${slideCount === n ? "bg-brand-gradient text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
+              className={`px-3 py-1 rounded-xl text-xs font-mono ${slideCount === n ? "bg-accent text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
               {n}
             </button>
           ))}
@@ -1840,7 +1840,7 @@ function GenerateContentDialog({ busy, onClose, onGenerate }) {
           <button onClick={onClose} className="btn-ghost">Cancel</button>
           <button onClick={() => onGenerate(topic, slideCount)} disabled={busy || !topic.trim()} data-testid="generate-content-submit"
             className="btn-primary disabled:opacity-60">
-            {busy ? <><Loader2 size={14} className="animate-spin" /> Drafting…</> : <><Wand2 size={14} /> Generate</>}
+            {busy ? <><Loader2 size={14} className="animate-spin" /> Drafting…</> : <><PenSquare size={14} /> Generate</>}
           </button>
         </div>
       </div>

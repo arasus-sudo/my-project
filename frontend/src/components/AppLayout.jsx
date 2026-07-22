@@ -3,6 +3,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../lib/auth";
 import { CreditPill } from "./Credits";
 import InnoiraLogo from "./InnoiraLogo";
+import CommandPalette from "./CommandPalette";
+import NotificationsCenter from "./NotificationsCenter";
 import {
   LayoutDashboard, Send, Users, Inbox as InboxIcon, Kanban, Mail, Settings as SettingsIcon, LogOut, Info, Shield,
   FileText, BarChart3, UsersRound, ShieldCheck, Image as ImageIcon, ChevronDown, Layers, Webhook, Link2,
@@ -169,6 +171,21 @@ export default function AppLayout() {
             </div>
           )}
         </div>
+        <div className="px-4 pt-3 flex items-center gap-2">
+          <button onClick={() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
+            data-testid="open-command-palette"
+            className="flex-1 flex items-center gap-2 px-3 py-2 text-caption text-ink-muted bg-ash hover:bg-line/40 rounded-xl transition-colors">
+            <Search size={13} />
+            <span className="flex-1 text-left">Search…</span>
+            <kbd className="text-tiny font-mono">⌘K</kbd>
+          </button>
+          <button onClick={() => nav("/app/unified-inbox")} title="Unified inbox — every channel, one list"
+            data-testid="open-unified-inbox"
+            className="p-2 text-ink-muted hover:text-ink hover:bg-ash rounded-xl transition-all">
+            <InboxIcon size={16} />
+          </button>
+          <NotificationsCenter />
+        </div>
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-thin">
           {currentAgent.nav.map((n) => (
             <NavLink
@@ -221,6 +238,7 @@ export default function AppLayout() {
           <Outlet />
         </div>
       </main>
+      <CommandPalette />
     </div>
   );
 }

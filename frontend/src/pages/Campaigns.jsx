@@ -13,9 +13,26 @@ export default function Campaigns() {
   const load = () => api.get("/campaigns").then((r) => { setItems(r.data); setLoading(false); });
   useEffect(() => { load(); }, []);
 
-  const launch = async (id) => {
-    try { await api.post(`/campaigns/${id}/launch`); toast.success("Campaign launched"); load(); }
-    catch (err) { toast.error(err?.response?.data?.detail || "Launch failed", { action: { label: "Open", onClick: () => nav(`/app/campaigns/${id}`) } }); }
+  const launch = async (id, skipPending) => {
+    if (skipPending === undefined) {
+      try {
+        await api.post(`/campaigns/${id}/launch`);
+        toast.success("Campaign launched"); load();
+      } catch (err) {
+        if (err?.response?.status === 400 && err?.response?.data?.detail?.includes("Review incomplete")) {
+          toast.info("Send approved leads only?", {
+            description: "Some leads need review — send to only those already approved",
+            action: { label: "Send approved", onClick: () => launch(id, true) },
+            duration: 10000,
+          });
+        } else {
+          toast.error(err?.response?.data?.detail || "Launch failed");
+        }
+      }
+      return;
+    }
+    try { await api.post(`/campaigns/${id}/launch?skip_pending=true`); toast.success("Campaign launched"); load(); }
+    catch (err) { toast.error(err?.response?.data?.detail || "Launch failed"); }
   };
   const pause = async (id) => {
     try { await api.post(`/campaigns/${id}/pause`); toast.success("Paused"); load(); }

@@ -69,7 +69,7 @@ export default function Billing() {
 
   if (!sub || !plans) {
     return <div className="min-h-screen bg-bone flex items-center justify-center">
-      <Loader2 className="animate-spin text-neutral-400" />
+      <Loader2 className="animate-spin text-ink-muted" />
     </div>;
   }
 
@@ -82,15 +82,15 @@ export default function Billing() {
     <div className="min-h-screen bg-bone animate-fade-in">
       <div className="border-b border-line bg-white">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-3 flex items-center justify-between">
-          <Link to="/suite" data-testid="billing-back" className="flex items-center gap-2 text-sm text-neutral-500 hover:text-ink">
+          <Link to="/suite" data-testid="billing-back" className="flex items-center gap-2 text-caption text-ink-muted hover:text-ink">
             <ArrowLeft size={15} /> Command center
           </Link>
           <div className="flex items-center gap-3">
             <div className="text-right leading-tight">
-              <div className="text-xs font-medium">{user?.name}</div>
-              <div className="text-[10px] text-neutral-400">{workspace?.name}</div>
+              <div className="text-caption font-medium">{user?.name}</div>
+              <div className="text-tiny text-ink-muted">{workspace?.name}</div>
             </div>
-            <button onClick={logout} className="p-1.5 text-neutral-400 hover:text-ink hover:bg-surfacehover rounded-xl">
+            <button onClick={logout} className="p-1.5 text-ink-muted hover:text-ink hover:bg-surfacehover rounded-xl">
               <LogOut size={14} />
             </button>
           </div>
@@ -99,8 +99,8 @@ export default function Billing() {
 
       <div className="max-w-6xl mx-auto px-6 sm:px-8 py-6 sm:py-8 space-y-8">
         <div>
-          <h1 className="font-display text-xl sm:text-2xl font-bold">Plan &amp; credits</h1>
-          <p className="text-sm text-neutral-400 mt-1">
+          <h1 className="text-page-title font-display">Plan &amp; credits</h1>
+          <p className="text-caption text-ink-muted mt-1">
             Every agent action spends credits from your monthly allowance. Credits reset each cycle.
           </p>
         </div>
@@ -113,20 +113,20 @@ export default function Billing() {
               <div className="font-display text-2xl sm:text-3xl font-bold mt-1 tabular-nums" data-testid="billing-balance-value">
                 {fmt(balance)}
               </div>
-              <div className="text-xs text-neutral-400 mt-1">
+              <div className="text-caption text-ink-muted mt-1">
                 {fmt(used)} of {fmt(sub.allowance)} used this cycle
                 {sub.renews_at && <> · renews {new Date(sub.renews_at).toLocaleDateString()}</>}
               </div>
             </div>
             <div className="text-left sm:text-right">
               <div className="ui-label">Current plan</div>
-              <div className="font-display text-xl font-semibold mt-1" data-testid="billing-plan-name">{sub.plan.name}</div>
-              <div className="text-xs text-neutral-400">
+              <div className="font-display font-semibold text-card-title mt-1" data-testid="billing-plan-name">{sub.plan.name}</div>
+              <div className="text-caption text-ink-muted">
                 {sub.plan.price_monthly ? `$${sub.plan.price_monthly}/mo` : "Free"} ·{" "}
                 {sub.plan.seats === 0 ? "Unlimited seats" : `${sub.plan.seats} seat${sub.plan.seats > 1 ? "s" : ""}`}
               </div>
               {sub.plan.id !== "trial" && (
-                <button onClick={openPortal} className="text-xs text-neutral-400 hover:text-sanguine mt-1 inline-flex items-center gap-1">
+                <button onClick={openPortal} className="text-caption text-ink-muted hover:text-ink mt-1 inline-flex items-center gap-1">
                   Manage payment <ExternalLink size={11} />
                 </button>
               )}
@@ -134,12 +134,12 @@ export default function Billing() {
           </div>
           <div className="h-2 rounded-full bg-neutral-100 overflow-hidden mt-5">
             <div
-              className={`h-full rounded-full transition-all ${pct > 85 ? "bg-warning" : "bg-brand-gradient"}`}
+              className={`h-full rounded-full transition-all ${pct > 85 ? "bg-warning" : "bg-accent"}`}
               style={{ width: `${pct}%` }}
             />
           </div>
           {balance === 0 && (
-            <div className="mt-4 text-xs text-warning bg-warning/10 border border-warning/30 rounded-xl px-3 py-2">
+            <div className="mt-4 text-caption text-warning bg-warning/10 border border-warning/30 rounded-xl px-3 py-2">
               You're out of credits. Agents are paused until you top up or upgrade.
             </div>
           )}
@@ -148,12 +148,12 @@ export default function Billing() {
         {/* Plans */}
         <div>
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <h2 className="font-display text-lg font-semibold">Plans</h2>
-            <div className="flex items-center gap-1 rounded-full border border-line bg-white p-1 text-xs">
+            <h2 className="font-display font-semibold text-card-title">Plans</h2>
+            <div className="flex items-center gap-1 rounded-full border border-line bg-white p-1 text-caption">
               <button onClick={() => setAnnual(false)} data-testid="billing-monthly"
-                className={`px-3 py-1 rounded-xl ${!annual ? "bg-ink text-white" : "text-neutral-500"}`}>Monthly</button>
+                className={`px-3 py-1 rounded-xl ${!annual ? "bg-ink text-white" : "text-ink-muted"}`}>Monthly</button>
               <button onClick={() => setAnnual(true)} data-testid="billing-annual"
-                className={`px-3 py-1 rounded-xl ${annual ? "bg-ink text-white" : "text-neutral-500"}`}>Annual · save 20%</button>
+                className={`px-3 py-1 rounded-xl ${annual ? "bg-ink text-white" : "text-ink-muted"}`}>Annual · save 20%</button>
             </div>
           </div>
 
@@ -165,20 +165,20 @@ export default function Billing() {
                 <div key={p.id} data-testid={`plan-${p.id}`}
                   className={`card-flat shadow-card p-4 sm:p-5 flex flex-col relative ${p.popular ? "ring-1 ring-accent" : ""}`}>
                   {p.popular && (
-                    <div className="absolute -top-2 left-5 bg-brand-gradient text-white text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full">
+                    <div className="absolute -top-2 left-5 bg-accent text-white text-tiny font-mono uppercase tracking-wider px-2 py-0.5 rounded-full">
                       Most popular
                     </div>
                   )}
                   <div className="font-display font-semibold">{p.name}</div>
                   <div className="mt-2">
                     <span className="font-display text-2xl sm:text-3xl font-bold">{price ? `$${price}` : "$0"}</span>
-                    <span className="text-xs text-neutral-400">/mo</span>
+                    <span className="text-caption text-ink-muted">/mo</span>
                   </div>
                   {annual && p.price_annual > 0 && (
-                    <div className="text-[11px] text-neutral-400">billed annually</div>
+                    <div className="text-tiny text-ink-muted">billed annually</div>
                   )}
-                  <p className="text-xs text-neutral-400 mt-3 min-h-[32px]">{p.blurb}</p>
-                  <ul className="text-xs space-y-1.5 mt-4 flex-1">
+                  <p className="text-caption text-ink-muted mt-3 min-h-[32px]">{p.blurb}</p>
+                  <ul className="text-caption space-y-1.5 mt-4 flex-1">
                     <li className="flex items-center gap-1.5"><Check size={12} className="text-accent" /> {fmt(p.credits)} credits / month</li>
                     <li className="flex items-center gap-1.5"><Check size={12} className="text-accent" /> {p.seats === 0 ? "Unlimited seats" : `${p.seats} seat${p.seats > 1 ? "s" : ""}`}</li>
                     <li className="flex items-center gap-1.5"><Check size={12} className="text-accent" /> All six agents</li>
@@ -187,8 +187,8 @@ export default function Billing() {
                     disabled={current || busy === p.id || p.id === "trial"}
                     onClick={() => upgrade(p.id)}
                     data-testid={`plan-${p.id}-cta`}
-                    className={`mt-5 w-full text-xs py-2 rounded-xl font-medium disabled:opacity-50 ${
-                      current ? "border border-line text-neutral-400" : "btn-primary"
+                    className={`mt-5 w-full text-caption py-2 rounded-xl font-medium disabled:opacity-50 ${
+                      current ? "border border-line text-ink-muted" : "btn-primary"
                     }`}
                   >
                     {busy === p.id ? "…" : current ? "Current plan" : p.id === "trial" ? "Trial" : `Switch to ${p.name}`}
@@ -197,26 +197,26 @@ export default function Billing() {
               );
             })}
           </div>
-          <p className="text-xs text-neutral-400 mt-4">
+          <p className="text-caption text-ink-muted mt-4">
             Need more than Scale, SSO, or a private deployment?{" "}
-            <a href="mailto:hello@innoira.com" className="text-sanguine hover:underline">Talk to us about Enterprise</a>.
+            <a href="mailto:hello@innoira.com" className="text-ink hover:underline">Talk to us about Enterprise</a>.
           </p>
         </div>
 
         {/* Top-ups */}
         <div>
-          <h2 className="font-display text-lg font-semibold">Top up</h2>
-          <p className="text-xs text-neutral-400 mt-1">One-off credits that land immediately. Your plan doesn't change.</p>
+          <h2 className="font-display font-semibold text-card-title">Top up</h2>
+          <p className="text-caption text-ink-muted mt-1">One-off credits that land immediately. Your plan doesn't change.</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
             {plans.topups.map((t) => (
               <div key={t.id} className="card-flat shadow-card p-4 sm:p-5 flex items-center justify-between" data-testid={`topup-${t.id}`}>
                 <div>
                   <div className="font-display font-semibold">{fmt(t.credits)}</div>
-                  <div className="text-xs text-neutral-400">credits · ${t.price}</div>
+                  <div className="text-caption text-ink-muted">credits · ${t.price}</div>
                 </div>
                 <button onClick={() => buyPack(t.id)} disabled={busy === t.id}
                   data-testid={`topup-${t.id}-cta`}
-                  className="btn-primary text-xs px-4 py-2 rounded-xl disabled:opacity-50">
+                  className="btn-primary text-caption px-4 py-2 rounded-xl disabled:opacity-50">
                   {busy === t.id ? "…" : "Buy"}
                 </button>
               </div>
@@ -227,24 +227,24 @@ export default function Billing() {
         {/* What burns credits */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="card-flat shadow-card p-4 sm:p-6">
-            <h2 className="font-display text-lg font-semibold flex items-center gap-2">
+            <h2 className="font-display font-semibold text-card-title flex items-center gap-2">
               <TrendingUp size={16} /> Where your credits went
             </h2>
             {usage.length === 0 ? (
-              <p className="text-xs text-neutral-400 mt-3">No credits spent yet.</p>
+              <p className="text-caption text-ink-muted mt-3">No credits spent yet.</p>
             ) : (
               <div className="space-y-3 mt-4" data-testid="billing-usage">
                 {usage.map((u) => (
                   <div key={u.action}>
-                    <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center justify-between text-caption">
                       <span className="flex items-center gap-2">
                         {u.agent && (
-                          <span className="w-4 h-4 rounded bg-brand-gradient text-white text-[9px] flex items-center justify-center font-mono">
+                          <span className="w-4 h-4 rounded bg-accent text-white text-tiny flex items-center justify-center font-mono">
                             {AGENT_BADGE[u.agent] || "·"}
                           </span>
                         )}
                         {u.label}
-                        <span className="text-neutral-400">×{u.count}</span>
+                        <span className="text-ink-muted">×{u.count}</span>
                       </span>
                       <span className="tabular-nums font-medium">{fmt(u.credits)}</span>
                     </div>
@@ -258,18 +258,18 @@ export default function Billing() {
           </div>
 
           <div className="card-flat shadow-card p-4 sm:p-6">
-            <h2 className="font-display text-lg font-semibold flex items-center gap-2">
+            <h2 className="font-display font-semibold text-card-title flex items-center gap-2">
               <Zap size={16} /> What each action costs
             </h2>
-            <p className="text-xs text-neutral-400 mt-1">
+            <p className="text-caption text-ink-muted mt-1">
               Priced off what the action actually costs to run. Exports, CRM writes and bookings are free.
             </p>
             <div className="mt-4 divide-y divide-line">
               {plans.credit_costs.map((c) => (
-                <div key={c.action} className="flex items-center justify-between py-2 text-xs">
+                <div key={c.action} className="flex items-center justify-between py-2 text-caption">
                   <span className="flex items-center gap-2">
                     {c.agent && (
-                      <span className="w-4 h-4 rounded bg-neutral-200 text-neutral-700 text-[9px] flex items-center justify-center font-mono">
+                      <span className="w-4 h-4 rounded bg-neutral-200 text-ink-secondary text-tiny flex items-center justify-center font-mono">
                         {AGENT_BADGE[c.agent] || "·"}
                       </span>
                     )}
@@ -284,35 +284,35 @@ export default function Billing() {
 
         {/* Ledger */}
         <div className="card-flat shadow-card p-4 sm:p-6">
-          <h2 className="font-display text-lg font-semibold flex items-center gap-2">
+          <h2 className="font-display font-semibold text-card-title flex items-center gap-2">
             <Receipt size={16} /> Activity
           </h2>
           {ledger.length === 0 ? (
-            <p className="text-xs text-neutral-400 mt-3">Nothing yet.</p>
+            <p className="text-caption text-ink-muted mt-3">Nothing yet.</p>
           ) : (
             <div className="overflow-x-auto card-floating mt-4">
-              <table className="w-full text-xs" data-testid="billing-ledger">
+              <table className="w-full text-table" data-testid="billing-ledger">
                 <thead>
-                  <tr className="text-left text-neutral-400 border-b border-line">
-                    <th className="pb-2 font-medium">When</th>
-                    <th className="pb-2 font-medium">Action</th>
-                    <th className="pb-2 font-medium">Agent</th>
-                    <th className="pb-2 font-medium text-right">Credits</th>
-                    <th className="pb-2 font-medium text-right">Balance</th>
+                  <tr className="text-left border-b border-line">
+                    <th className="pb-2 table-header">When</th>
+                    <th className="pb-2 table-header">Action</th>
+                    <th className="pb-2 table-header">Agent</th>
+                    <th className="pb-2 table-header text-right">Credits</th>
+                    <th className="pb-2 table-header text-right">Balance</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
                   {ledger.map((l) => (
                     <tr key={l.id}>
-                      <td className="py-2 text-neutral-400 whitespace-nowrap">
+                      <td className="py-2 text-ink-muted whitespace-nowrap">
                         {new Date(l.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </td>
                       <td className="py-2">{l.reason}{l.units > 1 ? ` (${l.units}×)` : ""}</td>
-                      <td className="py-2 text-neutral-400">{AGENT_NAME[l.agent] || "—"}</td>
+                      <td className="py-2 text-ink-muted">{AGENT_NAME[l.agent] || "—"}</td>
                       <td className={`py-2 text-right tabular-nums font-medium ${l.delta > 0 ? "text-success" : ""}`}>
                         {l.delta > 0 ? `+${fmt(l.delta)}` : fmt(l.delta)}
                       </td>
-                      <td className="py-2 text-right tabular-nums text-neutral-400">{fmt(l.balance_after)}</td>
+                      <td className="py-2 text-right tabular-nums text-ink-muted">{fmt(l.balance_after)}</td>
                     </tr>
                   ))}
                 </tbody>

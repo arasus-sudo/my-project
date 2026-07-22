@@ -38,6 +38,9 @@ export default function BookingPage() {
         ...form, start_at: selectedSlot, qualifying_answers: answers,
         form_answers: formAnswers,
         selected_duration_minutes: selectedDuration || undefined,
+        // The guest's own timezone — without this every booking/email defaulted
+        // to the host's timezone (or UTC) regardless of who was actually booking.
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       if (res.ok === false && res.redirect_url) {
         window.location.href = res.redirect_url;
@@ -57,12 +60,12 @@ export default function BookingPage() {
       <div className="min-h-screen flex items-center justify-center bg-bone p-6">
         <div className="text-center max-w-sm">
           <div className="text-4xl mb-3">🔗</div>
-          <div className="font-display text-xl font-semibold mb-2">This booking page isn't available</div>
-          <p className="text-sm text-neutral-500">The link may be invalid or the event type has been removed.</p>
+          <div className="text-section font-display font-semibold mb-2">This booking page isn't available</div>
+          <p className="text-body text-ink-tertiary">The link may be invalid or the event type has been removed.</p>
           <div className="mt-4 p-3 bg-danger/10 border border-danger/30 rounded-xl text-left">
-            <p className="text-xs font-mono text-danger break-all">API: /book/{workspaceId}/{eventTypeSlug}</p>
-            <p className="text-xs font-mono text-danger mt-1">Status: {error.status}</p>
-            <p className="text-xs font-mono text-danger mt-1">Detail: {error.detail}</p>
+            <p className="text-caption font-mono text-danger break-all">API: /book/{workspaceId}/{eventTypeSlug}</p>
+            <p className="text-caption font-mono text-danger mt-1">Status: {error.status}</p>
+            <p className="text-caption font-mono text-danger mt-1">Detail: {error.detail}</p>
           </div>
         </div>
       </div>
@@ -72,7 +75,7 @@ export default function BookingPage() {
   if (!data) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bone">
-        <div className="flex items-center gap-2 text-neutral-400">
+        <div className="flex items-center gap-2 text-ink-muted">
           <div className="w-4 h-4 border-2 border-neutral-300 border-t-transparent rounded-full animate-spin" />
           Loading…
         </div>
@@ -101,29 +104,29 @@ export default function BookingPage() {
             <div className="p-8 text-center space-y-4">
               <CheckCircle2 size={40} className="mx-auto text-success" />
               <div>
-                <div className="font-display text-2xl font-semibold" style={{ color: primaryColor }}>
+                <div className="text-page-title font-display font-semibold" style={{ color: primaryColor }}>
                   {branding.confirmation_message || "You're booked!"}
                 </div>
-                <p className="text-sm text-neutral-500 mt-1">
+                <p className="text-body text-ink-tertiary mt-1">
                   {data.event_type.name} with {data.workspace_name}
                 </p>
-                <p className="text-sm font-medium mt-2">
+                <p className="text-body font-medium mt-2">
                   {new Date(confirmed.start_at).toLocaleString(undefined, {
                     weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit",
                   })}
                 </p>
                 {confirmed.selected_duration_minutes && (
-                  <p className="text-xs text-neutral-400 mt-1">
+                  <p className="text-caption text-ink-muted mt-1">
                     {confirmed.selected_duration_minutes} minutes
                   </p>
                 )}
               </div>
 
               {confirmMsg && (
-                <p className="text-sm text-neutral-600 italic">{confirmMsg}</p>
+                <p className="text-body text-ink-secondary italic">{confirmMsg}</p>
               )}
 
-              <p className="text-xs text-neutral-400">
+              <p className="text-caption text-ink-muted">
                 A confirmation is on its way to {confirmed.guest_email}, with a calendar invite attached.
               </p>
 
@@ -131,19 +134,19 @@ export default function BookingPage() {
                 {confirmed.meet_link && (
                   <a href={confirmed.meet_link} target="_blank" rel="noreferrer"
                     data-testid="join-link"
-                    className="btn-primary justify-center text-sm py-2"
+                    className="btn-primary justify-center py-2"
                     style={primaryStyle}>
                     <Video size={14} /> Join video call
                   </a>
                 )}
                 <a href={calUrl} target="_blank" rel="noreferrer"
                   data-testid="add-to-calendar"
-                  className="border border-line rounded-xl py-2 text-sm flex items-center justify-center gap-1.5 hover:bg-surfacehover">
+                  className="border border-line rounded-xl py-2 text-button font-medium font-display flex items-center justify-center gap-1.5 hover:bg-surfacehover">
                   <CalendarPlus size={14} /> Add to calendar
                 </a>
                 {confirmed.manage_token && (
                   <Link to={`/book/manage/${confirmed.manage_token}`} data-testid="manage-link"
-                    className="text-xs text-neutral-400 hover:text-ink underline underline-offset-2 pt-1">
+                    className="text-caption text-ink-muted hover:text-ink underline underline-offset-2 pt-1">
                     Need a different time? Reschedule or cancel
                   </Link>
                 )}
@@ -167,21 +170,21 @@ export default function BookingPage() {
             {branding.logo_url && (
               <img src={branding.logo_url} alt="" className="h-8 mb-6 object-contain" />
             )}
-            <div className="text-xs text-neutral-400 font-medium uppercase tracking-wider mb-1">{data.workspace_name}</div>
-            <h1 className="font-display text-xl font-bold mb-2">{et.name}</h1>
-            {et.description && <p className="text-sm text-neutral-500 mb-4">{et.description}</p>}
-            <div className="space-y-2 text-sm text-neutral-500">
+            <div className="ui-label mb-1">{data.workspace_name}</div>
+            <h1 className="text-section font-display font-semibold mb-2">{et.name}</h1>
+            {et.description && <p className="text-body text-ink-tertiary mb-4">{et.description}</p>}
+            <div className="space-y-2 text-body text-ink-tertiary">
               <div className="flex items-center gap-2">
-                <Clock size={14} className="shrink-0 text-neutral-400" />
+                <Clock size={14} className="shrink-0 text-ink-muted" />
                 <span>{hasMultipleDurations ? `${Math.min(...et.duration_options.map(d => d.minutes))}–${Math.max(...et.duration_options.map(d => d.minutes))} min` : `${et.duration_minutes} min`}</span>
               </div>
               <div className="flex items-center gap-2">
-                <MapPin size={14} className="shrink-0 text-neutral-400" />
+                <MapPin size={14} className="shrink-0 text-ink-muted" />
                 <span className="capitalize">{et.location_type === "video" ? "Video call (Google Meet)" : et.location_type === "phone" ? "Phone call" : "In person"}</span>
               </div>
             </div>
             {branding.custom_message && (
-              <p className="text-sm text-neutral-600 mt-6 italic border-t border-line pt-4">{branding.custom_message}</p>
+              <p className="text-body text-ink-secondary mt-6 italic border-t border-line pt-4">{branding.custom_message}</p>
             )}
           </div>
 
@@ -189,13 +192,13 @@ export default function BookingPage() {
           <div className="flex-1 p-6 sm:p-8">
             {step === "slot" && (
               <div>
-                <h2 className="font-display text-base font-semibold mb-4">Select a time</h2>
+                <h2 className="text-subheading font-display font-semibold mb-4">Select a time</h2>
 
                 {hasMultipleDurations && (
-                  <div className="flex gap-2 mb-4">
+                  <div className="flex flex-wrap gap-2 mb-4">
                     {et.duration_options.map((opt) => (
                       <button key={opt.minutes} onClick={() => setSelectedDuration(opt.minutes)}
-                        className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${selectedDuration === opt.minutes ? 'border-ink bg-ink text-white' : 'border-line hover:border-neutral-400'}`}>
+                        className={`px-3 py-1.5 text-body rounded-lg border transition-all ${selectedDuration === opt.minutes ? 'border-ink bg-ink text-white' : 'border-line hover:border-neutral-400'}`}>
                         {opt.label || `${opt.minutes} min`}
                       </button>
                     ))}
@@ -208,19 +211,19 @@ export default function BookingPage() {
 
             {step === "form" && selectedSlot && (
               <div>
-                <button onClick={() => setStep("slot")} className="flex items-center gap-1 text-xs text-neutral-400 hover:text-ink mb-4">
+                <button onClick={() => setStep("slot")} className="flex items-center gap-1 text-caption text-ink-muted hover:text-ink mb-4">
                   <ChevronLeft size={12} /> Back to time selection
                 </button>
 
-                <div className="flex items-center gap-2 mb-5 p-3 bg-neutral-50 rounded-xl border border-line text-sm">
-                  <CalendarClock size={14} className="shrink-0 text-neutral-400" />
+                <div className="flex items-center gap-2 mb-5 p-3 bg-neutral-50 rounded-xl border border-line text-body">
+                  <CalendarClock size={14} className="shrink-0 text-ink-muted" />
                   <span className="font-medium">
                     {new Date(selectedSlot).toLocaleString(undefined, {
                       weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
                     })}
                   </span>
                   {selectedDuration && (
-                    <span className="text-neutral-400">· {selectedDuration} min</span>
+                    <span className="text-ink-muted">· {selectedDuration} min</span>
                   )}
                 </div>
 
@@ -228,17 +231,17 @@ export default function BookingPage() {
                   <input required placeholder="Your name" value={form.guest_name}
                     onChange={(e) => setForm({ ...form, guest_name: e.target.value })}
                     data-testid="guest-name"
-                    className="w-full border border-line px-3 py-2.5 rounded-xl text-sm focus:border-ink focus:outline-none transition-colors" />
+                    className="w-full border border-line px-3 py-2.5 rounded-xl text-input focus:border-ink focus:outline-none transition-colors" />
 
                   <input required type="email" placeholder="Email address" value={form.guest_email}
                     onChange={(e) => setForm({ ...form, guest_email: e.target.value })}
                     data-testid="guest-email"
-                    className="w-full border border-line px-3 py-2.5 rounded-xl text-sm focus:border-ink focus:outline-none transition-colors" />
+                    className="w-full border border-line px-3 py-2.5 rounded-xl text-input focus:border-ink focus:outline-none transition-colors" />
 
                   <input placeholder="Phone (optional)" value={form.guest_phone}
                     onChange={(e) => setForm({ ...form, guest_phone: e.target.value })}
                     data-testid="guest-phone"
-                    className="w-full border border-line px-3 py-2.5 rounded-xl text-sm focus:border-ink focus:outline-none transition-colors" />
+                    className="w-full border border-line px-3 py-2.5 rounded-xl text-input focus:border-ink focus:outline-none transition-colors" />
 
                   {/* Custom form fields */}
                   {et.form_fields?.map((field) => (
@@ -247,12 +250,12 @@ export default function BookingPage() {
                         <textarea placeholder={field.label} required={field.required}
                           value={formAnswers[field.key] || ""}
                           onChange={(e) => setFormAnswers({ ...formAnswers, [field.key]: e.target.value })}
-                          className="w-full border border-line px-3 py-2.5 rounded-xl text-sm focus:border-ink focus:outline-none transition-colors" rows={2} />
+                          className="w-full border border-line px-3 py-2.5 rounded-xl text-input focus:border-ink focus:outline-none transition-colors" rows={2} />
                       ) : field.type === "dropdown" ? (
                         <select required={field.required}
                           value={formAnswers[field.key] || ""}
                           onChange={(e) => setFormAnswers({ ...formAnswers, [field.key]: e.target.value })}
-                          className="w-full border border-line px-3 py-2.5 rounded-xl text-sm focus:border-ink focus:outline-none transition-colors">
+                          className="w-full border border-line px-3 py-2.5 rounded-xl text-input focus:border-ink focus:outline-none transition-colors">
                           <option value="">{field.label}</option>
                           {field.options?.map((opt) => (
                             <option key={opt} value={opt}>{opt}</option>
@@ -263,25 +266,25 @@ export default function BookingPage() {
                           placeholder={field.label} required={field.required}
                           value={formAnswers[field.key] || ""}
                           onChange={(e) => setFormAnswers({ ...formAnswers, [field.key]: e.target.value })}
-                          className="w-full border border-line px-3 py-2.5 rounded-xl text-sm focus:border-ink focus:outline-none transition-colors" />
+                          className="w-full border border-line px-3 py-2.5 rounded-xl text-input focus:border-ink focus:outline-none transition-colors" />
                       )}
                     </div>
                   ))}
 
-                  {/* AI qualifying questions */}
+                  {/* Qualifying questions */}
                   {et.qualifying_questions?.map((q) => (
                     <div key={q.key}>
-                      <label className="text-xs text-neutral-500 block mb-1">{q.prompt}</label>
+                      <label className="form-label block mb-1">{q.prompt}</label>
                       <input value={answers[q.key] || ""}
                         onChange={(e) => setAnswers({ ...answers, [q.key]: e.target.value })}
                         data-testid={`qanswer-${q.key}`}
-                        className="w-full border border-line px-3 py-2.5 rounded-xl text-sm focus:border-ink focus:outline-none transition-colors" />
+                        className="w-full border border-line px-3 py-2.5 rounded-xl text-input focus:border-ink focus:outline-none transition-colors" />
                     </div>
                   ))}
 
                   <button type="submit" disabled={busy}
                     data-testid="confirm-booking-btn"
-                    className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-button font-medium font-display transition-opacity hover:opacity-90 disabled:opacity-50"
                     style={primaryStyle}>
                     {busy ? "Booking…" : branding.button_text || "Confirm booking"}
                     {!busy && <ArrowRight size={14} />}

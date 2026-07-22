@@ -53,14 +53,14 @@ export default function ManageBooking() {
   if (error) {
     return (
       <Shell>
-        <p className="text-sm text-neutral-500">
+        <p className="text-body text-ink-tertiary">
           This link isn't valid any more. If you think that's a mistake, reply to your confirmation email.
         </p>
       </Shell>
     );
   }
   if (!data) {
-    return <Shell><Loader2 className="animate-spin text-neutral-400 mx-auto" /></Shell>;
+    return <Shell><Loader2 className="animate-spin text-ink-muted mx-auto" /></Shell>;
   }
 
   const { booking, event_type: et, workspace_name: ws, open_slots: slots } = data;
@@ -79,9 +79,9 @@ export default function ManageBooking() {
     return (
       <Shell>
         <div className="text-center space-y-3" data-testid="booking-cancelled">
-          <XCircle size={32} className="mx-auto text-neutral-400" />
-          <div className="font-display text-xl sm:text-2xl font-semibold">Meeting cancelled</div>
-          <p className="text-sm text-neutral-500">
+          <XCircle size={32} className="mx-auto text-ink-muted" />
+          <div className="text-section font-display font-semibold">Meeting cancelled</div>
+          <p className="text-body text-ink-tertiary">
             Your {et.name} with {ws} is cancelled. Nothing further is needed — we've let them know.
           </p>
         </div>
@@ -92,47 +92,47 @@ export default function ManageBooking() {
   return (
     <Shell>
       {done === "rescheduled" && (
-        <div className="mb-5 flex items-center gap-2 rounded-xl border border-success/30 bg-ash px-3 py-2 text-xs text-success"
+        <div className="mb-5 flex items-center gap-2 rounded-xl border border-success/30 bg-ash px-3 py-2 text-caption text-success"
           data-testid="reschedule-success">
           <CheckCircle2 size={14} /> Moved. We've emailed the new time to both of you.
         </div>
       )}
 
-      <div className="ui-label text-neutral-400">{ws}</div>
-      <div className="font-display text-xl sm:text-2xl font-bold mt-1">{et.name}</div>
-      <div className="text-xs text-neutral-400 font-mono mt-2 flex items-center gap-1">
+      <div className="ui-label">{ws}</div>
+      <div className="text-section font-display font-semibold mt-1">{et.name}</div>
+      <div className="text-tiny text-ink-muted font-mono mt-2 flex items-center gap-1">
         <CalendarClock size={12} /> {et.duration_minutes} min · {et.location_type}
       </div>
 
       <div className="mt-5 rounded-xl border border-line bg-bone px-4 py-3" data-testid="current-time">
         <div className="ui-label">Your meeting</div>
-        <div className="text-sm font-medium mt-1">
+        <div className="text-body font-medium mt-1">
           {when.toLocaleString(undefined, {
             weekday: "long", month: "long", day: "numeric",
             hour: "numeric", minute: "2-digit",
           })}
         </div>
-        <div className="text-xs text-neutral-400 mt-0.5">Shown in your local time.</div>
+        <div className="text-tiny text-ink-muted mt-0.5">Shown in your local time.</div>
       </div>
 
       {mode === "view" && (
         <div className="mt-5 flex flex-col gap-2">
           {booking.meet_link && (
             <a href={booking.meet_link} target="_blank" rel="noreferrer" data-testid="join-link"
-              className="btn-primary justify-center text-sm py-2">
+              className="btn-primary justify-center py-2">
               <Video size={14} /> Join video call
             </a>
           )}
           <a href={calUrl} target="_blank" rel="noreferrer" data-testid="add-to-calendar"
-            className="border border-line rounded-xl py-2 text-sm flex items-center justify-center gap-1.5 hover:bg-surfacehover">
+            className="border border-line rounded-xl py-2 text-button font-medium font-display flex items-center justify-center gap-1.5 hover:bg-surfacehover">
             <CalendarPlus size={14} /> Add to calendar
           </a>
           <button onClick={() => setMode("reschedule")} data-testid="reschedule-btn"
-            className="border border-line rounded-xl py-2 text-sm hover:bg-surfacehover">
+            className="border border-line rounded-xl py-2 text-button font-medium font-display hover:bg-surfacehover">
             Reschedule
           </button>
           <button onClick={() => setMode("confirmCancel")} data-testid="cancel-btn"
-            className="text-xs text-neutral-400 hover:text-sanguine underline underline-offset-2 pt-1">
+            className="text-caption text-ink-muted hover:text-danger underline underline-offset-2 pt-1">
             Cancel this meeting
           </button>
         </div>
@@ -140,7 +140,7 @@ export default function ManageBooking() {
 
       {mode === "reschedule" && (
         <div className="mt-5">
-          <button onClick={() => setMode("view")} className="text-xs text-neutral-400 hover:text-ink flex items-center gap-1 mb-3">
+          <button onClick={() => setMode("view")} className="text-caption text-ink-muted hover:text-ink flex items-center gap-1 mb-3">
             <ArrowLeft size={12} /> Back
           </button>
           <div className="ui-label mb-3">Pick a new time</div>
@@ -151,22 +151,22 @@ export default function ManageBooking() {
               emptyMessage="No other times are open right now. Reply to your confirmation email and we'll sort something out."
             />
           </div>
-          {busy && <div className="text-xs text-neutral-400 mt-3 flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Moving your meeting…</div>}
+          {busy && <div className="text-caption text-ink-muted mt-3 flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Moving your meeting…</div>}
         </div>
       )}
 
       {mode === "confirmCancel" && (
         <div className="mt-5 rounded-xl border border-warning/30 bg-warning/10 p-4" data-testid="cancel-confirm">
-          <div className="text-sm font-medium text-warning">Cancel this meeting?</div>
-          <p className="text-xs text-warning mt-1">
+          <div className="text-body font-medium text-warning">Cancel this meeting?</div>
+          <p className="text-caption text-warning mt-1">
             The slot opens back up and {ws} is notified. This can't be undone — you'd need to book again.
           </p>
           <div className="flex gap-2 mt-3">
             <button onClick={cancel} disabled={busy} data-testid="cancel-confirm-btn"
-              className="bg-danger text-white rounded-xl px-4 py-1.5 text-xs font-medium disabled:opacity-50">
+              className="bg-danger text-white rounded-xl px-4 py-1.5 text-caption font-medium disabled:opacity-50">
               {busy ? "Cancelling…" : "Yes, cancel it"}
             </button>
-            <button onClick={() => setMode("view")} className="text-xs text-neutral-500 px-3 hover:text-ink">
+            <button onClick={() => setMode("view")} className="text-caption text-ink-tertiary px-3 hover:text-ink">
               Keep the meeting
             </button>
           </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api, isCreditError } from "../lib/api";
 import { toast } from "sonner";
-import { Search, Sparkles, Bot, X, ChevronLeft, ChevronRight, SlidersHorizontal, Loader2, Wallet, Lightbulb, List, Tags, Flag, Megaphone } from "lucide-react";
+import { Search, Bot, X, ChevronLeft, ChevronRight, SlidersHorizontal, Loader2, Wallet, Lightbulb, List, Tags, Flag, Megaphone } from "lucide-react";
 import { PageHeader } from "../components/AppLayout";
 import LeadSearchFilters from "../components/lead-search/LeadSearchFilters";
 import LeadSearchTable from "../components/lead-search/LeadSearchTable";
@@ -242,17 +242,17 @@ export default function LeadSearch() {
       <div className="shrink-0 bg-white border-b border-line">
         <div className="px-5 py-3 flex items-center justify-between">
           <div>
-            <h1 className="font-display font-semibold text-base">Lead Search</h1>
-            <p className="text-xs text-ink-muted">Find and prospect leads across multiple data providers</p>
+            <h1 className="font-display font-semibold text-subheading">Lead Search</h1>
+            <p className="text-caption text-ink-muted">Find and prospect leads across multiple data providers</p>
           </div>
           <div className="flex items-center gap-3">
             {creditBalance !== null && (
-              <div className="flex items-center gap-1.5 text-xs text-ink-muted font-mono bg-ash rounded-full px-3 py-1.5 border border-line">
+              <div className="flex items-center gap-1.5 text-caption text-ink-muted font-mono bg-ash rounded-full px-3 py-1.5 border border-line">
                 <Wallet size={12} /> {creditBalance} credits
               </div>
             )}
             <button onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="btn-secondary text-xs py-1.5 px-3">
+              className="btn-secondary text-caption py-1.5 px-3">
               <SlidersHorizontal size={13} /> {sidebarOpen ? "Hide Filters" : "Show Filters"}
             </button>
           </div>
@@ -267,13 +267,13 @@ export default function LeadSearch() {
             <input value={query} onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") aiSearch(); }}
               placeholder='AI Search — e.g. "CTOs at SaaS startups in Berlin, 50-200 employees, mobile numbers"'
-              className="w-full pl-10 pr-36 py-3 border border-line rounded-xl text-sm bg-ash/30 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
+              className="w-full pl-10 pr-36 py-3 border border-line rounded-xl text-input bg-ash/30 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1.5">
               <button onClick={() => setShowAiExamples(!showAiExamples)}
-                className="btn-ghost text-xs py-1.5 px-2 text-ink-muted"><Lightbulb size={13} /></button>
+                className="btn-ghost text-caption py-1.5 px-2 text-ink-muted"><Lightbulb size={13} /></button>
               <button onClick={aiSearch} disabled={aiBusy || !query.trim()}
-                className="btn-primary text-xs py-1.5 px-3 disabled:opacity-50 flex items-center gap-1.5">
-                {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                className="btn-primary text-caption py-1.5 px-3 disabled:opacity-50 flex items-center gap-1.5">
+                {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
                 {aiBusy ? "Analyzing…" : "AI Search"}
               </button>
             </div>
@@ -282,7 +282,7 @@ export default function LeadSearch() {
             <div className="mt-2 flex flex-wrap gap-1.5">
               {AI_EXAMPLES.map((ex, i) => (
                 <button key={i} onClick={() => { setQuery(ex); setShowAiExamples(false); }}
-                  className="text-xs bg-white border border-line rounded-full px-2.5 py-1 hover:border-accent hover:text-accent transition-colors">
+                  className="text-caption bg-white border border-line rounded-full px-2.5 py-1 hover:border-accent hover:text-accent transition-colors">
                   {ex}
                 </button>
               ))}
@@ -294,8 +294,8 @@ export default function LeadSearch() {
       {/* Parsed AI filters banner */}
       {parsedFilters && (
         <div className="shrink-0 px-5 py-2 bg-blue-50/50 border-b border-blue-200 flex items-center gap-2">
-          <Sparkles size={12} className="text-blue-500" />
-          <span className="text-xs text-blue-700 font-medium">AI parsed your query — filters applied below</span>
+          <SlidersHorizontal size={12} className="text-blue-500" />
+          <span className="text-caption text-blue-700 font-medium">AI parsed your query — filters applied below</span>
           <button onClick={() => setParsedFilters(null)} className="ml-auto text-blue-400 hover:text-blue-600"><X size={12} /></button>
         </div>
       )}
@@ -336,8 +336,8 @@ export default function LeadSearch() {
           {/* Bulk action bar */}
           {selCount > 0 && (
             <div className="shrink-0 px-4 py-2 border-b border-line bg-accent/5 flex items-center gap-3">
-              <span className="text-sm font-medium">{selCount} selected</span>
-              <button onClick={importToCrm} className="btn-primary text-xs py-1.5">Import to CRM</button>
+              <span className="text-body font-medium">{selCount} selected</span>
+              <button onClick={importToCrm} className="btn-primary text-caption py-1.5">Import to CRM</button>
               <BulkActions
                 leadIds={results.filter((_, i) => selected.has(i)).map((r) => r.id).filter(Boolean)}
                 onDone={() => { loadCredits(); setSelected(new Set()); }} />
@@ -345,10 +345,10 @@ export default function LeadSearch() {
                 leadIds={results.filter((_, i) => selected.has(i)).map((r) => r.id || r.email).filter(Boolean)}
                 onDone={() => setSelected(new Set())} />
               <button onClick={() => { results.filter((_, i) => selected.has(i)).forEach((l) => revealContact(l, "email")); }}
-                className="btn-secondary text-xs py-1.5 flex items-center gap-1"><Mail size={11} /> Reveal Emails</button>
+                className="btn-secondary text-caption py-1.5 flex items-center gap-1"><Mail size={11} /> Reveal Emails</button>
               <button onClick={() => { results.filter((_, i) => selected.has(i)).forEach((l) => revealContact(l, "phone")); }}
-                className="btn-secondary text-xs py-1.5 flex items-center gap-1"><Phone size={11} /> Reveal Phones</button>
-              <button onClick={() => setSelected(new Set())} className="btn-ghost text-xs py-1.5 ml-auto text-ink-muted">Clear</button>
+                className="btn-secondary text-caption py-1.5 flex items-center gap-1"><Phone size={11} /> Reveal Phones</button>
+              <button onClick={() => setSelected(new Set())} className="btn-ghost text-caption py-1.5 ml-auto text-ink-muted">Clear</button>
             </div>
           )}
 
@@ -356,7 +356,7 @@ export default function LeadSearch() {
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
                 <Loader2 size={28} className="animate-spin text-accent mx-auto mb-3" />
-                <p className="text-sm text-ink-muted">{aiBusy ? "AI is analyzing your request…" : "Searching across providers…"}</p>
+                <p className="text-caption text-ink-muted">{aiBusy ? "AI is analyzing your request…" : "Searching across providers…"}</p>
               </div>
             </div>
           ) : hasResults ? (
@@ -375,8 +375,8 @@ export default function LeadSearch() {
                 <div className="w-14 h-14 bg-ash rounded-2xl flex items-center justify-center mx-auto mb-4 border border-line">
                   <Search size={24} className="text-ink-muted" />
                 </div>
-                <h3 className="font-display font-semibold text-base mb-1">Find your next leads</h3>
-                <p className="text-sm text-ink-muted">
+                <h3 className="font-display font-semibold text-subheading mb-1">Find your next leads</h3>
+                <p className="text-caption text-ink-muted">
                   Use the <strong>AI search</strong> bar above for natural language queries, or open the <strong>filters panel</strong> to build a precise search.
                 </p>
               </div>

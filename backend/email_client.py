@@ -140,9 +140,21 @@ def _shell(title: str, intro: str, rows: List[tuple], cta: Optional[tuple],
 
 def _when(booking: Dict[str, Any]) -> str:
     from datetime import datetime
-    start = datetime.fromisoformat(booking["start_at"])
-    end = datetime.fromisoformat(booking["end_at"])
-    return f"{start.strftime('%A, %d %B %Y')}<br>{start.strftime('%H:%M')}–{end.strftime('%H:%M')} ({booking.get('timezone', 'UTC')})"
+    from zoneinfo import ZoneInfo
+    # `start_at`/`end_at` are stored in the HOST's offset (slots are generated
+    # from the host's availability), while `booking["timezone"]` is the GUEST's
+    # captured zone — these can differ, so the wall-clock time must be
+    # converted, not just relabeled, or the email would show the host's time
+    # under the guest's zone name.
+    tz_name = booking.get("timezone") or "UTC"
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = ZoneInfo("UTC")
+        tz_name = "UTC"
+    start = datetime.fromisoformat(booking["start_at"]).astimezone(tz)
+    end = datetime.fromisoformat(booking["end_at"]).astimezone(tz)
+    return f"{start.strftime('%A, %d %B %Y')}<br>{start.strftime('%H:%M')}–{end.strftime('%H:%M')} ({tz_name})"
 
 
 def _manage_url(booking: Dict[str, Any]) -> str:
@@ -181,13 +193,32 @@ def confirmation_email(booking: Dict[str, Any], event_name: str, host_name: str,
     return title, _shell(title, intro, rows, cta, note)
 
 
-def reminder_email(booking: Dict[str, Any], event_name: str, host_name: str) -> tuple:
-    title = "Your meeting is tomorrow"
-    intro = f"A reminder that <strong>{event_name}</strong> with {host_name} is coming up."
-    rows = [("Event", event_name), ("With", host_name), ("When", _when(booking)), ("Where", _location(booking))]
+def _stage_label(minutes_before: int) -> str:
+    if minutes_before >= 1440 and minutes_before % 1440 == 0:
+        days = minutes_before // 1440
+        return "tomorrow" if days == 1 else f"in {days} days"
+    if minutes_before >= 60 and minutes_before % 60 == 0:
+        hours = minutes_before // 60
+        return "in an hour" if hours == 1 else f"in {hours} hours"
+    return f"in {minutes_before} minutes"
+
+
+def reminder_email(booking: Dict[str, Any], event_name: str, host_name: str,
+                    minutes_before: int = 1440, for_host: bool = False) -> tuple:
+    when_label = _stage_label(minutes_before)
+    title = f"Your meeting is {when_label}" if not for_host else f"{booking['guest_name']}'s meeting is {when_label}"
+    intro = (
+        f"A reminder that <strong>{event_name}</strong> with {host_name} is coming up {when_label}."
+        if not for_host else
+        f"A reminder that <strong>{event_name}</strong> with {booking['guest_name']} is coming up {when_label}."
+    )
+    rows = [("Event", event_name), ("With", host_name if not for_host else booking["guest_name"]),
+            ("When", _when(booking)), ("Where", _location(booking))]
     cta = ("Join the meeting", booking["meet_link"]) if booking.get("meet_link") else None
-    note = (f'Can no longer make it? <a href="{_manage_url(booking)}" style="color:{_INK};">'
-            f'Reschedule or cancel</a>.')
+    note = "" if for_host else (
+        f'Can no longer make it? <a href="{_manage_url(booking)}" style="color:{_INK};">'
+        f'Reschedule or cancel</a>.'
+    )
     return title, _shell(title, intro, rows, cta, note)
 
 

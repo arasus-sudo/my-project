@@ -652,13 +652,12 @@ async def delete_campaign(cid: str, user=Depends(current_user)):
 
 
 @api.post("/campaigns/{cid}/launch")
-async def launch_campaign(cid: str, user=Depends(current_user)):
+async def launch_campaign(cid: str, skip_pending: bool = False, user=Depends(current_user)):
     """Enqueue a campaign for real sending.
 
-    This used to fabricate its own metrics: it invented sent/opened/clicked/replied
-    events from `seed = (i*31 + step_idx*7) % 100` and never sent an email. It now
-    schedules real sends, and refuses to launch at all if there's no mailbox to
-    send from — a launch that silently sends nothing is worse than an error.
+    By default every lead must be approved before launch. Pass `skip_pending=true`
+    to send only to leads whose personalised email has been approved — the rest
+    are skipped rather than blocked.
     """
     from sender import enqueue_campaign
 
@@ -672,13 +671,19 @@ async def launch_campaign(cid: str, user=Depends(current_user)):
         missing = [lid for lid in lead_ids if lid not in pmap]
         drafts = [lid for lid in lead_ids if pmap.get(lid, {}).get("status") == "draft"]
         if missing or drafts:
-            reviewed = len(lead_ids) - len(missing) - len(drafts)
-            raise HTTPException(
-                400,
-                f"Review incomplete — {reviewed} of {len(lead_ids)} leads reviewed "
-                f"({len(missing)} not yet generated, {len(drafts)} awaiting approve/reject). "
-                "Every lead must be approved or rejected before launch.",
-            )
+            if skip_pending:
+                approved_ids = [lid for lid in lead_ids if pmap.get(lid, {}).get("status") == "approved"]
+                if not approved_ids:
+                    raise HTTPException(400, "No approved emails to send — approve at least one lead first.")
+                c["lead_ids"] = approved_ids
+            else:
+                reviewed = len(lead_ids) - len(missing) - len(drafts)
+                raise HTTPException(
+                    400,
+                    f"Review incomplete — {reviewed} of {len(lead_ids)} leads reviewed "
+                    f"({len(missing)} not yet generated, {len(drafts)} awaiting approve/reject). "
+                    "Every lead must be approved or rejected before launch.",
+                )
 
     try:
         result = await enqueue_campaign(user["workspace_id"], c)

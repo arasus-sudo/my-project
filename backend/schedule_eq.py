@@ -206,10 +206,21 @@ async def _compute_open_slots(workspace_id: str, event_type: Dict[str, Any]) -> 
     buffer_before = timedelta(minutes=event_type.get("buffer_before_minutes", 0))
     buffer_after = timedelta(minutes=event_type.get("buffer_after_minutes", 0))
 
+    # Widened to every confirmed booking in the workspace, not just this event
+    # type — the host only has one calendar, so a booking under a *different*
+    # event type must still block this one's slots (previously two event types
+    # could double-book the same host slot when Google Calendar wasn't connected).
     existing = await db.bookings.find({
-        "workspace_id": workspace_id, "event_type_id": event_type["id"], "status": "confirmed",
-    }, {"_id": 0}).to_list(1000)
+        "workspace_id": workspace_id, "status": "confirmed",
+    }, {"_id": 0}).to_list(2000)
     busy_ranges = [(datetime.fromisoformat(b["start_at"]), datetime.fromisoformat(b["end_at"])) for b in existing]
+    # True bookings/day cap: seed day_counts from already-confirmed bookings
+    # (across all event types, same reasoning as above) so `daily_limit` caps
+    # total meetings that day, not just slots offered in this one computation.
+    existing_day_counts: Dict[str, int] = {}
+    for b in existing:
+        d = datetime.fromisoformat(b["start_at"]).astimezone(tz).date().isoformat()
+        existing_day_counts[d] = existing_day_counts.get(d, 0) + 1
 
     integration = await db.calendar_integrations.find_one({"workspace_id": workspace_id}, {"_id": 0})
     if integration:
@@ -222,7 +233,7 @@ async def _compute_open_slots(workspace_id: str, event_type: Dict[str, Any]) -> 
                 continue
 
     slots: List[str] = []
-    day_counts: Dict[str, int] = {}
+    day_counts: Dict[str, int] = dict(existing_day_counts)
     for day_offset in range(days_ahead):
         day = (now_local + timedelta(days=day_offset)).date()
         date_str = day.isoformat()
@@ -339,7 +350,8 @@ async def _record_email(workspace_id: str, booking_id: str, kind: str, to: str,
 
 
 async def _notify(kind: str, workspace_id: str, booking: Dict[str, Any],
-                   event_type: Dict[str, Any], old_when: str = "") -> None:
+                   event_type: Dict[str, Any], old_when: str = "",
+                   reminder_stage_minutes: int = 1440) -> None:
     """Send the guest + host pair for a booking lifecycle event. Never raises: a
     mail failure must not undo a booking that already happened."""
     try:
@@ -354,7 +366,13 @@ async def _notify(kind: str, workspace_id: str, booking: Dict[str, Any],
                 (host["email"], email_client.confirmation_email(booking, name, host["name"], for_host=True), ics),
             ]
         elif kind == "reminder":
-            pairs = [(booking["guest_email"], email_client.reminder_email(booking, name, host["name"]), None)]
+            # Matches confirmation/reschedule/cancel: attach the .ics and send the
+            # host a copy too, not just the guest.
+            ics = build_invite(booking, name, desc, host["email"], method="REQUEST")
+            pairs = [
+                (booking["guest_email"], email_client.reminder_email(booking, name, host["name"], reminder_stage_minutes, for_host=False), ics),
+                (host["email"], email_client.reminder_email(booking, name, host["name"], reminder_stage_minutes, for_host=True), ics),
+            ]
         elif kind == "reschedule":
             ics = build_invite(booking, name, desc, host["email"], method="REQUEST")
             pairs = [
@@ -477,7 +495,7 @@ async def reschedule_booking(token: str, body: RescheduleIn):
         # Bumping SEQUENCE is what tells a calendar client to move the existing
         # event instead of creating a second one.
         "ics_sequence": int(b.get("ics_sequence", 0)) + 1,
-        "reminder_sent_at": None,  # new time earns a fresh reminder
+        "reminders_sent": [],  # new time earns fresh reminders at every configured stage
         "rescheduled_at": now_iso(),
     }
     await db.bookings.update_one({"id": b["id"]}, {"$set": patch})
@@ -597,7 +615,7 @@ async def create_booking(workspace_id: str, event_type_slug: str, body: BookingI
         "no_show_risk_score": risk_score, "prep_brief": prep_brief,
         "utm_source": body.utm_source, "utm_medium": body.utm_medium, "utm_campaign": body.utm_campaign,
         "manage_token": secrets.token_urlsafe(32),
-        "ics_sequence": 0, "reminder_sent_at": None,
+        "ics_sequence": 0, "reminders_sent": [],
         "created_at": now_iso(), "cancelled_at": None,
     }
     await db.bookings.insert_one(booking)
@@ -686,26 +704,23 @@ async def email_status(user=Depends(current_user)):
     return {"mocked": EMAIL_MOCKED, "from": email_client.EMAIL_FROM, "sent_count": sent}
 
 
-# ----------------------------- 24h reminder job -------------------------------------
+# ----------------------------- Multi-stage reminder job -----------------------------
 async def run_reminder_tick() -> int:
-    """Email a reminder for every confirmed booking starting in ~24h.
+    """Email a reminder for every confirmed booking at each configured offset in
+    its event type's `reminder_config.minutes_before` (e.g. [1440, 60] = a day
+    before AND an hour before — Calendly-style multi-stage reminders).
 
-    Idempotent by the `reminder_sent_at` stamp, which is claimed with a conditional
-    update *before* the send — so a restart, an overlapping tick, or two workers can
-    never double-remind the same guest. Returns how many were sent.
+    Idempotent per stage via `reminders_sent` (a list of the `minutes_before`
+    values already fired for this booking): a stage is claimed with a
+    conditional `$push` guarded by `{"reminders_sent": {"$ne": stage}}` *before*
+    sending, so a restart, an overlapping tick, or two workers can never
+    double-remind the same guest at the same stage. Returns how many were sent.
     """
     now = datetime.now(timezone.utc)
-    lo, hi = now + timedelta(hours=23), now + timedelta(hours=25)
 
-    # `start_at` is an ISO string carrying the workspace's UTC offset, and such
-    # strings do NOT sort correctly against each other across different offsets
-    # ("…T10:00+05:30" vs "…T10:00+00:00" compare bytewise, not chronologically).
-    # So the window is applied on parsed, offset-aware datetimes, not in the query.
-    candidates = await db.bookings.find({
-        "status": "confirmed", "reminder_sent_at": None,
-    }, {"_id": 0}).to_list(2000)
+    candidates = await db.bookings.find({"status": "confirmed"}, {"_id": 0}).to_list(2000)
 
-    due = []
+    sent = 0
     for b in candidates:
         try:
             start = datetime.fromisoformat(b["start_at"])
@@ -713,29 +728,32 @@ async def run_reminder_tick() -> int:
             continue
         if start.tzinfo is None:
             start = start.replace(tzinfo=timezone.utc)
-        if lo <= start <= hi:
-            due.append(b)
+        if start <= now:
+            continue  # meeting already started/passed — nothing left to remind about
 
-    sent = 0
-    for b in due:
         et = await db.event_types.find_one({"id": b["event_type_id"]}, {"_id": 0})
         if not et:
             continue
-        # Respect per-event-type reminder settings
         rc = et.get("reminder_config", {})
-        if rc.get("enabled", True) is False:
+        if rc.get("enabled", True) is False or et.get("send_reminder_email", True) is False:
             continue
-        if et.get("send_reminder_email", True) is False:
-            continue
-        # Claim it first: only the caller that flips None -> timestamp may send.
-        claimed = await db.bookings.find_one_and_update(
-            {"id": b["id"], "reminder_sent_at": None},
-            {"$set": {"reminder_sent_at": now_iso()}},
-        )
-        if not claimed:
-            continue
-        await _notify("reminder", b["workspace_id"], b, et)
-        sent += 1
+
+        already_sent = set(b.get("reminders_sent", []))
+        for stage in rc.get("minutes_before", [1440]):
+            if stage in already_sent:
+                continue
+            if now < start - timedelta(minutes=stage):
+                continue  # this stage isn't due yet
+            # Claim this specific stage first: only the caller that adds it to
+            # reminders_sent (starting from a doc that doesn't have it yet) may send.
+            claimed = await db.bookings.find_one_and_update(
+                {"id": b["id"], "reminders_sent": {"$ne": stage}},
+                {"$push": {"reminders_sent": stage}},
+            )
+            if not claimed:
+                continue
+            await _notify("reminder", b["workspace_id"], b, et, reminder_stage_minutes=stage)
+            sent += 1
     return sent
 
 

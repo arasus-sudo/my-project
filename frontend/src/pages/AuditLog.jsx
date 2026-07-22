@@ -12,6 +12,7 @@ export default function AuditLog() {
       <div className="p-6 sm:p-8">
         {items.length === 0 && <div className="text-body text-ink-muted">No audit entries yet.</div>}
         <div className="bg-white border border-line rounded-2xl overflow-hidden card-floating">
+          <div className="overflow-x-auto">
           <table className="w-full text-table min-w-[480px]">
             <thead>
               <tr className="border-b border-line">
@@ -29,6 +30,7 @@ export default function AuditLog() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     </div>

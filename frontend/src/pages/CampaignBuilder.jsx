@@ -524,18 +524,24 @@ export default function CampaignBuilder() {
     finally { setBusy(false); }
   };
 
-  const launch = async () => {
+  const launch = async (skipPending) => {
     if (!id) { toast.error("Save first"); return; }
+    if (skipPending === undefined && !leadStats.canLaunch && leadStats.approved > 0) {
+      toast.info(`Send to ${leadStats.approved} approved leads only?`, {
+        description: `${leadStats.total - leadStats.approved} leads need review and will be skipped`,
+        action: { label: "Send approved only", onClick: () => launch(true) },
+        duration: 10000,
+      });
+      return;
+    }
     setBusy(true);
     try {
-      const { data } = await api.post(`/campaigns/${id}/launch`);
+      const { data } = await api.post(`/campaigns/${id}/launch${skipPending ? "?skip_pending=true" : ""}`);
       toast.success(`Launched — ${data.queued} email${data.queued === 1 ? "" : "s"} queued`, {
         description: "They go out inside your sending window, spread across your mailboxes.",
       });
       nav("/app/campaigns");
     } catch (err) {
-      // The most common case by far: no mailbox connected. Say so plainly and
-      // point at the fix, rather than a generic "Launch failed".
       toast.error(err?.response?.data?.detail || "Launch failed", {
         action: { label: "Mailboxes", onClick: () => nav("/app/mailboxes") },
       });
@@ -557,8 +563,8 @@ export default function CampaignBuilder() {
             <button
               data-testid="launch-campaign"
               onClick={launch}
-              disabled={busy || !id || !leadStats.canLaunch}
-              title={leadStats.canLaunch ? "" : `${leadStats.reviewed} of ${leadStats.total} leads reviewed — approve or reject every lead before launching`}
+              disabled={busy || !id || leadStats.approved === 0}
+              title={leadStats.approved === 0 ? "Approve at least one lead before launching" : ""}
               className="btn-primary"
             >
               <Play size={14} /> Launch
@@ -578,8 +584,11 @@ export default function CampaignBuilder() {
             {leadStats.draft > 0 && <span className="text-warning">{leadStats.draft} draft</span>}
             {leadStats.ungenerated > 0 && <span className="text-ink-muted">{leadStats.ungenerated} not generated</span>}
           </div>
-          {!leadStats.canLaunch && (
-            <span className="text-caption text-ink-muted ml-auto">{leadStats.reviewed}/{leadStats.total} reviewed — approve or reject every lead to unlock Launch</span>
+          {leadStats.approved > 0 && !leadStats.canLaunch && (
+            <span className="text-caption text-ink-muted ml-auto">Launch will send to {leadStats.approved} approved leads (skipping {leadStats.total - leadStats.approved} unapproved)</span>
+          )}
+          {leadStats.approved === 0 && !leadStats.canLaunch && (
+            <span className="text-caption text-ink-muted ml-auto">{leadStats.reviewed}/{leadStats.total} reviewed — approve at least one lead to launch</span>
           )}
         </div>
       )}

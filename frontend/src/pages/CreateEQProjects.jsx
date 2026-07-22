@@ -5,7 +5,7 @@ import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import {
-  Plus, Trash2, ImageIcon, Sparkles, ChevronLeft, ChevronRight, Wand2, Loader2, Check, ArrowRight, History, X,
+  Plus, Trash2, ImageIcon, PenSquare, ChevronLeft, ChevronRight, Loader2, Check, ArrowRight, History, X,
 } from "lucide-react";
 import { TEMPLATES, PALETTES, blankSlide } from "../lib/creqTemplates";
 

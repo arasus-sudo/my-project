@@ -59,7 +59,7 @@ export default function ScheduleSettings() {
     } finally { setBusy(false); }
   };
 
-  if (!status || !availability) return <div className="p-10 text-neutral-400 text-sm">Loading…</div>;
+  if (!status || !availability) return <div className="p-10 text-ink-muted text-body">Loading…</div>;
 
   return (
     <div>
@@ -68,25 +68,25 @@ export default function ScheduleSettings() {
         <div className="shadow-card rounded-2xl p-6 sm:p-8">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div>
-              <div className="font-display font-semibold flex items-center gap-2">
+              <div className="text-card-title font-display font-semibold flex items-center gap-2">
                 <Mail size={15} /> Email notifications
               </div>
-              <p className="text-xs text-neutral-400 mt-1">
+              <p className="text-caption text-ink-muted mt-1">
                 {emailStatus?.mocked === false
                   ? <>Live — confirmations, 24-hour reminders, reschedules and cancellations are sent from <span className="font-mono">{emailStatus.from}</span>, each with a calendar invite attached.</>
                   : <>Test mode — every message is fully composed and recorded, but not delivered. Add a <span className="font-mono">RESEND_API_KEY</span> to send for real.</>}
               </p>
               {emailStatus && (
-                <p className="text-xs text-neutral-400 mt-1.5">
+                <p className="text-caption text-ink-muted mt-1.5">
                   {emailStatus.sent_count} message{emailStatus.sent_count === 1 ? "" : "s"} composed so far.
                 </p>
               )}
             </div>
             <span data-testid="email-status-chip"
-              className={`shrink-0 text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded-full border ${
+              className={`shrink-0 text-tiny font-mono uppercase tracking-wider px-2 py-1 rounded-full border ${
                 emailStatus?.mocked === false
                   ? "border-success/30 bg-success/10 text-success"
-                  : "border-line bg-bone text-neutral-400"
+                  : "border-line bg-bone text-ink-muted"
               }`}>
               {emailStatus?.mocked === false ? "Live" : "Test mode"}
             </span>
@@ -96,8 +96,8 @@ export default function ScheduleSettings() {
         <div className="shadow-card rounded-2xl p-6 sm:p-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <div className="font-display font-semibold">Google Calendar</div>
-              <p className="text-xs text-neutral-400 mt-1">
+              <div className="text-card-title font-display font-semibold">Google Calendar</div>
+              <p className="text-caption text-ink-muted mt-1">
                 {status.connected ? "Connected — real availability and calendar events are used." : status.mocked
                   ? "Test mode — availability is computed from your working hours only. Connect Google Calendar to sync real events."
                   : "Not connected."}
@@ -113,13 +113,13 @@ export default function ScheduleSettings() {
 
         <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div className="font-display font-semibold">Working hours</div>
+            <div className="text-card-title font-display font-semibold">Working hours</div>
             <button onClick={saveAvailability} disabled={busy} data-testid="save-availability-btn" className="btn-primary text-xs self-start"><Save size={12} /> Save</button>
           </div>
           <div>
-            <label className="ui-label block mb-1">Timezone</label>
+            <label className="form-label block mb-1">Timezone</label>
             <input value={availability.timezone} onChange={(e) => setAvailability({ ...availability, timezone: e.target.value })}
-              data-testid="availability-timezone" className="w-full border border-line px-3 py-2 rounded-sm" placeholder="UTC, America/New_York, …" />
+              data-testid="availability-timezone" className="w-full border border-line px-3 py-2 rounded-sm text-input" placeholder="UTC, America/New_York, …" />
           </div>
           <div className="space-y-2 pt-2">
             {DAYS.map((d) => {
@@ -127,18 +127,18 @@ export default function ScheduleSettings() {
               const window = availability.working_hours[d.key]?.[0] || { start: "09:00", end: "17:00" };
               return (
                 <div key={d.key} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                  <label className="flex items-center gap-2 sm:w-32 text-sm">
+                  <label className="form-label flex items-center gap-2 sm:w-32">
                     <input type="checkbox" checked={active} onChange={() => toggleDay(d.key)} data-testid={`day-toggle-${d.key}`} />
                     {d.label}
                   </label>
                   {active && (
                     <>
                       <input type="time" value={window.start} onChange={(e) => updateWindow(d.key, "start", e.target.value)}
-                        data-testid={`day-start-${d.key}`} className="border border-line px-2 py-1 rounded-sm text-sm min-w-0" />
-                      <span className="text-neutral-400 hidden sm:inline">to</span>
-                      <span className="text-neutral-400 sm:hidden">—</span>
+                        data-testid={`day-start-${d.key}`} className="border border-line px-2 py-1 rounded-sm text-input min-w-0" />
+                      <span className="text-ink-muted hidden sm:inline">to</span>
+                      <span className="text-ink-muted sm:hidden">—</span>
                       <input type="time" value={window.end} onChange={(e) => updateWindow(d.key, "end", e.target.value)}
-                        data-testid={`day-end-${d.key}`} className="border border-line px-2 py-1 rounded-sm text-sm min-w-0" />
+                        data-testid={`day-end-${d.key}`} className="border border-line px-2 py-1 rounded-sm text-input min-w-0" />
                     </>
                   )}
                 </div>

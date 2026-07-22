@@ -1,7 +1,7 @@
 import { memo, useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import {
-  Copy, Trash2, Layers, Italic, AlignLeft, AlignCenter, AlignRight, Wand2, RotateCcw, Mountain,
+  Copy, Trash2, Layers, Italic, AlignLeft, AlignCenter, AlignRight, PenLine, RotateCcw, Mountain,
   FlipHorizontal2, FlipVertical2,
   AlignStartVertical, AlignCenterVertical, AlignEndVertical,
   AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
@@ -102,7 +102,7 @@ function RightPanel({
             </div>
           </div>
         )}
-        <div className="text-[11px] text-neutral-400 pt-2 border-t border-line leading-relaxed">
+        <div className="text-tiny text-ink-muted pt-2 border-t border-line leading-relaxed">
           Drag any selected element to move the group · arrow keys to nudge · shift-click to add or remove.
         </div>
       </div>
@@ -126,25 +126,25 @@ function RightPanel({
                   <div className="flex gap-1">
                     {[p.bg, p.bg2, p.accent, p.text].map((c, i) => <span key={`${c}-${i}`} className="w-4 h-4 rounded" style={{ background: c }} />)}
                   </div>
-                  <div className="text-[11px] mt-1">{p.name}</div>
+                  <div className="text-tiny text-ink-secondary mt-1">{p.name}</div>
                 </button>
                 {editingPalette === p.id && (
                   <div className="p-2 border-t border-line space-y-1.5">
                     <input value={p.name} onChange={(e) => updateCustomPalette(p.id, "name", e.target.value)}
-                      placeholder="Name" className="w-full border border-line rounded px-2 py-1 text-[11px]" />
+                      placeholder="Name" className="w-full border border-line rounded px-2 py-1 text-tiny" />
                     {["bg", "bg2", "accent", "text", "muted"].map((k) => (
                       <div key={k} className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-neutral-400 w-10">{k}</span>
+                        <span className="text-tiny font-mono text-ink-muted w-10">{k}</span>
                         <input type="color" value={p[k] || "#000000"}
                           onChange={(e) => updateCustomPalette(p.id, k, e.target.value)}
                           className="w-8 h-6 rounded border border-line cursor-pointer" />
                         <input value={p[k] || ""}
                           onChange={(e) => updateCustomPalette(p.id, k, e.target.value)}
-                          className="flex-1 border border-line rounded px-1 py-0.5 text-[10px] font-mono" />
+                          className="flex-1 border border-line rounded px-1 py-0.5 text-tiny font-mono" />
                       </div>
                     ))}
                     <button onClick={() => deleteCustomPalette(p.id)}
-                      className="mt-1 text-[10px] text-danger hover:underline">Delete palette</button>
+                      className="mt-1 text-tiny text-danger hover:underline">Delete palette</button>
                   </div>
                 )}
               </div>
@@ -157,7 +157,7 @@ function RightPanel({
           <div className="flex gap-2">
             {["solid", "gradient"].map((t) => (
               <button key={t} onClick={() => onBg({ ...slide.bg, type: t })}
-                className={`flex-1 py-2 rounded-full text-xs border ${slide.bg?.type === t ? "border-ink bg-ink text-white" : "border-line hover:border-ink"}`}>
+                className={`flex-1 py-2 rounded-full text-caption border ${slide.bg?.type === t ? "border-ink bg-ink text-white" : "border-line hover:border-ink"}`}>
                 {t}
               </button>
             ))}
@@ -174,24 +174,24 @@ function RightPanel({
               <span className="ui-label">Background image</span>
               {slide.bg_img && (
                 <button onClick={() => onBg({ ...slide.bg, bg_img: null, bg_img_opacity: undefined })}
-                  className="ml-auto text-[10px] text-danger hover:underline">Remove</button>
+                  className="ml-auto text-tiny text-danger hover:underline">Remove</button>
               )}
             </div>
             <input value={slide.bg_img || ""} onChange={(e) => onBg({ ...slide.bg, bg_img: e.target.value })}
               placeholder="Paste image URL for background"
-              className="w-full border border-line rounded-full px-3 py-2 text-xs font-mono" />
+              className="w-full border border-line rounded-full px-3 py-2 text-caption font-mono" />
             {slide.bg_img && (
               <div className="mt-2">
                 <div className="flex justify-between items-baseline">
                   <span className="ui-label">Opacity</span>
-                  <span className="text-[10px] font-mono text-neutral-500">{Math.round((slide.bg_img_opacity ?? 0.3) * 100)}%</span>
+                  <span className="text-tiny font-mono text-ink-muted">{Math.round((slide.bg_img_opacity ?? 0.3) * 100)}%</span>
                 </div>
                 <input type="range" min={0.05} max={1} step={0.05} value={slide.bg_img_opacity ?? 0.3}
                   onChange={(e) => onBg({ ...slide.bg, bg_img_opacity: Number(e.target.value) })}
                   className="w-full" />
               </div>
             )}
-            <div className="text-[10px] text-neutral-400 mt-1">Images are layered over the background color</div>
+            <div className="text-tiny text-ink-muted mt-1">Images are layered over the background color</div>
           </div>
 
           {slide.bg?.type === "gradient" && (
@@ -224,7 +224,7 @@ function RightPanel({
               <label className="block">
                 <div className="flex items-center justify-between">
                   <span className="ui-label">Direction</span>
-                  <span className="text-[10px] font-mono text-neutral-500">{slide.bg?.angle || 145}°</span>
+                  <span className="text-tiny font-mono text-ink-muted">{slide.bg?.angle || 145}°</span>
                 </div>
                 <div className="relative mt-1">
                   <div className="w-full h-6 rounded-md border border-line overflow-hidden"
@@ -236,7 +236,7 @@ function RightPanel({
                 <div className="flex gap-1 mt-1">
                   {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
                     <button key={a} onClick={() => onBg({ ...slide.bg, angle: a })}
-                      className={`flex-1 text-[9px] py-1 rounded border ${(slide.bg?.angle || 145) === a ? "border-ink bg-ink text-white" : "border-line hover:border-ink"}`}>
+                      className={`flex-1 text-tiny py-1 rounded border ${(slide.bg?.angle || 145) === a ? "border-ink bg-ink text-white" : "border-line hover:border-ink"}`}>
                       {a}°
                     </button>
                   ))}
@@ -258,22 +258,22 @@ function RightPanel({
         <div className="border-t border-line pt-4">
           <div className="ui-label mb-2">Deck chrome</div>
           <div className="space-y-1.5">
-            <label className="flex items-center gap-2 text-xs">
+            <label className="flex items-center gap-2 form-label">
               <input type="checkbox" checked={!!proj?.show_slide_numbers} data-testid="deck-slide-numbers"
                 onChange={(e) => onDeckSetting("show_slide_numbers", e.target.checked)} />
               Slide numbers (1/6)
             </label>
-            <label className="flex items-center gap-2 text-xs">
+            <label className="flex items-center gap-2 form-label">
               <input type="checkbox" checked={!!proj?.show_progress_dots} data-testid="deck-progress-dots"
                 onChange={(e) => onDeckSetting("show_progress_dots", e.target.checked)} />
               Progress dots
             </label>
-            <label className="flex items-center gap-2 text-xs">
+            <label className="flex items-center gap-2 form-label">
               <input type="checkbox" checked={!!proj?.show_swipe_hint} data-testid="deck-swipe-hint"
                 onChange={(e) => onDeckSetting("show_swipe_hint", e.target.checked)} />
               Swipe hint arrow
             </label>
-            <label className="flex items-center gap-2 text-xs">
+            <label className="flex items-center gap-2 form-label">
               <input type="checkbox" checked={!!proj?.show_branding} data-testid="deck-branding"
                 onChange={(e) => onDeckSetting("show_branding", e.target.checked)} />
               &quot;Made with Innoira Agentic Suite&quot;
@@ -281,7 +281,7 @@ function RightPanel({
           </div>
         </div>
 
-        <div className="text-xs text-neutral-500 pt-4 border-t border-line">Click an element on the canvas to edit it. Drag to move. Press <span className="kbd">Del</span> to remove.</div>
+        <div className="text-caption text-ink-muted pt-4 border-t border-line">Click an element on the canvas to edit it. Drag to move. Press <span className="kbd">Del</span> to remove.</div>
       </div>
     );
   }
@@ -314,10 +314,10 @@ function RightPanel({
       {/* Z-order — jump-to plus one-step, Canva-style */}
       <div className="flex items-center gap-1" data-testid="z-order-group">
         <span className="ui-label mr-1"><Layers size={11} className="inline -mt-0.5" /> Layer</span>
-        <button onClick={onBack} data-testid="z-back" title="Send to back" className="btn-ghost text-[11px] py-0.5 px-2 border border-line rounded-lg">⇤ Back</button>
-        <button onClick={onBackward} data-testid="z-backward" title="Send backward one step" className="btn-ghost text-[11px] py-0.5 px-2 border border-line rounded-lg">←</button>
-        <button onClick={onForward} data-testid="z-forward" title="Bring forward one step" className="btn-ghost text-[11px] py-0.5 px-2 border border-line rounded-lg">→</button>
-        <button onClick={onFront} data-testid="z-front" title="Bring to front" className="btn-ghost text-[11px] py-0.5 px-2 border border-line rounded-lg">Front ⇥</button>
+        <button onClick={onBack} data-testid="z-back" title="Send to back" className="btn-ghost text-tiny py-0.5 px-2 border border-line rounded-lg">⇤ Back</button>
+        <button onClick={onBackward} data-testid="z-backward" title="Send backward one step" className="btn-ghost text-tiny py-0.5 px-2 border border-line rounded-lg">←</button>
+        <button onClick={onForward} data-testid="z-forward" title="Bring forward one step" className="btn-ghost text-tiny py-0.5 px-2 border border-line rounded-lg">→</button>
+        <button onClick={onFront} data-testid="z-front" title="Bring to front" className="btn-ghost text-tiny py-0.5 px-2 border border-line rounded-lg">Front ⇥</button>
       </div>
 
       {/* Precise position & size — matches every design tool's inspector. */}
@@ -360,7 +360,7 @@ function RightPanel({
           </label>
           <ColorPicker label="Color" palette={palette} value={el.color} onChange={(c) => onEditElement({ color: c })} />
 
-          <label className="flex items-center gap-2 text-xs pt-1">
+          <label className="flex items-center gap-2 form-label pt-1">
             <input type="checkbox" checked={!!el.highlight} data-testid="el-highlight-toggle"
               onChange={(e) => onEditElement({ highlight: e.target.checked ? (el.highlight || "accent") : null })} />
             Text highlight
@@ -372,7 +372,7 @@ function RightPanel({
           <details className="pt-2 border-t border-line">
             <summary className="ui-label cursor-pointer">Effects (shadow · stroke)</summary>
             <div className="mt-2 space-y-2">
-              <label className="flex items-center gap-2 text-xs">
+              <label className="flex items-center gap-2 form-label">
                 <input type="checkbox" checked={!!el.shadow} onChange={(e) => onEditElement({ shadow: e.target.checked })} data-testid="el-shadow" />
                 Drop shadow
               </label>
@@ -395,11 +395,11 @@ function RightPanel({
 
           {onAiAssist && (
             <div className="pt-3 border-t border-line">
-              <div className="ui-label mb-2 flex items-center gap-1"><Wand2 size={11} /> AI copy assist</div>
+              <div className="ui-label mb-2 flex items-center gap-1"><PenLine size={11} /> Copy assist</div>
               <div className="grid grid-cols-2 gap-1">
                 {[["punchier","Punchier"],["shorter","Shorter"],["catchier","Hook it"],["formal","Formal"]].map(([k,l]) => (
                   <button key={k} onClick={() => onAiAssist(k)} data-testid={`ai-assist-${k}`}
-                    className="text-xs py-1.5 rounded-md border border-line hover:border-ink hover:bg-neutral-50">{l}</button>
+                    className="text-caption py-1.5 rounded-md border border-line hover:border-ink hover:bg-neutral-50">{l}</button>
                 ))}
               </div>
             </div>
@@ -442,7 +442,7 @@ function RightPanel({
             <div className="flex gap-2">
               {[["fill", "Filled"], ["outline", "Outline"]].map(([k, l]) => (
                 <button key={k} onClick={() => onEditElement({ stroke_only: k === "outline" })}
-                  className={`flex-1 py-2 rounded-full text-xs border ${(!!el.stroke_only) === (k === "outline") ? "border-ink bg-ink text-white" : "border-line hover:border-ink"}`}>
+                  className={`flex-1 py-2 rounded-full text-caption border ${(!!el.stroke_only) === (k === "outline") ? "border-ink bg-ink text-white" : "border-line hover:border-ink"}`}>
                   {l}
                 </button>
               ))}
@@ -453,7 +453,7 @@ function RightPanel({
               {[["solid", "Solid"], ["gradient", "Gradient"]].map(([k, l]) => (
                 <button key={k} onClick={() => onEditElement({ fill_type: k })}
                   data-testid={`el-fill-type-${k}`}
-                  className={`flex-1 py-1.5 rounded-full text-[11px] border ${(el.fill_type || "solid") === k ? "border-ink bg-ink text-white" : "border-line hover:border-ink"}`}>
+                  className={`flex-1 py-1.5 rounded-full text-tiny border ${(el.fill_type || "solid") === k ? "border-ink bg-ink text-white" : "border-line hover:border-ink"}`}>
                   {l}
                 </button>
               ))}
@@ -517,7 +517,7 @@ function RightPanel({
               placeholder="Paste image URL"
               className="flex-1 border border-line rounded-full px-3 py-2 text-sm font-mono" />
             <button onClick={() => imageInputRef.current?.click()}
-              className="shrink-0 px-3 py-2 rounded-full bg-brand-gradient text-white text-xs font-medium">
+              className="shrink-0 px-3 py-2 rounded-full bg-accent text-white text-caption font-medium">
               Upload
             </button>
             <input ref={imageInputRef} type="file" accept="image/*" className="hidden"
@@ -586,7 +586,7 @@ function RightPanel({
             <ToggleBtn active={el.flip_h} onClick={() => onEditElement({ flip_h: !el.flip_h })}><FlipHorizontal2 size={13} /></ToggleBtn>
             <ToggleBtn active={el.flip_v} onClick={() => onEditElement({ flip_v: !el.flip_v })}><FlipVertical2 size={13} /></ToggleBtn>
           </div>
-          <label className="flex items-center gap-2 text-xs">
+          <label className="flex items-center gap-2 form-label">
             <input type="checkbox" checked={el.role === "logo"} data-testid="el-treat-as-logo"
               onChange={(e) => onEditElement({ role: e.target.checked ? "logo" : null })} />
             Treat as logo (transparent background, no crop tint)
@@ -674,7 +674,7 @@ function RightPanel({
             placeholder="Label (e.g. Conversion Rate)" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
           <input value={el.kpi_change || ""} onChange={(e) => onEditElement({ kpi_change: e.target.value })}
             placeholder="Change (e.g. +12%)" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
-          <label className="flex items-center gap-2 text-xs">
+          <label className="flex items-center gap-2 form-label">
             <input type="checkbox" checked={!!el.kpi_negative} onChange={(e) => onEditElement({ kpi_negative: e.target.checked })} />
             Negative trend (red)
           </label>
@@ -707,7 +707,7 @@ function RightPanel({
               catch { /* invalid JSON — ignore during typing */ }
             }}
             rows={6} className="w-full border border-line rounded-lg px-3 py-2 text-sm font-mono" />
-          <div className="text-[10px] text-neutral-400">Edit as JSON array of {`{date, title, desc}`} objects</div>
+          <div className="text-tiny text-ink-muted">Edit as JSON array of {`{date, title, desc}`} objects</div>
         </>
       )}
 
@@ -718,7 +718,7 @@ function RightPanel({
           <label className="block"><span className="ui-label">Progress</span>
             <input type="range" min={0} max={100} step={1} value={el.progress ?? 65}
               onChange={(e) => onEditElement({ progress: Number(e.target.value) })} className="w-full" />
-            <span className="text-[10px] font-mono text-neutral-500">{Math.round(el.progress ?? 65)}%</span>
+            <span className="text-tiny font-mono text-ink-muted">{Math.round(el.progress ?? 65)}%</span>
           </label>
         </>
       )}
@@ -747,7 +747,7 @@ function RightPanel({
             <input type="range" min={0.05} max={1} step={0.05} value={el.opacity ?? 0.3} onChange={(e) => onEditElement({ opacity: Number(e.target.value) })}
               className="w-full" />
           </label>
-          <label className="flex items-center gap-2 text-xs">
+          <label className="flex items-center gap-2 form-label">
             <input type="checkbox" checked={el.noise !== false} data-testid="el-cs-noise"
               onChange={(e) => onEditElement({ noise: e.target.checked })} />
             Grainy gradient effect
@@ -759,7 +759,7 @@ function RightPanel({
         <details className="pt-2 border-t border-line">
           <summary className="ui-label cursor-pointer">Shadow</summary>
           <div className="mt-2 space-y-2">
-            <label className="flex items-center gap-2 text-xs">
+            <label className="flex items-center gap-2 form-label">
               <input type="checkbox" checked={!!el.shadow} data-testid="el-box-shadow" onChange={(e) => onEditElement({ shadow: e.target.checked })} />
               Drop shadow
             </label>
@@ -788,7 +788,7 @@ function RightPanel({
         </label>
       </div>
 
-      <div className="pt-3 border-t border-line grid grid-cols-4 gap-1 text-[10px] text-neutral-500 font-mono">
+      <div className="pt-3 border-t border-line grid grid-cols-4 gap-1 text-tiny text-ink-muted font-mono">
         <label>X<input type="number" value={el.x || 0} onChange={(e) => { const n = parseNumInput(e.target.value); if (n !== undefined) onEditElement({ x: n }); }} className="w-full border border-line rounded px-1 py-0.5" /></label>
         <label>Y<input type="number" value={el.y || 0} onChange={(e) => { const n = parseNumInput(e.target.value); if (n !== undefined) onEditElement({ y: n }); }} className="w-full border border-line rounded px-1 py-0.5" /></label>
         <label>W<input type="number" value={el.w || 0} onChange={(e) => { const n = parseNumInput(e.target.value); if (n !== undefined) onEditElement({ w: n }); }} className="w-full border border-line rounded px-1 py-0.5" /></label>
@@ -802,7 +802,7 @@ export default memo(RightPanel);
 
 function ToggleBtn({ children, active, onClick }) {
   return (
-    <button onClick={onClick} className={`flex-1 py-1.5 rounded-md border text-xs ${active ? "bg-ink text-white border-ink" : "bg-white border-line hover:border-ink"}`}>
+    <button onClick={onClick} className={`flex-1 py-1.5 rounded-md border text-caption ${active ? "bg-ink text-white border-ink" : "bg-white border-line hover:border-ink"}`}>
       {children}
     </button>
   );
@@ -812,8 +812,8 @@ function Slider({ label, value, min, max, step, onChange, suffix }) {
   return (
     <label className="block mb-1.5">
       <div className="flex justify-between items-baseline mb-0.5">
-        <span className="text-[10px] font-mono text-neutral-500">{label}</span>
-        <span className="text-[10px] font-mono text-neutral-400">{value}{suffix || ""}</span>
+        <span className="text-tiny font-mono text-ink-muted">{label}</span>
+        <span className="text-tiny font-mono text-ink-muted">{value}{suffix || ""}</span>
       </div>
       <input type="range" min={min} max={max} step={step || 1} value={value}
         onChange={(e) => onChange(Number(e.target.value))}
@@ -825,7 +825,7 @@ function Slider({ label, value, min, max, step, onChange, suffix }) {
 function AlignBtn({ children, onClick, title, testid }) {
   return (
     <button onClick={onClick} title={title} data-testid={testid}
-      className="flex items-center justify-center py-2 rounded-md border border-line hover:border-ink hover:bg-neutral-50 text-neutral-700">
+      className="flex items-center justify-center py-2 rounded-md border border-line hover:border-ink hover:bg-neutral-50 text-ink-secondary">
       {children}
     </button>
   );
@@ -834,11 +834,11 @@ function AlignBtn({ children, onClick, title, testid }) {
 function PosInput({ label, value, onChange, testid, disabled }) {
   return (
     <label className="block">
-      <span className="text-[10px] font-mono text-neutral-400 block text-center">{label}</span>
+      <span className="text-tiny font-mono text-ink-muted block text-center">{label}</span>
       <input type="number" value={Math.round(value ?? 0)} disabled={disabled}
         onChange={(e) => { const n = parseNumInput(e.target.value); if (n !== undefined) onChange(n); }}
         data-testid={testid}
-        className="mt-0.5 w-full border border-line rounded-md px-1.5 py-1.5 text-xs font-mono text-center disabled:bg-neutral-50 disabled:text-neutral-400" />
+        className="mt-0.5 w-full border border-line rounded-md px-1.5 py-1.5 text-caption font-mono text-center disabled:bg-neutral-50 disabled:text-ink-disabled" />
     </label>
   );
 }
@@ -883,7 +883,7 @@ function PanoramaManualControls({ proj, palette, activeSlide, onChange, onReset,
       <label className="block">
         <div className="flex justify-between items-baseline">
           <span className="ui-label">Horizontal</span>
-          <span className="text-[10px] font-mono text-neutral-500">{Math.round(vp.ox ?? 50)}%</span>
+          <span className="text-tiny font-mono text-ink-muted">{Math.round(vp.ox ?? 50)}%</span>
         </div>
         <input type="range" min={0} max={100} step={1} value={vp.ox ?? 50}
           data-testid="pano-ox"
@@ -894,7 +894,7 @@ function PanoramaManualControls({ proj, palette, activeSlide, onChange, onReset,
       <label className="block">
         <div className="flex justify-between items-baseline">
           <span className="ui-label">Vertical</span>
-          <span className="text-[10px] font-mono text-neutral-500">{Math.round(vp.oy ?? 50)}%</span>
+          <span className="text-tiny font-mono text-ink-muted">{Math.round(vp.oy ?? 50)}%</span>
         </div>
         <input type="range" min={0} max={100} step={1} value={vp.oy ?? 50}
           data-testid="pano-oy"
@@ -905,7 +905,7 @@ function PanoramaManualControls({ proj, palette, activeSlide, onChange, onReset,
       <label className="block">
         <div className="flex justify-between items-baseline">
           <span className="ui-label">Zoom</span>
-          <span className="text-[10px] font-mono text-neutral-500">{Math.round((vp.scale ?? 1) * 100)}%</span>
+          <span className="text-tiny font-mono text-ink-muted">{Math.round((vp.scale ?? 1) * 100)}%</span>
         </div>
         <input type="range" min={1} max={3} step={0.05} value={vp.scale ?? 1}
           data-testid="pano-scale"
@@ -915,15 +915,15 @@ function PanoramaManualControls({ proj, palette, activeSlide, onChange, onReset,
 
       <div className="grid grid-cols-2 gap-2 pt-1">
         <button onClick={onReset} data-testid="pano-reset-slide"
-          className="text-[11px] py-1.5 rounded-full border border-line hover:border-ink flex items-center justify-center gap-1">
+          className="text-tiny py-1.5 rounded-full border border-line hover:border-ink flex items-center justify-center gap-1">
           <RotateCcw size={11} /> Reset slide
         </button>
         <button onClick={onApplyAll} data-testid="pano-apply-all"
-          className="text-[11px] py-1.5 rounded-full border border-ink bg-ink text-white hover:bg-neutral-800">
+          className="text-tiny py-1.5 rounded-full border border-ink bg-ink text-white hover:bg-neutral-800">
           Apply to all
         </button>
       </div>
-      <div className="text-[10px] text-neutral-500 leading-relaxed">
+      <div className="text-tiny text-ink-muted leading-relaxed">
         Tip: you can also drag directly on the canvas to reposition. Scroll on the canvas to zoom.
       </div>
     </div>

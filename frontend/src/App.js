@@ -2,6 +2,7 @@ import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { Toaster } from "sonner";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -14,6 +15,7 @@ import Leads from "./pages/Leads";
 import LeadDetail from "./pages/LeadDetail";
 import Mailboxes from "./pages/Mailboxes";
 import Inbox from "./pages/Inbox";
+import UnifiedInbox from "./pages/UnifiedInbox";
 import CRM from "./pages/CRM";
 import Pipeline from "./pages/Pipeline";
 import LeadLists from "./pages/LeadLists";
@@ -76,6 +78,7 @@ function Private({ children }) {
 function App() {
   return (
     <div className="App">
+      <ErrorBoundary>
       <AuthProvider>
         <BrowserRouter>
           <Toaster position="top-right" theme="light" />
@@ -149,6 +152,7 @@ function App() {
               <Route path="webhooks" element={<Webhooks />} />
               <Route path="hubspot" element={<HubSpotSettings />} />
               <Route path="inbox" element={<Inbox />} />
+              <Route path="unified-inbox" element={<UnifiedInbox />} />
               <Route path="intelligence" element={<CompanyIntel />} />
               <Route path="services" element={<ServiceLibrary />} />
               <Route path="campaigns/wizard" element={<CampaignWizard />} />
@@ -158,6 +162,7 @@ function App() {
           </Routes>
         </BrowserRouter>
       </AuthProvider>
+      </ErrorBoundary>
     </div>
   );
 }

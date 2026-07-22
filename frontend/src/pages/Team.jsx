@@ -43,7 +43,8 @@ export default function Team() {
       />
       <div className="p-6 sm:p-8">
         <div className="bg-white border border-line rounded-2xl overflow-hidden card-floating">
-          <table className="w-full text-table">
+          <div className="overflow-x-auto">
+          <table className="w-full text-table min-w-[520px]">
             <thead>
               <tr className="border-b border-line">
                 {["Name", "Email", "Role", "Joined", ""].map((h) => <th key={h} className="table-header text-left p-3">{h}</th>)}
@@ -67,6 +68,7 @@ export default function Team() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
       {modal && (

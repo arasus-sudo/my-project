@@ -166,7 +166,7 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
       <Section title="Elements" isOpen={open === "elements"} onToggle={() => toggle("elements")}>
         <div className="space-y-3">
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-1.5">Shapes</div>
+            <div className="ui-label mb-1.5">Shapes</div>
             <div className="grid grid-cols-4 gap-1">
               {SHAPE_ORDER.map((kind) => (
                 <ElementBtn key={kind} onClick={() => onAddShape(kind)}
@@ -178,7 +178,7 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
             </div>
           </div>
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-1.5">Decorative strokes</div>
+            <div className="ui-label mb-1.5">Decorative strokes</div>
             <div className="grid grid-cols-4 gap-1">
               {DECORATIVE_SHAPES.map((kind) => (
                 <ElementBtn key={kind} onClick={() => onAddShape(kind)}
@@ -190,7 +190,7 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
             </div>
           </div>
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-1.5">Lines &amp; arrows</div>
+            <div className="ui-label mb-1.5">Lines &amp; arrows</div>
             <div className="grid grid-cols-4 gap-1">
               <ElementBtn onClick={() => onAddLine()} title="Line / divider" testid="add-line"><LineIcon size={16} /></ElementBtn>
               <ElementBtn onClick={() => onAddLine({ cap_end: "arrow" })} title="Arrow" testid="add-line-arrow"><MoveRight size={16} /></ElementBtn>
@@ -199,7 +199,7 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
             </div>
           </div>
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-1.5">Badge &amp; icons</div>
+            <div className="ui-label mb-1.5">Badge &amp; icons</div>
             <div className="grid grid-cols-4 gap-1">
               <ElementBtn onClick={onAddBadge} title="Badge">Bdg</ElementBtn>
               {Object.keys(ICONS).map((n) => {
@@ -214,31 +214,31 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
       <Section title="Image" isOpen={open === "image"} onToggle={() => toggle("image")}>
         <div className="space-y-1.5">
           <button onClick={onAddImage} data-testid="upload-image-btn"
-            className="w-full text-left p-3 rounded-lg border border-dashed border-line hover:border-ink hover:bg-neutral-50 flex items-center gap-2 text-xs">
+            className="w-full text-left p-3 rounded-lg border border-dashed border-line hover:border-ink hover:bg-neutral-50 flex items-center gap-2 text-caption">
             <ImageIcon size={14} />
             <div className="flex-1">
               <div className="font-medium">Upload from device</div>
-              <div className="text-[10px] text-neutral-500">or drag &amp; drop onto canvas</div>
+              <div className="text-tiny text-ink-muted">or drag &amp; drop onto canvas</div>
             </div>
           </button>
           <button onClick={onAddImageUrl} data-testid="url-image-btn"
-            className="w-full text-left p-2 rounded-md border border-line hover:border-ink flex items-center gap-2 text-xs">
+            className="w-full text-left p-2 rounded-md border border-line hover:border-ink flex items-center gap-2 text-caption">
             <MessageSquare size={12} />
-            <span className="text-neutral-700">Paste image URL</span>
+            <span className="text-ink-secondary">Paste image URL</span>
           </button>
           <button onClick={onAddHeadshot} data-testid="add-headshot-btn"
-            className={`w-full text-left p-2 rounded-md border flex items-center gap-2 text-xs ${hasHeadshot ? "border-line hover:border-ink" : "border-line hover:border-ink opacity-70"}`}
+            className={`w-full text-left p-2 rounded-md border flex items-center gap-2 text-caption ${hasHeadshot ? "border-line hover:border-ink" : "border-line hover:border-ink opacity-70"}`}
             title={hasHeadshot ? "Add your profile photo" : "Upload a headshot in Settings → Profile first"}>
             <UserIcon size={12} />
-            <span className="text-neutral-700">Your headshot</span>
-            {!hasHeadshot && <span className="ml-auto text-[9px] font-mono text-neutral-400">setup</span>}
+            <span className="text-ink-secondary">Your headshot</span>
+            {!hasHeadshot && <span className="ml-auto text-tiny font-mono text-ink-muted">setup</span>}
           </button>
           <button onClick={onAddAuthorBar} data-testid="add-author-bar-btn"
-            className={`w-full text-left p-2 rounded-md border flex items-center gap-2 text-xs ${hasHeadshot ? "border-line hover:border-ink" : "border-line hover:border-ink opacity-70"}`}
+            className={`w-full text-left p-2 rounded-md border flex items-center gap-2 text-caption ${hasHeadshot ? "border-line hover:border-ink" : "border-line hover:border-ink opacity-70"}`}
             title={hasHeadshot ? "Headshot + name + handle, ready to post" : "Upload a headshot in Settings → Profile first"}>
             <UserIcon size={12} />
-            <span className="text-neutral-700">Author bar</span>
-            {!hasHeadshot && <span className="ml-auto text-[9px] font-mono text-neutral-400">setup</span>}
+            <span className="text-ink-secondary">Author bar</span>
+            {!hasHeadshot && <span className="ml-auto text-tiny font-mono text-ink-muted">setup</span>}
           </button>
         </div>
       </Section>
@@ -250,7 +250,7 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
             if (!frames.length) return null;
             return (
               <div key={cat.key}>
-                <div className="text-[9px] font-mono uppercase tracking-widest text-neutral-400 mb-1 flex items-center gap-1">
+                <div className="ui-label mb-1 flex items-center gap-1">
                   <span>{cat.icon}</span>
                   <span>{cat.label}</span>
                 </div>
@@ -301,7 +301,7 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
                   {cat === "number" && <text x="12" y="17" textAnchor="middle" fontSize="14" fontWeight="bold" fill="currentColor" opacity="0.7">{(d.index || 0) + 1}</text>}
                   {cat === "misc" && <path d="M12 2 L12 22 M2 12 L22 12" stroke="currentColor" strokeWidth="1" opacity="0.4" />}
                 </svg>
-                <span className="text-[6px] text-neutral-500 leading-tight truncate w-full text-center">{d.name}</span>
+                <span className="text-tiny text-ink-muted leading-tight truncate w-full text-center">{d.name}</span>
               </button>
             );
           })}
@@ -323,7 +323,7 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
                 {(i === 4) && <><div className="w-1.5 h-1.5 rounded-full bg-white mx-0.5" /><div className="w-1.5 h-1.5 rounded-full bg-white mx-0.5" opacity={0.7} /><div className="w-1.5 h-1.5 rounded-full bg-white mx-0.5" opacity={0.4} /></>}
                 {(i === 5) && <div className="w-4 h-4 rounded border border-white" />}
               </div>
-              <span className="text-[6px] text-neutral-500 truncate w-full text-center leading-tight">{a.name}</span>
+              <span className="text-tiny text-ink-muted truncate w-full text-center leading-tight">{a.name}</span>
             </button>
           ))}
         </div>
@@ -346,10 +346,10 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
               <button key={i} onClick={() => onAddComposition && onAddComposition(i)}
                 title={c.name}
                 className="flex items-center gap-2 p-1.5 rounded border border-line hover:border-ink hover:bg-neutral-50 text-left leading-tight">
-                <div className="w-7 h-7 rounded shrink-0 flex items-center justify-center text-neutral-500">
+                <div className="w-7 h-7 rounded shrink-0 flex items-center justify-center text-ink-muted">
                   {compSvgs[i % compSvgs.length]}
                 </div>
-                <span className="text-[10px] text-neutral-700">{c.name}</span>
+                <span className="text-tiny text-ink-secondary">{c.name}</span>
               </button>
             );
           })}
@@ -375,10 +375,10 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
               <button key={i} onClick={() => onAddChart && onAddChart(c)}
                 title={c.name}
                 className="flex items-center gap-2 p-1.5 rounded border border-line hover:border-ink hover:bg-neutral-50 text-left leading-tight">
-                <div className="w-7 h-7 rounded shrink-0 flex items-center justify-center text-neutral-500">
+                <div className="w-7 h-7 rounded shrink-0 flex items-center justify-center text-ink-muted">
                   {chartSvg()}
                 </div>
-                <span className="text-[10px] text-neutral-700">{c.name}</span>
+                <span className="text-tiny text-ink-secondary">{c.name}</span>
               </button>
             );
           })}
@@ -401,10 +401,10 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
               <button key={i} onClick={() => onAddCard && onAddCard(c)}
                 title={c.name}
                 className="flex items-center gap-2 p-1.5 rounded border border-line hover:border-ink hover:bg-neutral-50 text-left leading-tight">
-                <div className="w-7 h-7 rounded shrink-0 flex items-center justify-center text-neutral-500">
+                <div className="w-7 h-7 rounded shrink-0 flex items-center justify-center text-ink-muted">
                   {cardSvg()}
                 </div>
-                <span className="text-[10px] text-neutral-700">{c.name}</span>
+                <span className="text-tiny text-ink-secondary">{c.name}</span>
               </button>
             );
           })}
@@ -458,7 +458,7 @@ function Section({ title, isOpen, onToggle, children }) {
       <button onClick={onToggle} data-testid={`leftpanel-section-${title.toLowerCase().replace(/\s+/g, "-")}`}
         className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-surfacehover transition-colors">
         <span className="ui-label">{title}</span>
-        <ChevronDown size={14} className={`text-neutral-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        <ChevronDown size={14} className={`text-ink-muted transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
       {isOpen && (
         <div className="px-3 pb-3 max-h-[360px] overflow-y-auto">
@@ -473,11 +473,11 @@ function TextPreset({ label, onClick, sample, style }) {
   return (
     <button onClick={onClick} className="w-full text-left p-2 rounded-md border border-line hover:border-ink flex items-center gap-2">
       <span style={style} className="w-8 text-center">{sample}</span>
-      <span className="text-xs text-neutral-700">{label}</span>
+      <span className="text-caption text-ink-secondary">{label}</span>
     </button>
   );
 }
 
 function ElementBtn({ children, onClick, title, testid }) {
-  return <button onClick={onClick} title={title} data-testid={testid} className="aspect-square rounded-md border border-line hover:border-ink flex items-center justify-center text-xs">{children}</button>;
+  return <button onClick={onClick} title={title} data-testid={testid} className="aspect-square rounded-md border border-line hover:border-ink flex items-center justify-center text-caption">{children}</button>;
 }

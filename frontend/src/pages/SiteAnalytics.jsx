@@ -8,7 +8,7 @@ export default function SiteAnalytics() {
 
   useEffect(() => { api.get("/site-eq/analytics").then((r) => setData(r.data)); }, []);
 
-  if (!data) return <div className="p-6 sm:p-8 text-neutral-400 text-sm animate-fade-in">Loading…</div>;
+  if (!data) return <div className="p-6 sm:p-8 text-ink-muted text-body animate-fade-in">Loading…</div>;
 
   const trend = Object.entries(data.by_day).map(([day, count]) => ({ day: day.slice(5), count }));
 
@@ -40,9 +40,9 @@ export default function SiteAnalytics() {
 
         <div className="card-flat shadow-card p-6 sm:p-8">
           <div className="ui-label mb-2">Resolution rate</div>
-          <div className="font-mono text-3xl font-bold">{data.resolution_rate}%</div>
+          <div className="font-mono text-app-title font-bold">{data.resolution_rate}%</div>
           <div className="mt-3 h-2 bg-line rounded-full overflow-hidden">
-            <div className="h-full bg-brand-gradient" style={{ width: `${data.resolution_rate}%` }} />
+            <div className="h-full bg-accent" style={{ width: `${data.resolution_rate}%` }} />
           </div>
         </div>
       </div>
@@ -54,7 +54,7 @@ function StatCard({ label, value }) {
   return (
     <div className="p-3 sm:p-4 bg-white shadow-card rounded-2xl">
       <div className="ui-label">{label}</div>
-      <div className="font-mono text-xl sm:text-2xl font-bold mt-1.5 tracking-tighter">{value}</div>
+      <div className="text-section font-mono font-bold mt-1.5">{value}</div>
     </div>
   );
 }

@@ -30,25 +30,25 @@ export default function SiteEQOverview() {
 
         {!loading && sites.length === 0 && (
           <div className="shadow-card rounded-2xl p-10 text-center">
-            <div className="font-display text-xl sm:text-2xl font-semibold">Add your first site</div>
-            <p className="text-sm text-neutral-400 mt-2">Crawl a website into a knowledge base, then embed the chat widget.</p>
+            <div className="text-section font-display font-semibold">Add your first site</div>
+            <p className="text-caption text-ink-muted mt-2">Crawl a website into a knowledge base, then embed the chat widget.</p>
             <Link to="/app/site-eq/sites" className="btn-primary mt-6 inline-flex">Add a site</Link>
           </div>
         )}
 
         {!loading && sites.length > 0 && (
           <div className="shadow-card rounded-2xl border border-line bg-white">
-            <div className="p-4 border-b border-line font-display font-semibold text-sm">Your sites</div>
+            <div className="p-4 border-b border-line text-card-title font-display font-semibold">Your sites</div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-table">
                 <tbody>
                   {sites.map((s) => (
                     <tr key={s.id} className="border-b border-line last:border-0">
                       <td className="p-3 font-medium">{s.name}</td>
-                      <td className="p-3 font-mono text-xs text-neutral-400">{s.domain}</td>
-                      <td className="p-3 text-neutral-500">{s.pages_crawled} pages</td>
+                      <td className="p-3 font-mono text-caption text-ink-muted">{s.domain}</td>
+                      <td className="p-3 text-ink-tertiary">{s.pages_crawled} pages</td>
                       <td className="p-3 text-right">
-                        <span className={`ui-label px-2 py-0.5 border rounded-full ${s.status === "ready" ? "text-success border-success" : s.status === "crawling" ? "text-warning border-warning" : "text-neutral-400 border-line"}`}>
+                        <span className={`ui-label px-2 py-0.5 border rounded-full ${s.status === "ready" ? "text-success border-success" : s.status === "crawling" ? "text-warning border-warning" : "text-ink-muted border-line"}`}>
                           {s.status}
                         </span>
                       </td>
@@ -67,11 +67,11 @@ export default function SiteEQOverview() {
 function StatCard({ icon: Icon, label, value }) {
   return (
     <div className="shadow-card rounded-2xl p-4">
-      <div className="flex items-center gap-2 text-neutral-400">
+      <div className="flex items-center gap-2 text-ink-muted">
         <Icon size={14} />
         <span className="ui-label">{label}</span>
       </div>
-      <div className="font-display text-xl sm:text-2xl font-bold mt-1">{value}</div>
+      <div className="text-section font-display font-bold mt-1">{value}</div>
     </div>
   );
 }

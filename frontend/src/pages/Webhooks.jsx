@@ -97,12 +97,12 @@ export default function Webhooks() {
       />
 
       <div className="p-6 sm:p-8 space-y-6">
-        {loading && <div className="text-neutral-400 text-sm">Loading webhooks…</div>}
+        {loading && <div className="text-ink-muted text-caption">Loading webhooks…</div>}
         {!loading && hooks.length === 0 && (
           <div className="rounded-2xl border border-line bg-white shadow-card p-8 text-center">
-            <Webhook className="mx-auto mb-3 text-neutral-400" size={32} />
-            <div className="font-display font-semibold text-xl mb-1">No webhooks yet</div>
-            <p className="text-sm text-neutral-400 max-w-md mx-auto mb-4">
+            <Webhook className="mx-auto mb-3 text-ink-muted" size={32} />
+            <div className="font-display font-semibold text-section mb-1">No webhooks yet</div>
+            <p className="text-body text-ink-muted max-w-md mx-auto mb-4">
               Automate carousel creation. Pick a source (Airtable / Notion / any HTTP), map the fields, and paste the URL into your automation tool.
             </p>
             <button onClick={() => setModal(true)} data-testid="empty-new-webhook" className="btn-primary">
@@ -123,48 +123,48 @@ export default function Webhooks() {
                     <Webhook size={14} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm truncate">{h.name}</div>
-                    <div className="text-[11px] text-neutral-400 font-mono uppercase tracking-wider">
+                    <div className="font-medium text-body truncate">{h.name}</div>
+                    <div className="text-tiny text-ink-muted font-mono uppercase tracking-wider">
                       {h.source} · {h.call_count || 0} calls
                       {h.last_called_at && ` · last ${new Date(h.last_called_at).toLocaleString()}`}
                     </div>
                   </div>
                   <button onClick={() => copy(url)} data-testid={`webhook-copy-${h.id}`} title="Copy URL"
-                    className="btn-ghost text-xs">
+                    className="btn-ghost text-caption">
                     <Copy size={12} /> URL
                   </button>
                   <button onClick={() => toggle(h.id)} data-testid={`webhook-toggle-${h.id}`}
-                    className="btn-ghost text-xs">
+                    className="btn-ghost text-caption">
                     {isOpen ? "Hide" : "Details"} <ChevronRight size={12} className={`transition-transform ${isOpen ? "rotate-90" : ""}`} />
                   </button>
                   <button onClick={() => del(h.id)} data-testid={`webhook-delete-${h.id}`}
-                    className="btn-ghost text-xs text-danger">
+                    className="btn-ghost text-caption text-danger">
                     <Trash2 size={12} />
                   </button>
                 </div>
                 {isOpen && (
-                  <div className="border-t border-line px-4 py-4 bg-ash space-y-4 text-xs">
+                  <div className="border-t border-line px-4 py-4 bg-ash space-y-4 text-caption">
                     <div>
                       <div className="ui-label mb-1.5">Webhook URL</div>
-                      <div className="bg-white border border-line rounded-lg p-3 font-mono text-[11px] break-all select-all">{url}</div>
+                      <div className="bg-white border border-line rounded-lg p-3 font-mono text-tiny break-all select-all">{url}</div>
                     </div>
                     <div>
                       <div className="ui-label mb-1.5">Field mapping</div>
-                      <div className="bg-white border border-line rounded-lg p-3 font-mono text-[11px]">
+                      <div className="bg-white border border-line rounded-lg p-3 font-mono text-tiny">
                         {Object.entries(h.field_map || {}).map(([k, v]) => (
-                          <div key={k}><span className="text-neutral-400">{k}</span> ← <span className="text-ink">{v || "(payload." + k + ")"}</span></div>
+                          <div key={k}><span className="text-ink-muted">{k}</span> ← <span className="text-ink">{v || "(payload." + k + ")"}</span></div>
                         ))}
                       </div>
                     </div>
                     <div>
                       <div className="ui-label mb-1.5">Recent events</div>
-                      {evs.length === 0 && <div className="text-neutral-400">No calls yet.</div>}
+                      {evs.length === 0 && <div className="text-ink-muted">No calls yet.</div>}
                       <div className="space-y-1.5">
                         {evs.map((e) => (
                           <div key={e.id} className="bg-white border border-line rounded-lg p-2 flex items-center gap-2">
                             {e.status === "ok" ? <CheckCircle2 size={12} className="text-success flex-shrink-0" /> : <XCircle size={12} className="text-danger flex-shrink-0" />}
                             <div className="flex-1 min-w-0 truncate">{e.topic || e.reason || "—"}</div>
-                            <div className="text-neutral-400 font-mono flex items-center gap-1"><Clock size={10} /> {new Date(e.at).toLocaleTimeString()}</div>
+                            <div className="text-ink-muted font-mono flex items-center gap-1"><Clock size={10} /> {new Date(e.at).toLocaleTimeString()}</div>
                           </div>
                         ))}
                       </div>
@@ -217,8 +217,8 @@ function NewWebhookModal({ onClose, onCreated }) {
       <form onSubmit={submit} className="bg-white rounded-2xl shadow-card w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="new-webhook-modal">
         <div className="p-4 sm:p-6 border-b border-line flex items-center gap-2">
           <Webhook size={16} />
-          <div className="font-display font-semibold text-xl">New webhook</div>
-          <button type="button" onClick={onClose} className="ml-auto text-neutral-400 hover:text-ink text-sm">Cancel</button>
+          <div className="font-display font-semibold text-section">New webhook</div>
+          <button type="button" onClick={onClose} className="ml-auto text-ink-muted hover:text-ink text-caption">Cancel</button>
         </div>
         <div className="p-4 sm:p-6 space-y-5">
           <div>
@@ -228,47 +228,47 @@ function NewWebhookModal({ onClose, onCreated }) {
                 <button key={s.id} type="button" onClick={() => setSource(s.id)}
                   data-testid={`wh-source-${s.id}`}
                   className={`text-left p-3 rounded-lg border ${source === s.id ? "border-ink bg-ash" : "border-line hover:border-neutral-400"}`}>
-                  <div className="text-xs font-medium">{s.label}</div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5 leading-tight">{s.hint}</div>
+                  <div className="text-caption font-medium">{s.label}</div>
+                  <div className="text-tiny text-ink-muted mt-0.5 leading-tight">{s.hint}</div>
                 </button>
               ))}
             </div>
           </div>
 
           <label className="block">
-            <span className="ui-label">Name</span>
+            <span className="form-label">Name</span>
             <input value={name} onChange={(e) => setName(e.target.value)}
               data-testid="wh-name"
               placeholder={`${src.label} → Carousel`}
-              className="input-premium mt-1 w-full text-sm" />
+              className="input-premium mt-1 w-full" />
           </label>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block">
-              <span className="ui-label">Default platform</span>
+              <span className="form-label">Default platform</span>
               <select value={defaultPlatform} onChange={(e) => setDefaultPlatform(e.target.value)}
                 data-testid="wh-platform"
-                className="input-premium mt-1 w-full bg-white text-sm">
+                className="input-premium mt-1 w-full bg-white">
                 <option value="linkedin">LinkedIn Deck</option>
                 <option value="square">Square Social</option>
                 <option value="twitter">Twitter Cheat Sheet</option>
               </select>
             </label>
             <label className="block">
-              <span className="ui-label">Default slide count</span>
+              <span className="form-label">Default slide count</span>
               <input type="number" min={2} max={12} value={defaultCount}
                 onChange={(e) => setDefaultCount(Number(e.target.value))}
                 data-testid="wh-count"
-                className="input-premium mt-1 w-full font-mono text-sm" />
+                className="input-premium mt-1 w-full font-mono" />
             </label>
           </div>
 
           <div className="border-t border-line pt-4">
             <div className="ui-label mb-2">Sample payload</div>
-            <div className="text-[11px] text-neutral-400 mb-2">
+            <div className="text-tiny text-ink-muted mb-2">
               Your automation should POST JSON like this to the generated URL. Fields are auto-mapped.
             </div>
-            <pre className="bg-neutral-900 text-neutral-100 rounded-lg p-3 text-[11px] font-mono overflow-x-auto whitespace-pre">{src.example}</pre>
+            <pre className="bg-neutral-900 text-neutral-100 rounded-lg p-3 text-tiny font-mono overflow-x-auto whitespace-pre">{src.example}</pre>
           </div>
         </div>
 

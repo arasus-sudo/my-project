@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, isCreditError } from "../lib/api";
 import { toast } from "sonner";
-import { Loader2, Sparkles, X, Plus } from "lucide-react";
+import { Loader2, Search, X, Plus } from "lucide-react";
 
 /** Prospect Finder drawer — lead providers + LLM icebreaker */
 export default function ProspectFinder({ open, onClose, onDone }) {
@@ -89,8 +89,8 @@ export default function ProspectFinder({ open, onClose, onDone }) {
       <div className="w-full max-w-3xl bg-bone h-full overflow-y-auto animate-fade-in">
         <div className="sticky top-0 bg-white border-b border-line px-6 py-4 flex items-center gap-3 z-10">
           <div className="flex items-center gap-2">
-            <Sparkles size={16} />
-            <div className="font-display font-bold text-lg">Prospect Finder</div>
+            <Search size={16} />
+            <div className="font-display font-bold text-card-title">Prospect Finder</div>
           </div>
           <button onClick={onClose} data-testid="pf-close" className="ml-auto btn-ghost"><X size={14} /></button>
         </div>
@@ -100,40 +100,40 @@ export default function ProspectFinder({ open, onClose, onDone }) {
           <div className="bg-white border border-line rounded-2xl p-5 space-y-3">
             <div className="flex items-center gap-3">
               <label className="flex-1 block">
-                <span className="ui-label">Use ICP</span>
+                <span className="form-label">Use ICP</span>
                 <select value={form.icp_id} onChange={(e) => setForm({ ...form, icp_id: e.target.value })} data-testid="pf-icp"
-                  className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white">
+                  className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-input">
                   <option value="">— none / free-form —</option>
                   {icps.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
                 </select>
               </label>
               <button onClick={() => setIcpModalOpen(true)} data-testid="pf-new-icp" className="btn-secondary mt-5"><Plus size={12} /> New ICP</button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="block">
-                <span className="ui-label">Company domain</span>
+                <span className="form-label">Company domain</span>
                 <input value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })} data-testid="pf-domain"
-                  placeholder="acme.com" className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm" />
+                  placeholder="acme.com" className="mt-1 w-full border border-line rounded-full px-3 py-2 text-input" />
               </label>
               <label className="block">
-                <span className="ui-label">Result limit</span>
+                <span className="form-label">Result limit</span>
                 <input type="number" min={1} max={50} value={form.limit} onChange={(e) => setForm({ ...form, limit: e.target.value })} data-testid="pf-limit"
-                  className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm font-mono" />
+                  className="mt-1 w-full border border-line rounded-full px-3 py-2 text-input font-mono" />
               </label>
-              <label className="block col-span-2">
-                <span className="ui-label">Titles (comma-separated)</span>
+              <label className="block sm:col-span-2">
+                <span className="form-label">Titles (comma-separated)</span>
                 <input value={form.titles} onChange={(e) => setForm({ ...form, titles: e.target.value })} data-testid="pf-titles"
-                  placeholder="VP Sales, Head of Growth, CTO" className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm" />
+                  placeholder="VP Sales, Head of Growth, CTO" className="mt-1 w-full border border-line rounded-full px-3 py-2 text-input" />
               </label>
               <label className="block">
-                <span className="ui-label">Industries</span>
+                <span className="form-label">Industries</span>
                 <input value={form.industries} onChange={(e) => setForm({ ...form, industries: e.target.value })} data-testid="pf-industries"
-                  placeholder="SaaS, Fintech" className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm" />
+                  placeholder="SaaS, Fintech" className="mt-1 w-full border border-line rounded-full px-3 py-2 text-input" />
               </label>
               <label className="block">
-                <span className="ui-label">Locations</span>
+                <span className="form-label">Locations</span>
                 <input value={form.locations} onChange={(e) => setForm({ ...form, locations: e.target.value })} data-testid="pf-locations"
-                  placeholder="US, UK" className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm" />
+                  placeholder="US, UK" className="mt-1 w-full border border-line rounded-full px-3 py-2 text-input" />
               </label>
             </div>
             <button onClick={search} disabled={busy} data-testid="pf-search" className="btn-primary disabled:opacity-60">
@@ -146,31 +146,33 @@ export default function ProspectFinder({ open, onClose, onDone }) {
             <div className="bg-white border border-line rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-line flex items-center justify-between">
                 <div className="ui-label">Found {leads.length}</div>
-                <button onClick={importSelected} disabled={busy} data-testid="pf-import" className="btn-primary text-sm py-2">
+                <button onClick={importSelected} disabled={busy} data-testid="pf-import" className="btn-primary py-2">
                   {busy ? "Importing…" : "Import selected"}
                 </button>
               </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-line">
-                    <th className="p-3 w-8"></th>
-                    {["Name", "Email", "Title", "Company"].map((h) => <th key={h} className="ui-label text-left p-3">{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {leads.map((p, i) => (
-                    <tr key={(p.id || p.email || i)} className="border-b border-line last:border-0">
-                      <td className="p-3">
-                        <input type="checkbox" checked={!!selected[i]} onChange={(e) => setSelected({ ...selected, [i]: e.target.checked })} data-testid={`pf-select-${i}`} />
-                      </td>
-                      <td className="p-3 font-medium">{p.first_name} {p.last_name}</td>
-                      <td className="p-3 font-mono text-xs">{p.email || "—"}</td>
-                      <td className="p-3 text-neutral-600">{p.title || "—"}</td>
-                      <td className="p-3">{p.company || "—"}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-table min-w-[520px]">
+                  <thead>
+                    <tr className="border-b border-line">
+                      <th className="p-3 w-8"></th>
+                      {["Name", "Email", "Title", "Company"].map((h) => <th key={h} className="table-header text-left p-3">{h}</th>)}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {leads.map((p, i) => (
+                      <tr key={(p.id || p.email || i)} className="border-b border-line last:border-0">
+                        <td className="p-3">
+                          <input type="checkbox" checked={!!selected[i]} onChange={(e) => setSelected({ ...selected, [i]: e.target.checked })} data-testid={`pf-select-${i}`} />
+                        </td>
+                        <td className="p-3 font-medium">{p.first_name} {p.last_name}</td>
+                        <td className="p-3 font-mono text-caption">{p.email || "—"}</td>
+                        <td className="p-3 text-ink-tertiary">{p.title || "—"}</td>
+                        <td className="p-3">{p.company || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
