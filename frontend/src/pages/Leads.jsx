@@ -4,7 +4,7 @@ import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import LeadListImportDrawer from "./LeadListImportDrawer";
 import { toast } from "sonner";
-import { Plus, Upload, Download, Phone, ArrowUpDown, ArrowDown, Tag, X } from "lucide-react";
+import { Plus, Upload, Download, Phone, ArrowUpDown, ArrowDown, Tag, X, ChevronLeft, ChevronRight } from "lucide-react";
 
 const BAND_STYLE = {
   hot: "bg-sanguine text-white",
@@ -60,10 +60,17 @@ export default function Leads() {
   const [callAgentId, setCallAgentId] = useState("");
   const [calling, setCalling] = useState(false);
   const [form, setForm] = useState({ first_name: "", last_name: "", email: "", company: "", title: "", phone: "" });
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 25;
 
-  const load = () => api.get("/leads").then((r) => setLeads(r.data));
+  const load = (p) => api.get(`/leads?page=${p || page}&page_size=${pageSize}`).then((r) => {
+    setLeads(r.data.items);
+    setTotal(r.data.total);
+    setPage(r.data.page);
+  });
   useEffect(() => {
-    load();
+    load(1);
     api.get("/voice-eq/agents").then((r) => setVoiceAgents(r.data)).catch(() => {});
     api.get("/team").then((r) => setTeam(r.data)).catch(() => {});
     api.get("/crm/lists").then((r) => setLists(r.data)).catch(() => {});
@@ -192,7 +199,7 @@ export default function Leads() {
     <div>
       <PageHeader
         title="Leads"
-        subtitle={`${leads.length} contacts in your workspace.`}
+        subtitle={`${total} contacts in your workspace.`}
         right={
           <div className="flex flex-wrap gap-2">
             <button onClick={() => setImporter(true)} data-testid="import-csv-btn" className="btn-secondary">
@@ -321,6 +328,31 @@ export default function Leads() {
                 ))}
               </tbody>
             </table>
+            <div className="flex items-center justify-between pt-3 pb-1">
+              <span className="text-caption text-ink-muted">
+                {total > 0 && `Page ${page} · ${Math.ceil(total / pageSize)} total`}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={page <= 1}
+                  onClick={() => load(page - 1)}
+                  className="btn-secondary text-xs px-2 py-1 disabled:opacity-30"
+                ><ChevronLeft size={14} /></button>
+                {Array.from({ length: Math.min(Math.ceil(total / pageSize), 5) }, (_, i) => {
+                  const start = Math.max(1, Math.min(page - 2, Math.ceil(total / pageSize) - 4));
+                  const n = start + i;
+                  return (
+                    <button key={n} onClick={() => load(n)}
+                      className={`text-xs px-2 py-1 rounded-sm ${n === page ? 'bg-ink text-white' : 'hover:bg-ash'}`}>{n}</button>
+                  );
+                })}
+                <button
+                  disabled={page >= Math.ceil(total / pageSize)}
+                  onClick={() => load(page + 1)}
+                  className="btn-secondary text-xs px-2 py-1 disabled:opacity-30"
+                ><ChevronRight size={14} /></button>
+              </div>
+            </div>
           </div>
         )}
       </div>

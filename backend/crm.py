@@ -118,11 +118,20 @@ async def _enrich_campaign_names(items: List[Dict[str, Any]]):
 
 # ----------------------------- Leads -----------------------------------------
 @crm_router.get("/leads")
-async def list_leads(user=Depends(current_user)):
-    items = await db.leads.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(2000)
+async def list_leads(
+    page: int = 1,
+    page_size: int = 25,
+    user=Depends(current_user),
+):
+    query = {"workspace_id": user["workspace_id"]}
+    total = await db.leads.count_documents(query)
+    items = await db.leads.find(query, {"_id": 0}) \
+        .sort("created_at", -1) \
+        .skip((page - 1) * page_size) \
+        .to_list(page_size)
     await _enrich_campaign_names(items)
     await _enrich_owner_names(items)
-    return items
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @crm_router.get("/leads/export")
