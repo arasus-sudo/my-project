@@ -99,6 +99,12 @@ CREDIT_COSTS: Dict[str, int] = {
     "site_crawl": 8,     # matches lead_research's tier — multi-page fetch + one LLM-free pass
     "site_chat_reply": 1,  # single small LLM call, same tier as email_ai
     "email_ai": 1,
+    "whatsapp_broadcast_send": 2,  # real outbound conversation, parity with social_publish
+    "whatsapp_reply_suggest": 1,   # single small LLM call, same tier as email_ai
+    "sms_broadcast_send": 1,       # lower per-unit cost than a WhatsApp conversation
+    "sms_reply_suggest": 1,
+    "candidate_score": 5,          # AI resume/fit analysis, same tier as lead_enrichment
+    "bill_categorize_suggest": 1,  # single small LLM call, same tier as email_ai
     # Sending, tracking and reply-polling are deliberately absent = free. We never
     # charge for delivery, or for reading data you already own.
 }

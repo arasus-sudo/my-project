@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   FileSearch, Save, Play, Plus, Trash2, Loader2, Check, AlertTriangle, Flame,
   Mail, Eye, ThumbsUp, Signature, Search, Megaphone,
-  Zap, ChevronLeft, ChevronRight,
+  Zap, ChevronLeft, ChevronRight, ChevronDown,
   Edit2, RotateCw, Flag, List, Tag, X,
 } from "lucide-react";
 
@@ -357,7 +357,10 @@ export default function CampaignBuilder() {
   // server's launch gate checks — so the button and the 400 never disagree.
   const allTags = useMemo(() => {
     const set = new Set();
-    leads.forEach((l) => (l.tags || []).forEach((t) => set.add(t)));
+    leads.forEach((l) => {
+      const tags = Array.isArray(l.tags) ? l.tags : [];
+      tags.forEach((t) => set.add(t));
+    });
     return [...set].sort();
   }, [leads]);
 

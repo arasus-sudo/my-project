@@ -1,8 +1,9 @@
-"""Thin async wrapper around the Twilio REST API — call placement for Voice EQ's
-Twilio + OpenAI Realtime provider.
+"""Thin async wrapper around the Twilio REST API — shared by Voice EQ (call
+placement), SMS EQ, and WhatsApp EQ (Programmable Messaging).
 
 Falls back to deterministic mock responses when TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN
-are unset — this provider is fully demoable without a Twilio account.
+are unset — every provider built on this client is fully demoable without a Twilio
+account.
 
 twilio-python's REST client is synchronous; every call here runs it via
 asyncio.to_thread so an await-based caller never blocks the event loop on a
@@ -18,6 +19,12 @@ TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER", "")
 TWILIO_MOCKED = not bool(TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN)
+
+# WhatsApp-via-Twilio needs its own sending number (a WhatsApp-enabled Twilio
+# number or the Twilio sandbox number) — SMS reuses TWILIO_FROM_NUMBER above,
+# WhatsApp does not, since a single Twilio number is rarely provisioned for both.
+WHATSAPP_FROM_NUMBER = os.environ.get("WHATSAPP_FROM_NUMBER", "")
+WHATSAPP_MOCKED = TWILIO_MOCKED or not bool(WHATSAPP_FROM_NUMBER)
 
 
 def _mock_id(prefix: str) -> str:
@@ -77,6 +84,56 @@ class TwilioClient:
         if TWILIO_MOCKED or call_sid.startswith("mock-"):
             return
         await asyncio.to_thread(self._sdk.calls(call_sid).update, status="completed")
+
+    async def send_sms(self, *, to_number: str, body: str,
+                        from_number: Optional[str] = None,
+                        status_callback_url: Optional[str] = None) -> Dict[str, Any]:
+        """Programmable Messaging — plain SMS. Defaults to TWILIO_FROM_NUMBER."""
+        sender = from_number or TWILIO_FROM_NUMBER
+        if TWILIO_MOCKED:
+            return {
+                "message_id": _mock_id("sms"), "status": "queued",
+                "from_number": sender, "to_number": to_number, "mocked": True,
+            }
+        kwargs: Dict[str, Any] = {"to": to_number, "from_": sender, "body": body}
+        if status_callback_url:
+            kwargs["status_callback"] = status_callback_url
+        msg = await asyncio.to_thread(self._sdk.messages.create, **kwargs)
+        return {
+            "message_id": msg.sid, "status": msg.status,
+            "from_number": sender, "to_number": to_number, "mocked": False,
+        }
+
+    async def send_whatsapp(self, *, to_number: str, body: str,
+                             content_sid: Optional[str] = None,
+                             content_variables: Optional[Dict[str, str]] = None,
+                             status_callback_url: Optional[str] = None) -> Dict[str, Any]:
+        """Programmable Messaging over WhatsApp. `content_sid` + `content_variables`
+        send an approved template (the only way to open/re-open a conversation
+        outside the 24h session window); a plain `body` is a freeform session
+        message, only valid while a session is open."""
+        if WHATSAPP_MOCKED:
+            return {
+                "message_id": _mock_id("wa"), "status": "queued",
+                "from_number": WHATSAPP_FROM_NUMBER, "to_number": to_number, "mocked": True,
+            }
+        kwargs: Dict[str, Any] = {
+            "to": f"whatsapp:{to_number}", "from_": f"whatsapp:{WHATSAPP_FROM_NUMBER}",
+        }
+        if content_sid:
+            kwargs["content_sid"] = content_sid
+            if content_variables:
+                import json as _json
+                kwargs["content_variables"] = _json.dumps(content_variables)
+        else:
+            kwargs["body"] = body
+        if status_callback_url:
+            kwargs["status_callback"] = status_callback_url
+        msg = await asyncio.to_thread(self._sdk.messages.create, **kwargs)
+        return {
+            "message_id": msg.sid, "status": msg.status,
+            "from_number": WHATSAPP_FROM_NUMBER, "to_number": to_number, "mocked": False,
+        }
 
     def verify_webhook_signature(self, url: str, params: Dict[str, str], signature: str) -> bool:
         """Twilio signs its POSTed webhooks (TwiML fetch, status callbacks) with
