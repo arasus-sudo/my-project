@@ -136,7 +136,7 @@
    anything styled in canvas px shrinks with zoom. --inv-zoom (set inline on
    the canvas as 1/zoom) lets pure CSS draw screen-constant strokes — the hover
    affordance below costs zero React re-renders. */
-.creq-canvas .creq-el { cursor: grab; }
+.creq-canvas .creq-el { cursor: grab; touch-action: none; }
 .creq-canvas:not(.creq-interacting) .creq-el:hover {
   outline: calc(1.5px * var(--inv-zoom, 1)) solid rgba(29, 29, 31, 0.4);
   outline-offset: 2px;

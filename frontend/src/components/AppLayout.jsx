@@ -192,13 +192,18 @@ export default function AppLayout() {
             <CreditPill />
           </div>
           <div className="flex items-center gap-3 pt-3 border-t border-line">
-            <div className="w-9 h-9 bg-ash text-ink flex items-center justify-center rounded-xl font-mono text-caption font-semibold shrink-0">
-              {(user?.name || "U").slice(0, 2).toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
+            <button onClick={() => nav("/settings")} title="Profile settings"
+              className="w-9 h-9 bg-ash text-ink flex items-center justify-center rounded-xl font-mono text-caption font-semibold shrink-0 overflow-hidden hover:opacity-80 transition-opacity">
+              {user?.avatar_url ? (
+                <img src={user.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                (user?.name || "U").slice(0, 2).toUpperCase()
+              )}
+            </button>
+            <button onClick={() => nav("/settings")} className="flex-1 min-w-0 text-left">
               <div className="text-sm font-display font-medium truncate">{user?.name}</div>
               <div className="text-tiny text-ink-muted truncate">{user?.email}</div>
-            </div>
+            </button>
             {user?.is_admin && (
               <button onClick={() => nav("/admin")} data-testid="admin-link" title="Suite Admin"
                 className="p-2 text-ink-muted hover:text-ink hover:bg-ash rounded-xl transition-all">
