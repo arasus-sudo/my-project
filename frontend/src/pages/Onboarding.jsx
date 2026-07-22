@@ -54,7 +54,13 @@ export default function Onboarding() {
     const chosen = campaigns.filter((_, i) => accept[i]).map(strip);
     setBusy(true);
     try {
-      if (chosen.length) await api.post("/onboarding/accept", { campaigns: chosen });
+      // Persist what we learned about the business (summary + clarifying
+      // answers) onto the workspace's Brand Voice, so every other agent can
+      // draw on it instead of just seeding the first batch of campaigns and
+      // then losing this profile forever.
+      await api.post("/onboarding/accept", {
+        campaigns: chosen, business_summary: summary, services, answers,
+      });
       toast.success(`${chosen.length} campaign${chosen.length === 1 ? "" : "s"} saved`);
       nav("/suite");
     } catch { toast.error("Save failed"); }

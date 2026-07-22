@@ -308,7 +308,7 @@ async def signup(request: Request, body: SignupIn):
         "name": body.workspace_name,
         "owner_id": user_id,
         "created_at": now_iso(),
-        "brand_voice": {"tone": "warm", "banned_phrases": [], "sample": ""},
+        "brand_voice": {"tone": "warm", "banned_phrases": [], "sample": "", "offer": "", "icp_description": ""},
         "plan": "trial",
     })
     await db.users.insert_one({
@@ -394,7 +394,7 @@ async def google_auth(body: GoogleAuthIn):
         await db.workspaces.insert_one({
             "id": workspace_id, "name": workspace_name, "owner_id": user_id,
             "created_at": now_iso(),
-            "brand_voice": {"tone": "warm", "banned_phrases": [], "sample": ""},
+            "brand_voice": {"tone": "warm", "banned_phrases": [], "sample": "", "offer": "", "icp_description": ""},
             "plan": "trial",
         })
         await db.users.insert_one({
@@ -1468,8 +1468,19 @@ async def ai_personalize(body: AIPersonalizeIn, user=Depends(current_user)):
     if ANTHROPIC_API_KEY:
         from billing import charge_credits
         await charge_credits(user["workspace_id"], "email_ai", meta={"kind": "personalize"})
+        ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0, "brand_voice": 1})
+        bv = (ws or {}).get("brand_voice") or {}
+        # Describe the SENDER's own business, not this SaaS tool — pulled from the
+        # workspace's brand voice (set at onboarding or in Settings), never
+        # hardcoded to "Pitch EQ" like this prompt used to be.
+        sender_offer = bv.get("offer", "").strip() or (
+            "No specific offer is configured for this workspace yet — write generically "
+            "about helping the lead's team without inventing specific product claims."
+        )
+        icp_line = f"\nTarget customer profile: {bv.get('icp_description')}" if bv.get("icp_description") else ""
         system = (
-            "You are Pitch EQ — an outbound copywriter for B2B cold email. "
+            "You are an outbound copywriter for B2B cold email, writing on behalf of the "
+            "sender's own business (described below) — not on behalf of any email tool. "
             "Write ONE email tailored to the lead. Be warm, specific, and human. "
             "Under 120 words. One clear low-friction ask. No spammy words, no ALL-CAPS, no exclamation marks. "
             "Return STRICT JSON only: {\"subject\": str, \"body\": str}."
@@ -1478,7 +1489,7 @@ async def ai_personalize(body: AIPersonalizeIn, user=Depends(current_user)):
         user_text = (
             f"Lead: {json.dumps({k: lead.get(k) for k in ('first_name','last_name','title','company','linkedin')}, ensure_ascii=False)}\n"
             f"Tone: {body.tone}\n"
-            f"Sender product: Pitch EQ (AI outbound agent with an EQ Score that rates emails for tone, empathy, clarity and spam risk before sending).\n"
+            f"Sender's offer: {sender_offer}{icp_line}\n"
             f"Goal / template hint from user:\n{instructions}"
         )
         try:
@@ -1614,6 +1625,9 @@ class OnbGenerateIn(BaseModel):
 
 class OnbAcceptIn(BaseModel):
     campaigns: List[Dict[str, Any]]
+    business_summary: str = ""
+    services: List[str] = []
+    answers: Dict[str, str] = {}
 
 
 def _crawl_text(url: str) -> str:
@@ -1773,8 +1787,55 @@ async def onb_accept(body: OnbAcceptIn, user=Depends(current_user)):
             "send_window_start": "09:00", "send_window_end": "17:00", "timezone": "UTC",
         })
         saved.append(cid)
-    await db.workspaces.update_one({"id": user["workspace_id"]}, {"$set": {"onboarded": True}})
+
+    patch = {"onboarded": True}
+    # Persist what onboarding learned about the customer's own business onto the
+    # workspace, so every other agent (personalize, proposals, EQ score hints) can
+    # draw on it instead of falling back to language that describes this SaaS
+    # itself. Only set fields the user actually filled in — don't clobber a value
+    # someone later edited by hand in Settings with a blank re-run.
+    if body.business_summary.strip():
+        patch["brand_voice.offer"] = body.business_summary.strip()
+    if body.answers:
+        icp = " ".join(v.strip() for v in body.answers.values() if v and v.strip())
+        if icp:
+            patch["brand_voice.icp_description"] = icp
+    await db.workspaces.update_one({"id": user["workspace_id"]}, {"$set": patch})
     return {"ok": True, "campaign_ids": saved}
+
+
+# ----------------------------- Brand voice (company profile) -----------------
+class BrandVoiceIn(BaseModel):
+    tone: str = "warm"
+    offer: str = ""
+    icp_description: str = ""
+    banned_phrases: List[str] = []
+    sample: str = ""
+
+
+@api.get("/workspace/brand-voice")
+async def get_brand_voice(user=Depends(current_user)):
+    ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0, "brand_voice": 1})
+    bv = (ws or {}).get("brand_voice") or {}
+    return {
+        "tone": bv.get("tone", "warm"), "offer": bv.get("offer", ""),
+        "icp_description": bv.get("icp_description", ""),
+        "banned_phrases": bv.get("banned_phrases", []), "sample": bv.get("sample", ""),
+    }
+
+
+@api.put("/workspace/brand-voice")
+async def update_brand_voice(body: BrandVoiceIn, user=Depends(current_user)):
+    """The single real source of truth every agent's LLM prompt should draw the
+    customer's own offer/ICP/tone from — replaces the old dead schema that had
+    no editable UI and was never read back anywhere except a fallback that
+    could never fire."""
+    await db.workspaces.update_one(
+        {"id": user["workspace_id"]},
+        {"$set": {"brand_voice": body.model_dump()}},
+    )
+    await _audit(user, "brand_voice.update", {})
+    return body.model_dump()
 
 
 # ----------------------------- Prospeo + Icypeas + ICP ----------------------

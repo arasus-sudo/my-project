@@ -80,7 +80,7 @@ class DraftIn(BaseModel):
     lead_id: str
     offer: str = ""
     goal: str = "Book a 15-minute intro call."
-    tone: str = "warm"
+    tone: str = ""  # empty = use the workspace's Brand Voice tone setting
     signature: str = ""
 
 
@@ -234,15 +234,19 @@ async def draft_email(body: DraftIn, user=Depends(current_user)):
     # already paid for by /enrich.
     pack = await research_worker.get_research(wid, lead)
 
-    offer = body.offer.strip()
-    if not offer:
-        ws = await db.workspaces.find_one({"id": wid}, {"_id": 0})
-        offer = (ws or {}).get("brand_voice", {}).get("offer") or \
-                "An AI agent suite that runs outbound, calls, scheduling and proposals."
+    ws = await db.workspaces.find_one({"id": wid}, {"_id": 0})
+    bv = (ws or {}).get("brand_voice") or {}
+
+    offer = body.offer.strip() or bv.get("offer", "").strip() or \
+        "No specific offer is configured for this workspace yet — write generically, without inventing product claims."
+    # An explicit per-draft tone always wins; otherwise fall back to the
+    # workspace's real Brand Voice setting instead of a hardcoded "warm" that
+    # ignored whatever the user configured in Settings.
+    tone = (body.tone or "").strip() or bv.get("tone", "warm")
 
     try:
         result = await draft_chain.run_chain(
-            lead, pack, offer=offer, goal=body.goal, tone=body.tone,
+            lead, pack, offer=offer, goal=body.goal, tone=tone,
             signature=body.signature,
         )
     except ChainError as ex:

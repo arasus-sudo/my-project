@@ -279,9 +279,15 @@ async def voice_media_stream(ws: WebSocket, token: str, call_id: str):
 
     qf = cfg.get("qualification_framework", "custom")
     qfields = cfg.get("qualification_fields", [])
-    if qf and qf != "custom" and qfields:
+    if qfields:
+        # Fields reach the prompt regardless of framework label — previously
+        # `qf != "custom"` excluded exactly the case where a user hand-authors
+        # their own qualification questions (the builder UI sets
+        # framework="custom" the moment you edit/add a field), so custom
+        # fields were silently dropped on every real call.
+        label = qf.upper() if qf and qf != "custom" else "Custom"
         field_descriptions = "\n".join(f"- {f.get('key', 'field')}: {f.get('prompt', '')}" for f in qfields)
-        prompt += f"\n\nQualification framework ({qf.upper()}): Extract the following information during the conversation:\n{field_descriptions}"
+        prompt += f"\n\nQualification framework ({label}): Extract the following information during the conversation:\n{field_descriptions}"
 
     kb = cfg.get("knowledge_base", "")
     if kb:

@@ -65,14 +65,11 @@ class AgentConfig(BaseModel):
     background_noise_suppression: bool = True
     call_recording: bool = True
     human_handoff_enabled: bool = False
-    handoff_number: str = ""
     accent: str = "neutral"
     qualification_framework: str = "custom"
     qualification_fields: List[QualificationField] = []
     knowledge_base: str = ""
     crm_context_level: str = "full_lead"
-    post_call_pipeline: bool = True
-    post_call_action: str = "none"
 
     # Google provider fields
     google_voice: str = "en-US-Studio-Q"
@@ -244,7 +241,21 @@ def _build_system_prompt(agent: Dict[str, Any], lead: Optional[Dict[str, Any]] =
         if lead.get("website"):
             prompt += f"\n- Website: {lead['website']}"
 
-    if config.get("qualification_framework") == "BANT":
+    qf = config.get("qualification_framework", "custom")
+    qfields = config.get("qualification_fields") or []
+    if qfields:
+        # Whatever fields are configured — preset (BANT/MEDDIC/etc.) or
+        # user-authored custom ones — always reach the prompt. Previously this
+        # only special-cased the literal string "BANT" with hardcoded
+        # boilerplate, silently dropping every custom qualification field the
+        # agent builder actually lets you author.
+        label = qf.upper() if qf and qf != "custom" else "Custom"
+        field_lines = "\n".join(f"- {f.get('key', 'field')}: {f.get('prompt', '')}" for f in qfields)
+        prompt += (
+            f"\n\n# Qualification framework: {label}"
+            f"\nDuring the conversation, discreetly gather:\n{field_lines}"
+        )
+    elif qf == "BANT":
         prompt += (
             "\n\n# Qualification framework: BANT"
             "\nDuring the conversation, discreetly gather:"

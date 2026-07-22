@@ -106,14 +106,11 @@ const emptyAgent = () => ({
     background_noise_suppression: true,
     call_recording: true,
     human_handoff_enabled: false,
-    handoff_number: "",
     accent: "neutral",
     qualification_framework: "custom",
     qualification_fields: [],
     knowledge_base: "",
     crm_context_level: "full_lead",
-    post_call_pipeline: true,
-    post_call_action: "none",
     google_voice: "en-US-Studio-Q",
     google_stt_language: "en-US",
     greeting_message: "",
@@ -296,18 +293,6 @@ export default function VoiceAgentBuilder() {
                   Set this URL as the Voice webhook in your Twilio Console → Phone Numbers → your number → Voice configuration.
                 </p>
               )}
-            </div>
-
-            <div className="shadow-card rounded-2xl p-6 space-y-4">
-              <div className="text-card-title font-display font-semibold">Cross-agent handoff</div>
-              <p className="text-caption text-ink-muted">When a call qualifies the lead, automatically trigger another agent.</p>
-              <select value={c.post_call_action} onChange={(e) => patchConfig({ post_call_action: e.target.value })}
-                className="w-full border border-line px-3 py-2 rounded-lg">
-                <option value="none">Do nothing extra (just update CRM)</option>
-                <option value="draft_proposal">Auto-draft a proposal (Proposal EQ)</option>
-                <option value="send_booking_link">Queue a booking link (Schedule EQ)</option>
-                <option value="follow_up_email">Queue a follow-up email (Pitch EQ)</option>
-              </select>
             </div>
           </>
         )}
@@ -626,11 +611,6 @@ export default function VoiceAgentBuilder() {
                     onChange={(e) => patchConfig({ call_recording: e.target.checked })} />
                   Record calls
                 </label>
-                <label className="flex items-center gap-2 text-body">
-                  <input type="checkbox" checked={c.post_call_pipeline}
-                    onChange={(e) => patchConfig({ post_call_pipeline: e.target.checked })} />
-                  Post-call pipeline (transcript → summary → CRM update)
-                </label>
               </div>
             </div>
 
@@ -639,14 +619,12 @@ export default function VoiceAgentBuilder() {
               <label className="flex items-center gap-2 text-body">
                 <input type="checkbox" checked={c.human_handoff_enabled}
                   onChange={(e) => patchConfig({ human_handoff_enabled: e.target.checked })} />
-                Enable human handoff — agent can transfer to a live rep
+                If the lead asks for a person, the agent offers to connect them
               </label>
               {c.human_handoff_enabled && (
-                <div>
-                  <label className="form-label block mb-1">Handoff phone number (E.164)</label>
-                  <input value={c.handoff_number} onChange={(e) => patchConfig({ handoff_number: e.target.value })}
-                    placeholder="+14155551234" className="w-full border border-line px-3 py-2 rounded-lg" />
-                </div>
+                <p className="text-caption text-ink-muted">
+                  The agent will acknowledge the request in the conversation — this doesn't yet perform a real call transfer.
+                </p>
               )}
             </div>
           </>

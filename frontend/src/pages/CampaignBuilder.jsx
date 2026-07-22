@@ -446,7 +446,9 @@ export default function CampaignBuilder() {
       const { data } = await api.post("/pitch-eq/draft", {
         lead_id: previewLead.id,
         goal: goal || "Book a 15-minute intro call.",
-        tone: "warm",
+        // No tone override here — the backend falls back to the workspace's
+        // real Brand Voice tone (Settings → Brand voice) instead of a
+        // hardcoded value that ignored whatever the user configured.
       });
       updateStep({
         subject: data.subject,

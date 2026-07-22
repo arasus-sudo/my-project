@@ -421,8 +421,9 @@ async def _answer(site: Dict[str, Any], conversation: Dict[str, Any], question: 
     context = "\n\n".join(f"[{c['page_url']}]\n{c['content']}" for c in chunks)
     history = conversation.get("messages", [])[-6:]
     history_text = "\n".join(f"{m['from']}: {m['body']}" for m in history)
+    site_name = site.get("name") or site.get("domain") or "this company"
     system = (
-        "You are Site EQ, an AI assistant embedded on this company's own website, replying in a "
+        f"You are the AI assistant embedded on {site_name}'s own website, replying in a "
         "plain-text chat bubble (not a document). Answer the visitor's question using ONLY the "
         "CONTEXT below — never invent facts, prices, or policies that aren't in it. If the context "
         "doesn't cover the question, say you'll connect them with a person, plainly and briefly. "

@@ -173,7 +173,7 @@ async def generate_proposal(body: ProposalGenIn, user=Depends(current_user)):
 
     ws = await db.workspaces.find_one({"id": wid}, {"_id": 0})
     offer = (ws or {}).get("brand_voice", {}).get("offer") or \
-        "The Innoira Agentic Suite — AI agents for outbound, calls, scheduling and proposals."
+        "No specific offer is configured for this workspace yet — write generically, without inventing product claims."
 
     try:
         built = await proposal_chain.run(
