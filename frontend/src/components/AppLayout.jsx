@@ -10,7 +10,8 @@ import {
   FileText, BarChart3, UsersRound, ShieldCheck, Image as ImageIcon, ChevronDown, Layers, Webhook, Link2,
   Bot, PhoneCall, History, Radio, CalendarClock, CalendarCheck, CalendarRange, FileBarChart, Tags,
   Share2, PenSquare, ListChecks, LayoutGrid, Menu, X, Search, Upload, Globe, Loader2,
-  MessageSquare, Building2, Briefcase, BookOpen, DollarSign, FileDown, Scale, TrendingUp,
+  Building2, Briefcase, BookOpen, DollarSign, FileDown, Scale, TrendingUp,
+  Smartphone, Phone,
 } from "lucide-react";
 
 const FONT_FAMILIES = {
@@ -147,17 +148,17 @@ export const AGENTS = [
     blurb: "Drafts and schedules posts — publishing always needs your approval." },
   { k: "site", label: "Site EQ", tag: "Website Chat", root: "/app/site-eq", nav: SITE_NAV, tid: "agent-site", icon: Globe,
     blurb: "A chat widget for your website — answers from your own content, hands off to a human when it can't." },
-  { k: "sms", label: "SMS EQ", tag: "Texting", root: "/app/sms-eq", nav: SMS_NAV, tid: "agent-sms", icon: MessageSquare,
+  { k: "sms", label: "SMS EQ", tag: "Texting", root: "/app/sms-eq", nav: SMS_NAV, tid: "agent-sms", icon: Smartphone,
     blurb: "Broadcast messaging, two-way conversations, and contact management." },
-  { k: "whatsapp", label: "WhatsApp EQ", tag: "WhatsApp", root: "/app/whatsapp-eq", nav: WHATSAPP_NAV, tid: "agent-whatsapp", icon: MessageSquare,
+  { k: "whatsapp", label: "WhatsApp EQ", tag: "WhatsApp", root: "/app/whatsapp-eq", nav: WHATSAPP_NAV, tid: "agent-whatsapp", icon: Phone,
     blurb: "WhatsApp Business messaging, templates, and broadcasts." },
-  { k: "hrms", label: "HRMS EQ", tag: "HR", root: "/app/hrms-eq", nav: HRMS_NAV, tid: "agent-hrms", icon: Users,
+  { k: "hrms", label: "HRMS EQ", tag: "HR", root: "/app/hrms-eq", nav: HRMS_NAV, tid: "agent-hrms", icon: Briefcase,
     blurb: "Employee lifecycle, recruitment, leave, and performance management." },
   { k: "accounting", label: "Accounting EQ", tag: "Finance", root: "/app/accounting-eq", nav: ACCOUNTING_NAV, tid: "agent-accounting", icon: DollarSign,
     blurb: "Double-entry ledger, invoicing, AP bills, and financial reports." },
 ];
 
-export const AGENT_BADGE = { crm: "M", pitch: "P", create: "C", voice: "V", schedule: "S", proposal: "R", social: "O", site: "W", sms: "T", whatsapp: "A", hrms: "H", accounting: "F" };
+export const AGENT_BADGE = { crm: "M", pitch: "P", create: "C", voice: "V", schedule: "S", proposal: "R", social: "O", site: "W", sms: "T", whatsapp: "WA", hrms: "H", accounting: "F" };
 
 export default function AppLayout() {
   const { user, workspace, logout } = useAuth();

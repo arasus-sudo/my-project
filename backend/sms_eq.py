@@ -169,17 +169,15 @@ async def suggest_reply(cid: str, user=Depends(current_user)):
     
     messages = conv.get("messages", [])
     recent = "\n".join(f"{m.get('direction','')}: {m.get('body','')}" for m in messages[-10:])
-    
-    prompt = f"""Based on this SMS conversation, suggest a short reply (max 160 chars):
 
-Conversation:
-{recent}
+    system = ("You write short SMS replies for a business's support/sales inbox. "
+              "Given the conversation so far, suggest a natural, helpful reply to the "
+              "customer's most recent message. Max 160 characters. Reply with the "
+              "message text only, no preamble, no quotes.")
 
-Reply:"""
-    
     try:
-        suggestion = await _llm_chat("claude-sonnet", [{"role": "user", "content": prompt}])
-        suggestion = suggestion[:160] if suggestion else "Thank you for your message."
+        suggestion = await _llm_chat(system, recent, f"sms-suggest-{cid[:8]}", user=user)
+        suggestion = (suggestion or "").strip()[:160] or "Thank you for your message."
     except Exception:
         suggestion = "Thank you for your message."
     
@@ -239,22 +237,26 @@ async def launch_broadcast(bid: str, user=Depends(current_user)):
         "status": "active", "updated_at": now_iso(),
     }})
     
-    # Enqueue sends
+    # Enqueue sends. SMS opt-outs (STOP replies, manual opt-out) are recorded
+    # keyed by phone, not email — the previous version of this check compared
+    # lead emails against email-keyed suppressions, which meant a contact who
+    # texted STOP was never actually excluded, and crashed with a KeyError the
+    # moment any phone-only suppression existed.
     lead_ids = b.get("lead_ids", [])
-    suppressed = {s["email"].lower() async for s in db.suppressions.find(
-        {"workspace_id": user["workspace_id"]}, {"_id": 0, "email": 1}
+    suppressed_phones = {_sanitize_phone(s["phone"]) async for s in db.suppressions.find(
+        {"workspace_id": user["workspace_id"], "channel": "sms", "phone": {"$exists": True}},
+        {"_id": 0, "phone": 1}
     )}
-    
+
     queued = 0
     for lid in lead_ids:
         lead = await db.leads.find_one({"id": lid, "workspace_id": user["workspace_id"]}, {"_id": 0})
         if not lead:
             continue
-        phone = lead.get("phone", "")
+        phone = _sanitize_phone(lead.get("phone", ""))
         if not phone:
             continue
-        email = (lead.get("email") or "").lower()
-        if email in suppressed:
+        if phone in suppressed_phones:
             continue
         
         await db.sms_send_queue.insert_one({
@@ -306,9 +308,11 @@ async def opt_out_contact(body: dict, user=Depends(current_user)):
         {"$set": {"opted_out": True, "opted_out_at": now_iso()}},
         upsert=True,
     )
-    # Also add to suppressions
+    # Also add to suppressions, keyed by phone — matching the STOP webhook and
+    # launch_broadcast's suppression check, so a manual opt-out actually excludes
+    # the contact from future broadcasts too.
     await db.suppressions.update_one(
-        {"workspace_id": user["workspace_id"], "email": body.get("email", phone)},
+        {"workspace_id": user["workspace_id"], "phone": phone},
         {"$set": {"channel": "sms", "reason": "user_opt_out", "at": now_iso()}},
         upsert=True,
     )
@@ -471,6 +475,11 @@ async def run_sms_send_tick():
                 {"id": row["id"]},
                 {"$set": {"status": "sent", "sent_at": now_iso(), "error": None}}
             )
+            try:
+                await charge_credits(row["workspace_id"], "sms_broadcast_send",
+                                      meta={"broadcast_id": row.get("broadcast_id")})
+            except Exception:
+                pass  # a metering failure must never undo a send that already went out
         except Exception as ex:
             attempts = (row.get("attempts") or 0) + 1
             failed = attempts >= 3

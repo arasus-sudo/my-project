@@ -294,18 +294,18 @@ async def score_candidate(cid: str, user=Depends(current_user)):
         {"id": c.get("requisition_id")}, {"_id": 0}
     )
     
-    prompt = f"""Score this candidate for the position.
-
-Position: {req.get('title', 'N/A') if req else 'N/A'}
+    system = ("You score job candidates for a recruiting pipeline. Given the position "
+              "and the candidate's resume, respond with a score from 1-100 followed by "
+              "a brief rationale — start your reply with the number.")
+    resume = (c.get('resume_text') or 'No resume provided')[:2000]
+    prompt = f"""Position: {req.get('title', 'N/A') if req else 'N/A'}
 Requirements: {req.get('requirements', 'N/A') if req else 'N/A'}
 
 Candidate: {c.get('first_name', '')} {c.get('last_name', '')}
-Resume: {c.get('resume_text', 'No resume provided')[:2000]}
+Resume: {resume}"""
 
-Provide a score from 1-100 and a brief rationale."""
-    
     try:
-        result = await _llm_chat("claude-sonnet", [{"role": "user", "content": prompt}])
+        result = await _llm_chat(system, prompt, f"hrms-score-{cid[:8]}", user=user)
         score = 70
         import re as _re
         m = _re.search(r'(\d{1,3})', result or "")

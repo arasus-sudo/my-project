@@ -189,7 +189,7 @@ async def reply_with_template(cid: str, body: dict, user=Depends(current_user)):
     )
     
     try:
-        twilio_client.send_whatsapp(
+        await twilio_client.send_whatsapp(
             to_number=conv.get("phone", ""),
             body=template["body_text"],
         )
@@ -211,16 +211,15 @@ async def suggest_reply(cid: str, user=Depends(current_user)):
     
     messages = conv.get("messages", [])
     recent = "\n".join(f"{m.get('direction','')}: {m.get('body','')}" for m in messages[-10:])
-    
-    prompt = f"""Based on this WhatsApp conversation, suggest a short reply:
 
-Conversation:
-{recent}
+    system = ("You write short WhatsApp replies for a business's support/sales inbox. "
+              "Given the conversation so far, suggest a natural, helpful reply to the "
+              "customer's most recent message. Reply with the message text only, no "
+              "preamble, no quotes.")
 
-Reply:"""
-    
     try:
-        suggestion = await _llm_chat("claude-sonnet", [{"role": "user", "content": prompt}])
+        suggestion = await _llm_chat(system, recent, f"wa-suggest-{cid[:8]}", user=user)
+        suggestion = (suggestion or "").strip() or "Thank you for your message."
     except Exception:
         suggestion = "Thank you for your message."
     
@@ -466,6 +465,11 @@ async def run_whatsapp_send_tick():
                 {"id": row["id"]},
                 {"$set": {"status": "sent", "sent_at": now_iso(), "error": None}}
             )
+            try:
+                await charge_credits(row["workspace_id"], "whatsapp_broadcast_send",
+                                      meta={"broadcast_id": row.get("broadcast_id")})
+            except Exception:
+                pass  # a metering failure must never undo a send that already went out
         except Exception as ex:
             attempts = (row.get("attempts") or 0) + 1
             failed = attempts >= 3

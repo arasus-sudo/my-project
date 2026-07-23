@@ -3,7 +3,7 @@ import { useState } from "react";
 import {
   ArrowUpRight, ArrowRight, Mail, PhoneCall, CalendarClock,
   FileText, Images, Share2, Database, Coins, ShieldCheck, GitBranch, Menu, X,
-  MessageSquare, Users, DollarSign,
+  Users, DollarSign, Smartphone, Phone,
 } from "lucide-react";
 import InnoiraLogo from "../components/InnoiraLogo";
 import ParticleField from "../components/ParticleField";
@@ -13,9 +13,9 @@ const AGENTS = [
     d: "Finds verified prospects, researches them, and writes cold email that reads human — every draft gated by an EQ Score before send." },
   { icon: PhoneCall, name: "Voice EQ", tag: "AI calling",
     d: "Places real phone calls with a natural AI voice, qualifies conversationally, and writes the outcome straight into your pipeline." },
-  { icon: MessageSquare, name: "WhatsApp EQ", tag: "WhatsApp Business",
+  { icon: Phone, name: "WhatsApp EQ", tag: "WhatsApp Business",
     d: "Manages WhatsApp Business messaging — template approval lifecycle, 24-hour session inbox, and broadcast campaigns that keep every conversation compliant." },
-  { icon: MessageSquare, name: "SMS EQ", tag: "Text messaging",
+  { icon: Smartphone, name: "SMS EQ", tag: "Text messaging",
     d: "Broadcast and two-way SMS at scale — opt-in/opt-out enforcement, contact segmentation, drip-scheduled sends, and keyword-triggered auto-replies." },
   { icon: CalendarClock, name: "Schedule EQ", tag: "Scheduling",
     d: "Booking pages, availability, reminders and reschedules — meetings appear on the calendar without a single back-and-forth." },

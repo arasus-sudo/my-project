@@ -7,9 +7,9 @@ Integrates with Proposal EQ for invoice generation.
 import logging
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
-from server import db, now_iso, new_id, current_user, _audit
+from server import db, now_iso, new_id, current_user, _audit, _llm_chat
 from billing import charge_credits
 
 log = logging.getLogger(__name__)
@@ -75,6 +75,49 @@ async def create_account(body: dict, user=Depends(current_user)):
     }
     await db.coa_accounts.insert_one(account)
     return account
+
+# The auto-posting routes below (invoice sent/paid, bill paid) look accounts up
+# by exact account_type + category, e.g. {"account_type": ASSET, "category":
+# "accounts_receivable"}. A brand-new workspace has no accounts at all, so those
+# lookups return None and the posting silently no-ops — the invoice still flips
+# to "sent"/"paid" with nothing hitting the ledger. This route seeds the
+# categories those lookups actually require, so a fresh workspace works
+# out of the box.
+DEFAULT_ACCOUNTS = [
+    {"code": "1000", "name": "Cash", "account_type": ASSET, "category": "cash_and_bank"},
+    {"code": "1100", "name": "Accounts Receivable", "account_type": ASSET, "category": "accounts_receivable"},
+    {"code": "2000", "name": "Accounts Payable", "account_type": LIABILITY, "category": "accounts_payable"},
+    {"code": "3000", "name": "Owner's Equity", "account_type": EQUITY, "category": "equity"},
+    {"code": "4000", "name": "Sales Revenue", "account_type": REVENUE, "category": "sales"},
+    {"code": "5000", "name": "General Expenses", "account_type": EXPENSE, "category": "operating_expenses"},
+]
+
+
+@accounting_router.post("/accounts/seed-defaults")
+async def seed_default_accounts(user=Depends(current_user)):
+    wid = user["workspace_id"]
+    existing_categories = {
+        a["category"] async for a in db.coa_accounts.find(
+            {"workspace_id": wid}, {"_id": 0, "category": 1}
+        )
+    }
+    created = []
+    for tmpl in DEFAULT_ACCOUNTS:
+        if tmpl["category"] in existing_categories:
+            continue
+        account = {
+            "id": new_id(), "workspace_id": wid,
+            "code": tmpl["code"], "name": tmpl["name"], "description": "",
+            "account_type": tmpl["account_type"], "category": tmpl["category"],
+            "normal_balance": "debit" if tmpl["account_type"] in DEBIT_NORMAL_TYPES else "credit",
+            "currency": "USD", "is_active": True, "balance": 0.0,
+            "created_at": now_iso(), "updated_at": now_iso(),
+        }
+        await db.coa_accounts.insert_one(account)
+        created.append(account)
+    await _audit(user, "accounting.accounts.seed_defaults", {"created": len(created)})
+    return {"created": len(created), "accounts": created}
+
 
 @accounting_router.put("/accounts/{aid}")
 async def update_account(aid: str, body: dict, user=Depends(current_user)):
@@ -301,6 +344,73 @@ async def create_invoice(body: dict, user=Depends(current_user)):
     await db.accounting_invoices.insert_one(inv)
     return inv
 
+@accounting_router.post("/invoices/from-proposal/{proposal_id}")
+async def create_invoice_from_proposal(proposal_id: str, user=Depends(current_user)):
+    wid = user["workspace_id"]
+    proposal = await db.proposals.find_one({"id": proposal_id, "workspace_id": wid}, {"_id": 0})
+    if not proposal:
+        raise HTTPException(404, "Proposal not found")
+
+    pricing = proposal.get("pricing") or {}
+    line_items = pricing.get("line_items") or []
+    if not line_items:
+        raise HTTPException(400, "Proposal has no priced line items")
+
+    lead = await db.leads.find_one({"id": proposal.get("lead_id")}, {"_id": 0}) or {}
+    customer = None
+    if lead.get("email"):
+        customer = await db.accounting_customers.find_one(
+            {"workspace_id": wid, "email": lead["email"]}, {"_id": 0}
+        )
+    if not customer:
+        customer = {
+            "id": new_id(), "workspace_id": wid,
+            "name": lead.get("company") or
+                    f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip() or "Customer",
+            "email": lead.get("email", ""), "phone": lead.get("phone", ""), "address": "",
+            "currency": pricing.get("currency", "USD"), "payment_terms": "net30", "notes": "",
+            "total_billed": 0.0, "total_paid": 0.0, "balance": 0.0,
+            "created_at": now_iso(), "updated_at": now_iso(),
+        }
+        await db.accounting_customers.insert_one(customer)
+
+    lines = [{
+        "description": li.get("name", "") + (f" — {li['description']}" if li.get("description") else ""),
+        "quantity": li.get("qty", 1),
+        "unit_price": li.get("unit_price", 0),
+        "amount": _fmt_d(li.get("line_total", li.get("qty", 1) * li.get("unit_price", 0))),
+    } for li in line_items]
+    if pricing.get("discount"):
+        lines.append({
+            "description": f"Discount ({pricing.get('discount_pct', 0):g}%)",
+            "quantity": 1, "unit_price": -pricing["discount"], "amount": _fmt_d(-pricing["discount"]),
+        })
+    subtotal = _fmt_d(sum(l["amount"] for l in lines))
+
+    inv = {
+        "id": new_id(), "workspace_id": wid,
+        "invoice_number": f"INV-{new_id()[:8].upper()}",
+        "customer_id": customer["id"],
+        "date": now_iso()[:10],
+        "due_date": "",
+        "lines": lines,
+        "subtotal": subtotal,
+        "tax_rate": 0.0,
+        "tax_amount": 0.0,
+        "total": subtotal,
+        "amount_paid": 0.0,
+        "balance_due": subtotal,
+        "currency": pricing.get("currency", "USD"),
+        "status": "draft",
+        "notes": pricing.get("notes", ""),
+        "proposal_id": proposal_id,
+        "created_at": now_iso(), "updated_at": now_iso(),
+    }
+    await db.accounting_invoices.insert_one(inv)
+    await db.proposals.update_one({"id": proposal_id}, {"$set": {"invoice_id": inv["id"]}})
+    await _audit(user, "accounting.invoice.from_proposal", {"invoice_id": inv["id"], "proposal_id": proposal_id})
+    return inv
+
 @accounting_router.put("/invoices/{iid}")
 async def update_invoice(iid: str, body: dict, user=Depends(current_user)):
     inv = await db.accounting_invoices.find_one(
@@ -308,7 +418,9 @@ async def update_invoice(iid: str, body: dict, user=Depends(current_user)):
     )
     if not inv:
         raise HTTPException(404, "Invoice not found")
-    
+
+    posting_warning = None
+
     if body.get("status") == "sent" and inv["status"] == "draft":
         # Post to AR account
         ar_acct = await db.coa_accounts.find_one({
@@ -349,7 +461,18 @@ async def update_invoice(iid: str, body: dict, user=Depends(current_user)):
                 {"id": rev_acct["id"]},
                 {"$set": {"balance": _fmt_d(rev_bal), "updated_at": now_iso()}}
             )
-        
+        else:
+            posting_warning = (
+                "Invoice marked sent but not posted to the ledger — missing "
+                "accounts_receivable and/or revenue account in the chart of accounts. "
+                "Run POST /accounting-eq/accounts/seed-defaults."
+            )
+            log.warning(
+                "accounting_eq: invoice %s sent with no ledger posting (workspace=%s, "
+                "ar_acct=%s, rev_acct=%s)",
+                iid, user["workspace_id"], bool(ar_acct), bool(rev_acct),
+            )
+
         # Update customer balance
         if inv.get("customer_id"):
             cust = await db.accounting_customers.find_one({"id": inv["customer_id"]})
@@ -408,7 +531,27 @@ async def update_invoice(iid: str, body: dict, user=Depends(current_user)):
                     {"id": ar_acct["id"]},
                     {"$set": {"balance": _fmt_d(ar_bal), "updated_at": now_iso()}}
                 )
-        
+            else:
+                posting_warning = (
+                    "Payment recorded but not posted to the ledger — missing "
+                    "accounts_receivable account in the chart of accounts. "
+                    "Run POST /accounting-eq/accounts/seed-defaults."
+                )
+                log.warning(
+                    "accounting_eq: invoice %s payment not posted, missing ar_acct "
+                    "(workspace=%s)", iid, user["workspace_id"],
+                )
+        else:
+            posting_warning = (
+                "Payment recorded but not posted to the ledger — missing "
+                "cash_and_bank account in the chart of accounts. "
+                "Run POST /accounting-eq/accounts/seed-defaults."
+            )
+            log.warning(
+                "accounting_eq: invoice %s payment not posted, missing bank_acct "
+                "(workspace=%s)", iid, user["workspace_id"],
+            )
+
         # Update customer
         if inv.get("customer_id"):
             cust = await db.accounting_customers.find_one({"id": inv["customer_id"]})
@@ -428,7 +571,84 @@ async def update_invoice(iid: str, body: dict, user=Depends(current_user)):
         {"id": iid},
         {"$set": {**body, "updated_at": now_iso()}}
     )
-    return {"ok": True}
+    return {"ok": True, "posting_warning": posting_warning}
+
+@accounting_router.get("/invoices/{iid}/export.pdf")
+async def export_invoice_pdf(iid: str, user=Depends(current_user)):
+    inv = await db.accounting_invoices.find_one({"id": iid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not inv:
+        raise HTTPException(404, "Invoice not found")
+    customer = None
+    if inv.get("customer_id"):
+        customer = await db.accounting_customers.find_one({"id": inv["customer_id"]}, {"_id": 0})
+    data = _build_invoice_pdf(inv, customer)
+    filename = f"{inv.get('invoice_number', 'invoice')}.pdf"
+    return Response(
+        content=data, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+def _build_invoice_pdf(inv: dict, customer: Optional[dict]) -> bytes:
+    import io
+    from reportlab.lib.pagesizes import LETTER
+    from reportlab.lib.units import inch
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+
+    styles = getSampleStyleSheet()
+    ink = colors.HexColor("#141414")
+    muted = colors.HexColor("#6B6B6B")
+    h_title = ParagraphStyle("ITitle", parent=styles["Title"], textColor=ink, fontSize=22, spaceAfter=4)
+    h_sub = ParagraphStyle("ISub", parent=styles["Normal"], textColor=muted, fontSize=10.5, spaceAfter=4)
+
+    cur = inv.get("currency", "USD")
+    def money(v):
+        return f"{cur} {float(v or 0):,.2f}"
+
+    story = [Paragraph(f"Invoice {inv.get('invoice_number', '')}", h_title)]
+    if customer:
+        story.append(Paragraph(f"Bill to: {customer.get('name', '')}", h_sub))
+        if customer.get("email"):
+            story.append(Paragraph(customer["email"], h_sub))
+    story.append(Paragraph(f"Date: {inv.get('date', '')}    Due: {inv.get('due_date', '') or 'N/A'}", h_sub))
+    story.append(Spacer(1, 16))
+
+    data = [["Description", "Qty", "Unit price", "Amount"]]
+    for l in inv.get("lines", []):
+        data.append([l.get("description", ""), str(l.get("quantity", 1)),
+                     money(l.get("unit_price", 0)), money(l.get("amount", 0))])
+    data.append(["", "", "Subtotal", money(inv.get("subtotal", 0))])
+    if inv.get("tax_amount"):
+        data.append(["", "", f"Tax ({inv.get('tax_rate', 0):g}%)", money(inv["tax_amount"])])
+    data.append(["", "", "Total", money(inv.get("total", 0))])
+
+    t = Table(data, colWidths=[260, 45, 90, 90])
+    last = len(data) - 1
+    t.setStyle(TableStyle([
+        ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#141414")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.HexColor("#141414")),
+        ("FONTNAME", (2, last), (-1, last), "Helvetica-Bold"),
+        ("TOPPADDING", (0, 1), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 5),
+    ]))
+    story.append(t)
+
+    if inv.get("notes"):
+        story.append(Spacer(1, 16))
+        story.append(Paragraph(inv["notes"], h_sub))
+
+    buf = io.BytesIO()
+    SimpleDocTemplate(
+        buf, pagesize=LETTER, topMargin=0.9 * inch, bottomMargin=0.9 * inch,
+        leftMargin=0.9 * inch, rightMargin=0.9 * inch,
+        title=inv.get("invoice_number", "Invoice"),
+    ).build(story)
+    return buf.getvalue()
 
 # ── AP Bills ──
 @accounting_router.get("/bills")
@@ -472,6 +692,40 @@ async def create_bill(body: dict, user=Depends(current_user)):
     await db.accounting_bills.insert_one(bill)
     return bill
 
+@accounting_router.post("/bills/{bid}/categorize-suggest")
+async def categorize_bill_suggest(bid: str, user=Depends(current_user)):
+    bill = await db.accounting_bills.find_one({"id": bid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not bill:
+        raise HTTPException(404, "Bill not found")
+
+    accounts = await db.coa_accounts.find(
+        {"workspace_id": user["workspace_id"], "account_type": EXPENSE, "is_active": True},
+        {"_id": 0, "id": 1, "code": 1, "name": 1}
+    ).to_list(100)
+    if not accounts:
+        raise HTTPException(400, "No expense accounts configured — run /accounts/seed-defaults first")
+
+    lines_desc = "; ".join(l.get("description", "") for l in bill.get("lines", []) if l.get("description"))
+    acct_list = "\n".join(f"- {a['code']} {a['name']}" for a in accounts)
+    system = ("You categorize vendor bills into a chart of accounts for bookkeeping. "
+              "Given the bill's vendor and line items and the available expense accounts, "
+              "reply with ONLY the matching account code, nothing else.")
+    prompt = f"Vendor: {bill.get('vendor_name', 'N/A')}\nLine items: {lines_desc or 'N/A'}\n\nExpense accounts:\n{acct_list}"
+
+    try:
+        result = await _llm_chat(system, prompt, f"bill-categorize-{bid[:8]}", user=user)
+        code = (result or "").strip().split()[0] if result else ""
+    except Exception:
+        code = ""
+
+    matched = next((a for a in accounts if a["code"] == code), None) or accounts[0]
+    await charge_credits(user["workspace_id"], "bill_categorize_suggest", meta={"bill_id": bid})
+    return {
+        "suggested_account_id": matched["id"],
+        "suggested_account_code": matched["code"],
+        "suggested_account_name": matched["name"],
+    }
+
 @accounting_router.put("/bills/{bid}")
 async def update_bill(bid: str, body: dict, user=Depends(current_user)):
     bill = await db.accounting_bills.find_one(
@@ -479,7 +733,9 @@ async def update_bill(bid: str, body: dict, user=Depends(current_user)):
     )
     if not bill:
         raise HTTPException(404, "Bill not found")
-    
+
+    posting_warning = None
+
     if body.get("status") == "paid":
         paid_amt = bill["total"]
         
@@ -521,15 +777,26 @@ async def update_bill(bid: str, body: dict, user=Depends(current_user)):
                 {"id": bank_acct["id"]},
                 {"$set": {"balance": _fmt_d(bank_bal), "updated_at": now_iso()}}
             )
-        
+        else:
+            posting_warning = (
+                "Bill marked paid but not posted to the ledger — missing an expense "
+                "and/or cash_and_bank account in the chart of accounts. "
+                "Run POST /accounting-eq/accounts/seed-defaults."
+            )
+            log.warning(
+                "accounting_eq: bill %s paid with no ledger posting (workspace=%s, "
+                "exp_acct=%s, bank_acct=%s)",
+                bid, user["workspace_id"], bool(exp_acct), bool(bank_acct),
+            )
+
         body["amount_paid"] = paid_amt
         body["balance_due"] = 0
-    
+
     await db.accounting_bills.update_one(
         {"id": bid},
         {"$set": {**body, "updated_at": now_iso()}}
     )
-    return {"ok": True}
+    return {"ok": True, "posting_warning": posting_warning}
 
 # ── Financial Reports ──
 @accounting_router.get("/reports/trial-balance")
@@ -636,8 +903,8 @@ async def ar_aging_report(user=Depends(current_user)):
     ).to_list(200)
     
     today = now_iso()[:10]
-    aging = {"0_30": 0.0, "31_60": 0.0, "61_90": 0.0, "90_plus": 0.0}
-    
+    aging = {"not_due": 0.0, "0_30": 0.0, "31_60": 0.0, "61_90": 0.0, "90_plus": 0.0}
+
     for inv in invoices:
         bal = float(inv.get("balance_due", 0))
         due = inv.get("due_date", today)
@@ -646,7 +913,9 @@ async def ar_aging_report(user=Depends(current_user)):
             d1 = _dt.fromisoformat(today)
             d2 = _dt.fromisoformat(due)
             days = (d1 - d2).days
-            if days <= 30:
+            if days < 0:
+                aging["not_due"] += bal
+            elif days <= 30:
                 aging["0_30"] += bal
             elif days <= 60:
                 aging["31_60"] += bal

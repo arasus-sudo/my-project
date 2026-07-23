@@ -19,7 +19,7 @@ const CHANNEL_META = {
   social: { label: "Social EQ", icon: Share2, color: "bg-pink-500" },
   site: { label: "Site EQ", icon: Globe, color: "bg-emerald-500" },
   sms: { label: "SMS EQ", icon: Smartphone, color: "bg-neutral-500" },
-  whatsapp: { label: "WhatsApp EQ", icon: Phone, color: "bg-emerald-500" },
+  whatsapp: { label: "WhatsApp EQ", icon: Phone, color: "bg-teal-500" },
 };
 
 export default function UnifiedInbox() {
