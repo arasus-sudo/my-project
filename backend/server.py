@@ -1553,60 +1553,9 @@ async def dashboard(user=Depends(current_user)):
     }
 
 
-# ----------------------------- Demo Seed -------------------------------------
-DEMO_LEADS = [
-    ("Alex", "Rivera", "alex@northloop.io", "Northloop", "VP Sales"),
-    ("Priya", "Shah", "priya@aeromark.co", "Aeromark", "Head of Growth"),
-    ("Marcus", "Chen", "marcus@obsidianlabs.ai", "Obsidian Labs", "Founder"),
-    ("Sofia", "Nunez", "sofia@quorumhq.com", "Quorum HQ", "Director of RevOps"),
-    ("Daniel", "Okafor", "daniel@stackward.dev", "Stackward", "CTO"),
-    ("Emma", "Whitfield", "emma@paperlantern.com", "Paperlantern", "Marketing Lead"),
-    ("Ravi", "Menon", "ravi@vaultwave.io", "Vaultwave", "COO"),
-    ("Jules", "Beaumont", "jules@finchgrid.co", "Finchgrid", "Head of Sales"),
-]
-
-
-@api.post("/demo/seed")
-async def seed(user=Depends(current_user)):
-    wid = user["workspace_id"]
-    # only seed once
-    if await db.leads.count_documents({"workspace_id": wid}) > 0:
-        return {"ok": True, "already": True}
-    lead_ids = []
-    for fn, ln, em, co, ti in DEMO_LEADS:
-        lid = new_id()
-        lead_ids.append(lid)
-        await db.leads.insert_one({
-            "id": lid, "workspace_id": wid, "first_name": fn, "last_name": ln, "email": em,
-            "company": co, "title": ti, "status": "new",
-            "icp_score": 60 + (len(co) * 3) % 40, "verified": True, "created_at": now_iso(),
-        })
-    # a mailbox
-    mid = new_id()
-    await db.mailboxes.insert_one({
-        "id": mid, "workspace_id": wid, "email": user["email"], "provider": "gmail",
-        "display_name": user["name"], "daily_cap": 50, "status": "connected",
-        "warmup_enabled": True, "warmup_day": 12, "warmup_target": 30,
-        "dns": {"spf": True, "dkim": True, "dmarc": True, "tracking_domain": False},
-        "sent_today": 24, "bounce_rate": 0.6, "spam_rate": 0.03, "created_at": now_iso(),
-    })
-    # a campaign
-    cid = new_id()
-    await db.campaigns.insert_one({
-        "id": cid, "workspace_id": wid, "name": "Q1 SaaS Founders Outreach",
-        "goal": "Book demos", "from_mailbox_id": mid, "lead_ids": lead_ids, "status": "draft",
-        "send_window_start": "09:00", "send_window_end": "17:00", "timezone": "UTC",
-        "owner_id": user["id"], "created_at": now_iso(),
-        "steps": [
-            {"day": 0, "subject": "Quick idea for {{company}}",
-             "body": "Hi {{first_name}},\n\nNoticed {{company}} has been scaling fast. Teams your size often lose momentum in outbound because emails start feeling AI-written.\n\nPitch EQ scores every draft for tone, empathy, clarity and spam risk before it goes out.\n\nWorth 15 minutes next week?\n\n— From the Pitch EQ team",
-             "ab_variant_subject": "", "ab_variant_body": ""},
-            {"day": 3, "subject": "Re: Quick idea for {{company}}",
-             "body": "Hi {{first_name}},\n\nCircling back — curious whether reply rates are a priority for the {{company}} team this quarter.\n\nHappy to send a one-pager instead of a call if easier.",
-             "ab_variant_subject": "", "ab_variant_body": ""},
-        ],
-    })
-    return {"ok": True, "campaign_id": cid, "seeded_leads": len(lead_ids)}
+# Demo-data self-service seeding (POST /demo/seed) was removed — the demo
+# account (demo@innoira.com) is now hand-curated with realistic data across
+# every agent instead of a generic one-click Pitch-EQ-only sample.
 
 
 # ----------------------------- Onboarding ------------------------------------
@@ -3823,7 +3772,7 @@ async def _start_scheduler():
                           id="booking_reminders", max_instances=1, coalesce=True)
         # Drain the outbound queue. Every 2 min, capped per tick — a trickle looks
         # human; a burst looks like spam and gets the mailbox flagged.
-        scheduler.add_job(lambda: run_send_tick(PUBLIC_BASE_URL), "interval", minutes=2,
+        scheduler.add_job(run_send_tick, "interval", minutes=2, args=[PUBLIC_BASE_URL],
                           id="outbound_sends", max_instances=1, coalesce=True)
         # Poll sent threads for real replies (this is what feeds the unified inbox).
         scheduler.add_job(run_reply_tick, "interval", minutes=10,
