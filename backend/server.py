@@ -162,11 +162,23 @@ class LoginIn(BaseModel):
 
 
 class SequenceStep(BaseModel):
+    channel: str = "email"
     day: int = 0
-    subject: str
-    body: str
+    # Email fields
+    subject: str = ""
+    body: str = ""
+    body_html: str = ""
     ab_variant_subject: Optional[str] = ""
     ab_variant_body: Optional[str] = ""
+    # Voice fields
+    script: str = ""
+    agent_id: Optional[str] = None
+    call_timeout_seconds: int = 60
+    # LinkedIn fields
+    linkedin_message: str = ""
+    linkedin_comment_text: str = ""
+    linkedin_post_url: str = ""
+    linkedin_connection_note: str = ""
 
 
 class CampaignIn(BaseModel):

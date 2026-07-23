@@ -9,6 +9,7 @@ import {
   Mail, Eye, ThumbsUp, Signature, Search, Megaphone,
   Zap, ChevronLeft, ChevronRight, ChevronDown,
   Edit2, RotateCw, Flag, List, Tag, X,
+  Phone, MessageSquare, Send, MessageCircle,
 } from "lucide-react";
 
 const TIMEZONES = [
@@ -39,12 +40,29 @@ const TIMEZONES = [
 
 const stepKey = () => `s_${Math.random().toString(36).slice(2, 10)}`;
 
+const CHANNELS = [
+  { key: "email", label: "Email" },
+  { key: "phone_call", label: "Phone Call" },
+  { key: "sms", label: "SMS" },
+  { key: "whatsapp", label: "WhatsApp" },
+  { key: "linkedin_connect", label: "LinkedIn Connect" },
+  { key: "linkedin_message", label: "LinkedIn Message" },
+  { key: "linkedin_comment", label: "LinkedIn Comment" },
+];
+
 const DEFAULT_STEP = () => ({
   _key: stepKey(),
+  channel: "email",
   day: 0,
   subject: "Quick idea for {{company}}",
   body_html: "<p>Hi {{first_name}},</p><p>Noticed {{company}} — worth 15 minutes to compare notes?</p>",
   body: "Hi {{first_name}},\n\nNoticed {{company}} — worth 15 minutes to compare notes?",
+  script: "",
+  agent_id: null,
+  linkedin_message: "",
+  linkedin_comment_text: "",
+  linkedin_post_url: "",
+  linkedin_connection_note: "",
 });
 
 /** The four steps the backend actually runs (draft_chain.run_chain). */
@@ -619,13 +637,20 @@ export default function CampaignBuilder() {
                 <button
                   onClick={() => setActiveStep(i)}
                   data-testid={`step-${i}`}
-                  className={`w-full text-left p-3 border transition-colors duration-150 ${i === activeStep ? "border-ink bg-surfacehover" : "border-line hover:bg-surfacehover"} rounded-xl`}
+                  <div className="w-full text-left p-3 border transition-colors duration-150 ${i === activeStep ? "border-ink bg-surfacehover" : "border-line hover:bg-surfacehover"} rounded-xl"}
                 >
                   <div className="flex justify-between items-center">
-                    <div className="ui-label">Step {i + 1}</div>
+                    <div className="flex items-center gap-1.5">
+                      {(() => {
+                        const ch = s.channel || "email";
+                        const icons = { email: <Mail size={12} />, phone_call: <Phone size={12} />, sms: <MessageSquare size={12} />, whatsapp: <MessageCircle size={12} />, linkedin_connect: <Send size={12} />, linkedin_message: <Send size={12} />, linkedin_comment: <MessageCircle size={12} /> };
+                        return <span className="text-ink-muted">{icons[ch] || <Mail size={12} />}</span>;
+                      })()}
+                      <div className="ui-label">Step {i + 1}</div>
+                    </div>
                     <div className="text-tiny font-mono text-ink-muted">day {s.day}</div>
                   </div>
-                  <div className="text-body font-medium mt-1 truncate">{s.subject || "(no subject)"}</div>
+                  <div className="text-body font-medium mt-1 truncate">{s.subject || CHANNELS.find(c => c.key === (s.channel || "email"))?.label || "Email"}</div>
                   {steps.length > 1 && (
                     <button onClick={(e) => { e.stopPropagation(); removeStep(i); }} data-testid={`remove-step-${i}`} className="text-caption text-ink-muted hover:text-danger mt-2">
                       <Trash2 size={12} className="inline" /> remove
@@ -1014,35 +1039,159 @@ export default function CampaignBuilder() {
               })()}
             </div>
           ) : (
-            /* TEMPLATE EDITOR — normal mode */
+            /* TEMPLATE EDITOR — multi-channel */
             <div className="shadow-card p-6 sm:p-8 rounded-2xl">
-              <div className="ui-label mb-2">Subject</div>
-              <input
-                value={step.subject}
-                onChange={(e) => updateStep({ subject: e.target.value })}
-                data-testid="editor-subject"
-                className="w-full text-card-title font-display font-semibold border-0 border-b border-line py-2 focus:outline-none focus:border-ink bg-transparent"
-                placeholder="Quick idea for {{company}}"
-              />
-              <div className="mt-5 flex items-center justify-between">
-                <div className="ui-label">Body</div>
-                <div className="flex items-center gap-3">
-                  <label className="form-label">day</label>
-                  <input type="number" min={0} value={step.day}
-                    onChange={(e) => updateStep({ day: Number(e.target.value) })}
-                    data-testid="editor-day"
-                    className="w-16 border border-line px-2 py-1 text-input rounded-xl font-mono" />
+              {/* Channel selector */}
+              <div className="flex items-center gap-2 mb-5 pb-4 border-b border-line">
+                <div className="ui-label shrink-0">Channel</div>
+                <div className="flex flex-wrap gap-1">
+                  {CHANNELS.map((ch) => {
+                    const active = (step.channel || "email") === ch.key;
+                    const chIcons = { email: <Mail size={14} />, phone_call: <Phone size={14} />, sms: <MessageSquare size={14} />, whatsapp: <MessageCircle size={14} />, linkedin_connect: <Send size={14} />, linkedin_message: <Send size={14} />, linkedin_comment: <MessageCircle size={14} /> };
+                    return (
+                      <button key={ch.key} onClick={() => updateStep({ channel: ch.key })}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${active ? "bg-ink text-white" : "bg-ash text-ink-muted hover:text-ink"}`}>
+                        {chIcons[ch.key]} {ch.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-              <div className="mt-2">
-                <RichEmailEditor
-                  value={step.body_html || ""}
-                  onChange={(html) => updateStep({ body_html: html })}
-                  placeholder="Write your email, or research this lead and draft it for you."
-                />
-              </div>
-          </div>
-            )}
+
+              {/* Email fields */}
+              {(step.channel || "email") === "email" && (
+                <>
+                  <div className="ui-label mb-2">Subject</div>
+                  <input value={step.subject} onChange={(e) => updateStep({ subject: e.target.value })}
+                    data-testid="editor-subject"
+                    className="w-full text-card-title font-display font-semibold border-0 border-b border-line py-2 focus:outline-none focus:border-ink bg-transparent"
+                    placeholder="Quick idea for {{company}}" />
+                  <div className="mt-5 flex items-center justify-between">
+                    <div className="ui-label">Body</div>
+                    <div className="flex items-center gap-3">
+                      <label className="form-label">day</label>
+                      <input type="number" min={0} value={step.day}
+                        onChange={(e) => updateStep({ day: Number(e.target.value) })}
+                        data-testid="editor-day"
+                        className="w-16 border border-line px-2 py-1 rounded-xl font-mono text-ink" />
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    <RichEmailEditor value={step.body_html || ""} onChange={(html) => updateStep({ body_html: html })}
+                      placeholder="Write your email, or research this lead and draft it for you." />
+                  </div>
+                </>
+              )}
+
+              {/* Phone Call fields */}
+              {(step.channel || "") === "phone_call" && (
+                <>
+                  <div className="ui-label mb-1">Call Script</div>
+                  <p className="text-tiny text-ink-muted mb-2">{{first_name}}, {{company}}, and other merge fields will be filled automatically.</p>
+                  <textarea value={step.script || ""} onChange={(e) => updateStep({ script: e.target.value })}
+                    rows={6} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-sm text-ink"
+                    placeholder="Hi {{first_name}}, this is [Your Name] from {{company}}... (write your call script with {{merge_fields}})" />
+                  <div className="mt-3 flex items-center gap-3">
+                    <label className="form-label">day</label>
+                    <input type="number" min={0} value={step.day}
+                      onChange={(e) => updateStep({ day: Number(e.target.value) })}
+                      className="w-16 border border-line px-2 py-1 rounded-xl font-mono text-ink" />
+                  </div>
+                </>
+              )}
+
+              {/* SMS fields */}
+              {(step.channel || "") === "sms" && (
+                <>
+                  <div className="ui-label mb-1">SMS Body</div>
+                  <p className="text-tiny text-ink-muted mb-2">Short message. Merge fields supported: {{{{first_name}}}}, {{{{company}}}}, etc.</p>
+                  <textarea value={step.body || ""} onChange={(e) => updateStep({ body: e.target.value })}
+                    rows={3} maxLength={160} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-sm text-ink"
+                    placeholder="Hi {{first_name}}, quick reminder about {{company}}..." />
+                  <div className="text-tiny text-ink-muted mt-1">{(step.body || "").length}/160 characters</div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <label className="form-label">day</label>
+                    <input type="number" min={0} value={step.day}
+                      onChange={(e) => updateStep({ day: Number(e.target.value) })}
+                      className="w-16 border border-line px-2 py-1 rounded-xl font-mono text-ink" />
+                  </div>
+                </>
+              )}
+
+              {/* WhatsApp fields */}
+              {(step.channel || "") === "whatsapp" && (
+                <>
+                  <div className="ui-label mb-1">WhatsApp Message</div>
+                  <p className="text-tiny text-ink-muted mb-2">Merge fields supported. Keep it conversational.</p>
+                  <textarea value={step.body || ""} onChange={(e) => updateStep({ body: e.target.value })}
+                    rows={4} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-sm text-ink"
+                    placeholder="Hi {{first_name}}, wanted to share something relevant for {{company}}..." />
+                  <div className="mt-3 flex items-center gap-3">
+                    <label className="form-label">day</label>
+                    <input type="number" min={0} value={step.day}
+                      onChange={(e) => updateStep({ day: Number(e.target.value) })}
+                      className="w-16 border border-line px-2 py-1 rounded-xl font-mono text-ink" />
+                  </div>
+                </>
+              )}
+
+              {/* LinkedIn Message fields */}
+              {(step.channel || "") === "linkedin_message" && (
+                <>
+                  <div className="ui-label mb-1">LinkedIn Message</div>
+                  <p className="text-tiny text-ink-muted mb-2">This will be marked as a manual task — LinkedIn Messages require sending via LinkedIn.com</p>
+                  <textarea value={step.linkedin_message || step.body || ""} onChange={(e) => updateStep({ linkedin_message: e.target.value })}
+                    rows={5} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-sm text-ink"
+                    placeholder="Hi {{first_name}}, noticed {{company}}'s recent work on..." />
+                  <div className="mt-3 flex items-center gap-3">
+                    <label className="form-label">day</label>
+                    <input type="number" min={0} value={step.day}
+                      onChange={(e) => updateStep({ day: Number(e.target.value) })}
+                      className="w-16 border border-line px-2 py-1 rounded-xl font-mono text-ink" />
+                  </div>
+                </>
+              )}
+
+              {/* LinkedIn Comment fields */}
+              {(step.channel || "") === "linkedin_comment" && (
+                <>
+                  <div className="ui-label mb-1">Post URL to comment on</div>
+                  <input value={step.linkedin_post_url || ""} onChange={(e) => updateStep({ linkedin_post_url: e.target.value })}
+                    className="w-full border border-line px-3 py-2 rounded-xl text-sm text-ink"
+                    placeholder="https://www.linkedin.com/posts/..." />
+                  <div className="ui-label mb-1 mt-3">Comment text</div>
+                  <textarea value={step.linkedin_comment_text || step.body || ""} onChange={(e) => updateStep({ linkedin_comment_text: e.target.value })}
+                    rows={4} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-sm text-ink"
+                    placeholder="Great insight, {{first_name}}! I'd add that..." />
+                  <div className="mt-3 flex items-center gap-3">
+                    <label className="form-label">day</label>
+                    <input type="number" min={0} value={step.day}
+                      onChange={(e) => updateStep({ day: Number(e.target.value) })}
+                      className="w-16 border border-line px-2 py-1 rounded-xl font-mono text-ink" />
+                  </div>
+                </>
+              )}
+
+              {/* LinkedIn Connect fields */}
+              {(step.channel || "") === "linkedin_connect" && (
+                <>
+                  <div className="flex items-center gap-2 text-warning mb-2">
+                    <AlertTriangle size={14} />
+                    <span className="text-caption font-medium">Manual action required</span>
+                  </div>
+                  <p className="text-tiny text-ink-muted mb-3">LinkedIn doesn't allow automating connection requests. The lead's LinkedIn URL will be shown so you can connect manually.</p>
+                  <div className="ui-label mb-1">Connection note (optional)</div>
+                  <textarea value={step.linkedin_connection_note || step.body || ""} onChange={(e) => updateStep({ linkedin_connection_note: e.target.value })}
+                    rows={3} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-sm text-ink"
+                    placeholder="Hi {{first_name}}, I've been following {{company}}'s work..." />
+                  <div className="mt-3 flex items-center gap-3">
+                    <label className="form-label">day</label>
+                    <input type="number" min={0} value={step.day}
+                      onChange={(e) => updateStep({ day: Number(e.target.value) })}
+                      className="w-16 border border-line px-2 py-1 rounded-xl font-mono text-ink" />
+                  </div>
+                </>
+              )}
 
           {/* Signature modal */}
           {showSignatureModal && (

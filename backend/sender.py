@@ -1,18 +1,8 @@
-"""The send queue — real outbound, replacing the simulator.
+"""The send queue — multi-channel outbound (email, voice, SMS, WhatsApp, LinkedIn).
 
-What this replaces: `launch_campaign` used to compute `seed = (i*31 + step_idx*7)
-% 100` and fabricate `sent` / `opened` / `clicked` / `replied` events from it. No
-email was sent, `from_mailbox_id` was never read, `sent_today` never incremented,
-and the daily cap was never enforced. The Analytics dashboard was charting noise.
-
-Now: launching a campaign *enqueues* one row per (lead, step). A job on the
-existing APScheduler drains the queue, honouring the three fields that were being
-stored and ignored — `day` offsets, `send_window_start/end`, and `timezone` —
-plus per-mailbox daily caps and rotation across mailboxes.
-
-Opens and clicks come from a tracking pixel and a click redirect. Replies come
-from polling the Gmail thread. Every number in the dashboard is now something
-that actually happened.
+Enqueues campaign steps by channel, dispatches in run_send_tick to the
+appropriate sender. Workers live here; API key management is delegated to
+twilio_client / linkedin_client / mailbox_client.
 """
 
 import logging
@@ -25,19 +15,16 @@ import mailbox_client
 
 log = logging.getLogger(__name__)
 
-MAX_PER_TICK = 25          # a polite trickle; bursts look like spam
+MAX_PER_TICK = 25
 RETRY_BACKOFF_MIN = 15
 
-
-def _get_signature_html(workspace_id: str, signature_id: Optional[str]) -> str:
-    """Resolve a signature to HTML."""
-    return ""  # placeholder — we resolve async in enqueue
+CHANNEL_ICONS = {
+    "email": "✉", "phone_call": "📞", "sms": "💬", "whatsapp": "📱",
+    "linkedin_connect": "🔗", "linkedin_message": "💌", "linkedin_comment": "🗨",
+}
 
 
 def _apply_opener(text: str, opener: str) -> str:
-    """Fill {{personalized_opener}} on a later-step template, or drop the line
-    entirely when no opener is on file — the literal placeholder must never
-    reach a recipient."""
     if not text or "{{personalized_opener}}" not in text:
         return text or ""
     if opener:
@@ -47,21 +34,22 @@ def _apply_opener(text: str, opener: str) -> str:
 
 # ----------------------------- Enqueue -----------------------------------------
 async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[str, Any]:
-    """Turn a campaign into scheduled sends. Refuses to launch without a connected
-    mailbox — the old code happily "launched" with none and faked the metrics."""
-    mailboxes = await db.mailboxes.find(
-        {"workspace_id": workspace_id, "status": "connected"}, {"_id": 0}).to_list(20)
-    if not mailboxes:
-        raise ValueError("Connect a mailbox before launching — nothing can be sent without one.")
-
     steps = campaign.get("steps") or []
     if not steps:
         raise ValueError("This campaign has no steps.")
 
     lead_ids = campaign.get("lead_ids") or []
     if not lead_ids:
-        raise ValueError("Select at least one lead. (Campaigns no longer silently "
-                         "fall back to emailing every lead in the workspace.)")
+        raise ValueError("Select at least one lead.")
+
+    has_email = any(s.get("channel", "email") == "email" for s in steps)
+    if has_email:
+        mailboxes = await db.mailboxes.find(
+            {"workspace_id": workspace_id, "status": "connected"}, {"_id": 0}).to_list(20)
+        if not mailboxes:
+            raise ValueError("Connect a mailbox before launching — email steps require one.")
+    else:
+        mailboxes = []
 
     suppressed = {s["email"].lower() async for s in db.suppressions.find(
         {"workspace_id": workspace_id}, {"_id": 0, "email": 1})}
@@ -69,7 +57,7 @@ async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[
     tz = ZoneInfo(campaign.get("timezone") or "UTC")
     now_local = datetime.now(tz)
 
-    # Resolve signature
+    # Resolve signature (email only)
     signature_html = ""
     signature_text = ""
     sig_id = campaign.get("signature_id")
@@ -91,12 +79,13 @@ async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[
         if not lead:
             skipped += 1
             continue
+
         email = (lead.get("email") or "").lower()
-        if not _verify_email_syntax(email):
+        if email and not _verify_email_syntax(email):
             await _quarantine_lead(workspace_id, lead, "invalid_syntax")
             skipped += 1
             continue
-        if email in suppressed:
+        if email and email in suppressed:
             await _quarantine_lead(workspace_id, lead, "on_suppression_list")
             skipped += 1
             continue
@@ -105,140 +94,81 @@ async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[
             skipped += 1
             continue
 
-        # A lead without an approved step-0 email never gets queued for ANY
-        # step — the old code fell back to the raw template (still holding a
-        # literal {{personalized_opener}}) for anyone who skipped review.
         personal = personalized_map.get(lid)
-        if not personal:
-            skipped += 1
-            continue
 
         for step_idx, step in enumerate(steps):
-            if step_idx == 0:
-                subject = personal.get("subject", step.get("subject", ""))
-                body_html = personal.get("body_html", step.get("body_html") or "")
-                body_text = personal.get("body", step.get("body_text") or step.get("body") or "")
-            else:
-                opener = personal.get("personalized_opener", "")
-                subject = _apply_opener(step.get("subject", ""), opener)
-                body_html = _apply_opener(step.get("body_html") or "", opener)
-                body_text = _apply_opener(step.get("body_text") or step.get("body") or "", opener)
-            # Append signature
-            if signature_html and body_html:
-                body_html = body_html + "<br><br>" + signature_html
-            if signature_text and body_text:
-                body_text = body_text + "\n\n" + signature_text
+            channel = step.get("channel", "email")
+
+            # For email: skip if no approved personalization
+            if channel == "email" and not personal:
+                continue
+
             send_at = _next_window_slot(
                 now_local + timedelta(days=int(step.get("day") or 0)),
                 campaign.get("send_window_start", "09:00"),
                 campaign.get("send_window_end", "17:00"),
                 tz,
             )
-            await db.send_queue.insert_one({
+
+            queue_item = {
                 "id": new_id(), "workspace_id": workspace_id,
                 "campaign_id": campaign["id"], "lead_id": lid, "step": step_idx,
-                "subject": subject,
-                "body_html": body_html,
-                "body_text": body_text,
-                "status": "pending",          # pending | sent | failed | cancelled
+                "channel": channel,
+                "status": "pending",
                 "send_at": send_at.isoformat(),
                 "attempts": 0, "error": None,
-                "provider_message_id": None, "thread_id": None,
                 "created_at": now_iso(),
-            })
+            }
+
+            if channel == "email":
+                if step_idx == 0:
+                    subject = personal.get("subject", step.get("subject", ""))
+                    body_html = personal.get("body_html", step.get("body_html") or step.get("body", ""))
+                    body_text = personal.get("body", step.get("body_text") or step.get("body", ""))
+                else:
+                    opener = personal.get("personalized_opener", "")
+                    subject = _apply_opener(step.get("subject", ""), opener)
+                    body_html = _apply_opener(step.get("body_html") or step.get("body", ""), opener)
+                    body_text = _apply_opener(step.get("body_text") or step.get("body", ""), opener)
+                if signature_html and body_html:
+                    body_html = body_html + "<br><br>" + signature_html
+                if signature_text and body_text:
+                    body_text = body_text + "\n\n" + signature_text
+                queue_item["subject"] = subject
+                queue_item["body_html"] = body_html
+                queue_item["body_text"] = body_text
+
+            elif channel in ("sms", "whatsapp"):
+                body = step.get("body", "") or step.get("body_text", "") or step.get("body_html", "")
+                queue_item["body"] = body
+
+            elif channel == "phone_call":
+                queue_item["script"] = step.get("script", "")
+                queue_item["agent_id"] = step.get("agent_id")
+                queue_item["call_timeout_seconds"] = step.get("call_timeout_seconds", 60)
+
+            elif channel == "linkedin_message":
+                queue_item["message"] = step.get("linkedin_message", "") or step.get("body", "")
+                queue_item["linkedin_url"] = lead.get("linkedin_url", "")
+
+            elif channel == "linkedin_comment":
+                queue_item["comment_text"] = step.get("linkedin_comment_text", "") or step.get("body", "")
+                queue_item["post_url"] = step.get("linkedin_post_url", "")
+
+            elif channel == "linkedin_connect":
+                queue_item["connection_note"] = step.get("linkedin_connection_note", "") or step.get("body", "")
+                queue_item["linkedin_url"] = lead.get("linkedin_url", "")
+                # Mark as manual — connection requests require human action
+                queue_item["status"] = "manual"
+
+            await db.send_queue.insert_one(queue_item)
             queued += 1
 
     return {"queued": queued, "skipped": skipped, "mailboxes": len(mailboxes)}
 
 
-def _next_window_slot(target: datetime, win_start: str, win_end: str,
-                       tz: ZoneInfo) -> datetime:
-    """Clamp a send time into the campaign's sending window.
-
-    These three fields have existed on the campaign model since day one and were
-    never once read. Sending at 3am is both rude and a deliverability penalty.
-    """
-    try:
-        sh, sm = (int(x) for x in win_start.split(":"))
-        eh, em = (int(x) for x in win_end.split(":"))
-    except Exception:
-        sh, sm, eh, em = 9, 0, 17, 0
-
-    local = target.astimezone(tz)
-    start = local.replace(hour=sh, minute=sm, second=0, microsecond=0)
-    end = local.replace(hour=eh, minute=em, second=0, microsecond=0)
-
-    if local < start:
-        return start
-    if local >= end:
-        # Past the window — first thing in the next day's window.
-        return start + timedelta(days=1)
-    return local
-
-
-# ----------------------------- Mailbox rotation ---------------------------------
-async def _pick_mailbox(workspace_id: str) -> Optional[Dict[str, Any]]:
-    """Round-robin across connected mailboxes, skipping any that hit its daily cap.
-
-    Rotation is what keeps a single mailbox's reputation intact; the cap is what
-    keeps you out of the spam folder. Both were previously fictional."""
-    today = datetime.now(dt_timezone.utc).date().isoformat()
-    boxes = await db.mailboxes.find(
-        {"workspace_id": workspace_id, "status": "connected"}, {"_id": 0}).to_list(20)
-
-    eligible = []
-    for b in boxes:
-        # The counter resets on the first send of a new day.
-        if b.get("sent_date") != today:
-            b["sent_today"] = 0
-        cap = int(b.get("daily_cap") or 50)
-        if b.get("warmup_enabled"):
-            # Warmup ramps the cap: a brand-new mailbox blasting 50/day is the
-            # fastest way to get it flagged.
-            cap = min(cap, 5 + int(b.get("warmup_day") or 1) * 5)
-        if int(b.get("sent_today") or 0) < cap:
-            eligible.append((int(b.get("sent_today") or 0), b))
-
-    if not eligible:
-        return None
-    eligible.sort(key=lambda x: x[0])   # least-used first
-    return eligible[0][1]
-
-
-async def _mark_sent(mailbox: Dict[str, Any]) -> None:
-    today = datetime.now(dt_timezone.utc).date().isoformat()
-    if mailbox.get("sent_date") != today:
-        await db.mailboxes.update_one({"id": mailbox["id"]},
-                                       {"$set": {"sent_date": today, "sent_today": 1}})
-    else:
-        await db.mailboxes.update_one({"id": mailbox["id"]}, {"$inc": {"sent_today": 1}})
-
-
-# ----------------------------- Tracking ----------------------------------------
-def inject_tracking(html: str, workspace_id: str, queue_id: str, base_url: str) -> str:
-    """A 1x1 open beacon, plus every link rewritten through a click redirect."""
-    import re
-    pixel = (f'<img src="{base_url}/api/t/o/{queue_id}" width="1" height="1" '
-             f'alt="" style="display:none">')
-
-    def _wrap(m):
-        url = m.group(2)
-        if url.startswith("#") or url.startswith("mailto:"):
-            return m.group(0)
-        from urllib.parse import quote
-        return f'{m.group(1)}="{base_url}/api/t/c/{queue_id}?u={quote(url, safe="")}"'
-
-    html = re.sub(r'(href)="([^"]+)"', _wrap, html or "")
-    return (html or "") + pixel
-
-
-# ----------------------------- The drain ---------------------------------------
+# ----------------------------- Tick: drain queue --------------------------------
 async def run_send_tick(base_url: str = "") -> int:
-    """Send everything that's due. Returns how many went out.
-
-    Claims each row with a conditional update before sending, so overlapping ticks
-    can't send the same email twice — the same pattern as the booking reminders.
-    """
     now = datetime.now(dt_timezone.utc)
 
     due = await db.send_queue.find({
@@ -263,14 +193,11 @@ async def run_send_tick(base_url: str = "") -> int:
             "workspace_id": row["workspace_id"], "lead_id": row["lead_id"], "type": "replied"})
         if replied:
             await db.send_queue.update_one({"id": row["id"]},
-                                            {"$set": {"status": "cancelled", "error": "lead replied"}})
+                                           {"$set": {"status": "cancelled", "error": "lead replied"}})
             log.info("run_send_tick: cancelled queue %s — lead replied", row["id"])
             continue
 
-        mailbox = await _pick_mailbox(row["workspace_id"])
-        if not mailbox:
-            log.info("run_send_tick: no eligible mailbox for workspace %s", row["workspace_id"])
-            continue
+        channel = row.get("channel", "email")
 
         # Claim it.
         claimed = await db.send_queue.find_one_and_update(
@@ -285,15 +212,23 @@ async def run_send_tick(base_url: str = "") -> int:
             await db.send_queue.update_one({"id": row["id"]}, {"$set": {"status": "cancelled"}})
             continue
 
-        subject, html, text = _render(row, lead)
-        if base_url:
-            html = inject_tracking(html, row["workspace_id"], row["id"], base_url)
-
         try:
-            result = await mailbox_client.send(
-                mailbox, to_addr=lead["email"], subject=subject, html=html, text=text,
-                reply_to=mailbox.get("email"),
-            )
+            if channel == "email":
+                await _send_email(row, lead, base_url, campaign)
+            elif channel == "sms":
+                await _send_sms(row, lead)
+            elif channel == "whatsapp":
+                await _send_whatsapp(row, lead)
+            elif channel == "phone_call":
+                await _send_phone_call(row, lead)
+            elif channel == "linkedin_message":
+                await _send_linkedin_message(row, lead)
+            elif channel == "linkedin_comment":
+                await _send_linkedin_comment(row, lead)
+            else:
+                log.warning("run_send_tick: unknown channel %s for %s", channel, row["id"])
+                await db.send_queue.update_one({"id": row["id"]}, {"$set": {"status": "failed", "error": f"unknown channel: {channel}"}})
+                continue
         except Exception as ex:
             attempts = row.get("attempts", 0) + 1
             failed = attempts >= 3
@@ -302,48 +237,217 @@ async def run_send_tick(base_url: str = "") -> int:
                 "error": str(ex)[:300],
                 "send_at": (now + timedelta(minutes=RETRY_BACKOFF_MIN)).isoformat(),
             }})
-            log.warning("send failed (attempt %s): %s", attempts, ex)
+            log.warning("send failed (attempt %s, channel %s): %s", attempts, channel, ex)
             continue
 
-        await db.send_queue.update_one({"id": row["id"]}, {"$set": {
-            "status": "sent", "sent_at": now_iso(), "error": None,
-            "provider_message_id": result.get("provider_message_id"),
-            "thread_id": result.get("thread_id"),
-            "mailbox_id": mailbox["id"], "mocked": result.get("mocked", True),
-        }})
-        await _mark_sent(mailbox)
-
-        # A "sent" event now means an email actually left a mailbox.
         await db.events.insert_one({
             "id": new_id(), "workspace_id": row["workspace_id"],
             "campaign_id": row["campaign_id"], "lead_id": row["lead_id"],
             "step": row["step"], "type": "sent", "at": now_iso(),
+            "channel": channel,
         })
-        await db.generated_emails.insert_one({
-            "id": new_id(), "workspace_id": row["workspace_id"],
-            "campaign_id": row["campaign_id"], "lead_id": row["lead_id"],
-            "step": row["step"], "subject": row.get("subject", ""),
-            "body_html": row.get("body_html", ""),
-            "body_text": row.get("body_text", ""),
-            "status": "sent", "source": "campaign_send",
-            "generated_at": row.get("created_at", now_iso()),
-            "sent_at": now_iso(),
-            "mailbox_email": mailbox.get("email", ""),
-            "campaign_name": (campaign or {}).get("name", ""),
-            "lead_email": lead.get("email", ""),
-            "lead_name": f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip(),
-        })
-        await _log_activity(row["workspace_id"], row["lead_id"], "pitch", "email_sent",
-                             f"Sent “{subject}” from {mailbox['email']}",
-                             {"campaign_id": row["campaign_id"], "step": row["step"]})
         sent += 1
 
-    log.info("run_send_tick: sent %s email(s)", sent)
+    log.info("run_send_tick: sent %s item(s)", sent)
     return sent
 
 
+# ----------------------------- Email sender ------------------------------------
+async def _send_email(row: Dict[str, Any], lead: Dict[str, Any], base_url: str,
+                      campaign: Dict[str, Any]):
+    from server import inject_tracking
+
+    mailbox = await _pick_mailbox(row["workspace_id"])
+    if not mailbox:
+        raise RuntimeError("no eligible mailbox")
+
+    subject, html, text = _render(row, lead)
+    if base_url:
+        html = inject_tracking(html, row["workspace_id"], row["id"], base_url)
+
+    result = await mailbox_client.send(
+        mailbox, to_addr=lead["email"], subject=subject, html=html, text=text,
+        reply_to=mailbox.get("email"),
+    )
+
+    await db.send_queue.update_one({"id": row["id"]}, {"$set": {
+        "status": "sent", "sent_at": now_iso(), "error": None,
+        "provider_message_id": result.get("provider_message_id"),
+        "thread_id": result.get("thread_id"),
+        "mailbox_id": mailbox["id"], "mocked": result.get("mocked", True),
+    }})
+    await _mark_sent(mailbox)
+
+    await db.generated_emails.insert_one({
+        "id": new_id(), "workspace_id": row["workspace_id"],
+        "campaign_id": row["campaign_id"], "lead_id": row["lead_id"],
+        "step": row["step"], "subject": row.get("subject", ""),
+        "body_html": row.get("body_html", ""),
+        "body_text": row.get("body_text", ""),
+        "status": "sent", "source": "campaign_send",
+        "generated_at": row.get("created_at", now_iso()),
+        "sent_at": now_iso(),
+        "mailbox_email": mailbox.get("email", ""),
+        "campaign_name": (campaign or {}).get("name", ""),
+        "lead_email": lead.get("email", ""),
+        "lead_name": f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip(),
+    })
+
+    await _log_activity(row["workspace_id"], row["lead_id"], "pitch", "email_sent",
+                         f"Sent “{subject}” from {mailbox['email']}",
+                         {"campaign_id": row["campaign_id"], "step": row["step"]})
+
+
+# ----------------------------- SMS sender --------------------------------------
+async def _send_sms(row: Dict[str, Any], lead: Dict[str, Any]):
+    from twilio_client import twilio_client
+
+    phone = lead.get("phone")
+    if not phone:
+        raise ValueError("lead has no phone number")
+
+    body = _merge_fields(row.get("body", ""), lead)
+
+    result = await twilio_client.send_sms(to_number=phone, body=body)
+    await db.send_queue.update_one({"id": row["id"]}, {"$set": {
+        "status": "sent", "sent_at": now_iso(), "error": None,
+        "provider_message_id": result.get("message_id"),
+        "mocked": result.get("mocked", True),
+    }})
+
+
+# ----------------------------- WhatsApp sender ----------------------------------
+async def _send_whatsapp(row: Dict[str, Any], lead: Dict[str, Any]):
+    from twilio_client import twilio_client
+
+    phone = lead.get("phone")
+    if not phone:
+        raise ValueError("lead has no phone number")
+
+    body = _merge_fields(row.get("body", ""), lead)
+
+    result = await twilio_client.send_whatsapp(to_number=phone, body=body)
+    await db.send_queue.update_one({"id": row["id"]}, {"$set": {
+        "status": "sent", "sent_at": now_iso(), "error": None,
+        "provider_message_id": result.get("message_id"),
+        "mocked": result.get("mocked", True),
+    }})
+
+
+# ----------------------------- Phone call sender --------------------------------
+async def _send_phone_call(row: Dict[str, Any], lead: Dict[str, Any]):
+    from twilio_client import twilio_client
+    from voice_eq import _agent_twiml_url
+
+    phone = lead.get("phone")
+    if not phone:
+        raise ValueError("lead has no phone number")
+
+    agent_id = row.get("agent_id")
+    script = _merge_fields(row.get("script", ""), lead)
+
+    # Find an active voice agent or use default
+    agent = None
+    if agent_id:
+        agent = await db.voice_agents.find_one({"id": agent_id, "workspace_id": row["workspace_id"]}, {"_id": 0})
+
+    twiml_url = _agent_twiml_url(agent, script) if agent else ""
+    from_number = None  # Twilio will use default
+
+    result = await twilio_client.create_phone_call(
+        from_number=from_number or "+15005550006",
+        to_number=phone,
+        twiml_url=twiml_url or f"https://handler.twilio.com/twiml/say?text={script}",
+    )
+    await db.send_queue.update_one({"id": row["id"]}, {"$set": {
+        "status": "sent", "sent_at": now_iso(), "error": None,
+        "provider_message_id": result.get("call_id"),
+        "mocked": result.get("mocked", True),
+    }})
+
+
+# ----------------------------- LinkedIn senders ---------------------------------
+async def _send_linkedin_message(row: Dict[str, Any], lead: Dict[str, Any]):
+    import linkedin_client
+
+    linkedin_url = lead.get("linkedin_url") or row.get("linkedin_url", "")
+    if not linkedin_url:
+        raise ValueError("lead has no LinkedIn URL")
+
+    integration = await db.integrations.find_one(
+        {"workspace_id": row["workspace_id"], "provider": "linkedin", "status": "connected"},
+        {"_id": 0})
+    if not integration:
+        raise RuntimeError("no connected LinkedIn account")
+
+    message = _merge_fields(row.get("message", ""), lead)
+    # LinkedIn Messaging API is limited — store as message to be sent manually
+    await db.send_queue.update_one({"id": row["id"]}, {"$set": {
+        "status": "manual", "sent_at": now_iso(),
+        "error": "LinkedIn messages require manual sending via LinkedIn.com",
+        "note": f"Send this message to {linkedin_url}: {message}",
+    }})
+
+
+async def _send_linkedin_comment(row: Dict[str, Any], lead: Dict[str, Any]):
+    import linkedin_client
+
+    integration = await db.integrations.find_one(
+        {"workspace_id": row["workspace_id"], "provider": "linkedin", "status": "connected"},
+        {"_id": 0})
+    if not integration:
+        raise RuntimeError("no connected LinkedIn account")
+
+    post_url = row.get("post_url", "")
+    if not post_url:
+        raise ValueError("no post URL specified for LinkedIn comment")
+
+    # Extract post URN from URL
+    post_urn = post_url.split("/update/")[-1].split("?")[0] if "/update/" in post_url else post_url
+
+    text = _merge_fields(row.get("comment_text", ""), lead)
+    result = await linkedin_client.create_comment(integration, post_urn, text)
+    await db.send_queue.update_one({"id": row["id"]}, {"$set": {
+        "status": "sent", "sent_at": now_iso(), "error": None,
+        "provider_message_id": result.get("comment_id"),
+        "mocked": False,
+    }})
+
+
+# ----------------------------- Helpers ------------------------------------------
+async def _pick_mailbox(workspace_id: str) -> Optional[Dict[str, Any]]:
+    """Round-robin across connected mailboxes for a workspace."""
+    mailboxes = await db.mailboxes.find(
+        {"workspace_id": workspace_id, "status": "connected"}, {"_id": 0}).to_list(20)
+    if not mailboxes:
+        return None
+    today = datetime.now(dt_timezone.utc).isoformat()[:10]
+    used = await db.mailbox_usage.find_one({"workspace_id": workspace_id, "date": today})
+    usage = used.get("by_mailbox", {}) if used else {}
+    best, best_count = None, None
+    for m in mailboxes:
+        cap = m.get("daily_cap", 50)
+        used_count = usage.get(m["id"], 0)
+        if used_count >= cap:
+            continue
+        remaining = cap - used_count
+        if best is None or remaining > best_count:
+            best, best_count = m, remaining
+    return best
+
+
+async def _mark_sent(mailbox: Dict[str, Any]):
+    today = datetime.now(dt_timezone.utc).isoformat()[:10]
+    await db.mailbox_usage.update_one(
+        {"workspace_id": mailbox["workspace_id"], "date": today},
+        {"$inc": {f"by_mailbox.{mailbox['id']}": 1},
+         "$setOnInsert": {"workspace_id": mailbox["workspace_id"], "date": today}},
+        upsert=True,
+    )
+
+
 def _render(row: Dict[str, Any], lead: Dict[str, Any]) -> tuple:
-    """Substitute {{merge_fields}} against the lead."""
+    """Substitute {{merge_fields}} against the lead for email."""
     import re
 
     def sub(s: str) -> str:
@@ -358,10 +462,37 @@ def _render(row: Dict[str, Any], lead: Dict[str, Any]) -> tuple:
     return subject, html, text
 
 
+def _merge_fields(text: str, lead: Dict[str, Any]) -> str:
+    """Substitute {{merge_fields}} in any text string."""
+    import re
+
+    def rep(m):
+        return str(lead.get(m.group(1).strip(), "") or "")
+    return re.sub(r"\{\{\s*(\w+)\s*\}\}", rep, text or "")
+
+
+def _next_window_slot(target: datetime, win_start: str, win_end: str,
+                       tz: ZoneInfo) -> datetime:
+    """Clamp a send time into the campaign's sending window."""
+    from datetime import time as _time
+    try:
+        ws = _time(*map(int, win_start.split(":")))
+        we = _time(*map(int, win_end.split(":")))
+    except Exception:
+        ws, we = _time(9, 0), _time(17, 0)
+
+    if target.weekday() >= 5:
+        target += timedelta(days=(7 - target.weekday()))
+
+    target = target.replace(hour=ws.hour, minute=ws.minute, second=0, microsecond=0)
+    if not (ws <= target.time() <= we):
+        target = target.replace(hour=ws.hour, minute=ws.minute)
+    return target
+
+
 # ----------------------------- Reply polling ------------------------------------
 async def run_reply_tick() -> int:
-    """Poll sent threads for replies. This is what makes the unified inbox real —
-    it used to be populated from a five-string bank of invented replies."""
+    """Poll sent email threads for replies."""
     from server import _classify_reply
 
     cutoff = (datetime.now(dt_timezone.utc) - timedelta(days=14)).isoformat()
@@ -400,7 +531,7 @@ async def run_reply_tick() -> int:
                 "step": row["step"], "type": "replied", "at": now_iso(),
             })
             await _log_activity(row["workspace_id"], row["lead_id"], "pitch", "email_replied",
-                                 f"Replied ({classification}): “{body[:80]}”",
+                                 f"Replied ({classification}): \u201c{body[:80]}\u201d",
                                  {"conversation_id": convo_id})
             found += 1
     return found
