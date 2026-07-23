@@ -106,7 +106,7 @@ module.exports = {
         // shadcn/ui primitive contract — mapped onto the tokens above so
         // components/ui/* (button, dialog, select, toast, etc.) resolve.
         border: "rgb(var(--color-line) / <alpha-value>)",
-        input: "rgb(var(--color-line) / <alpha-value>)",
+        input: "rgb(var(--color-ink) / <alpha-value>)",
         ring: "rgb(var(--color-ink) / <alpha-value>)",
         background: "rgb(var(--color-bone) / <alpha-value>)",
         foreground: "rgb(var(--color-ink) / <alpha-value>)",
