@@ -245,7 +245,7 @@ export default function Landing() {
                 {RELAY.map((s, i) => (
                   <div key={s.agent} className="flex gap-3 sm:gap-4">
                     <div className="flex flex-col items-center">
-                      <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-tiny font-mono font-bold shrink-0 ${i === 0 ? "bg-white text-ink" : "bg-white/10 text-white/60"}`}>
+                      <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-tiny font-mono font-bold shrink-0 ${i === 0 ? "bg-white text-ink" : "bg-white/10 text-white/80"}`}>
                         {i + 1}
                       </div>
                       {i < RELAY.length - 1 && <div className="w-px flex-1 bg-white/10 my-1" />}
@@ -255,12 +255,12 @@ export default function Landing() {
                         <span className="font-display font-semibold text-sm sm:text-base text-white">{s.agent}</span>
                         <span className="text-xs sm:text-sm text-white/70">{s.event}</span>
                       </div>
-                      <div className="text-tiny sm:text-xs font-mono text-white/50 mt-1">{s.detail}</div>
+                      <div className="text-tiny sm:text-xs font-mono text-white/70 mt-1">{s.detail}</div>
                     </div>
                   </div>
                 ))}
               </div>
-              <p className="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-white/10 text-xs sm:text-sm text-white/60">
+              <p className="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-white/10 text-xs sm:text-sm text-white/80">
                 Agents hand off to each other automatically — a "yes" on the phone becomes a drafted
                 proposal, a booking link, and a confirmation SMS before your rep has hung up.
               </p>
@@ -278,7 +278,7 @@ export default function Landing() {
                     <f.icon size={15} strokeWidth={1.75} />
                   </div>
                   <div className="mt-3.5 font-display font-semibold text-sm sm:text-base text-white">{f.t}</div>
-                  <div className="mt-1.5 text-xs sm:text-sm text-white/60 leading-relaxed">{f.d}</div>
+                  <div className="mt-1.5 text-xs sm:text-sm text-white/80 leading-relaxed">{f.d}</div>
                 </div>
               ))}
             </div>
@@ -355,16 +355,16 @@ export default function Landing() {
                   {p.price ? (
                     <>
                       <span className="font-mono text-3xl sm:text-4xl font-bold text-white">${p.price}</span>
-                      <span className="text-sm text-white/50">/mo</span>
+                      <span className="text-sm text-white/70">/mo</span>
                     </>
                   ) : (
                     <span className="font-mono text-3xl sm:text-4xl font-bold text-white">Let's talk</span>
                   )}
                 </div>
                 {p.annual && (
-                  <div className="text-xs text-white/40 mt-1">${p.annual}/mo billed annually</div>
+                  <div className="text-xs text-white/80 mt-1">${p.annual}/mo billed annually</div>
                 )}
-                <p className="text-xs sm:text-sm text-white/60 mt-3 sm:mt-4 min-h-[36px] sm:min-h-[40px]">{p.blurb}</p>
+                <p className="text-xs sm:text-sm text-white/80 mt-3 sm:mt-4 min-h-[36px] sm:min-h-[40px]">{p.blurb}</p>
                 <ul className="mt-4 sm:mt-5 space-y-2 text-xs sm:text-sm text-white/70 flex-1">
                   {[`${p.credits} credits / month`, p.seats, "All ten agents included", "Shared CRM & activity timeline"].map((x) => (
                     <li key={x} className="flex gap-2.5 items-start">
@@ -399,11 +399,11 @@ export default function Landing() {
               ].map((c) => (
                 <div key={c.l}>
                   <div className="text-section font-display font-bold text-white">{c.n}</div>
-                  <div className="text-tiny sm:text-xs text-white/50 mt-1 leading-snug">{c.l}</div>
+                  <div className="text-tiny sm:text-xs text-white/70 mt-1 leading-snug">{c.l}</div>
                 </div>
               ))}
             </div>
-            <p className="text-tiny sm:text-xs text-white/40 mt-5 sm:mt-6">
+            <p className="text-tiny sm:text-xs text-white/80 mt-5 sm:mt-6">
               Exports, CRM writes, HR records, journal entries, and bookings are free — you're never charged to read your own data.
               Every plan starts with a 14-day trial and 500 credits, no card required.
             </p>
@@ -446,9 +446,9 @@ export default function Landing() {
 
       {/* Footer */}
       <footer className="border-t border-white/10 py-8 sm:py-10 px-6 sm:px-8 animate-fade-up bg-ink">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-tiny sm:text-xs text-white/40 font-mono uppercase tracking-widest">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-tiny sm:text-xs text-white/80 font-mono uppercase tracking-widest">
           <div>© INNOIRA Consulting Services 2026 · CONFIDENTIAL</div>
-          <div className="flex gap-6 text-white/40">
+          <div className="flex gap-6 text-white/80">
             <a href="#" className="hover:text-white transition-colors">Privacy</a>
             <a href="#" className="hover:text-white transition-colors">Terms</a>
             <a href="mailto:hello@innoira.com" className="hover:text-white transition-colors">Contact</a>

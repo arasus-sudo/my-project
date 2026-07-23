@@ -11,6 +11,19 @@ import {
   Edit2, RotateCw, Flag, List, Tag, X,
 } from "lucide-react";
 
+const TIMEZONES = [
+  "UTC", "US/Eastern", "US/Central", "US/Mountain", "US/Pacific",
+  "US/Alaska", "US/Hawaii", "Canada/Atlantic", "Canada/Newfoundland",
+  "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Madrid",
+  "Europe/Rome", "Europe/Amsterdam", "Europe/Stockholm", "Europe/Moscow",
+  "Asia/Dubai", "Asia/Kolkata", "Asia/Bangkok", "Asia/Singapore",
+  "Asia/Hong_Kong", "Asia/Shanghai", "Asia/Tokyo", "Asia/Seoul",
+  "Australia/Sydney", "Australia/Melbourne", "Australia/Perth",
+  "Pacific/Auckland", "Pacific/Fiji", "America/Sao_Paulo",
+  "America/Mexico_City", "America/Argentina/Buenos_Aires",
+  "Africa/Cairo", "Africa/Lagos", "Africa/Johannesburg",
+];
+
 const stepKey = () => `s_${Math.random().toString(36).slice(2, 10)}`;
 
 const DEFAULT_STEP = () => ({
@@ -647,17 +660,7 @@ export default function CampaignBuilder() {
         <div className="relative">
           <select value={timezone} onChange={(e) => setTimezone(e.target.value)}
             className="w-full border border-line px-2 py-1.5 rounded-lg text-caption font-mono appearance-none pr-8">
-            <option value="UTC">UTC</option>
-            <option value="US/Eastern">US Eastern</option>
-            <option value="US/Central">US Central</option>
-            <option value="US/Mountain">US Mountain</option>
-            <option value="US/Pacific">US Pacific</option>
-            <option value="Europe/London">London</option>
-            <option value="Europe/Paris">Paris</option>
-            <option value="Europe/Berlin">Berlin</option>
-            <option value="Asia/Tokyo">Tokyo</option>
-            <option value="Australia/Sydney">Sydney</option>
-            <option value="Asia/Shanghai">Shanghai</option>
+            {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
           </select>
           <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-ink-muted pointer-events-none" size={14} />
         </div>

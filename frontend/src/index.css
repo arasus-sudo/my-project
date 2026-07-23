@@ -16,9 +16,9 @@
     --color-line: 226 226 229;                /* #E2E2E5 hairline border */
     --color-ink: 10 10 11;                    /* #0A0A0B near-black — primary text */
     --color-ink-secondary: 58 58 62;          /* #3A3A3E */
-    --color-ink-tertiary: 110 110 115;        /* #6E6E73 */
-    --color-ink-muted: 142 142 147;           /* #8E8E93 */
-    --color-ink-disabled: 210 210 215;        /* #D2D2D7 */
+    --color-ink-tertiary: 82 82 85;           /* #525255 — darkened for readability */
+    --color-ink-muted: 110 110 115;           /* #6E6E73 — darkened for readability */
+    --color-ink-disabled: 180 180 185;        /* #B4B4B9 — darkened for readability */
     --color-accent: 59 130 246;                /* #3B82F6 lighter vivid blue */
     --color-accent-hover: 37 99 235;            /* #2563EB */
     --color-accent-soft: 219 234 254;           /* #DBEAFE soft tint */

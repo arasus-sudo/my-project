@@ -3,7 +3,20 @@ import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Save, Link2, Unlink, Mail } from "lucide-react";
+import { Save, Link2, Unlink, Mail, ChevronDown } from "lucide-react";
+
+const TIMEZONES = [
+  "UTC", "US/Eastern", "US/Central", "US/Mountain", "US/Pacific",
+  "US/Alaska", "US/Hawaii", "Canada/Atlantic", "Canada/Newfoundland",
+  "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Madrid",
+  "Europe/Rome", "Europe/Amsterdam", "Europe/Stockholm", "Europe/Moscow",
+  "Asia/Dubai", "Asia/Kolkata", "Asia/Bangkok", "Asia/Singapore",
+  "Asia/Hong_Kong", "Asia/Shanghai", "Asia/Tokyo", "Asia/Seoul",
+  "Australia/Sydney", "Australia/Melbourne", "Australia/Perth",
+  "Pacific/Auckland", "Pacific/Fiji", "America/Sao_Paulo",
+  "America/Mexico_City", "America/Argentina/Buenos_Aires",
+  "Africa/Cairo", "Africa/Lagos", "Africa/Johannesburg",
+];
 
 const DAYS = [
   { key: "mon", label: "Monday" }, { key: "tue", label: "Tuesday" }, { key: "wed", label: "Wednesday" },
@@ -118,8 +131,14 @@ export default function ScheduleSettings() {
           </div>
           <div>
             <label className="form-label block mb-1">Timezone</label>
-            <input value={availability.timezone} onChange={(e) => setAvailability({ ...availability, timezone: e.target.value })}
-              data-testid="availability-timezone" className="w-full border border-line px-3 py-2 rounded-sm text-input" placeholder="UTC, America/New_York, …" />
+            <div className="relative">
+              <select value={availability.timezone} onChange={(e) => setAvailability({ ...availability, timezone: e.target.value })}
+                data-testid="availability-timezone"
+                className="w-full border border-line px-3 py-2 rounded-sm text-input font-mono appearance-none pr-8">
+                {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+              </select>
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" size={14} />
+            </div>
           </div>
           <div className="space-y-2 pt-2">
             {DAYS.map((d) => {
