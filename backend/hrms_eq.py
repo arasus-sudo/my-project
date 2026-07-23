@@ -119,6 +119,7 @@ async def create_employee(body: EmployeeIn, user=Depends(current_user)):
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.employees.insert_one(emp)
+    emp.pop("_id", None)
     await _audit(user, "hrms.employee.create", {"employee_id": emp["id"]})
     return emp
 
@@ -169,6 +170,7 @@ async def create_department(body: DepartmentIn, user=Depends(current_user)):
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.departments.insert_one(dept)
+    dept.pop("_id", None)
     return dept
 
 @hrms_router.put("/departments/{did}")
@@ -233,6 +235,7 @@ async def create_requisition(body: JobRequisitionIn, user=Depends(current_user))
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.job_requisitions.insert_one(req)
+    req.pop("_id", None)
     await _audit(user, "hrms.requisition.create", {"requisition_id": req["id"]})
     return req
 
@@ -272,6 +275,7 @@ async def create_candidate(body: CandidateIn, user=Depends(current_user)):
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.candidates.insert_one(c)
+    c.pop("_id", None)
     return c
 
 @hrms_router.put("/candidates/{cid}")
@@ -346,7 +350,8 @@ async def schedule_interview(cid: str, body: dict, user=Depends(current_user)):
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.interview_bookings.insert_one(booking)
-    
+    booking.pop("_id", None)
+
     await db.candidates.update_one(
         {"id": cid},
         {"$set": {"stage": "interview", "interview_booking_id": booking["id"], "updated_at": now_iso()}}
@@ -377,6 +382,7 @@ async def create_onboarding_task(body: dict, user=Depends(current_user)):
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.onboarding_tasks.insert_one(task)
+    task.pop("_id", None)
     return task
 
 @hrms_router.put("/onboarding-tasks/{tid}")
@@ -426,6 +432,7 @@ async def create_leave_request(body: LeaveRequestIn, user=Depends(current_user))
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.leave_requests.insert_one(lr)
+    lr.pop("_id", None)
     return lr
 
 @hrms_router.put("/leave-requests/{lid}")
@@ -515,6 +522,7 @@ async def create_performance_review(body: PerformanceReviewIn, user=Depends(curr
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.performance_reviews.insert_one(pr)
+    pr.pop("_id", None)
     return pr
 
 @hrms_router.put("/performance-reviews/{pid}")

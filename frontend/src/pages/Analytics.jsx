@@ -37,7 +37,7 @@ export default function Analytics() {
           <div className="bg-white border border-line rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
             <div>
               <div className="ui-label">LLM calls today</div>
-              <div className="font-mono text-xl sm:text-2xl font-bold mt-1">{quota.used} <span className="text-ink-muted text-base">/ {quota.limit}</span></div>
+              <div className="text-section font-display font-bold mt-1">{quota.used} <span className="text-ink-muted text-base">/ {quota.limit}</span></div>
             </div>
             <div className="flex-1 h-2 bg-neutral-100 rounded-full overflow-hidden">
               <div className="h-full bg-accent" style={{ width: `${Math.min(100, (quota.used / quota.limit) * 100)}%` }} />
@@ -103,7 +103,7 @@ export default function Analytics() {
                   ].map(([k, v]) => (
                     <div key={k}>
                       <div className="ui-label">{k}</div>
-                      <div className="font-mono text-lg font-bold">{v}</div>
+                      <div className="text-subheading font-display font-bold">{v}</div>
                     </div>
                   ))}
                 </div>

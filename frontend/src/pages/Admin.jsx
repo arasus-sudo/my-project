@@ -74,7 +74,7 @@ export default function Admin() {
           ].map((c) => (
             <div key={c.k} className="bg-white border border-line rounded-2xl shadow-card p-5">
               <div className="ui-label">{c.k}</div>
-              <div className="font-mono text-2xl sm:text-3xl font-bold mt-1 tracking-tighter">{c.v}</div>
+              <div className="text-app-title font-display font-bold mt-1 tracking-tighter">{c.v}</div>
             </div>
           ))}
         </div>

@@ -53,7 +53,7 @@ export default function JournalEntries() {
             </div>
             <div className="text-caption text-ink-muted mt-1">{e.date} {e.reference ? `· ${e.reference}` : ""}</div>
             <table className="w-full mt-3 text-body">
-              <thead><tr className="text-left ui-label text-ink-muted"><th className="pb-1">Account</th><th className="pb-1 text-right">Debit</th><th className="pb-1 text-right">Credit</th></tr></thead>
+              <thead><tr className="text-left"><th className="table-header pb-1">Account</th><th className="table-header pb-1 text-right">Debit</th><th className="table-header pb-1 text-right">Credit</th></tr></thead>
               <tbody>
                 {e.lines.map((l, i) => (
                   <tr key={i} className="border-t border-line">

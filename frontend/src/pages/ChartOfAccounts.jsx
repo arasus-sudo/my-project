@@ -39,8 +39,8 @@ export default function ChartOfAccounts() {
         {items.length === 0 && <div className="text-body text-ink-muted">No accounts yet.</div>}
         <div className="bg-white border border-line rounded-2xl overflow-hidden">
           <table className="w-full text-body">
-            <thead><tr className="border-b border-line bg-ash text-left ui-label">
-              <th className="p-3">Code</th><th className="p-3">Name</th><th className="p-3">Type</th><th className="p-3">Category</th><th className="p-3">Balance</th><th className="p-3"></th>
+            <thead><tr className="border-b border-line bg-ash text-left">
+              <th className="table-header p-3">Code</th><th className="table-header p-3">Name</th><th className="table-header p-3">Type</th><th className="table-header p-3">Category</th><th className="table-header p-3">Balance</th><th className="p-3"></th>
             </tr></thead>
             <tbody>
               {items.map((a) => (

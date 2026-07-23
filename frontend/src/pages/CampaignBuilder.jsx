@@ -582,7 +582,7 @@ export default function CampaignBuilder() {
         <div className="px-4 sm:px-6 pt-4 flex items-center gap-4 flex-wrap" data-testid="assigned-leads-stat">
           <div className="flex items-baseline gap-2">
             <span className="ui-label">Assigned Leads</span>
-            <span className="font-mono text-2xl font-bold">{leadStats.total}</span>
+            <span className="text-section font-display font-bold">{leadStats.total}</span>
           </div>
           <div className="flex items-center gap-2 text-caption font-mono">
             {leadStats.approved > 0 && <span className="text-success">{leadStats.approved} approved</span>}

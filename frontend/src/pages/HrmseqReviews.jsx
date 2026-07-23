@@ -43,7 +43,7 @@ export default function HrmseqReviews() {
           <div key={r.id} className="bg-white border border-line rounded-2xl p-5">
             <div className="flex items-center justify-between">
               <div className="text-card-title font-display font-semibold">{empMap[r.employee_id] || r.employee_id}</div>
-              <div className="text-xl font-bold">{r.rating}/5</div>
+              <div className="text-section font-display font-bold">{r.rating}/5</div>
             </div>
             <div className="text-caption text-ink-muted mt-1">Reviewer: {empMap[r.reviewer_id] || r.reviewer_id}</div>
             {r.strengths && <div className="mt-3"><span className="ui-label">Strengths:</span><p className="text-body">{r.strengths}</p></div>}

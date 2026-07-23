@@ -74,6 +74,7 @@ async def create_account(body: dict, user=Depends(current_user)):
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.coa_accounts.insert_one(account)
+    account.pop("_id", None)
     return account
 
 # The auto-posting routes below (invoice sent/paid, bill paid) look accounts up
@@ -114,6 +115,7 @@ async def seed_default_accounts(user=Depends(current_user)):
             "created_at": now_iso(), "updated_at": now_iso(),
         }
         await db.coa_accounts.insert_one(account)
+        account.pop("_id", None)
         created.append(account)
     await _audit(user, "accounting.accounts.seed_defaults", {"created": len(created)})
     return {"created": len(created), "accounts": created}
@@ -232,7 +234,8 @@ async def create_journal_entry(body: dict, user=Depends(current_user)):
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.journal_entries.insert_one(entry)
-    
+    entry.pop("_id", None)
+
     # Update account balances
     for line in validated:
         norm = "debit" if line["debit"] > 0 else "credit"
@@ -277,6 +280,7 @@ async def create_customer(body: dict, user=Depends(current_user)):
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.accounting_customers.insert_one(c)
+    c.pop("_id", None)
     return c
 
 @accounting_router.put("/customers/{cid}")
@@ -342,6 +346,7 @@ async def create_invoice(body: dict, user=Depends(current_user)):
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.accounting_invoices.insert_one(inv)
+    inv.pop("_id", None)
     return inv
 
 @accounting_router.post("/invoices/from-proposal/{proposal_id}")
@@ -407,6 +412,7 @@ async def create_invoice_from_proposal(proposal_id: str, user=Depends(current_us
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.accounting_invoices.insert_one(inv)
+    inv.pop("_id", None)
     await db.proposals.update_one({"id": proposal_id}, {"$set": {"invoice_id": inv["id"]}})
     await _audit(user, "accounting.invoice.from_proposal", {"invoice_id": inv["id"], "proposal_id": proposal_id})
     return inv
@@ -690,6 +696,7 @@ async def create_bill(body: dict, user=Depends(current_user)):
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.accounting_bills.insert_one(bill)
+    bill.pop("_id", None)
     return bill
 
 @accounting_router.post("/bills/{bid}/categorize-suggest")

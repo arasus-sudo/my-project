@@ -179,7 +179,7 @@ export default function Mailboxes() {
               <div className="mt-6 grid grid-cols-2 gap-4 border-t border-line pt-4">
                 <div>
                   <div className="ui-label">Warmup</div>
-                  <div className="font-mono text-lg font-bold">
+                  <div className="text-subheading font-display font-bold">
                     {m.warmup_enabled ? `day ${m.warmup_day}` : "off"}
                   </div>
                   <button onClick={() => toggleWarmup(m.id)} data-testid={`warmup-${m.id}`}
@@ -194,7 +194,7 @@ export default function Mailboxes() {
                 </div>
                 <div>
                   <div className="ui-label">Sent today</div>
-                  <div className="font-mono text-lg font-bold">{m.sent_today || 0}/{cap}</div>
+                  <div className="text-subheading font-display font-bold">{m.sent_today || 0}/{cap}</div>
                   <div className="h-1 mt-1.5 bg-neutral-100 rounded-full overflow-hidden">
                     <div className="h-full bg-accent rounded-full"
                       style={{ width: `${Math.min(100, ((m.sent_today || 0) / cap) * 100)}%` }} />

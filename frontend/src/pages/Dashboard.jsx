@@ -3,7 +3,6 @@ import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { Link } from "react-router-dom";
-import { toast } from "sonner";
 import { ArrowRight } from "lucide-react";
 import { SkeletonKpiGrid } from "../components/ui/loading-states";
 
@@ -11,11 +10,6 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const load = () => api.get("/dashboard").then((r) => setData(r.data));
   useEffect(() => { load(); }, []);
-
-  const seed = async () => {
-    try { await api.post("/demo/seed"); toast.success("Sample data added"); load(); }
-    catch { toast.error("Could not seed"); }
-  };
 
   if (!data) {
     return (
@@ -41,16 +35,6 @@ export default function Dashboard() {
         }
       />
       <div className="p-6 sm:p-8 space-y-6">
-        {kpis.sent === 0 && (
-          <div className="card-flat shadow-card p-6 flex items-center justify-between">
-            <div>
-              <div className="text-card-title font-display font-semibold">Get a live demo in one click</div>
-              <div className="text-caption text-ink-muted">Seed sample leads, a mailbox and a Q1 outreach campaign.</div>
-            </div>
-            <button data-testid="seed-demo-btn" onClick={seed} className="btn-secondary">Seed demo data</button>
-          </div>
-        )}
-
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
@@ -62,7 +46,7 @@ export default function Dashboard() {
           ].map((c, i) => (
             <div key={c.k} className="p-3 sm:p-6 bg-white shadow-card rounded-2xl">
               <div className="ui-label">{c.k}</div>
-              <div className="font-mono text-xl sm:text-2xl font-bold mt-2 tracking-tighter truncate">{c.v}</div>
+              <div className="text-section font-display font-bold mt-2 tracking-tighter truncate">{c.v}</div>
               {c.sub && <div className="text-tiny text-ink-muted mt-1 font-mono">{c.sub}</div>}
             </div>
           ))}
@@ -103,7 +87,7 @@ export default function Dashboard() {
               ].map(([k, v]) => (
                 <li key={k} className="flex justify-between py-3">
                   <span className="text-body text-ink-tertiary">{k}</span>
-                  <span className="font-mono text-lg font-bold">{v}</span>
+                  <span className="text-subheading font-display font-bold">{v}</span>
                 </li>
               ))}
             </ul>
@@ -122,7 +106,7 @@ export default function Dashboard() {
             ].map((s) => (
               <div key={s.k}>
                 <div className="ui-label">{s.k}</div>
-                <div className="font-mono text-lg sm:text-2xl font-bold mt-1 truncate">{s.v}</div>
+                <div className="text-section font-display font-bold mt-1 truncate">{s.v}</div>
                 <div className="mt-2 h-2 bg-line rounded-full overflow-hidden">
                   <div className="h-full bg-accent" style={{ width: `${Math.max(2, s.w)}%` }} />
                 </div>

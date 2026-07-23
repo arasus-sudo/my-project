@@ -43,8 +43,8 @@ export default function HrmseqEmployees() {
         {items.length > 0 && (
           <div className="bg-white border border-line rounded-2xl overflow-hidden">
             <table className="w-full text-body">
-              <thead><tr className="border-b border-line bg-ash text-left ui-label">
-                <th className="p-3">Name</th><th className="p-3">Email</th><th className="p-3">Position</th><th className="p-3">Department</th><th className="p-3">Status</th>
+              <thead><tr className="border-b border-line bg-ash text-left">
+                <th className="table-header p-3">Name</th><th className="table-header p-3">Email</th><th className="table-header p-3">Position</th><th className="table-header p-3">Department</th><th className="table-header p-3">Status</th>
               </tr></thead>
               <tbody>
                 {items.map((e) => (

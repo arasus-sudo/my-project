@@ -60,8 +60,8 @@ export default function AccountingReports() {
               </span>
             </div>
             <table className="w-full text-body">
-              <thead><tr className="border-b border-line bg-ash text-left ui-label">
-                <th className="p-3">Account</th><th className="p-3">Type</th><th className="p-3 text-right">Debit</th><th className="p-3 text-right">Credit</th>
+              <thead><tr className="border-b border-line bg-ash text-left">
+                <th className="table-header p-3">Account</th><th className="table-header p-3">Type</th><th className="table-header p-3 text-right">Debit</th><th className="table-header p-3 text-right">Credit</th>
               </tr></thead>
               <tbody>
                 {trialBalance.rows?.map((r, i) => (
@@ -92,7 +92,7 @@ export default function AccountingReports() {
               <div className="flex justify-between"><span>Expenses</span><span className="font-mono font-bold text-red-600">${pnl.expenses?.toFixed(2)}</span></div>
               <div className="border-t border-line pt-3 flex justify-between">
                 <span className="font-bold">Net Income</span>
-                <span className={`font-mono font-bold text-xl ${pnl.net_income >= 0 ? "text-green-600" : "text-red-600"}`}>${pnl.net_income?.toFixed(2)}</span>
+                <span className={`text-section font-bold font-mono ${pnl.net_income >= 0 ? "text-green-600" : "text-red-600"}`}>${pnl.net_income?.toFixed(2)}</span>
               </div>
             </div>
           </div>

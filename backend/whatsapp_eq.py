@@ -66,6 +66,7 @@ async def create_template(body: WATemplateIn, user=Depends(current_user)):
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.whatsapp_templates.insert_one(t)
+    t.pop("_id", None)
     await _audit(user, "whatsapp.template.create", {"template_id": t["id"], "name": t["name"]})
     return t
 
@@ -264,6 +265,7 @@ async def create_broadcast(body: WABroadcastIn, user=Depends(current_user)):
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.whatsapp_broadcasts.insert_one(b)
+    b.pop("_id", None)
     await _audit(user, "whatsapp.broadcast.create", {"broadcast_id": b["id"]})
     return b
 

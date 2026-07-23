@@ -81,6 +81,7 @@ async def create_template(body: SMSTemplateIn, user=Depends(current_user)):
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.sms_templates.insert_one(t)
+    t.pop("_id", None)
     await _audit(user, "sms.template.create", {"template_id": t["id"], "name": t["name"]})
     return t
 
@@ -222,6 +223,7 @@ async def create_broadcast(body: SMSBroadcastIn, user=Depends(current_user)):
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.sms_broadcasts.insert_one(b)
+    b.pop("_id", None)
     await _audit(user, "sms.broadcast.create", {"broadcast_id": b["id"], "name": b["name"]})
     return b
 
