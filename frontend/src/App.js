@@ -75,6 +75,32 @@ const SiteEQOverview = lazy(() => import("./pages/SiteEQOverview"));
 const SiteList = lazy(() => import("./pages/SiteList"));
 const SiteInbox = lazy(() => import("./pages/SiteInbox"));
 const SiteAnalytics = lazy(() => import("./pages/SiteAnalytics"));
+const SmsEQOverview = lazy(() => import("./pages/SmsEQOverview"));
+const SmsTemplates = lazy(() => import("./pages/SmsTemplates"));
+const SmsInbox = lazy(() => import("./pages/SmsInbox"));
+const SmsBroadcasts = lazy(() => import("./pages/SmsBroadcasts"));
+const SmsContacts = lazy(() => import("./pages/SmsContacts"));
+const SmsSettings = lazy(() => import("./pages/SmsSettings"));
+const WhatsAppEQOverview = lazy(() => import("./pages/WhatsAppEQOverview"));
+const WhatsAppTemplates = lazy(() => import("./pages/WhatsAppTemplates"));
+const WhatsAppInbox = lazy(() => import("./pages/WhatsAppInbox"));
+const WhatsAppBroadcasts = lazy(() => import("./pages/WhatsAppBroadcasts"));
+const WhatsAppContacts = lazy(() => import("./pages/WhatsAppContacts"));
+const WhatsAppSettings = lazy(() => import("./pages/WhatsAppSettings"));
+const HrmseqOverview = lazy(() => import("./pages/HrmseqOverview"));
+const HrmseqEmployees = lazy(() => import("./pages/HrmseqEmployees"));
+const HrmseqOrgChart = lazy(() => import("./pages/HrmseqOrgChart"));
+const HrmseqRecruitment = lazy(() => import("./pages/HrmseqRecruitment"));
+const HrmseqOnboarding = lazy(() => import("./pages/HrmseqOnboarding"));
+const HrmseqLeave = lazy(() => import("./pages/HrmseqLeave"));
+const HrmseqReviews = lazy(() => import("./pages/HrmseqReviews"));
+const AccountingOverview = lazy(() => import("./pages/AccountingOverview"));
+const ChartOfAccounts = lazy(() => import("./pages/ChartOfAccounts"));
+const JournalEntries = lazy(() => import("./pages/JournalEntries"));
+const AccountingCustomers = lazy(() => import("./pages/AccountingCustomers"));
+const AccountingInvoices = lazy(() => import("./pages/AccountingInvoices"));
+const AccountingBills = lazy(() => import("./pages/AccountingBills"));
+const AccountingReports = lazy(() => import("./pages/AccountingReports"));
 
 export function RouteLoader() {
   return (
@@ -166,6 +192,32 @@ function App() {
               <Route path="site-eq/sites" element={<SiteList />} />
               <Route path="site-eq/inbox" element={<SiteInbox />} />
               <Route path="site-eq/analytics" element={<SiteAnalytics />} />
+              <Route path="sms-eq" element={<SmsEQOverview />} />
+              <Route path="sms-eq/templates" element={<SmsTemplates />} />
+              <Route path="sms-eq/inbox" element={<SmsInbox />} />
+              <Route path="sms-eq/broadcasts" element={<SmsBroadcasts />} />
+              <Route path="sms-eq/contacts" element={<SmsContacts />} />
+              <Route path="sms-eq/settings" element={<SmsSettings />} />
+              <Route path="whatsapp-eq" element={<WhatsAppEQOverview />} />
+              <Route path="whatsapp-eq/templates" element={<WhatsAppTemplates />} />
+              <Route path="whatsapp-eq/inbox" element={<WhatsAppInbox />} />
+              <Route path="whatsapp-eq/broadcasts" element={<WhatsAppBroadcasts />} />
+              <Route path="whatsapp-eq/contacts" element={<WhatsAppContacts />} />
+              <Route path="whatsapp-eq/settings" element={<WhatsAppSettings />} />
+              <Route path="hrms-eq" element={<HrmseqOverview />} />
+              <Route path="hrms-eq/employees" element={<HrmseqEmployees />} />
+              <Route path="hrms-eq/org-chart" element={<HrmseqOrgChart />} />
+              <Route path="hrms-eq/recruitment" element={<HrmseqRecruitment />} />
+              <Route path="hrms-eq/onboarding" element={<HrmseqOnboarding />} />
+              <Route path="hrms-eq/leave" element={<HrmseqLeave />} />
+              <Route path="hrms-eq/reviews" element={<HrmseqReviews />} />
+              <Route path="accounting-eq" element={<AccountingOverview />} />
+              <Route path="accounting-eq/chart-of-accounts" element={<ChartOfAccounts />} />
+              <Route path="accounting-eq/journal-entries" element={<JournalEntries />} />
+              <Route path="accounting-eq/customers" element={<AccountingCustomers />} />
+              <Route path="accounting-eq/invoices" element={<AccountingInvoices />} />
+              <Route path="accounting-eq/bills" element={<AccountingBills />} />
+              <Route path="accounting-eq/reports" element={<AccountingReports />} />
               <Route path="webhooks" element={<Webhooks />} />
               <Route path="hubspot" element={<HubSpotSettings />} />
               <Route path="inbox" element={<Inbox />} />

@@ -3,6 +3,7 @@ import { useState } from "react";
 import {
   ArrowUpRight, ArrowRight, Mail, PhoneCall, CalendarClock,
   FileText, Images, Share2, Database, Coins, ShieldCheck, GitBranch, Menu, X,
+  MessageSquare, Users, DollarSign,
 } from "lucide-react";
 import InnoiraLogo from "../components/InnoiraLogo";
 import ParticleField from "../components/ParticleField";
@@ -12,6 +13,10 @@ const AGENTS = [
     d: "Finds verified prospects, researches them, and writes cold email that reads human — every draft gated by an EQ Score before send." },
   { icon: PhoneCall, name: "Voice EQ", tag: "AI calling",
     d: "Places real phone calls with a natural AI voice, qualifies conversationally, and writes the outcome straight into your pipeline." },
+  { icon: MessageSquare, name: "WhatsApp EQ", tag: "WhatsApp Business",
+    d: "Manages WhatsApp Business messaging — template approval lifecycle, 24-hour session inbox, and broadcast campaigns that keep every conversation compliant." },
+  { icon: MessageSquare, name: "SMS EQ", tag: "Text messaging",
+    d: "Broadcast and two-way SMS at scale — opt-in/opt-out enforcement, contact segmentation, drip-scheduled sends, and keyword-triggered auto-replies." },
   { icon: CalendarClock, name: "Schedule EQ", tag: "Scheduling",
     d: "Booking pages, availability, reminders and reschedules — meetings appear on the calendar without a single back-and-forth." },
   { icon: FileText, name: "Proposal EQ", tag: "Proposals",
@@ -20,12 +25,17 @@ const AGENTS = [
     d: "A full carousel and creative editor — real Google Fonts, brand kits, AI copy and image assist, PDF/PNG export." },
   { icon: Share2, name: "Social EQ", tag: "Social posting",
     d: "Drafts, schedules and queues social posts across platforms — nothing publishes without your explicit approval." },
+  { icon: Users, name: "HRMS EQ", tag: "HR & people",
+    d: "Employee lifecycle from hire to review — org charts, recruitment pipelines with AI candidate scoring, onboarding checklists, leave management, and performance reviews." },
+  { icon: DollarSign, name: "Accounting EQ", tag: "Finance",
+    d: "Double-entry bookkeeping with enforced balance rules — chart of accounts, automated AR/AP posting, invoicing, vendor bills, and P&L / balance sheet / AR aging reports." },
 ];
 
 const RELAY = [
   { agent: "Voice EQ", event: "Call ended — lead qualified", detail: "sentiment: positive · budget: yes" },
   { agent: "Proposal EQ", event: "Proposal auto-drafted", detail: "researched, priced, ready to review" },
   { agent: "Schedule EQ", event: "Booking link queued", detail: "30-min demo · next available slots" },
+  { agent: "SMS EQ", event: "Follow-up SMS sent", detail: "confirmation + calendar link" },
 ];
 
 export default function Landing() {
@@ -35,11 +45,7 @@ export default function Landing() {
     <div className="min-h-screen bg-bone text-ink animate-fade-in">
       {/* Nav */}
       <header className="fixed top-0 left-0 right-0 z-50 px-6 sm:px-8 pt-4">
-        {/* grid, not justify-between: on 3 flex children, justify-between lets the
-            middle/first items collide as the viewport narrows since it only
-            distributes leftover space. A fixed auto/1fr/auto grid guarantees
-            the logo keeps its own column no matter the width. */}
-        <div className="nav-floating max-w-7xl mx-auto bg-white/70 backdrop-blur border border-line rounded-xl pl-3 pr-3 py-2.5 grid grid-cols-[auto_1fr_auto] items-center gap-4 sm:gap-8">
+        <div className="nav-floating max-w-7xl mx-auto pl-3 pr-3 py-2.5 grid grid-cols-[auto_1fr_auto] items-center gap-4 sm:gap-8">
           <Link to="/" className="flex items-center shrink-0">
             <InnoiraLogo size="sm" />
           </Link>
@@ -70,17 +76,18 @@ export default function Landing() {
       <section className="relative px-6 sm:px-8 pt-24 sm:pt-32 pb-20 sm:pb-28 animate-fade-up overflow-hidden">
         <ParticleField className="absolute inset-0 w-full h-full pointer-events-none opacity-70" />
         <div className="relative max-w-6xl mx-auto text-center">
-          <div className="pill mx-auto mb-6 sm:mb-8"><span className="w-1.5 h-1.5 rounded-full bg-success" /> Six agents live · more on the way</div>
+          <div className="pill mx-auto mb-6 sm:mb-8"><span className="w-1.5 h-1.5 rounded-full bg-success" /> Ten agents live · one platform</div>
           <h1 className="font-display font-bold text-4xl sm:text-6xl lg:text-8xl leading-[1.05] sm:leading-[1.02] tracking-tighter max-w-5xl mx-auto">
-            Your <span className="hl-ink">AI revenue team,</span> under one login.
+            Your entire <span className="hl-ink">revenue operation,</span> under one login.
           </h1>
           <p className="mt-6 sm:mt-8 text-base sm:text-lg text-ink-muted max-w-2xl mx-auto leading-relaxed px-2">
-            The Innoira Agentic Suite is six specialist agents — outbound email, AI calling, scheduling,
-            proposals, content and social — working one shared pipeline. Not six tools taped together.
+            The Innoira Agentic Suite is ten specialist agents — outbound email, AI calling, WhatsApp, SMS,
+            scheduling, proposals, content, social, HR and accounting — working one shared pipeline.
+            Not ten tools taped together.
           </p>
           <div className="mt-8 sm:mt-10 flex items-center justify-center gap-3 flex-wrap">
             <Link to="/signup" data-testid="hero-cta-start" className="btn-primary">Start free <ArrowRight size={14} /></Link>
-            <a href="#agents" className="btn-secondary bg-white border-line hover:bg-ash">Meet the agents</a>
+            <a href="#agents" className="btn-secondary">Meet the agents</a>
           </div>
 
           {/* Hero visual — the cross-agent relay */}
@@ -108,7 +115,7 @@ export default function Landing() {
               </div>
               <p className="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-white/10 text-xs sm:text-sm text-white/60">
                 Agents hand off to each other automatically — a "yes" on the phone becomes a drafted
-                proposal and a booking link before your rep has hung up.
+                proposal, a booking link, and a confirmation SMS before your rep has hung up.
               </p>
             </div>
           </div>
@@ -116,15 +123,16 @@ export default function Landing() {
       </section>
 
       {/* Agents grid */}
-      <section id="agents" className="px-6 sm:px-8 py-16 sm:py-24 animate-fade-up animate-delay-1">
+      <section id="agents" className="px-6 sm:px-8 py-16 sm:py-24 animate-fade-up animate-delay-100">
         <div className="max-w-6xl mx-auto">
           <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-14">
             <div className="ui-label mb-3">The Innoira Agentic Suite</div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold tracking-tight">
-              Six specialists. <span className="hl-ink">One pipeline.</span>
+              Ten specialists. <span className="hl-ink">One pipeline.</span>
             </h2>
             <p className="mt-4 text-ink-muted text-sm sm:text-base">
               Every agent reads from and writes back to the same CRM, timeline and credit pool — no exports, no Zapier, no copy-paste.
+              Revenue, HR, and accounting in the same workspace for the first time.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -151,11 +159,11 @@ export default function Landing() {
         </div>
       </section>
 
-{/* Shared foundation */}
-      <section id="relay" className="px-6 sm:px-8 py-16 sm:py-24 bg-ink text-white animate-fade-up animate-delay-2">
+      {/* Shared foundation */}
+      <section id="relay" className="px-6 sm:px-8 py-16 sm:py-24 bg-ink text-white animate-fade-up animate-delay-200">
         <div className="max-w-6xl mx-auto">
           <div className="max-w-2xl mb-10 sm:mb-14">
-            <div className="ui-label mb-4 text-white/70">Why a suite beats six point tools</div>
+            <div className="ui-label mb-4 text-white/70">Why a suite beats ten point tools</div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold tracking-tight">
               The agents <span className="hl-white">share a brain.</span>
             </h2>
@@ -163,9 +171,9 @@ export default function Landing() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { icon: Database, t: "One CRM & timeline", d: "Leads, deals and every touchpoint — an email opened, a call analyzed, a proposal viewed — live on one shared record." },
-              { icon: GitBranch, t: "Cross-agent handoffs", d: "A qualified call can auto-draft the proposal, queue the follow-up email and send the booking link. Configured per agent, no glue code." },
-              { icon: Coins, t: "One credit pool", d: "Every plan unlocks all agents drawing from one balance — a call costs more than an email because it costs more to run." },
-              { icon: ShieldCheck, t: "Human approval gates", d: "Social posts, outbound sends and live calls all respect explicit approval and do-not-contact rules. The agents work for you, not around you." },
+              { icon: GitBranch, t: "Cross-agent handoffs", d: "A qualified call can auto-draft the proposal, queue the follow-up email, send the booking link and fire a confirmation SMS. Configured per agent, no glue code." },
+              { icon: Coins, t: "One credit pool", d: "Every plan unlocks all ten agents drawing from one balance — a call costs more than an SMS because it costs more to run." },
+              { icon: ShieldCheck, t: "Human approval gates", d: "Social posts, outbound sends, WhatsApp templates, and live calls all respect explicit approval and do-not-contact rules. The agents work for you, not around you." },
             ].map((f) => (
               <div key={f.t} className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8 hover:border-white/30 hover:bg-white/10 transition-all">
                 <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
@@ -180,14 +188,14 @@ export default function Landing() {
       </section>
 
       {/* Suite pricing */}
-      <section id="suite-pricing" className="px-6 sm:px-8 py-16 sm:py-24 bg-ink border-y border-white/10 animate-fade-up animate-delay-3">
+      <section id="suite-pricing" className="px-6 sm:px-8 py-16 sm:py-24 bg-ink border-y border-white/10 animate-fade-up animate-delay-300">
         <div className="max-w-6xl mx-auto">
           <div className="text-center">
             <div className="ui-label mb-4 text-white/70">One plan, every agent</div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold tracking-tight text-white">Pay for <span className="hl-white">what the agents do.</span></h2>
             <p className="mt-4 text-white/70 max-w-2xl mx-auto text-sm sm:text-base">
-              No per-agent fees and no per-seat surprises. Every plan unlocks all six agents and a pool of
-              credits they draw from — a call costs more than an email because it costs us more to run.
+              No per-agent fees and no per-seat surprises. Every plan unlocks all ten agents and a pool of
+              credits they draw from — a call costs more than an SMS because it costs us more to run.
             </p>
           </div>
 
@@ -198,14 +206,14 @@ export default function Landing() {
               { id: "growth", name: "Growth", price: 249, annual: 199, credits: "30,000", seats: "10 seats",
                 blurb: "The full suite at production volume.", popular: true },
               { id: "scale", name: "Scale", price: 749, annual: 599, credits: "120,000", seats: "Unlimited seats",
-                blurb: "High-volume calling across a whole revenue org." },
+                blurb: "High-volume calling and messaging across a whole revenue org." },
               { id: "enterprise", name: "Enterprise", price: null, credits: "Custom", seats: "Unlimited seats",
                 blurb: "SSO, private deployment, custom agents." },
             ].map((p) => (
               <div key={p.id} data-testid={`landing-plan-${p.id}`}
                 className={`border rounded-2xl p-6 sm:p-8 flex flex-col text-left relative shadow-card ${p.popular ? "border-white ring-1 ring-white" : "border-white/10"}`}>
                 {p.popular && (
-                  <div className="absolute -top-3 left-5 sm:left-7 bg-white text-ink text-[10px] font-mono uppercase tracking-widest px-3 py-1 rounded-xl badge-info">
+                  <div className="absolute -top-3 left-5 sm:left-7 bg-white text-ink text-tiny font-mono uppercase tracking-widest px-3 py-1 rounded-xl">
                     Most popular
                   </div>
                 )}
@@ -225,7 +233,7 @@ export default function Landing() {
                 )}
                 <p className="text-xs sm:text-sm text-white/60 mt-3 sm:mt-4 min-h-[36px] sm:min-h-[40px]">{p.blurb}</p>
                 <ul className="mt-4 sm:mt-5 space-y-2 text-xs sm:text-sm text-white/70 flex-1">
-                  {[`${p.credits} credits / month`, p.seats, "All six agents included", "Shared CRM & activity timeline"].map((x) => (
+                  {[`${p.credits} credits / month`, p.seats, "All ten agents included", "Shared CRM & activity timeline"].map((x) => (
                     <li key={x} className="flex gap-2.5 items-start">
                       <span className="w-4 h-4 mt-0.5 bg-white text-ink rounded-full flex items-center justify-center text-[9px] shrink-0">✓</span>
                       <span>{x}</span>
@@ -234,7 +242,7 @@ export default function Landing() {
                 </ul>
                 {p.id === "enterprise" ? (
                   <a href="mailto:hello@innoira.com" data-testid="pricing-cta-enterprise"
-                    className="btn-ghost mt-5 sm:mt-6 justify-center border border-white/20 rounded-xl py-2 text-sm text-white hover:bg-white/10">Contact sales</a>
+                    className="mt-5 sm:mt-6 flex items-center justify-center gap-2 border border-white/20 rounded-xl py-2 text-sm font-medium text-white hover:bg-white/10 transition-colors duration-150">Contact sales</a>
                 ) : (
                   <Link to="/signup" data-testid={`pricing-cta-${p.id}`}
                     className={`mt-5 sm:mt-6 justify-center rounded-xl py-2 text-sm font-medium flex items-center gap-1.5 ${p.popular ? "bg-white text-ink hover:bg-white/90" : "border border-white/20 bg-transparent hover:bg-white/10 text-white"}`}>
@@ -252,9 +260,9 @@ export default function Landing() {
                 { n: "20", l: "per minute of an AI phone call" },
                 { n: "60", l: "per researched proposal deck" },
                 { n: "40", l: "per AI-generated carousel" },
-                { n: "25", l: "per AI image" },
-                { n: "5", l: "per enriched contact" },
-                { n: "1", l: "per AI email + EQ Score" },
+                { n: "5", l: "per AI-enriched lead or candidate score" },
+                { n: "2", l: "per WhatsApp broadcast message" },
+                { n: "1", l: "per AI email, SMS, or EQ Score" },
               ].map((c) => (
                 <div key={c.l}>
                   <div className="font-mono text-xl sm:text-2xl font-bold text-white">{c.n}</div>
@@ -263,7 +271,7 @@ export default function Landing() {
               ))}
             </div>
             <p className="text-[10px] sm:text-xs text-white/40 mt-5 sm:mt-6">
-              Exports, CRM writes and bookings are free — you're never charged to read your own data.
+              Exports, CRM writes, HR records, journal entries, and bookings are free — you're never charged to read your own data.
               Every plan starts with a 14-day trial and 500 credits, no card required.
             </p>
           </div>
@@ -275,7 +283,7 @@ export default function Landing() {
         <div className="max-w-3xl mx-auto text-center">
           <InnoiraLogo size="lg" variant="light" className="mx-auto" />
           <p className="mt-6 text-white/70 text-sm sm:text-base">
-            Put six agents on your pipeline this afternoon. Free for 14 days, no card.
+            Put ten agents on your pipeline this afternoon. Free for 14 days, no card.
           </p>
           <Link to="/signup" data-testid="footer-cta-start" className="btn-primary mt-8 inline-flex">
             Start free <ArrowRight size={14} />
@@ -286,7 +294,7 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-white/10 py-8 sm:py-10 px-6 sm:px-8 animate-fade-up bg-ink">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] sm:text-xs text-white/40 font-mono uppercase tracking-widest">
-          <div>© Innoira Consulting Services · Agentic Suite</div>
+          <div>© INNOIRA Consulting Services 2026 · CONFIDENTIAL</div>
           <div className="flex gap-6 text-white/40">
             <a href="#" className="hover:text-white transition-colors">Privacy</a>
             <a href="#" className="hover:text-white transition-colors">Terms</a>

@@ -127,6 +127,12 @@ ACTION_LABELS = {
     "site_crawl": "Website crawled",
     "site_chat_reply": "Site chat reply",
     "email_ai": "AI email / EQ score",
+    "whatsapp_broadcast_send": "WhatsApp message sent",
+    "whatsapp_reply_suggest": "WhatsApp AI reply suggested",
+    "sms_broadcast_send": "SMS sent",
+    "sms_reply_suggest": "SMS AI reply suggested",
+    "candidate_score": "Candidate AI-scored",
+    "bill_categorize_suggest": "Bill category suggested",
 }
 
 ACTION_AGENT = {
@@ -145,6 +151,12 @@ ACTION_AGENT = {
     "booking_qualify": "schedule",
     "next_best_action": "voice",
     "email_ai": "pitch",
+    "whatsapp_broadcast_send": "whatsapp",
+    "whatsapp_reply_suggest": "whatsapp",
+    "sms_broadcast_send": "sms",
+    "sms_reply_suggest": "sms",
+    "candidate_score": "hrms",
+    "bill_categorize_suggest": "accounting",
 }
 
 

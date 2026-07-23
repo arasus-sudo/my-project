@@ -10,6 +10,7 @@ import {
   FileText, BarChart3, UsersRound, ShieldCheck, Image as ImageIcon, ChevronDown, Layers, Webhook, Link2,
   Bot, PhoneCall, History, Radio, CalendarClock, CalendarCheck, CalendarRange, FileBarChart, Tags,
   Share2, PenSquare, ListChecks, LayoutGrid, Menu, X, Search, Upload, Globe, Loader2,
+  MessageSquare, Building2, Briefcase, BookOpen, DollarSign, FileDown, Scale, TrendingUp,
 } from "lucide-react";
 
 const FONT_FAMILIES = {
@@ -86,6 +87,44 @@ const SITE_NAV = [
   { to: "/app/site-eq/analytics", label: "Analytics", icon: BarChart3, tid: "site-nav-analytics" },
 ];
 
+const SMS_NAV = [
+  { to: "/app/sms-eq", label: "Overview", icon: LayoutDashboard, end: true, tid: "sms-nav-overview" },
+  { to: "/app/sms-eq/templates", label: "Templates", icon: FileText, tid: "sms-nav-templates" },
+  { to: "/app/sms-eq/inbox", label: "Inbox", icon: InboxIcon, tid: "sms-nav-inbox" },
+  { to: "/app/sms-eq/broadcasts", label: "Broadcasts", icon: Send, tid: "sms-nav-broadcasts" },
+  { to: "/app/sms-eq/contacts", label: "Contacts", icon: Users, tid: "sms-nav-contacts" },
+  { to: "/app/sms-eq/settings", label: "Settings", icon: SettingsIcon, tid: "sms-nav-settings" },
+];
+
+const WHATSAPP_NAV = [
+  { to: "/app/whatsapp-eq", label: "Overview", icon: LayoutDashboard, end: true, tid: "wa-nav-overview" },
+  { to: "/app/whatsapp-eq/templates", label: "Templates", icon: FileText, tid: "wa-nav-templates" },
+  { to: "/app/whatsapp-eq/inbox", label: "Inbox", icon: InboxIcon, tid: "wa-nav-inbox" },
+  { to: "/app/whatsapp-eq/broadcasts", label: "Broadcasts", icon: Send, tid: "wa-nav-broadcasts" },
+  { to: "/app/whatsapp-eq/contacts", label: "Contacts", icon: Users, tid: "wa-nav-contacts" },
+  { to: "/app/whatsapp-eq/settings", label: "Settings", icon: SettingsIcon, tid: "wa-nav-settings" },
+];
+
+const HRMS_NAV = [
+  { to: "/app/hrms-eq", label: "Overview", icon: LayoutDashboard, end: true, tid: "hrms-nav-overview" },
+  { to: "/app/hrms-eq/employees", label: "Employees", icon: Users, tid: "hrms-nav-employees" },
+  { to: "/app/hrms-eq/org-chart", label: "Org Chart", icon: Building2, tid: "hrms-nav-orgchart" },
+  { to: "/app/hrms-eq/recruitment", label: "Recruitment", icon: Briefcase, tid: "hrms-nav-recruitment" },
+  { to: "/app/hrms-eq/onboarding", label: "Onboarding", icon: ListChecks, tid: "hrms-nav-onboarding" },
+  { to: "/app/hrms-eq/leave", label: "Leave", icon: CalendarClock, tid: "hrms-nav-leave" },
+  { to: "/app/hrms-eq/reviews", label: "Reviews", icon: FileBarChart, tid: "hrms-nav-reviews" },
+];
+
+const ACCOUNTING_NAV = [
+  { to: "/app/accounting-eq", label: "Overview", icon: LayoutDashboard, end: true, tid: "acct-nav-overview" },
+  { to: "/app/accounting-eq/chart-of-accounts", label: "Chart of Accounts", icon: BookOpen, tid: "acct-nav-coa" },
+  { to: "/app/accounting-eq/journal-entries", label: "Journal Entries", icon: FileText, tid: "acct-nav-journal" },
+  { to: "/app/accounting-eq/customers", label: "Customers", icon: Users, tid: "acct-nav-customers" },
+  { to: "/app/accounting-eq/invoices", label: "Invoices", icon: DollarSign, tid: "acct-nav-invoices" },
+  { to: "/app/accounting-eq/bills", label: "Bills", icon: FileDown, tid: "acct-nav-bills" },
+  { to: "/app/accounting-eq/reports", label: "Reports", icon: BarChart3, tid: "acct-nav-reports" },
+];
+
 export const AGENTS = [
   // Pitch EQ must stay first: its root ("/app") is a prefix of every other
   // agent's routes too, so the matcher below deliberately skips it in the
@@ -108,9 +147,17 @@ export const AGENTS = [
     blurb: "Drafts and schedules posts — publishing always needs your approval." },
   { k: "site", label: "Site EQ", tag: "Website Chat", root: "/app/site-eq", nav: SITE_NAV, tid: "agent-site", icon: Globe,
     blurb: "A chat widget for your website — answers from your own content, hands off to a human when it can't." },
+  { k: "sms", label: "SMS EQ", tag: "Texting", root: "/app/sms-eq", nav: SMS_NAV, tid: "agent-sms", icon: MessageSquare,
+    blurb: "Broadcast messaging, two-way conversations, and contact management." },
+  { k: "whatsapp", label: "WhatsApp EQ", tag: "WhatsApp", root: "/app/whatsapp-eq", nav: WHATSAPP_NAV, tid: "agent-whatsapp", icon: MessageSquare,
+    blurb: "WhatsApp Business messaging, templates, and broadcasts." },
+  { k: "hrms", label: "HRMS EQ", tag: "HR", root: "/app/hrms-eq", nav: HRMS_NAV, tid: "agent-hrms", icon: Users,
+    blurb: "Employee lifecycle, recruitment, leave, and performance management." },
+  { k: "accounting", label: "Accounting EQ", tag: "Finance", root: "/app/accounting-eq", nav: ACCOUNTING_NAV, tid: "agent-accounting", icon: DollarSign,
+    blurb: "Double-entry ledger, invoicing, AP bills, and financial reports." },
 ];
 
-export const AGENT_BADGE = { crm: "M", pitch: "P", create: "C", voice: "V", schedule: "S", proposal: "R", social: "O", site: "W" };
+export const AGENT_BADGE = { crm: "M", pitch: "P", create: "C", voice: "V", schedule: "S", proposal: "R", social: "O", site: "W", sms: "T", whatsapp: "A", hrms: "H", accounting: "F" };
 
 export default function AppLayout() {
   const { user, workspace, logout } = useAuth();

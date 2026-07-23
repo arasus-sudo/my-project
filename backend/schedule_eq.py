@@ -79,6 +79,9 @@ class DurationOption(BaseModel):
 
 class EventTypeIn(BaseModel):
     name: str
+    category: str = "meeting"  # meeting | interview — lets other agents (e.g. HRMS EQ)
+                                # book through this same engine while staying filterable/
+                                # visually distinct from regular customer-facing meetings
     duration_minutes: int = 30
     description: str = ""
     location_type: str = "video"  # video | phone | in_person

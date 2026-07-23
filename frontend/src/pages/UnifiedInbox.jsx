@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
-import { Mail, Share2, Globe } from "lucide-react";
+import { Mail, Share2, Globe, Smartphone, Phone } from "lucide-react";
 
 /**
  * A cross-agent triage view — merges Pitch EQ's email inbox, Social EQ's
@@ -18,6 +18,8 @@ const CHANNEL_META = {
   email: { label: "Pitch EQ", icon: Mail, color: "bg-blue-500" },
   social: { label: "Social EQ", icon: Share2, color: "bg-pink-500" },
   site: { label: "Site EQ", icon: Globe, color: "bg-emerald-500" },
+  sms: { label: "SMS EQ", icon: Smartphone, color: "bg-neutral-500" },
+  whatsapp: { label: "WhatsApp EQ", icon: Phone, color: "bg-emerald-500" },
 };
 
 export default function UnifiedInbox() {
@@ -27,10 +29,12 @@ export default function UnifiedInbox() {
 
   useEffect(() => {
     const load = async () => {
-      const [emailRes, socialRes, siteRes] = await Promise.all([
+      const [emailRes, socialRes, siteRes, smsRes, whatsappRes] = await Promise.all([
         api.get("/inbox").catch(() => ({ data: [] })),
         api.get("/social-eq/inbox").catch(() => ({ data: [] })),
         api.get("/site-eq/conversations").catch(() => ({ data: [] })),
+        api.get("/sms-eq/conversations").catch(() => ({ data: [] })),
+        api.get("/whatsapp-eq/conversations").catch(() => ({ data: [] })),
       ]);
 
       const email = emailRes.data.map((c) => ({
@@ -63,25 +67,45 @@ export default function UnifiedInbox() {
         url: "/app/site-eq/inbox",
       }));
 
-      const merged = [...email, ...social, ...site].sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+      const sms = smsRes.data.map((c) => ({
+        channel: "sms", id: c.contact_id,
+        contactName: c.contact_name || c.phone || "Unknown",
+        contactMeta: c.phone || "",
+        preview: c.last_message || "",
+        needsAttention: (c.unread || 0) > 0,
+        at: c.updated_at || c.created_at,
+        url: "/app/sms-eq/inbox",
+      }));
+
+      const whatsapp = whatsappRes.data.map((c) => ({
+        channel: "whatsapp", id: c.contact_id,
+        contactName: c.contact_name || c.phone || "Unknown",
+        contactMeta: c.phone || "",
+        preview: c.last_message || "",
+        needsAttention: (c.unread || 0) > 0,
+        at: c.updated_at || c.created_at,
+        url: "/app/whatsapp-eq/inbox",
+      }));
+
+      const merged = [...email, ...social, ...site, ...sms, ...whatsapp].sort((a, b) => (b.at || "").localeCompare(a.at || ""));
       setItems(merged);
       setLoading(false);
     };
     load();
   }, []);
 
-  const filtered = items.filter((i) => filter === "all" || i.channel === filter);
-  const attentionCount = items.filter((i) => i.needsAttention).length;
+  const filtered = useMemo(() => items.filter((i) => filter === "all" || i.channel === filter), [items, filter]);
+  const attentionCount = useMemo(() => items.filter((i) => i.needsAttention).length, [items]);
 
   return (
     <div>
       <PageHeader
         title="Unified Inbox"
-        subtitle="Every email reply, social comment, and site chat that needs a response — one list, across every channel."
+        subtitle="Every email reply, SMS, WhatsApp message, social comment, and site chat — one list, across every channel."
       />
       <div className="animate-fade-in px-6 sm:px-8 space-y-4">
         <div className="flex flex-wrap gap-2">
-          {[["all", "All channels"], ["email", "Pitch EQ"], ["social", "Social EQ"], ["site", "Site EQ"]].map(([k, t]) => (
+          {[["all", "All channels"], ["email", "Pitch EQ"], ["social", "Social EQ"], ["site", "Site EQ"], ["sms", "SMS EQ"], ["whatsapp", "WhatsApp EQ"]].map(([k, t]) => (
             <button key={k} onClick={() => setFilter(k)} data-testid={`unified-filter-${k}`}
               className={`px-3 py-1.5 rounded-xl text-caption font-medium font-display transition-colors ${
                 filter === k ? "bg-accent-soft text-accent" : "text-ink-muted hover:bg-ash"

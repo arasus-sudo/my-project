@@ -413,6 +413,20 @@ export default function CampaignWizard() {
                 </div>
               )}
 
+              {campaign.sms_sequence?.length > 0 && (
+                <div className="card-floating p-5">
+                  <div className="text-card-title font-display font-semibold mb-4 flex items-center gap-2">
+                    <Smartphone size={16} /> SMS Sequence
+                  </div>
+                  {campaign.sms_sequence.map((sms, i) => (
+                    <div key={i} className="border border-line rounded-xl p-3 mb-2">
+                      <span className="pill">Day {sms.day}</span>
+                      <div className="text-caption mt-1">{sms.message}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {campaign.meeting_script?.discovery_questions?.length > 0 && (
                 <div className="card-floating p-5">
                   <div className="text-card-title font-display font-semibold mb-3">Meeting Script</div>

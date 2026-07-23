@@ -3160,6 +3160,10 @@ from pitch_eq import pitch_router, pitch_public_router
 from company_intel import router as company_intel_router
 from service_library import router as service_library_router
 from campaign_engine import router as campaign_engine_router
+from sms_eq import sms_router, sms_public_router
+from whatsapp_eq import whatsapp_router, whatsapp_public_router
+from hrms_eq import hrms_router
+from accounting_eq import accounting_router
 api.include_router(pitch_router)
 api.include_router(crm_router)
 api.include_router(pitch_public_router)
@@ -3179,6 +3183,12 @@ api.include_router(billing_public_router)
 api.include_router(company_intel_router)
 api.include_router(service_library_router)
 api.include_router(campaign_engine_router)
+api.include_router(sms_router)
+api.include_router(sms_public_router)
+api.include_router(whatsapp_router)
+api.include_router(whatsapp_public_router)
+api.include_router(hrms_router)
+api.include_router(accounting_router)
 
 # ── Lead Intelligence Provider Manager ──────────────────────────────
 from lead_intelligence import ProviderManager, ProspeoAdapter, IcypeasAdapter
@@ -3735,6 +3745,55 @@ async def _create_indexes():
         await db.activities.create_index([("workspace_id", 1), ("lead_id", 1), ("at", -1)])
         await db.lead_lists.create_index([("workspace_id", 1), ("id", 1)])
         await db.lead_lists.create_index([("workspace_id", 1), ("updated_at", -1)])
+        # -- SMS EQ indexes --
+        await db.sms_templates.create_index([("workspace_id", 1), ("id", 1)])
+        await db.sms_contacts.create_index([("workspace_id", 1), ("id", 1)])
+        await db.sms_contacts.create_index([("workspace_id", 1), ("phone", 1)], unique=True)
+        await db.sms_conversations.create_index([("workspace_id", 1), ("contact_id", 1)])
+        await db.sms_conversations.create_index([("workspace_id", 1), ("updated_at", -1)])
+        await db.sms_broadcasts.create_index([("workspace_id", 1), ("id", 1)])
+        await db.sms_broadcasts.create_index([("workspace_id", 1), ("status", 1)])
+        # -- WhatsApp EQ indexes --
+        await db.whatsapp_templates.create_index([("workspace_id", 1), ("id", 1)])
+        await db.whatsapp_templates.create_index([("workspace_id", 1), ("status", 1)])
+        await db.whatsapp_contacts.create_index([("workspace_id", 1), ("id", 1)])
+        await db.whatsapp_contacts.create_index([("workspace_id", 1), ("phone", 1)], unique=True)
+        await db.whatsapp_conversations.create_index([("workspace_id", 1), ("contact_id", 1)])
+        await db.whatsapp_conversations.create_index([("workspace_id", 1), ("session_status", 1), ("updated_at", -1)])
+        await db.whatsapp_broadcasts.create_index([("workspace_id", 1), ("id", 1)])
+        await db.whatsapp_broadcasts.create_index([("workspace_id", 1), ("status", 1)])
+        # -- HRMS EQ indexes --
+        await db.employees.create_index([("workspace_id", 1), ("id", 1)])
+        await db.employees.create_index([("workspace_id", 1), ("email", 1)], unique=True)
+        await db.employees.create_index([("workspace_id", 1), ("department_id", 1)])
+        await db.employees.create_index([("workspace_id", 1), ("status", 1)])
+        await db.departments.create_index([("workspace_id", 1), ("id", 1)])
+        await db.job_requisitions.create_index([("workspace_id", 1), ("id", 1)])
+        await db.job_requisitions.create_index([("workspace_id", 1), ("status", 1)])
+        await db.candidates.create_index([("workspace_id", 1), ("id", 1)])
+        await db.candidates.create_index([("workspace_id", 1), ("email", 1)], unique=True)
+        await db.candidates.create_index([("workspace_id", 1), ("requisition_id", 1)])
+        await db.onboarding_tasks.create_index([("workspace_id", 1), ("employee_id", 1)])
+        await db.leave_requests.create_index([("workspace_id", 1), ("id", 1)])
+        await db.leave_requests.create_index([("workspace_id", 1), ("employee_id", 1)])
+        await db.leave_requests.create_index([("workspace_id", 1), ("status", 1)])
+        await db.leave_balances.create_index([("workspace_id", 1), ("employee_id", 1), ("leave_type", 1)])
+        await db.performance_reviews.create_index([("workspace_id", 1), ("employee_id", 1)])
+        # -- Accounting EQ indexes --
+        await db.coa_accounts.create_index([("workspace_id", 1), ("id", 1)])
+        await db.coa_accounts.create_index([("workspace_id", 1), ("account_type", 1)])
+        await db.coa_accounts.create_index([("workspace_id", 1), ("category", 1)])
+        await db.journal_entries.create_index([("workspace_id", 1), ("id", 1)])
+        await db.journal_entries.create_index([("workspace_id", 1), ("date", -1)])
+        await db.journal_entries.create_index([("workspace_id", 1), ("lines.account_id", 1)])
+        await db.accounting_customers.create_index([("workspace_id", 1), ("id", 1)])
+        await db.accounting_invoices.create_index([("workspace_id", 1), ("id", 1)])
+        await db.accounting_invoices.create_index([("workspace_id", 1), ("status", 1)])
+        await db.accounting_invoices.create_index([("workspace_id", 1), ("customer_id", 1)])
+        await db.accounting_bills.create_index([("workspace_id", 1), ("id", 1)])
+        await db.accounting_bills.create_index([("workspace_id", 1), ("status", 1)])
+        await db.interview_bookings.create_index([("workspace_id", 1), ("id", 1)])
+        await db.interview_bookings.create_index([("workspace_id", 1), ("candidate_id", 1)])
         logger.info("indexes ensured")
     except Exception as ex:
         logger.warning("index setup: %s", ex)
@@ -3754,6 +3813,8 @@ async def _start_scheduler():
         from sender import run_send_tick, run_reply_tick
         from social_eq import run_social_publish_tick, run_social_engagement_tick, run_rss_poll_tick
         from site_eq import run_site_recrawl_tick
+        from sms_eq import run_sms_send_tick
+        from whatsapp_eq import run_whatsapp_send_tick
 
         scheduler = AsyncIOScheduler(timezone="UTC")
         # Every 15 min: any confirmed booking ~24h out gets one reminder. The job
@@ -3785,9 +3846,18 @@ async def _start_scheduler():
         # sites whose last crawl is 7+ days old.
         scheduler.add_job(run_site_recrawl_tick, "interval", hours=24,
                           id="site_recrawl", max_instances=1, coalesce=True)
+        # SMS broadcast send tick — drains queued SMS broadcasts at a human
+        # trickle (2/min, capped).
+        scheduler.add_job(run_sms_send_tick, "interval", minutes=2,
+                          id="sms_send", max_instances=1, coalesce=True)
+        # WhatsApp broadcast send tick — same trickle for WhatsApp template
+        # sends.
+        scheduler.add_job(run_whatsapp_send_tick, "interval", minutes=2,
+                          id="whatsapp_send", max_instances=1, coalesce=True)
         scheduler.start()
         logger.info("scheduler started (reminders 15m, sends 2m, reply polling 10m, "
-                   "social publish 2m, social engagement 10m, RSS poll 30m, site recrawl 24h)")
+                   "social publish 2m, social engagement 10m, RSS poll 30m, site recrawl 24h, "
+                   "sms send 2m, whatsapp send 2m)")
     except Exception as ex:
         logger.warning("scheduler failed to start: %s", ex)
 

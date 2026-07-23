@@ -27,7 +27,10 @@ if ($LASTEXITCODE -ne 0) { Write-Host "✗ Failed"; exit 1 }
 
 # ── 4. Set Startup & Config ──
 Write-Host "▶ [4/6] Configuring startup command..." -ForegroundColor Yellow
-az webapp config set --name $WebAppName --resource-group $ResourceGroup --startup-file "gunicorn --bind=0.0.0.0:8000 --workers=2 --timeout=120 server:app" --output table
+# NOTE: --workers=1 is required because the APScheduler runs in-process.
+# With 2+ workers, each gets its own scheduler instance, causing duplicate
+# background jobs and race conditions on the send queue.
+az webapp config set --name $WebAppName --resource-group $ResourceGroup --startup-file "gunicorn --bind=0.0.0.0:8000 --workers=1 --timeout=120 -k uvicorn.workers.UvicornWorker server:app" --output table
 
 Write-Host "▶ Setting Python version..." -ForegroundColor Yellow
 az webapp config set --name $WebAppName --resource-group $ResourceGroup --linux-fx-version "PYTHON|3.11" --output table
@@ -56,26 +59,38 @@ Write-Host ""
 Write-Host "▶ [6/6] Configure environment variables" -ForegroundColor Yellow
 Write-Host "Enter your API keys (leave blank to skip):" -ForegroundColor Gray
 
-$mongodb = Read-Host "MONGODB_URI (e.g. mongodb+srv://user:pass@cluster.mongodb.net/innoira)"
+$mongodb = Read-Host "MONGO_URL (e.g. mongodb+srv://user:pass@cluster.mongodb.net/innoira?retryWrites=true&w=majority)"
+$dbName = Read-Host "DB_NAME [pitcheq_dev]"
 $anthropic = Read-Host "ANTHROPIC_API_KEY"
 $prospeo = Read-Host "PROSPEO_API_KEY"
 $icypeasKey = Read-Host "ICYPEAS_API_KEY"
 $icypeasSecret = Read-Host "ICYPEAS_API_SECRET"
 $jwt = if ((Read-Host "Auto-generate JWT_SECRET? (y/n)") -eq "y") { openssl rand -hex 32 } else { Read-Host "JWT_SECRET" }
+$baseUrl = Read-Host "PUBLIC_BASE_URL (e.g. https://innoira-api.azurewebsites.net)"
 
 $settings = @()
-if ($mongodb) { $settings += "MONGODB_URI=$mongodb" }
+if ($mongodb) { $settings += "MONGO_URL=$mongodb" }
+if ($dbName) { $settings += "DB_NAME=$dbName" } else { $settings += "DB_NAME=pitcheq_dev" }
 if ($anthropic) { $settings += "ANTHROPIC_API_KEY=$anthropic" }
 if ($prospeo) { $settings += "PROSPEO_API_KEY=$prospeo" }
 if ($icypeasKey) { $settings += "ICYPEAS_API_KEY=$icypeasKey" }
 if ($icypeasSecret) { $settings += "ICYPEAS_API_SECRET=$icypeasSecret" }
 if ($jwt) { $settings += "JWT_SECRET=$jwt" }
+if ($baseUrl) { $settings += "PUBLIC_BASE_URL=$baseUrl" }
+$settings += "ENV=production"
 $settings += "PORT=8000"
 $settings += "PYTHONPATH=/home/site/wwwroot"
 
 if ($settings.Count -gt 0) {
     Write-Host "Setting app configuration..." -ForegroundColor Yellow
     az webapp config appsettings set --name $WebAppName --resource-group $ResourceGroup --settings $settings --output table
+}
+
+# ── 6b. Enable Always On (required for background scheduler) ──
+Write-Host "▶ Enabling Always On (required for background scheduler)..." -ForegroundColor Yellow
+az webapp config set --name $WebAppName --resource-group $ResourceGroup --always-on true --output table 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  ⚠ Always On requires Basic tier (B1) or above. If you're on Free (F1), upgrade to B1 for background jobs to work." -ForegroundColor Yellow
 }
 
 # ── Done ──
@@ -87,5 +102,12 @@ Write-Host "║  URL: https://$WebAppName.azurewebsites.net" -ForegroundColor Gr
 Write-Host "║  Docs: https://$WebAppName.azurewebsites.net/docs" -ForegroundColor Green
 Write-Host "╚══════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
-Write-Host "To verify:" -ForegroundColor Cyan
-Write-Host "  curl https://$WebAppName.azurewebsites.net/api/health" -ForegroundColor Gray
+Write-Host "IMPORTANT — Post-deploy checks:" -ForegroundColor Cyan
+Write-Host "  1. Verify Always On is enabled in Portal → App Service → Configuration → General settings" -ForegroundColor Gray
+Write-Host "     (Required for email scheduler + other background jobs to keep running)" -ForegroundColor Gray
+Write-Host "  2. Check Log Stream to confirm scheduler started:" -ForegroundColor Gray
+Write-Host "     az webapp log tail --name $WebAppName --resource-group $ResourceGroup" -ForegroundColor Gray
+Write-Host "  3. Test health endpoint:" -ForegroundColor Gray
+Write-Host "     curl https://$WebAppName.azurewebsites.net/api/health" -ForegroundColor Gray
+Write-Host "  4. Verify env vars are set:" -ForegroundColor Gray
+Write-Host "     az webapp config appsettings list --name $WebAppName --resource-group $ResourceGroup --query '[].name' -o tsv" -ForegroundColor Gray
