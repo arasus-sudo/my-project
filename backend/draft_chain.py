@@ -198,10 +198,8 @@ def to_html(final: Dict[str, Any], signature: str = "") -> str:
     if final.get("cta"):
         parts.append(f'<p style="{_P_STYLE}">{_esc(final["cta"])}</p>')
     if signature:
-        # A signature is multi-line by nature; HTML collapses newlines, so they
-        # have to become <br> or the whole block renders as one run-on line.
-        sig = "<br>".join(_esc(line) for line in str(signature).splitlines() if line.strip())
-        parts.append(f'<p style="{_SIG_STYLE}">{sig}</p>')
+        # Signature is user-authored HTML — preserve formatting and images.
+        parts.append(f'<div style="{_SIG_STYLE}">{signature}</div>')
     parts.append("</div>")
     return "\n".join(parts)
 

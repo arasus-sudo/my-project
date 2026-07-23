@@ -76,11 +76,6 @@ export default function CampaignBuilder() {
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [signatureName, setSignatureName] = useState("");
   const [signatureHtml, setSignatureHtml] = useState("");
-  const [sigSenderName, setSigSenderName] = useState("");
-  const [sigTitle, setSigTitle] = useState("");
-  const [sigCompany, setSigCompany] = useState("");
-  const [sigEmail, setSigEmail] = useState("");
-  const [sigPhone, setSigPhone] = useState("");
   const [savingSignature, setSavingSignature] = useState(false);
   
   const [leadLists, setLeadLists] = useState([]);
@@ -172,27 +167,17 @@ export default function CampaignBuilder() {
   }, []);
 
   // Signature CRUD
-  const buildSignatureHtml = () => {
-    const parts = [];
-    if (sigSenderName) parts.push(`<strong>${sigSenderName}</strong>`);
-    if (sigTitle) parts.push(sigTitle);
-    if (sigCompany) parts.push(sigCompany);
-    if (sigEmail) parts.push(`<a href="mailto:${sigEmail}" style="color:inherit;text-decoration:none">${sigEmail}</a>`);
-    if (sigPhone) parts.push(sigPhone);
-    return parts.join('<br>');
-  };
-
   const createSignature = async () => {
     if (!signatureName.trim()) { toast.error("Name is required"); return; }
+    if (!signatureHtml.trim()) { toast.error("Signature content is required"); return; }
     setSavingSignature(true);
     try {
-      const html = buildSignatureHtml();
-      const text = [sigSenderName, sigTitle, sigCompany, sigEmail, sigPhone].filter(Boolean).join('\n');
-      const { data } = await api.post("/signatures", { name: signatureName, content_html: html, content_text: text });
+      const txt = signatureHtml.replace(/<[^>]+>/g, '').trim();
+      const { data } = await api.post("/signatures", { name: signatureName, content_html: signatureHtml, content_text: txt });
       setSignatures((prev) => [data, ...prev]);
       setSignatureId(data.id);
       setShowSignatureModal(false);
-      setSignatureName(""); setSigSenderName(""); setSigTitle(""); setSigCompany(""); setSigEmail(""); setSigPhone("");
+      setSignatureName(""); setSignatureHtml("");
       toast.success("Signature created");
     } catch { toast.error("Failed to create signature"); }
     finally { setSavingSignature(false); }
@@ -1049,7 +1034,7 @@ export default function CampaignBuilder() {
           {/* Signature modal */}
           {showSignatureModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowSignatureModal(false)}>
-              <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-2xl mx-4" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-4">
                   <div className="text-section font-display font-semibold">Create Signature</div>
                   <button onClick={() => setShowSignatureModal(false)} className="btn-ghost text-xs">Close</button>
@@ -1058,22 +1043,15 @@ export default function CampaignBuilder() {
                   <input value={signatureName} onChange={(e) => setSignatureName(e.target.value)}
                     className="w-full border border-line rounded-xl px-3 py-2 text-input"
                     placeholder="Signature name (e.g. My Standard Signature)" />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <input value={sigSenderName} onChange={(e) => setSigSenderName(e.target.value)}
-                      className="w-full border border-line rounded-xl px-3 py-2 text-input" placeholder="Your name" />
-                    <input value={sigTitle} onChange={(e) => setSigTitle(e.target.value)}
-                      className="w-full border border-line rounded-xl px-3 py-2 text-input" placeholder="Title" />
-                    <input value={sigCompany} onChange={(e) => setSigCompany(e.target.value)}
-                      className="w-full border border-line rounded-xl px-3 py-2 text-input" placeholder="Company" />
-                    <input value={sigEmail} onChange={(e) => setSigEmail(e.target.value)}
-                      className="w-full border border-line rounded-xl px-3 py-2 text-input" placeholder="Email" />
-                    <input value={sigPhone} onChange={(e) => setSigPhone(e.target.value)}
-                      className="w-full border border-line rounded-xl px-3 py-2 text-input" placeholder="Phone (optional)" />
-                  </div>
-                  {(sigSenderName || sigTitle || sigCompany || sigEmail || sigPhone) && (
+                  <RichEmailEditor
+                    value={signatureHtml}
+                    onChange={setSignatureHtml}
+                    placeholder="Paste or compose your signature here — add images, links, and formatting..."
+                  />
+                  {signatureHtml && (
                     <div className="bg-bone border border-line rounded-xl p-3 text-body">
                       <div className="text-tiny font-mono uppercase text-ink-muted mb-1">Preview</div>
-                      <div className="border-t border-line pt-2 mt-1" dangerouslySetInnerHTML={{ __html: buildSignatureHtml() }} />
+                      <div className="border-t border-line pt-2 mt-1 signature-preview" dangerouslySetInnerHTML={{ __html: signatureHtml }} />
                     </div>
                   )}
                   <div className="flex justify-end gap-2">

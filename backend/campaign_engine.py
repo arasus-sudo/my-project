@@ -354,11 +354,12 @@ async def generate_campaign(body: CampaignGenerateIn, user=Depends(current_user)
     signature_id = None
     if body.signature:
         signature_id = new_id()
+        html = body.signature if "<" in body.signature else body.signature.replace("\n", "<br>")
         await db.signatures.insert_one({
             "id": signature_id,
             "workspace_id": user["workspace_id"],
             "name": f"{camp_name} signature",
-            "content_html": body.signature.replace("\n", "<br>"),
+            "content_html": html,
             "content_text": body.signature,
             "is_default": False,
             "created_at": now_iso(),

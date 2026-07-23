@@ -1,13 +1,16 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
+import Image from "@tiptap/extension-image";
 import DOMPurify from "dompurify";
 import {
   Bold, Italic, List, ListOrdered, Link2, Unlink, Undo2, Redo2, Braces,
+  ImagePlus, Loader2,
 } from "lucide-react";
+import { api } from "../lib/api";
+import { toast } from "sonner";
 
-/** The merge fields the sender substitutes at send time (see sender._render). */
 export const MERGE_FIELDS = [
   { token: "{{first_name}}", label: "First name" },
   { token: "{{last_name}}", label: "Last name" },
@@ -16,21 +19,10 @@ export const MERGE_FIELDS = [
   { token: "{{personalized_opener}}", label: "Opener" },
 ];
 
-/** We now store and send HTML, so this is the XSS boundary. Everything is
- *  sanitized on the way in AND on the way out — a draft can arrive from the LLM,
- *  from a paste, or from the database, and none of those are trusted. */
-const ALLOWED_TAGS = ["div", "p", "br", "strong", "em", "b", "i", "u", "ul", "ol", "li", "a", "span"];
-const ALLOWED_ATTR = ["href", "target", "rel", "class", "style"];
+const ALLOWED_TAGS = ["div", "p", "br", "strong", "em", "b", "i", "u", "ul", "ol", "li", "a", "span", "img"];
+const ALLOWED_ATTR = ["href", "target", "rel", "class", "style", "src", "alt", "width", "height"];
 
-// `style` is required so the draft chain's inline-styled typography (real font
-// stack, line-height, paragraph spacing — see draft_chain.to_html) survives
-// loading into the editor. DOMPurify doesn't restrict style *properties* by
-// default once the attribute is allowed, so a property allowlist runs as a
-// second layer: it can only ever narrow a style attribute, never widen one, and
-// it's inert against anything that isn't a `style` value in the first place.
-// Registered once at module load — sanitizeEmailHtml runs on every keystroke,
-// and DOMPurify hooks are global, so adding it per-call would stack duplicates.
-const ALLOWED_STYLE_PROPS = /^(margin|padding|font-family|font-size|font-weight|line-height|color|border-top|text-align)/i;
+const ALLOWED_STYLE_PROPS = /^(margin|padding|font-family|font-size|font-weight|line-height|color|border-top|text-align|max-width)/i;
 DOMPurify.addHook("uponSanitizeAttribute", (_node, data) => {
   if (data.attrName !== "style") return;
   data.attrValue = data.attrValue
@@ -47,7 +39,6 @@ export function sanitizeEmailHtml(html) {
   return DOMPurify.sanitize(html || "", {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
-    // Block javascript:/data: URLs in links outright.
     ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|\{\{)/i,
   });
 }
@@ -59,7 +50,7 @@ function ToolBtn({ active, disabled, onClick, title, children, testid }) {
       title={title}
       data-testid={testid}
       disabled={disabled}
-      onMouseDown={(e) => e.preventDefault()}   // don't steal the selection
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       className={`p-1.5 rounded-md transition-colors disabled:opacity-30 ${
         active ? "bg-ink text-white" : "text-neutral-600 hover:bg-surfacehover"
@@ -71,15 +62,18 @@ function ToolBtn({ active, disabled, onClick, title, children, testid }) {
 }
 
 export default function RichEmailEditor({ value, onChange, placeholder = "Write your email…" }) {
+  const [uploading, setUploading] = useState(false);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: false,       // headings in a cold email look like a newsletter
+        heading: false,
         codeBlock: false,
         blockquote: false,
         horizontalRule: false,
       }),
       Link.configure({ openOnClick: false, autolink: true }),
+      Image.configure({ inline: false, allowBase64: true }),
     ],
     content: sanitizeEmailHtml(value) || "",
     editorProps: {
@@ -91,8 +85,6 @@ export default function RichEmailEditor({ value, onChange, placeholder = "Write 
     onUpdate: ({ editor: ed }) => onChange(sanitizeEmailHtml(ed.getHTML())),
   });
 
-  // Sync external changes (e.g. the AI draft chain replacing the body) without
-  // clobbering what the user is typing.
   useEffect(() => {
     if (!editor) return;
     const incoming = sanitizeEmailHtml(value) || "";
@@ -115,6 +107,28 @@ export default function RichEmailEditor({ value, onChange, placeholder = "Write 
 
   const insertField = useCallback((token) => {
     editor?.chain().focus().insertContent(token).run();
+  }, [editor]);
+
+  const insertImage = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/png,image/jpeg,image/gif,image/webp";
+    input.onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setUploading(true);
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const { data } = await api.post("/upload-image", fd);
+        editor?.chain().focus().setImage({ src: data.image_url }).run();
+      } catch (err) {
+        toast.error("Failed to upload image");
+      } finally {
+        setUploading(false);
+      }
+    };
+    input.click();
   }, [editor]);
 
   if (!editor) return null;
@@ -140,6 +154,13 @@ export default function RichEmailEditor({ value, onChange, placeholder = "Write 
           onClick={addLink}><Link2 size={14} /></ToolBtn>
         <ToolBtn testid="fmt-unlink" title="Remove link" disabled={!editor.isActive("link")}
           onClick={() => editor.chain().focus().unsetLink().run()}><Unlink size={14} /></ToolBtn>
+
+        <span className="w-px h-4 bg-line mx-1" />
+
+        <ToolBtn testid="fmt-image" title="Insert image" onClick={insertImage}
+          disabled={uploading}>
+          {uploading ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
+        </ToolBtn>
 
         <span className="w-px h-4 bg-line mx-1" />
 

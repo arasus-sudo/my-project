@@ -5,7 +5,7 @@ campaigns, sequencer, leads, mailboxes, unified inbox, CRM pipeline, and a
 heuristic EQ Score engine (real LLM to be plugged in later).
 """
 
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request, status
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request, File, UploadFile, status
 from fastapi.responses import JSONResponse
 from fastapi.responses import Response, RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -1183,6 +1183,46 @@ async def update_lead_opener(cid: str, lead_id: str, body: Dict[str, Any], user=
         raise HTTPException(404, "Personalized email not found")
     await _audit(user, "campaign.lead.opener_updated", {"campaign_id": cid, "lead_id": lead_id})
     return {"status": "draft", "personalized_opener": new_opener, "body": merged_body}
+
+
+@api.post("/upload-image")
+async def upload_image(file: UploadFile = File(...), user=Depends(current_user)):
+    ALLOWED = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+    if file.content_type not in ALLOWED:
+        raise HTTPException(400, "Only PNG, JPEG, GIF, WebP allowed")
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Image too large (max 5 MB)")
+    image_id = new_id()
+    access_token = _secrets.token_urlsafe(24)
+    await db.uploaded_images.insert_one({
+        "id": image_id,
+        "workspace_id": user["workspace_id"],
+        "created_by": user["id"],
+        "data": data,
+        "mime_type": file.content_type,
+        "access_token": access_token,
+        "created_at": now_iso(),
+    })
+    base = (PUBLIC_BASE_URL or FRONTEND_URL).rstrip("/")
+    return {
+        "image_id": image_id,
+        "image_url": f"{base}/api/image/{image_id}?t={access_token}",
+    }
+
+
+@api.get("/image/{image_id}")
+async def serve_image(image_id: str, t: str = None,
+                      user: Optional[Dict] = Depends(current_user_optional)):
+    doc = await db.uploaded_images.find_one({"id": image_id})
+    if not doc:
+        raise HTTPException(404, "image not found")
+    authed = (user and user.get("workspace_id") == doc.get("workspace_id"))
+    token_match = t and t == doc.get("access_token")
+    if not authed and not token_match:
+        raise HTTPException(403, "forbidden")
+    return Response(content=doc["data"], media_type=doc.get("mime_type", "image/png"),
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 # ----------------------------- Signature Management ----------------------------
