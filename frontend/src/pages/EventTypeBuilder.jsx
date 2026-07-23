@@ -95,23 +95,23 @@ export default function EventTypeBuilder() {
               <div>
                 <label className="form-label block mb-1">Name</label>
                 <input value={et.name} onChange={(e) => patch("name", e.target.value)}
-                  data-testid="et-name" className="w-full border border-line px-3 py-2 rounded-sm text-input" />
+                  data-testid="et-name" className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink" />
               </div>
               <div>
                 <label className="form-label block mb-1">Description</label>
                 <textarea value={et.description} onChange={(e) => patch("description", e.target.value)}
-                  data-testid="et-description" rows={2} className="w-full border border-line px-3 py-2 rounded-sm text-input" />
+                  data-testid="et-description" rows={2} className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="form-label block mb-1">Default duration (min)</label>
                   <input type="number" value={et.duration_minutes} onChange={(e) => patch("duration_minutes", Number(e.target.value) || 15)}
-                    data-testid="et-duration" className="w-full border border-line px-3 py-2 rounded-sm text-input" />
+                    data-testid="et-duration" className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink" />
                 </div>
                 <div>
                   <label className="form-label block mb-1">Location</label>
                   <select value={et.location_type} onChange={(e) => patch("location_type", e.target.value)}
-                    data-testid="et-location" className="w-full border border-line px-3 py-2 rounded-sm text-input">
+                    data-testid="et-location" className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink">
                     <option value="video">Video (Google Meet)</option>
                     <option value="phone">Phone</option>
                     <option value="in_person">In person</option>
@@ -120,30 +120,30 @@ export default function EventTypeBuilder() {
                 <div>
                   <label className="form-label block mb-1">Min notice (hrs)</label>
                   <input type="number" value={et.min_notice_hours} onChange={(e) => patch("min_notice_hours", Number(e.target.value) || 0)}
-                    data-testid="et-min-notice" className="w-full border border-line px-3 py-2 rounded-sm text-input" />
+                    data-testid="et-min-notice" className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink" />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="form-label block mb-1">Buffer before (min)</label>
                   <input type="number" value={et.buffer_before_minutes} onChange={(e) => patch("buffer_before_minutes", Number(e.target.value) || 0)}
-                    data-testid="et-buffer-before" className="w-full border border-line px-3 py-2 rounded-sm text-input" />
+                    data-testid="et-buffer-before" className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink" />
                 </div>
                 <div>
                   <label className="form-label block mb-1">Buffer after (min)</label>
                   <input type="number" value={et.buffer_after_minutes} onChange={(e) => patch("buffer_after_minutes", Number(e.target.value) || 0)}
-                    data-testid="et-buffer-after" className="w-full border border-line px-3 py-2 rounded-sm text-input" />
+                    data-testid="et-buffer-after" className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink" />
                 </div>
                 <div>
                   <label className="form-label block mb-1">Daily limit (0=∞)</label>
                   <input type="number" value={et.daily_limit} onChange={(e) => patch("daily_limit", Number(e.target.value) || 0)}
-                    data-testid="et-daily-limit" className="w-full border border-line px-3 py-2 rounded-sm text-input" />
+                    data-testid="et-daily-limit" className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink" />
                 </div>
               </div>
               <div>
                 <label className="form-label block mb-1">Date range (days ahead)</label>
                 <input type="number" value={et.date_range_days} onChange={(e) => patch("date_range_days", Number(e.target.value) || 7)}
-                  className="w-full border border-line px-3 py-2 rounded-sm text-input" />
+                  className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink" />
               </div>
             </div>
 
@@ -159,10 +159,10 @@ export default function EventTypeBuilder() {
                   <div key={i} className="flex items-center gap-2">
                     <input placeholder="Label (e.g. Quick chat)" value={opt.label || ""}
                       onChange={(e) => { const next = [...et.duration_options]; next[i] = { ...next[i], label: e.target.value }; patch("duration_options", next); }}
-                      className="flex-1 border border-line px-2 py-1.5 rounded-sm text-input" />
+                      className="flex-1 border border-line px-2 py-1.5 rounded-sm text-input text-ink" />
                     <input type="number" placeholder="Minutes" value={opt.minutes || 15}
                       onChange={(e) => { const next = [...et.duration_options]; next[i] = { ...next[i], minutes: Number(e.target.value) || 15 }; patch("duration_options", next); }}
-                      className="w-20 border border-line px-2 py-1.5 rounded-sm text-input" />
+                      className="w-20 border border-line px-2 py-1.5 rounded-sm text-input text-ink" />
                     <button onClick={() => patch("duration_options", et.duration_options.filter((_, x) => x !== i))}
                       className="text-ink-muted hover:text-danger"><Trash2 size={14} /></button>
                   </div>
@@ -206,39 +206,39 @@ export default function EventTypeBuilder() {
                       className="w-10 h-10 rounded cursor-pointer border border-line" />
                     <input value={et.branding?.primary_color || "#141414"}
                       onChange={(e) => patchBranding("primary_color", e.target.value)}
-                      className="flex-1 border border-line px-3 py-2 rounded-sm text-input font-mono" />
+                      className="flex-1 border border-line px-3 py-2 rounded-sm text-input text-ink font-mono" />
                   </div>
                 </div>
                 <div>
                   <label className="form-label block mb-1">Button text</label>
                   <input value={et.branding?.button_text || "Confirm booking"}
                     onChange={(e) => patchBranding("button_text", e.target.value)}
-                    className="w-full border border-line px-3 py-2 rounded-sm text-input" />
+                    className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink" />
                 </div>
               </div>
               <div>
                 <label className="form-label block mb-1">Logo URL</label>
                 <input value={et.branding?.logo_url || ""} onChange={(e) => patchBranding("logo_url", e.target.value)}
                   placeholder="https://example.com/logo.png"
-                  className="w-full border border-line px-3 py-2 rounded-sm text-input" />
+                  className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink" />
               </div>
               <div>
                 <label className="form-label block mb-1">Custom message (shown below event info)</label>
                 <textarea value={et.branding?.custom_message || ""} onChange={(e) => patchBranding("custom_message", e.target.value)}
                   rows={2} placeholder="e.g. We're excited to meet you!"
-                  className="w-full border border-line px-3 py-2 rounded-sm text-input" />
+                  className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink" />
               </div>
               <div>
                 <label className="form-label block mb-1">Confirmation message (shown after booking)</label>
                 <textarea value={et.branding?.confirmation_message || ""} onChange={(e) => patchBranding("confirmation_message", e.target.value)}
                   rows={2} placeholder="e.g. See you soon!"
-                  className="w-full border border-line px-3 py-2 rounded-sm text-input" />
+                  className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink" />
               </div>
               <div>
                 <label className="form-label block mb-1">Custom domain (optional)</label>
                 <input value={et.branding?.custom_domain || ""} onChange={(e) => patchBranding("custom_domain", e.target.value)}
                   placeholder="book.yourdomain.com"
-                  className="w-full border border-line px-3 py-2 rounded-sm text-input" />
+                  className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink" />
               </div>
             </div>
           </div>
@@ -259,13 +259,13 @@ export default function EventTypeBuilder() {
                   <div key={i} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center p-2 bg-neutral-50 rounded-lg">
                     <input placeholder="Field key" value={f.key}
                       onChange={(e) => { const next = [...et.form_fields]; next[i] = { ...next[i], key: e.target.value }; patch("form_fields", next); }}
-                      className="w-full sm:w-24 border border-line px-2 py-1.5 rounded-sm text-input font-mono" />
+                      className="w-full sm:w-24 border border-line px-2 py-1.5 rounded-sm text-input text-ink font-mono" />
                     <input placeholder="Label" value={f.label}
                       onChange={(e) => { const next = [...et.form_fields]; next[i] = { ...next[i], label: e.target.value }; patch("form_fields", next); }}
-                      className="flex-1 border border-line px-2 py-1.5 rounded-sm text-input" />
+                      className="flex-1 border border-line px-2 py-1.5 rounded-sm text-input text-ink" />
                     <select value={f.type || "string"}
                       onChange={(e) => { const next = [...et.form_fields]; next[i] = { ...next[i], type: e.target.value }; patch("form_fields", next); }}
-                      className="w-full sm:w-28 border border-line px-2 py-1.5 rounded-sm text-input">
+                      className="w-full sm:w-28 border border-line px-2 py-1.5 rounded-sm text-input text-ink">
                       <option value="string">Text</option>
                       <option value="textarea">Long text</option>
                       <option value="phone">Phone</option>
@@ -295,9 +295,9 @@ export default function EventTypeBuilder() {
                 {et.qualifying_questions.map((q, i) => (
                   <div key={i} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
                     <input placeholder="key" value={q.key} onChange={(e) => { const next = [...et.qualifying_questions]; next[i] = { ...next[i], key: e.target.value }; patch("qualifying_questions", next); }}
-                      data-testid={`et-qfield-key-${i}`} className="w-full sm:w-28 border border-line px-2 py-1.5 rounded-sm text-input font-mono" />
+                      data-testid={`et-qfield-key-${i}`} className="w-full sm:w-28 border border-line px-2 py-1.5 rounded-sm text-input text-ink font-mono" />
                     <input placeholder="Question to ask" value={q.prompt} onChange={(e) => { const next = [...et.qualifying_questions]; next[i] = { ...next[i], prompt: e.target.value }; patch("qualifying_questions", next); }}
-                      data-testid={`et-qfield-prompt-${i}`} className="flex-1 border border-line px-2 py-1.5 rounded-sm text-input" />
+                      data-testid={`et-qfield-prompt-${i}`} className="flex-1 border border-line px-2 py-1.5 rounded-sm text-input text-ink" />
                     <button onClick={() => patch("qualifying_questions", et.qualifying_questions.filter((_, x) => x !== i))}
                       data-testid={`et-qfield-remove-${i}`} className="text-ink-muted hover:text-danger"><Trash2 size={14} /></button>
                   </div>
@@ -312,12 +312,12 @@ export default function EventTypeBuilder() {
                     <label className="form-label block mb-1">Low-score threshold (0=off)</label>
                     <input type="number" min={0} max={100} value={et.low_score_threshold}
                       onChange={(e) => patch("low_score_threshold", Number(e.target.value) || 0)}
-                      data-testid="et-low-score-threshold" className="w-full border border-line px-3 py-2 rounded-sm text-input" />
+                      data-testid="et-low-score-threshold" className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink" />
                   </div>
                   <div>
                     <label className="form-label block mb-1">Redirect URL for low scores</label>
                     <input value={et.low_score_redirect_url || ""} onChange={(e) => patch("low_score_redirect_url", e.target.value)}
-                      data-testid="et-low-score-redirect" placeholder="https://…" className="w-full border border-line px-3 py-2 rounded-sm text-input" />
+                      data-testid="et-low-score-redirect" placeholder="https://…" className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink" />
                   </div>
                 </div>
               )}
@@ -365,7 +365,7 @@ export default function EventTypeBuilder() {
                     <div key={i} className="flex items-center gap-2">
                       <input type="number" value={m}
                         onChange={(e) => { const next = [...et.reminder_config.minutes_before]; next[i] = Number(e.target.value) || 1440; patchReminder("minutes_before", next); }}
-                        className="w-24 border border-line px-2 py-1.5 rounded-sm text-input" />
+                        className="w-24 border border-line px-2 py-1.5 rounded-sm text-input text-ink" />
                       <span className="text-caption text-ink-muted">{m >= 1440 ? `${Math.round(m/1440)} day(s)` : m >= 60 ? `${Math.round(m/60)} hour(s)` : `${m} min`}</span>
                       {et.reminder_config.minutes_before.length > 1 && (
                         <button onClick={() => patchReminder("minutes_before", et.reminder_config.minutes_before.filter((_, x) => x !== i))}
@@ -388,7 +388,7 @@ export default function EventTypeBuilder() {
                 <label className="form-label block mb-1">Webhook URL (called on booking.created / cancelled / rescheduled)</label>
                 <input value={et.webhook_url || ""} onChange={(e) => patch("webhook_url", e.target.value)}
                   placeholder="https://hooks.example.com/calendar"
-                  className="w-full border border-line px-3 py-2 rounded-sm text-input" />
+                  className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink" />
               </div>
             </div>
           </div>

@@ -231,17 +231,17 @@ export default function BookingPage() {
                   <input required placeholder="Your name" value={form.guest_name}
                     onChange={(e) => setForm({ ...form, guest_name: e.target.value })}
                     data-testid="guest-name"
-                    className="w-full border border-line px-3 py-2.5 rounded-xl text-input focus:border-ink focus:outline-none transition-colors" />
+                    className="w-full border border-line px-3 py-2.5 rounded-xl text-input text-ink focus:border-ink focus:outline-none transition-colors" />
 
                   <input required type="email" placeholder="Email address" value={form.guest_email}
                     onChange={(e) => setForm({ ...form, guest_email: e.target.value })}
                     data-testid="guest-email"
-                    className="w-full border border-line px-3 py-2.5 rounded-xl text-input focus:border-ink focus:outline-none transition-colors" />
+                    className="w-full border border-line px-3 py-2.5 rounded-xl text-input text-ink focus:border-ink focus:outline-none transition-colors" />
 
                   <input placeholder="Phone (optional)" value={form.guest_phone}
                     onChange={(e) => setForm({ ...form, guest_phone: e.target.value })}
                     data-testid="guest-phone"
-                    className="w-full border border-line px-3 py-2.5 rounded-xl text-input focus:border-ink focus:outline-none transition-colors" />
+                    className="w-full border border-line px-3 py-2.5 rounded-xl text-input text-ink focus:border-ink focus:outline-none transition-colors" />
 
                   {/* Custom form fields */}
                   {et.form_fields?.map((field) => (
@@ -250,12 +250,12 @@ export default function BookingPage() {
                         <textarea placeholder={field.label} required={field.required}
                           value={formAnswers[field.key] || ""}
                           onChange={(e) => setFormAnswers({ ...formAnswers, [field.key]: e.target.value })}
-                          className="w-full border border-line px-3 py-2.5 rounded-xl text-input focus:border-ink focus:outline-none transition-colors" rows={2} />
+                          className="w-full border border-line px-3 py-2.5 rounded-xl text-input text-ink focus:border-ink focus:outline-none transition-colors" rows={2} />
                       ) : field.type === "dropdown" ? (
                         <select required={field.required}
                           value={formAnswers[field.key] || ""}
                           onChange={(e) => setFormAnswers({ ...formAnswers, [field.key]: e.target.value })}
-                          className="w-full border border-line px-3 py-2.5 rounded-xl text-input focus:border-ink focus:outline-none transition-colors">
+                          className="w-full border border-line px-3 py-2.5 rounded-xl text-input text-ink focus:border-ink focus:outline-none transition-colors">
                           <option value="">{field.label}</option>
                           {field.options?.map((opt) => (
                             <option key={opt} value={opt}>{opt}</option>
@@ -266,7 +266,7 @@ export default function BookingPage() {
                           placeholder={field.label} required={field.required}
                           value={formAnswers[field.key] || ""}
                           onChange={(e) => setFormAnswers({ ...formAnswers, [field.key]: e.target.value })}
-                          className="w-full border border-line px-3 py-2.5 rounded-xl text-input focus:border-ink focus:outline-none transition-colors" />
+                          className="w-full border border-line px-3 py-2.5 rounded-xl text-input text-ink focus:border-ink focus:outline-none transition-colors" />
                       )}
                     </div>
                   ))}
@@ -278,7 +278,7 @@ export default function BookingPage() {
                       <input value={answers[q.key] || ""}
                         onChange={(e) => setAnswers({ ...answers, [q.key]: e.target.value })}
                         data-testid={`qanswer-${q.key}`}
-                        className="w-full border border-line px-3 py-2.5 rounded-xl text-input focus:border-ink focus:outline-none transition-colors" />
+                        className="w-full border border-line px-3 py-2.5 rounded-xl text-input text-ink focus:border-ink focus:outline-none transition-colors" />
                     </div>
                   ))}
 

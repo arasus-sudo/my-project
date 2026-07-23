@@ -147,7 +147,7 @@ export default function ScheduleSettings() {
             <div className="relative">
               <select value={availability.timezone} onChange={(e) => setAvailability({ ...availability, timezone: e.target.value })}
                 data-testid="availability-timezone"
-                className="w-full border border-line px-3 py-2 rounded-sm text-input font-mono appearance-none pr-8">
+                className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink font-mono appearance-none pr-8">
                 {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
               </select>
               <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" size={14} />
@@ -166,11 +166,11 @@ export default function ScheduleSettings() {
                   {active && (
                     <>
                       <input type="time" value={window.start} onChange={(e) => updateWindow(d.key, "start", e.target.value)}
-                        data-testid={`day-start-${d.key}`} className="border border-line px-2 py-1 rounded-sm text-input min-w-0" />
+                        data-testid={`day-start-${d.key}`} className="border border-line px-2 py-1 rounded-sm text-input text-ink min-w-0" />
                       <span className="text-ink-muted hidden sm:inline">to</span>
                       <span className="text-ink-muted sm:hidden">—</span>
                       <input type="time" value={window.end} onChange={(e) => updateWindow(d.key, "end", e.target.value)}
-                        data-testid={`day-end-${d.key}`} className="border border-line px-2 py-1 rounded-sm text-input min-w-0" />
+                        data-testid={`day-end-${d.key}`} className="border border-line px-2 py-1 rounded-sm text-input text-ink min-w-0" />
                     </>
                   )}
                 </div>
