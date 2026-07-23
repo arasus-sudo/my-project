@@ -8,10 +8,14 @@ import GoogleSignInButton from "../components/GoogleSignInButton";
 const AGENT_LINES = [
   ["Pitch EQ", "cold email that reads human"],
   ["Voice EQ", "AI calls that qualify leads"],
+  ["WhatsApp EQ", "broadcasts + a live session inbox"],
+  ["SMS EQ", "text sequences, opt-outs handled"],
   ["Schedule EQ", "meetings that book themselves"],
   ["Proposal EQ", "decks drafted from your CRM"],
   ["Create EQ", "carousels & content on brand"],
   ["Social EQ", "posts queued, approved, shipped"],
+  ["HRMS EQ", "hiring, onboarding, reviews"],
+  ["Accounting EQ", "invoices, ledger, real reports"],
 ];
 
 export default function Login() {
@@ -40,14 +44,18 @@ export default function Login() {
       <div className="hidden md:flex md:w-1/2 border-r border-line p-16 flex-col justify-between bg-gradient-to-b from-white to-ash">
         <Link to="/"><InnoiraLogo size="sm" /></Link>
         <div>
-          <div className="ui-label text-ink mb-5">One login, every agent</div>
+          <div className="ui-label text-ink mb-5 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse-soft" />
+            One login, every agent
+          </div>
           <p className="font-display text-app-title leading-tight max-w-md">
-            Your AI revenue team is already at its desk.
+            Your AI team for the whole enterprise is already at its desk.
           </p>
-          <ul className="mt-8 space-y-2.5 text-body text-ink-muted">
-            {AGENT_LINES.map(([name, tag]) => (
-              <li key={name} className="flex gap-3 items-baseline">
-                <span className="font-display font-semibold text-ink w-28 shrink-0">{name}</span>
+          <ul className="mt-8 space-y-2 text-body text-ink-muted">
+            {AGENT_LINES.map(([name, tag], i) => (
+              <li key={name} className="flex gap-3 items-baseline animate-fade-up opacity-0"
+                style={{ animationDelay: `${i * 60}ms`, animationFillMode: "forwards" }}>
+                <span className="font-display font-semibold text-ink w-32 shrink-0">{name}</span>
                 <span>{tag}</span>
               </li>
             ))}

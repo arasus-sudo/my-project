@@ -806,6 +806,18 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
         {"id": cid},
         {"$push": {"personalized_emails": personalized}}
     )
+    await db.generated_emails.insert_one({
+        "id": new_id(), "workspace_id": wid,
+        "campaign_id": cid, "lead_id": lead_id, "step": 0,
+        "subject": step_template.get("subject", ""),
+        "body_html": merged_html, "body_text": merged_body,
+        "personalized_opener": personalized_opener,
+        "status": "draft", "source": "campaign_generation",
+        "generated_at": now_iso(), "sent_at": None,
+        "campaign_name": campaign.get("name", ""),
+        "lead_email": lead.get("email", ""),
+        "lead_name": f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip(),
+    })
     await _audit(user, "campaign.lead.email_generated", {"campaign_id": cid, "lead_id": lead_id})
     return personalized
 
@@ -918,6 +930,18 @@ async def generate_all_lead_emails(cid: str, user=Depends(current_user)):
                     "status": "draft", "generated_at": now_iso(),
                 }}}
             )
+            await db.generated_emails.insert_one({
+                "id": new_id(), "workspace_id": wid,
+                "campaign_id": cid, "lead_id": lid, "step": 0,
+                "subject": template_subject,
+                "body_html": merged_html, "body_text": merged_body,
+                "personalized_opener": personalized_opener,
+                "status": "draft", "source": "campaign_generation",
+                "generated_at": now_iso(), "sent_at": None,
+                "campaign_name": campaign.get("name", ""),
+                "lead_email": lead.get("email", ""),
+                "lead_name": f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip(),
+            })
             results.append(lid)
 
     outcomes = await asyncio.gather(*(_generate_one(lid) for lid in to_generate), return_exceptions=True)

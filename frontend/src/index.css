@@ -3,20 +3,63 @@
 @tailwind utilities;
 
 @layer base {
+  /* ---- Single light theme ----
+     Neutral bone/ash/line/ink scale (kept from the Dronea pass) with the
+     vivid blue accent restored — content/structure changes made under the
+     monochrome pivot are kept, only the accent color reverts.
+     All values are "R G B" triplets (no commas) so Tailwind's
+     `rgb(var(--x) / <alpha-value>)` pattern can apply opacity modifiers. */
   :root {
-    --radius: 0.5rem;
+    --radius: 0.75rem;
+    --color-bone: 250 250 250;              /* #FAFAFA page background */
+    --color-ash: 240 240 240;                /* #F0F0F0 section bg / zebra */
+    --color-line: 226 226 229;                /* #E2E2E5 hairline border */
+    --color-ink: 10 10 11;                    /* #0A0A0B near-black — primary text */
+    --color-ink-secondary: 58 58 62;          /* #3A3A3E */
+    --color-ink-tertiary: 110 110 115;        /* #6E6E73 */
+    --color-ink-muted: 142 142 147;           /* #8E8E93 */
+    --color-ink-disabled: 210 210 215;        /* #D2D2D7 */
+    --color-accent: 59 130 246;                /* #3B82F6 lighter vivid blue */
+    --color-accent-hover: 37 99 235;            /* #2563EB */
+    --color-accent-soft: 219 234 254;           /* #DBEAFE soft tint */
+    --color-accent-foreground: 255 255 255;
+    --color-brand-to: 109 94 245;              /* #6D5EF5 — deprecated gradient's "to" stop */
+    --color-success: 48 209 88;                /* #30D158 */
+    --color-warning: 255 159 10;               /* #FF9F0A */
+    --color-danger: 255 69 58;                 /* #FF453A */
+    --color-surface: 255 255 255;              /* #FFFFFF card/panel bg */
+    --color-surfacehover: 240 240 240;         /* #F0F0F0 */
+    --color-sanguine-hover: 0 0 0;
+    --color-neutral-50: 249 249 251;
+    --color-neutral-100: 245 245 247;
+    --color-neutral-200: 229 229 231;
+    --color-neutral-300: 210 210 215;
+    --color-neutral-400: 161 161 166;
+    --color-neutral-500: 142 142 147;
+    --color-neutral-600: 110 110 115;
+    --color-neutral-700: 72 72 74;
+    --color-neutral-800: 54 54 56;
+    --color-neutral-900: 29 29 31;
+    --color-neutral-950: 13 13 15;
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+    --shadow-card-hover: 0 2px 6px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.02);
+    --shadow-card-lg: 0 4px 14px rgba(0,0,0,0.05), 0 1px 4px rgba(0,0,0,0.02);
+    --shadow-nav: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+    --shadow-modal: 0 8px 24px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.03);
+    --shadow-float: 0 2px 10px rgba(0,0,0,0.05);
   }
+
   * { @apply border-line; }
   html { scroll-behavior: smooth; }
   body {
-    background-color: #F5F5F7;
-    color: #1D1D1F;
+    @apply bg-bone text-ink;
     font-family: "Inter", system-ui, -apple-system, sans-serif;
     font-size: 0.875rem;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     letter-spacing: 0;
     line-height: 1.5;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
   h1, h2, h3, h4, h5 {
     font-family: "Geist", system-ui, sans-serif;
@@ -24,8 +67,8 @@
     font-weight: 600;
     line-height: 1.2;
   }
-  ::selection { background: #3B82F6; color: #FFFFFF; }
-  :focus-visible { outline: 2px solid #3B82F6; outline-offset: 2px; border-radius: 6px; }
+  ::selection { @apply bg-accent text-white; }
+  :focus-visible { @apply outline-2 outline-accent; outline-style: solid; outline-offset: 2px; border-radius: 6px; }
 }
 
 @layer components {
@@ -35,18 +78,19 @@
   .bg-brand-gradient { background-image: linear-gradient(135deg, theme("colors.brand.from"), theme("colors.brand.to")); }
 
   /* Button typography: 14px Medium (500), Geist, no ALL CAPS — never font-semibold.
-     Flat brand color, subtle hover, no gradient/glow/exaggerated shadow. */
+     Pill-shaped (rounded-full), monochrome black fill — matches the Dronea
+     brand guide's black pill CTAs, no gradient/glow/exaggerated shadow. */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-accent text-white text-button font-medium font-display rounded-xl active:scale-[0.98] transition-colors duration-150 hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent/30;
+    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-accent text-white text-button font-medium font-display rounded-full active:scale-[0.98] transition-colors duration-150 hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent/30;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-white text-ink text-button font-medium font-display rounded-xl border border-line hover:border-ink/20 hover:bg-ash active:scale-[0.97] transition-all duration-200 shadow-sm;
+    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-surface text-ink text-button font-medium font-display rounded-full border border-line hover:border-ink/20 hover:bg-surfacehover active:scale-[0.97] transition-all duration-200 shadow-sm;
   }
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-ink-muted hover:text-ink hover:bg-ash rounded-xl transition-all duration-200 text-button font-medium font-display;
   }
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-danger text-white text-button font-medium font-display rounded-xl hover:opacity-90 active:scale-[0.97] transition-all duration-200;
+    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-danger text-white text-button font-medium font-display rounded-full hover:opacity-90 active:scale-[0.97] transition-all duration-200;
   }
   .btn-sm {
     @apply px-4 py-1.5 text-caption rounded-lg;
@@ -67,14 +111,14 @@
     @apply text-table font-medium font-display text-ink-tertiary;
   }
   .card-flat {
-    @apply bg-white border border-line rounded-2xl;
+    @apply bg-surface border border-line rounded-2xl;
   }
   /* Flat surface, tiny border, minimal shadow — no lift/dramatic depth. */
   .card-floating {
-    @apply bg-white border border-line rounded-2xl shadow-card transition-colors duration-150 hover:border-ink/15;
+    @apply bg-surface border border-line rounded-2xl shadow-card transition-colors duration-150 hover:border-ink/15;
   }
   .input-premium {
-    @apply w-full px-4 py-2.5 bg-white border border-line rounded-xl text-input text-ink placeholder:text-ink-muted focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/15 transition-all duration-200;
+    @apply w-full px-4 py-2.5 bg-surface border border-line rounded-xl text-input text-ink placeholder:text-ink-muted focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/15 transition-all duration-200;
   }
   .pill {
     @apply inline-flex items-center gap-1.5 px-3 py-1 text-tiny rounded-full bg-ash border border-line text-ink-muted font-medium font-display uppercase tracking-wider;
@@ -82,11 +126,20 @@
   .kbd {
     @apply font-mono text-caption px-1.5 py-0.5 border border-line rounded-lg bg-ash text-ink-muted;
   }
+  /* Visual-only — positioning (fixed/centered) is owned by the parent
+     <header> in Landing.jsx. Applying a second `fixed` + `left-1/2 +
+     -translate-x-1/2` here (on top of the header's own fixed box) put this
+     element in a separate shrink-to-fit positioning context whose width
+     calculation didn't reliably match its content, causing the nav items to
+     overlap at narrow widths. */
   .nav-floating {
-    @apply fixed top-3 left-1/2 -translate-x-1/2 z-50 bg-white/80 backdrop-blur-xl border border-line rounded-2xl shadow-nav transition-all duration-300;
+    @apply bg-surface/80 backdrop-blur-xl border border-line rounded-2xl shadow-nav transition-all duration-300;
   }
   .skeleton {
-    @apply bg-gradient-to-r from-ash via-white to-ash bg-[length:200%_100%] animate-shimmer rounded-lg;
+    @apply bg-gradient-to-r from-ash via-surfacehover to-ash bg-[length:200%_100%] animate-shimmer rounded-lg;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-orbit-slow, .animate-orbit-slow-reverse { animation: none; }
   }
   .badge {
     @apply inline-flex items-center gap-1 px-2 py-0.5 text-tiny font-medium font-display rounded-full;
@@ -99,23 +152,42 @@
   .divider { @apply h-px bg-line my-4; }
 }
 
-/* Marker-style headline highlights (Landing) — ink block on light sections,
-   white block on bg-ink sections. box-decoration-break keeps the padding on
-   every wrapped line, matching the selection-style look. */
-.hl-ink, .hl-white {
-  padding: 0.02em 0.18em;
+/* Marker-style headline highlights (Landing, etc.) — accent-blue chip as the
+   primary "pop" highlight, white/ink chip as the neutral alternative.
+   box-decoration-break keeps the padding on every wrapped line, matching the
+   selection-style look. */
+/* A `background-color` fill on an inline element paints its full em-box —
+   font ascent+descent, which is always taller than the actual glyph ink
+   (cap-height to baseline, plus a little for descenders like the comma in
+   "operation,"). No amount of padding/line-height tuning removes that gap,
+   since it's the font's own metrics, not spacing. The fix: paint a sized
+   `background-image` instead of `background-color` — height is an explicit
+   em value we control directly, independent of font ascent/descent, so it
+   can hug the glyphs exactly. `background-position` centers it slightly
+   below middle (caps extend further above baseline than descenders go
+   below). Horizontal padding stays for the "chip" look at the sides. */
+.hl-ink, .hl-white, .hl-accent {
+  padding: 0 0.1em;
+  background-repeat: no-repeat;
+  background-size: 100% 0.78em;
+  background-position: 0 58%;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
-.hl-ink { background: #1D1D1F; color: #FFFFFF; }
-.hl-white { background: #FFFFFF; color: #1D1D1F; }
-.hl-brand { background-image: linear-gradient(135deg, #3B82F6, #8B5CF6); color: #FFFFFF; }
+/* Theme-reactive: a filled ink-colored chip with page-bg text — near-black
+   chip/light text in light mode, near-white chip/dark text in dark mode. */
+.hl-ink { background-image: linear-gradient(rgb(var(--color-ink)), rgb(var(--color-ink))); color: rgb(var(--color-bone)); }
+/* Always a literal white chip (for text sitting on an already-dark bg-ink
+   block, regardless of theme) — deliberately not theme-reactive. */
+.hl-white { background-image: linear-gradient(#FFFFFF, #FFFFFF); color: #0A0A0B; }
+.hl-accent { background-image: linear-gradient(rgb(var(--color-accent)), rgb(var(--color-accent))); color: #FFFFFF; }
+.hl-brand { background-image: linear-gradient(135deg, rgb(var(--color-accent)), rgb(var(--color-brand-to))); color: #FFFFFF; }
 
-/* Feature-list bullet dot in the brand gradient (checklists, bullet lists) —
-   text stays dark ink per brand rule, only the marker carries the accent. */
+/* Feature-list bullet dot in accent (checklists, bullet lists) — text stays
+   ink per brand rule, only the marker carries the accent. */
 .bullet-brand {
   display: inline-block; width: 6px; height: 6px; border-radius: 9999px;
-  background-image: linear-gradient(135deg, #3B82F6, #8B5CF6);
+  background: rgb(var(--color-accent));
   flex-shrink: 0;
 }
 
@@ -128,8 +200,8 @@
 .prose-email strong { font-weight: 600; }
 .prose-email .signature { color: #6E6E73; }
 
-.recharts-cartesian-grid line { stroke: #E5E5E7; }
-.recharts-text { font-family: "JetBrains Mono", monospace; font-size: 11px; fill: #A1A1A6; }
+.recharts-cartesian-grid line { stroke: rgb(var(--color-line)); }
+.recharts-text { font-family: "JetBrains Mono", monospace; font-size: 11px; fill: rgb(var(--color-ink-muted)); }
 
 /* ---------------- Create EQ canvas (selection / interaction chrome) ----------
    The canvas is a fixed 1080×1350 div scaled by `transform: scale(zoom)`, so
@@ -157,10 +229,10 @@
 @keyframes creq-preview-fill { from { width: 0%; } to { width: 100%; } }
 
 @layer utilities {
-  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #E5E5E7 transparent; }
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: rgb(var(--color-line)) transparent; }
   .scrollbar-thin::-webkit-scrollbar { width: 4px; }
   .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-  .scrollbar-thin::-webkit-scrollbar-thumb { background: #E5E5E7; border-radius: 8px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: rgb(var(--color-line)); border-radius: 8px; }
   .animate-delay-100 { animation-delay: 0.1s; }
   .animate-delay-200 { animation-delay: 0.2s; }
   .animate-delay-300 { animation-delay: 0.3s; }

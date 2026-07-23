@@ -1,8 +1,10 @@
 // The wordmark asset is ~4:1 (cropped from the original square logo.png,
 // which carried ~77% transparent padding and made every square-box placement
 // render a tiny mark inside invisible whitespace). Sizes are heights; width
-// follows the image's own aspect. variant="light" swaps in the white-text
-// version for dark (bg-ink) surfaces.
+// follows the image's own aspect. Default is "dark" (black wordmark) since
+// the app is light-surfaced (Dronea brand guide, monochrome, no dark theme);
+// pass variant="light" explicitly for the rare on-black-panel context (e.g.
+// Landing's bg-ink closing CTA section).
 export default function InnoiraLogo({ size = "md", variant = "dark", className = "" }) {
   const dims = {
     xs: "h-5",

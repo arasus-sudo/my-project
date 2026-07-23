@@ -34,10 +34,10 @@ export default function Signup() {
         <div>
           <div className="ui-label text-ink mb-5">You're 60 seconds away</div>
           <p className="font-display text-app-title leading-tight max-w-md">
-            Six AI agents. One pipeline. Zero copy-pasting between tools.
+            Ten AI agents. One workspace. Zero copy-pasting between tools.
           </p>
           <ul className="mt-8 space-y-2 text-body text-ink-muted">
-            <li>→ Outbound email, AI calling, scheduling, proposals, content and social — under one login</li>
+            <li>→ Outbound, calling, WhatsApp/SMS, scheduling, proposals, content, social, HR and accounting — under one login</li>
             <li>→ A shared CRM every agent reads from and writes back to</li>
             <li>→ A qualified call can auto-draft the proposal and queue the booking link</li>
           </ul>

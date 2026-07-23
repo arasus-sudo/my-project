@@ -246,6 +246,7 @@ async def run_send_tick(base_url: str = "") -> int:
         "send_at": {"$lte": now.isoformat()},
     }, {"_id": 0}).sort("send_at", 1).to_list(MAX_PER_TICK * 4)
 
+    log.info("run_send_tick: found %s pending items", len(due))
     sent = 0
     for row in due:
         if sent >= MAX_PER_TICK:
@@ -255,20 +256,21 @@ async def run_send_tick(base_url: str = "") -> int:
             {"id": row["campaign_id"], "workspace_id": row["workspace_id"]}, {"_id": 0})
         if not campaign or campaign.get("status") != "active":
             await db.send_queue.update_one({"id": row["id"]}, {"$set": {"status": "cancelled"}})
+            log.info("run_send_tick: cancelled queue %s — campaign not active", row["id"])
             continue
 
-        # A reply cancels the rest of the sequence — nobody wants step 3 after
-        # they've already answered.
         replied = await db.events.count_documents({
             "workspace_id": row["workspace_id"], "lead_id": row["lead_id"], "type": "replied"})
         if replied:
             await db.send_queue.update_one({"id": row["id"]},
                                             {"$set": {"status": "cancelled", "error": "lead replied"}})
+            log.info("run_send_tick: cancelled queue %s — lead replied", row["id"])
             continue
 
         mailbox = await _pick_mailbox(row["workspace_id"])
         if not mailbox:
-            continue  # every mailbox capped out; try again next tick
+            log.info("run_send_tick: no eligible mailbox for workspace %s", row["workspace_id"])
+            continue
 
         # Claim it.
         claimed = await db.send_queue.find_one_and_update(
@@ -317,11 +319,26 @@ async def run_send_tick(base_url: str = "") -> int:
             "campaign_id": row["campaign_id"], "lead_id": row["lead_id"],
             "step": row["step"], "type": "sent", "at": now_iso(),
         })
+        await db.generated_emails.insert_one({
+            "id": new_id(), "workspace_id": row["workspace_id"],
+            "campaign_id": row["campaign_id"], "lead_id": row["lead_id"],
+            "step": row["step"], "subject": row.get("subject", ""),
+            "body_html": row.get("body_html", ""),
+            "body_text": row.get("body_text", ""),
+            "status": "sent", "source": "campaign_send",
+            "generated_at": row.get("created_at", now_iso()),
+            "sent_at": now_iso(),
+            "mailbox_email": mailbox.get("email", ""),
+            "campaign_name": (campaign or {}).get("name", ""),
+            "lead_email": lead.get("email", ""),
+            "lead_name": f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip(),
+        })
         await _log_activity(row["workspace_id"], row["lead_id"], "pitch", "email_sent",
                              f"Sent “{subject}” from {mailbox['email']}",
                              {"campaign_id": row["campaign_id"], "step": row["step"]})
         sent += 1
 
+    log.info("run_send_tick: sent %s email(s)", sent)
     return sent
 
 

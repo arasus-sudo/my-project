@@ -176,15 +176,15 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen flex bg-bone">
       <button onClick={() => setSidebarOpen(true)} data-testid="sidebar-open"
-        className="lg:hidden fixed top-4 left-4 z-50 p-2.5 bg-white/80 backdrop-blur-xl border border-line rounded-xl shadow-card hover:shadow-card-hover transition-all">
+        className="lg:hidden fixed top-4 left-4 z-50 p-2.5 bg-surface/80 backdrop-blur-xl border border-line rounded-xl shadow-card hover:shadow-card-hover transition-all">
         <Menu size={20} className="text-ink" />
       </button>
 
       {sidebarOpen && (
-        <div className="lg:hidden fixed inset-0 bg-black/20 backdrop-blur-sm z-40 animate-fade-in" onClick={closeSidebar} />
+        <div className="lg:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40 animate-fade-in" onClick={closeSidebar} />
       )}
 
-      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 border-r border-line bg-white flex flex-col transform transition-transform duration-300 ease-out ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
+      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 border-r border-line bg-surface flex flex-col transform transition-transform duration-300 ease-out ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
         <div className="p-5 border-b border-line relative">
           <button onClick={() => setOpen(!open)} data-testid="suite-switcher"
             className="w-full flex items-center gap-3 hover:bg-ash rounded-xl p-2 transition-colors">
@@ -197,7 +197,7 @@ export default function AppLayout() {
             <ChevronDown size={14} className={`text-ink-muted transition-transform duration-200 shrink-0 ${open ? "rotate-180" : ""}`} />
           </button>
           {open && (
-            <div className="absolute left-4 right-4 top-full mt-2 bg-white border border-line rounded-2xl shadow-card-lg z-30 overflow-hidden animate-scale-in origin-top">
+            <div className="absolute left-4 right-4 top-full mt-2 bg-surface border border-line rounded-2xl shadow-card-lg z-30 overflow-hidden animate-scale-in origin-top">
               {AGENTS.map((a) => (
                 <button key={a.k} onClick={() => { setOpen(false); nav(a.root); }} data-testid={a.tid}
                   className={`w-full text-left p-3 hover:bg-ash flex items-center gap-3 transition-colors ${a.k === currentAgent.k ? "bg-accent/5" : ""}`}>
@@ -306,7 +306,7 @@ function ContentLoader() {
 
 export function PageHeader({ title, subtitle, right, badge }) {
   return (
-    <div className="border-b border-line bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+    <div className="border-b border-line bg-surface/80 backdrop-blur-sm sticky top-0 z-10">
       {/* pl-16 below lg clears the fixed hamburger button (top-4 left-4, ~44px);
           actions stack under the title on phones instead of crushing it. */}
       <div className="pl-16 pr-6 sm:pr-8 lg:pl-8 py-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
