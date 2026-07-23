@@ -67,6 +67,10 @@ $icypeasKey = Read-Host "ICYPEAS_API_KEY"
 $icypeasSecret = Read-Host "ICYPEAS_API_SECRET"
 $jwt = if ((Read-Host "Auto-generate JWT_SECRET? (y/n)") -eq "y") { openssl rand -hex 32 } else { Read-Host "JWT_SECRET" }
 $baseUrl = Read-Host "PUBLIC_BASE_URL (e.g. https://innoira-api.azurewebsites.net)"
+$frontendUrl = Read-Host "FRONTEND_URL (e.g. https://innoira-app.azurewebsites.net)"
+$encKey = Read-Host "TOKEN_ENCRYPTION_KEY (from backend/.env — paste the full base64 value)"
+$googleId = Read-Host "GOOGLE_CLIENT_ID (from backend/.env, or skip to use mocked Gmail)"
+$googleSecret = Read-Host "GOOGLE_CLIENT_SECRET (from backend/.env, or skip to use mocked Gmail)"
 
 $settings = @()
 if ($mongodb) { $settings += "MONGO_URL=$mongodb" }
@@ -77,6 +81,11 @@ if ($icypeasKey) { $settings += "ICYPEAS_API_KEY=$icypeasKey" }
 if ($icypeasSecret) { $settings += "ICYPEAS_API_SECRET=$icypeasSecret" }
 if ($jwt) { $settings += "JWT_SECRET=$jwt" }
 if ($baseUrl) { $settings += "PUBLIC_BASE_URL=$baseUrl" }
+if ($frontendUrl) { $settings += "FRONTEND_URL=$frontendUrl" }
+if ($encKey) { $settings += "TOKEN_ENCRYPTION_KEY=$encKey" }
+if ($googleId) { $settings += "GOOGLE_CLIENT_ID=$googleId" }
+if ($googleSecret) { $settings += "GOOGLE_CLIENT_SECRET=$googleSecret" }
+if ($baseUrl) { $settings += "GOOGLE_REDIRECT_URI=${baseUrl}/api/mailbox/oauth/callback" }
 $settings += "ENV=production"
 $settings += "PORT=8000"
 $settings += "PYTHONPATH=/home/site/wwwroot"

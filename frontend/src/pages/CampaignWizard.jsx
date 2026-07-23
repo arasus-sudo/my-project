@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useEffect, useState, useRef } from "react";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
@@ -7,7 +7,7 @@ import {
   ArrowRight, ArrowLeft, Loader2, CheckCircle2, XCircle,
   Mail, MessageCircle, Phone, Globe, Smartphone, Target, Users,
   Building2, BookOpen, ChevronRight, Zap, ShieldCheck, AlertTriangle,
-  FileText, BarChart3, Play, Plus,
+  FileText, BarChart3, Play, Plus, Send,
 } from "lucide-react";
 
 const GOALS = [
@@ -43,12 +43,20 @@ const STEPS = ["Service", "Goal", "Audience", "Tone", "Channels", "Generate"];
 
 export default function CampaignWizard() {
   const nav = useNavigate();
+  const { id } = useParams();
   const [step, setStep] = useState(0);
   const [services, setServices] = useState([]);
   const [intel, setIntel] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [campaign, setCampaign] = useState(null);
+  const [leadLists, setLeadLists] = useState([]);
+  const [selectedListId, setSelectedListId] = useState("");
+  const [sendingChannel, setSendingChannel] = useState(null); // "whatsapp" | "sms" | null
+  // A ref, not just the state above: state updates aren't visible to a second
+  // click that lands in the same tick (e.g. a fast double-click before React
+  // re-renders the disabled button), which was creating duplicate templates.
+  const sendingRef = useRef(false);
 
   const [form, setForm] = useState({
     service_id: "",
@@ -71,6 +79,19 @@ export default function CampaignWizard() {
       setServices(svcRes.data.filter((s) => s.status !== "archived"));
       setIntel(intelRes.data || []);
     } catch { /* ignore */ }
+    api.get("/crm/lists").then((r) => setLeadLists(r.data || [])).catch(() => {});
+    if (id) {
+      try {
+        const { data } = await api.get(`/campaigns/${id}`);
+        // /campaigns/{id} returns the raw stored doc — the multi-channel
+        // sequence content this review screen renders lives nested under
+        // ai_meta, whereas /campaign-engine/generate's response has it
+        // flattened at the top level. Flatten the same way here so both
+        // entry points (fresh generation and revisiting a saved campaign)
+        // render identically.
+        setCampaign({ ...data, ...(data.ai_meta || {}) });
+      } catch { /* ignore — falls through to the wizard form */ }
+    }
     setLoading(false);
   };
 
@@ -105,10 +126,63 @@ export default function CampaignWizard() {
       });
       setCampaign(data.campaign);
       toast.success("Campaign generated!");
-      nav(`/app/campaigns/${data.campaign_id}`);
+      // Move the URL to the reviewable route (matching the id-aware load()
+      // effect above) without losing the campaign we already have in state —
+      // history.replaceState-style, so Back doesn't return to a blank wizard.
+      window.history.replaceState(null, "", `/app/campaigns/pro/${data.campaign_id}`);
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Generation failed");
     } finally { setGenerating(false); }
+  };
+
+  // Sends a generated day-by-day sequence to SMS EQ or WhatsApp EQ: one
+  // template + one draft broadcast per day, targeting the selected lead list.
+  // Broadcasts are created in "draft" status — nothing goes out until the
+  // user reviews and launches each one from that agent's own Broadcasts page,
+  // matching this app's existing approval-gated send pattern.
+  const sendSequence = async (channel) => {
+    if (sendingRef.current) return;
+    const sequence = channel === "whatsapp" ? campaign?.whatsapp_sequence : campaign?.sms_sequence;
+    if (!sequence?.length) return;
+    if (!selectedListId) {
+      toast.error("Pick a lead list first");
+      return;
+    }
+    sendingRef.current = true;
+    setSendingChannel(channel);
+    try {
+      const baseName = campaign?.name || campaign?.strategy?.campaign_name || "Campaign";
+      let created = 0;
+      for (const entry of sequence) {
+        const label = `${baseName} — Day ${entry.day}`;
+        if (channel === "whatsapp") {
+          const { data: template } = await api.post("/whatsapp-eq/templates", {
+            name: label, category: "marketing", language: "en", body_text: entry.message,
+          });
+          await api.post(`/whatsapp-eq/templates/${template.id}/submit`);
+          await api.post("/whatsapp-eq/broadcasts", {
+            name: label, template_id: template.id, list_id: selectedListId,
+          });
+        } else {
+          const { data: template } = await api.post("/sms-eq/templates", {
+            name: label, body: entry.message, category: "marketing",
+          });
+          await api.post("/sms-eq/broadcasts", {
+            name: label, template_id: template.id, list_id: selectedListId,
+          });
+        }
+        created += 1;
+      }
+      toast.success(`Created ${created} draft broadcast${created === 1 ? "" : "s"} in ${channel === "whatsapp" ? "WhatsApp EQ" : "SMS EQ"}`, {
+        description: "Review and launch each one from the Broadcasts page — nothing has sent yet.",
+      });
+      nav(`/app/${channel === "whatsapp" ? "whatsapp-eq" : "sms-eq"}/broadcasts`);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Failed to create broadcasts");
+    } finally {
+      sendingRef.current = false;
+      setSendingChannel(null);
+    }
   };
 
   const selectedService = services.find((s) => s.id === form.service_id);
@@ -399,10 +473,31 @@ export default function CampaignWizard() {
               {renderVoiceScript()}
               {renderObjections()}
 
+              {(campaign.whatsapp_sequence?.length > 0 || campaign.sms_sequence?.length > 0) && (
+                <div className="flex items-center gap-2 -mb-2">
+                  <span className="text-caption text-ink-muted">Send to:</span>
+                  <select value={selectedListId} onChange={(e) => setSelectedListId(e.target.value)}
+                    className="border border-line rounded-lg px-2 py-1.5 text-caption font-mono bg-white">
+                    <option value="">Choose a lead list…</option>
+                    {leadLists.map((lst) => (
+                      <option key={lst.id} value={lst.id}>{lst.name} ({lst.lead_count || (lst.lead_ids || []).length})</option>
+                    ))}
+                  </select>
+                  {leadLists.length === 0 && (
+                    <Link to="/app/crm/lists" className="text-caption text-accent hover:underline">Create a lead list first</Link>
+                  )}
+                </div>
+              )}
+
               {campaign.whatsapp_sequence?.length > 0 && (
                 <div className="card-floating p-5">
-                  <div className="text-card-title font-display font-semibold mb-4 flex items-center gap-2">
-                    <Phone size={16} /> WhatsApp Sequence
+                  <div className="text-card-title font-display font-semibold mb-4 flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2"><Phone size={16} /> WhatsApp Sequence</span>
+                    <button onClick={() => sendSequence("whatsapp")} disabled={sendingChannel !== null || !campaign.whatsapp_sequence.length}
+                      className="btn-secondary text-xs" data-testid="send-whatsapp-sequence">
+                      {sendingChannel === "whatsapp" ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                      Send via WhatsApp EQ
+                    </button>
                   </div>
                   {campaign.whatsapp_sequence.map((wa, i) => (
                     <div key={i} className="border border-line rounded-xl p-3 mb-2">
@@ -415,8 +510,13 @@ export default function CampaignWizard() {
 
               {campaign.sms_sequence?.length > 0 && (
                 <div className="card-floating p-5">
-                  <div className="text-card-title font-display font-semibold mb-4 flex items-center gap-2">
-                    <Smartphone size={16} /> SMS Sequence
+                  <div className="text-card-title font-display font-semibold mb-4 flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2"><Smartphone size={16} /> SMS Sequence</span>
+                    <button onClick={() => sendSequence("sms")} disabled={sendingChannel !== null || !campaign.sms_sequence.length}
+                      className="btn-secondary text-xs" data-testid="send-sms-sequence">
+                      {sendingChannel === "sms" ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                      Send via SMS EQ
+                    </button>
                   </div>
                   {campaign.sms_sequence.map((sms, i) => (
                     <div key={i} className="border border-line rounded-xl p-3 mb-2">
