@@ -798,11 +798,14 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
     except Exception as ex:
         raise HTTPException(502, f"Opener generation failed: {ex}")
 
-    # Merge opener into template
+    # Merge opener into template — trim opener, ensure clean line spacing
+    opener_clean = (personalized_opener or "").strip()
     template_body = step_template.get("body", "")
     template_html = step_template.get("body_html", "")
-    merged_body = template_body.replace("{{personalized_opener}}", personalized_opener)
-    merged_html = template_html.replace("{{personalized_opener}}", personalized_opener) if template_html else ""
+    merged_body = template_body.replace("{{personalized_opener}}", opener_clean)
+    merged_html = template_html.replace("{{personalized_opener}}", opener_clean) if template_html else ""
+    # Normalise multiple blank lines to exactly one blank line between sections
+    merged_body = re.sub(r"\n{3,}", "\n\n", merged_body)
 
     personalized = {
         "lead_id": lead_id,
@@ -836,19 +839,24 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
 
 @api.get("/campaigns/{cid}/leads")
 async def get_campaign_leads(cid: str, user=Depends(current_user)):
-    """Return leads for a campaign with their personalized email status."""
+    """Return leads for a campaign with their personalized email status. Leads
+    that have never been through AI generation (or a manual opener edit) still
+    get a merge-field-resolved preview of the raw template, so the review
+    screen has something to show — and to edit — before any generation runs."""
     wid = user["workspace_id"]
-    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0, "personalized_emails": 1, "lead_ids": 1})
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0, "personalized_emails": 1, "lead_ids": 1, "steps": 1})
     if not campaign:
         raise HTTPException(404, "not found")
     lead_ids = campaign.get("lead_ids", [])
     personalized = campaign.get("personalized_emails", [])
     personalization_map = {p["lead_id"]: p for p in personalized}
+    step_template = (campaign.get("steps") or [{}])[0]
     leads = await db.leads.find(
         {"id": {"$in": lead_ids}, "workspace_id": wid},
         {"_id": 0}
     ).to_list(500)
-    def _resolve(s: str) -> str:
+
+    def _resolve(s: str, lead: Dict[str, Any]) -> str:
         if not s:
             return s
         for k in ("first_name", "last_name", "company", "title"):
@@ -860,6 +868,16 @@ async def get_campaign_leads(cid: str, user=Depends(current_user)):
     result = []
     for lead in leads:
         p = personalization_map.get(lead["id"])
+        if p:
+            subject = _resolve(p.get("subject", ""), lead)
+            body = _resolve(p.get("body", ""), lead)
+            body_html = _resolve(p.get("body_html", ""), lead)
+            opener = p.get("personalized_opener", "")
+        else:
+            subject = _resolve(step_template.get("subject", ""), lead)
+            body = _resolve((step_template.get("body", "") or "").replace("{{personalized_opener}}", ""), lead)
+            body_html = _resolve((step_template.get("body_html", "") or "").replace("{{personalized_opener}}", ""), lead)
+            opener = ""
         result.append({
             "id": lead["id"],
             "first_name": lead.get("first_name", ""),
@@ -869,10 +887,10 @@ async def get_campaign_leads(cid: str, user=Depends(current_user)):
             "title": lead.get("title", ""),
             "personalized": p is not None,
             "email_status": p.get("status", "none") if p else "none",
-            "email_subject": _resolve(p.get("subject", "")) if p else "",
-            "email_body": _resolve(p.get("body", "")) if p else "",
-            "email_body_html": _resolve(p.get("body_html", "")) if p else "",
-            "personalized_opener": p.get("personalized_opener", "") if p else "",
+            "email_subject": subject,
+            "email_body": body,
+            "email_body_html": body_html,
+            "personalized_opener": opener,
             "generated_at": p.get("generated_at", "") if p else "",
         })
     return {"leads": result, "personalized_count": len(personalized), "total_count": len(lead_ids)}
@@ -1054,8 +1072,9 @@ async def _run_generation_background(cid: str, wid: str, to_generate: list, camp
                     f"gen-{lid[:8]}", user=user, max_tokens=512
                 )
                 opener_data = _extract_json(opener_raw) or {}
-                personalized_opener = opener_data.get("opener", "")
+                personalized_opener = (opener_data.get("opener", "") or "").strip()
                 merged_body = (step_template.get("body", "") or "").replace("{{personalized_opener}}", personalized_opener)
+                merged_body = re.sub(r"\n{3,}", "\n\n", merged_body)
                 merged_html = (step_template.get("body_html", "") or "").replace("{{personalized_opener}}", personalized_opener) if step_template.get("body_html") else ""
                 await db.campaigns.update_one(
                     {"id": cid},

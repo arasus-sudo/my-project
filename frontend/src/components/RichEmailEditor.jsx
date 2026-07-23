@@ -78,15 +78,23 @@ export default function RichEmailEditor({ value, onChange, placeholder = "Write 
     content: sanitizeEmailHtml(value) || "",
     editorProps: {
       attributes: {
-        class: "prose-email focus:outline-none min-h-[260px] px-4 py-3 text-sm leading-relaxed",
+        class: "prose-email focus:outline-none min-h-[260px] px-4 py-3 text-xs leading-relaxed",
         "data-testid": "rich-editor-body",
       },
     },
-    onUpdate: ({ editor: ed }) => onChange(sanitizeEmailHtml(ed.getHTML())),
+    onUpdate: ({ editor: ed }) => {
+      if (ed.isDestroyed) return;
+      onChange(sanitizeEmailHtml(ed.getHTML()));
+    },
   });
 
+  // Guard every editor call with isDestroyed: TipTap tears down its internal
+  // ProseMirror schema on unmount, and calling getHTML()/setContent() after
+  // that (e.g. a value-prop update racing a step switch or a Preview-mode
+  // toggle unmounting this component) throws deep inside DOMSerializer
+  // rather than failing gracefully.
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || editor.isDestroyed) return;
     const incoming = sanitizeEmailHtml(value) || "";
     if (incoming !== editor.getHTML()) {
       editor.commands.setContent(incoming, { emitUpdate: false });
@@ -190,7 +198,7 @@ export default function RichEmailEditor({ value, onChange, placeholder = "Write 
       <div className="relative">
         <EditorContent editor={editor} />
         {editor.isEmpty && (
-          <div className="absolute top-3 left-4 text-sm text-neutral-400 pointer-events-none">
+          <div className="absolute top-3 left-4 text-xs text-neutral-400 pointer-events-none">
             {placeholder}
           </div>
         )}

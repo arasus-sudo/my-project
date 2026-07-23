@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
   Users, ListChecks, Kanban, BarChart3, Plus, Target, Activity, Phone, Mail,
   CalendarClock, FileText, MessageSquare, ArrowRight, Share2, Search,
-  CheckSquare, ShieldAlert, ChevronDown, ChevronUp,
+  CheckSquare, ShieldAlert, ChevronDown, ChevronUp, Building2,
 } from "lucide-react";
 import { SkeletonKpiGrid, SkeletonListRows } from "../components/ui/loading-states";
 
@@ -26,13 +26,14 @@ export default function CRM() {
   const [quarantineOpen, setQuarantineOpen] = useState(false);
 
   const load = async () => {
-    const [leadsRes, dealsRes, listsRes, activityRes, tasksRes, quarantineRes] = await Promise.all([
+    const [leadsRes, dealsRes, listsRes, activityRes, tasksRes, quarantineRes, companiesRes] = await Promise.all([
       api.get("/leads?page_size=2000").catch(() => ({ data: { items: [] } })),
       api.get("/deals").catch(() => ({ data: [] })),
       api.get("/crm/lists").catch(() => ({ data: [] })),
       api.get("/activities").catch(() => ({ data: [] })),
       api.get("/crm/tasks", { params: { status: "open" } }).catch(() => ({ data: [] })),
       api.get("/quarantine").catch(() => ({ data: [] })),
+      api.get("/companies?page_size=1").catch(() => ({ data: { total: 0 } })),
     ]);
     const leads = leadsRes.data.items || leadsRes.data;
     const deals = dealsRes.data;
@@ -45,6 +46,7 @@ export default function CRM() {
       totalDeals: deals.length,
       pipelineValue: deals.reduce((s, d) => s + (d.value || 0), 0),
       dealsWon: deals.filter((d) => d.stage === "won").length,
+      totalCompanies: companiesRes?.data?.total || 0,
     });
   };
 
@@ -125,6 +127,7 @@ export default function CRM() {
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={Users} label="Total Leads" value={stats?.totalLeads} to="/app/crm/leads" color="bg-accent" />
+          <StatCard icon={Building2} label="Companies" value={stats?.totalCompanies} to="/app/crm/companies" color="bg-accent" />
           <StatCard icon={Target} label="Deals" value={stats?.totalDeals} to="/app/crm/pipeline" color="bg-blue-500" />
           <StatCard icon={BarChart3} label="Pipeline Value" value={stats ? `$${(stats.pipelineValue).toLocaleString()}` : "—"} to="/app/crm/pipeline" color="bg-emerald-500" />
           <StatCard icon={Activity} label="Deals Won" value={stats?.dealsWon} to="/app/crm/pipeline" color="bg-amber-500" />

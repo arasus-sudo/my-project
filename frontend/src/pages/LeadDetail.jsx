@@ -8,7 +8,7 @@ import {
   Mail, Phone, CalendarClock, FileText, Share2, ArrowLeft, Loader2,
   Newspaper, Github, Globe, Flame, ExternalLink, Search, Megaphone, Save, X,
   Edit2, Check, ListChecks, Tag, Plus, Trash2, StickyNote, CheckSquare, Square,
-  ShieldOff,
+  ShieldOff, Linkedin, Building2,
 } from "lucide-react";
 
 const AGENT_ICON = { pitch: Mail, voice: Phone, scheduler: CalendarClock, proposal: FileText, social: Share2 };
@@ -37,6 +37,7 @@ export default function LeadDetail() {
   const [notes, setNotes] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [team, setTeam] = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [noteText, setNoteText] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [taskForm, setTaskForm] = useState({ title: "", due_at: "", assignee_id: "" });
@@ -51,10 +52,12 @@ export default function LeadDetail() {
       api.get(`/leads/${id}/notes`).catch(() => ({ data: [] })),
       api.get(`/leads/${id}/tasks`).catch(() => ({ data: [] })),
       api.get("/team").catch(() => ({ data: [] })),
-    ]).then(([l, t, r, ls, vc, nt, tk, tm]) => {
+      api.get("/companies?page_size=500").catch(() => ({ data: { items: [] } })),
+    ]).then(([l, t, r, ls, vc, nt, tk, tm, co]) => {
       setLead(l.data); setTimeline(t.data); setResearch(r.data);
       setLists(ls.data); setVoiceCalls(vc.data || []);
       setNotes(nt.data || []); setTasks(tk.data || []); setTeam(tm.data || []);
+      setCompanies(co.data?.items || []);
       setLoading(false);
     });
   }, [id]);
@@ -159,6 +162,9 @@ export default function LeadDetail() {
       phone: lead.phone || "",
       company: lead.company || "",
       title: lead.title || "",
+      linkedin_url: lead.linkedin_url || "",
+      website: lead.website || "",
+      company_id: lead.company_id || "",
       status: lead.status || "new",
     });
     setEditing(true);
@@ -211,9 +217,18 @@ export default function LeadDetail() {
                 <input value={editForm.phone || ""} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
                   className="w-full border border-line px-2 py-1 rounded text-input font-mono" placeholder="Phone" />
                 <input value={editForm.company || ""} onChange={(e) => setEditForm({ ...editForm, company: e.target.value })}
-                  className="w-full border border-line px-2 py-1 rounded text-input" placeholder="Company" />
+                  className="w-full border border-line px-2 py-1 rounded text-input" placeholder="Company name" />
                 <input value={editForm.title || ""} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                   className="w-full border border-line px-2 py-1 rounded text-input" placeholder="Title" />
+                <input value={editForm.linkedin_url || ""} onChange={(e) => setEditForm({ ...editForm, linkedin_url: e.target.value })}
+                  className="w-full border border-line px-2 py-1 rounded text-input font-mono" placeholder="LinkedIn URL" />
+                <input value={editForm.website || ""} onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
+                  className="w-full border border-line px-2 py-1 rounded text-input font-mono" placeholder="Website URL" />
+                <select value={editForm.company_id} onChange={(e) => setEditForm({ ...editForm, company_id: e.target.value })}
+                  className="w-full border border-line px-2 py-1 rounded text-input">
+                  <option value="">No company</option>
+                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
                 <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
                   className="w-full border border-line px-2 py-1 rounded text-input">
                   {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -228,6 +243,28 @@ export default function LeadDetail() {
                 <div className="text-body font-mono text-ink-secondary">{lead.email}</div>
                 {lead.phone && <div className="text-body font-mono text-ink-secondary">{lead.phone}</div>}
                 {lead.title && <div className="text-body text-ink-muted">{lead.title}</div>}
+                <div className="flex items-center gap-3 pt-1 flex-wrap text-caption">
+                  {lead.linkedin_url && (
+                    <a href={lead.linkedin_url.startsWith("http") ? lead.linkedin_url : `https://${lead.linkedin_url}`}
+                      target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-accent hover:underline">
+                      <Linkedin size={12} /> LinkedIn
+                    </a>
+                  )}
+                  {lead.website && (
+                    <a href={lead.website.startsWith("http") ? lead.website : `https://${lead.website}`}
+                      target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-accent hover:underline">
+                      <Globe size={12} /> Website
+                    </a>
+                  )}
+                  {lead.company_id && companies.find((c) => c.id === lead.company_id) && (
+                    <Link to={`/app/crm/companies/${lead.company_id}`}
+                      className="inline-flex items-center gap-1 text-accent hover:underline">
+                      <Building2 size={12} /> {companies.find((c) => c.id === lead.company_id)?.name}
+                    </Link>
+                  )}
+                </div>
                 <div className="flex items-center gap-2 pt-2 flex-wrap">
                   <span className="ui-label border border-line px-2 py-0.5 rounded-xl">{lead.status}</span>
                   {intent ? (

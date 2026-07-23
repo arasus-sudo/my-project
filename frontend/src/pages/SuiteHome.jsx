@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { AGENTS } from "../components/AppLayout";
+import { AGENTS, AGENT_CATEGORIES } from "../components/AppLayout";
 import { CreditPill } from "../components/Credits";
 import InnoiraLogo from "../components/InnoiraLogo";
 import {
@@ -202,49 +202,31 @@ export default function SuiteHome() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5 mt-6">
-          {/* Detailed agent grid */}
-          <div className="lg:col-span-2">
-            <div className="ui-label mb-2">Agents</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {AGENTS.map((a) => {
-                const Icon = a.icon;
-                const s = data[a.k];
-                return (
-                  <button key={a.k} onClick={() => nav(a.root)} data-testid={`suite-card-${a.k}`}
-                    className="relative text-left bg-white border border-line rounded-xl p-4 shadow-card hover:shadow-card-lg hover:border-accent/30 transition-all duration-200 group overflow-hidden">
-                    <div className="relative flex items-start justify-between">
-                      <div className="w-8 h-8 rounded-xl bg-accent flex items-center justify-center text-white shadow-sm">
-                        <Icon size={16} />
-                      </div>
-                      {s === undefined ? null : (
-                        <span className={`inline-flex items-center gap-1 text-tiny font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${s?.active ? "text-success border-success/30 bg-success/10" : "text-ink-muted border-line"}`}>
-                          <Circle size={6} className={s?.active ? "fill-success text-success" : "fill-ink-muted text-ink-muted"} />
-                          {s?.active ? "Active" : "Idle"}
-                        </span>
-                      )}
+          {/* Detailed agent grid — grouped by function (sales/revenue,
+              marketing/content, back-office operations) instead of one flat
+              list, so the command center reads as an org chart rather than
+              an arbitrary tile wall. */}
+          <div className="lg:col-span-2 space-y-6">
+            {AGENT_CATEGORIES.map((cat) => {
+              const agentsInCat = AGENTS.filter((a) => a.category === cat.key);
+              if (!agentsInCat.length) return null;
+              const activeInCat = agentsInCat.filter((a) => data[a.k]?.active).length;
+              return (
+                <div key={cat.key}>
+                  <div className="flex items-baseline gap-2 mb-2">
+                    <div className="ui-label">{cat.label}</div>
+                    <div className="text-tiny text-ink-disabled font-mono">
+                      {activeInCat}/{agentsInCat.length} active
                     </div>
-                    <div className="relative font-display font-semibold text-subheading mt-2.5">{a.label}</div>
-                    <p className="relative text-tiny text-ink-muted mt-0.5 min-h-[14px] truncate">
-                      {s === undefined ? "Loading…" : s === null ? "—" : s.working}
-                    </p>
-                    <div className="relative flex items-center gap-4 mt-3 pt-3 border-t border-line">
-                      {s?.metrics?.map((m) => (
-                        <div key={m.label}>
-                          <div className="font-display text-sm font-bold">{m.value}</div>
-                          <div className="text-tiny text-ink-muted font-mono uppercase">{m.label}</div>
-                        </div>
-                      ))}
-                      {s?.needs > 0 && (
-                        <div className="ml-auto text-tiny text-warning font-medium flex items-center gap-1">
-                          <AlertCircle size={12} /> {s.needs} {s.needsLabel}
-                        </div>
-                      )}
-                      {(!s || !s.needs) && <span className="ml-auto text-ink-disabled group-hover:text-accent transition-colors"><ArrowRight size={14} /></span>}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {agentsInCat.map((a) => (
+                      <AgentCard key={a.k} agent={a} status={data[a.k]} onClick={() => nav(a.root)} />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           {/* Live activity feed */}
@@ -310,5 +292,43 @@ function Kpi({ icon: Icon, label, value, to, highlight }) {
       </div>
       <div className="font-display text-lg sm:text-xl font-bold mt-1 tabular-nums truncate">{value}</div>
     </Wrap>
+  );
+}
+
+function AgentCard({ agent, status: s, onClick }) {
+  const Icon = agent.icon;
+  return (
+    <button onClick={onClick} data-testid={`suite-card-${agent.k}`}
+      className="relative text-left bg-white border border-line rounded-xl p-4 shadow-card hover:shadow-card-lg hover:border-accent/30 transition-all duration-200 group overflow-hidden">
+      <div className="relative flex items-start justify-between">
+        <div className="w-8 h-8 rounded-xl bg-accent flex items-center justify-center text-white shadow-sm">
+          <Icon size={16} />
+        </div>
+        {s === undefined ? null : (
+          <span className={`inline-flex items-center gap-1 text-tiny font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${s?.active ? "text-success border-success/30 bg-success/10" : "text-ink-muted border-line"}`}>
+            <Circle size={6} className={s?.active ? "fill-success text-success" : "fill-ink-muted text-ink-muted"} />
+            {s?.active ? "Active" : "Idle"}
+          </span>
+        )}
+      </div>
+      <div className="relative font-display font-semibold text-subheading mt-2.5">{agent.label}</div>
+      <p className="relative text-tiny text-ink-muted mt-0.5 min-h-[14px] truncate">
+        {s === undefined ? "Loading…" : s === null ? "—" : s.working}
+      </p>
+      <div className="relative flex items-center gap-4 mt-3 pt-3 border-t border-line">
+        {s?.metrics?.map((m) => (
+          <div key={m.label}>
+            <div className="font-display text-sm font-bold">{m.value}</div>
+            <div className="text-tiny text-ink-muted font-mono uppercase">{m.label}</div>
+          </div>
+        ))}
+        {s?.needs > 0 && (
+          <div className="ml-auto text-tiny text-warning font-medium flex items-center gap-1">
+            <AlertCircle size={12} /> {s.needs} {s.needsLabel}
+          </div>
+        )}
+        {(!s || !s.needs) && <span className="ml-auto text-ink-disabled group-hover:text-accent transition-colors"><ArrowRight size={14} /></span>}
+      </div>
+    </button>
   );
 }

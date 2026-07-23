@@ -34,6 +34,9 @@ class LeadIn(BaseModel):
     company: Optional[str] = ""
     title: Optional[str] = ""
     linkedin: Optional[str] = ""
+    linkedin_url: Optional[str] = ""
+    website: Optional[str] = ""
+    company_id: Optional[str] = None
     phone: Optional[str] = None
     tags: List[str] = []
 
@@ -46,10 +49,45 @@ class LeadUpdate(BaseModel):
     title: Optional[str] = None
     phone: Optional[str] = None
     linkedin: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    website: Optional[str] = None
+    company_id: Optional[str] = None
     tags: Optional[List[str]] = None
     status: Optional[str] = None
     owner_id: Optional[str] = None
     dnc: Optional[bool] = None
+
+
+class CompanyIn(BaseModel):
+    name: str
+    domain: Optional[str] = ""
+    website: Optional[str] = ""
+    linkedin_url: Optional[str] = ""
+    industry: Optional[str] = ""
+    employee_count: Optional[int] = None
+    description: Optional[str] = ""
+    logo_url: Optional[str] = ""
+    hq_location: Optional[str] = ""
+    tags: List[str] = []
+
+
+class CompanyUpdate(BaseModel):
+    name: Optional[str] = None
+    domain: Optional[str] = None
+    website: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    industry: Optional[str] = None
+    employee_count: Optional[int] = None
+    description: Optional[str] = None
+    logo_url: Optional[str] = None
+    hq_location: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+
+class CompanyListIn(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    company_ids: List[str] = []
 
 
 class LeadBulk(BaseModel):
@@ -154,6 +192,11 @@ async def create_lead(body: LeadIn, user=Depends(current_user)):
     lead["dnc"] = False
     lead["owner_id"] = None
     lead["created_at"] = now_iso()
+    # Normalize linkedin → linkedin_url for backward compatibility
+    if not lead.get("linkedin_url") and lead.get("linkedin"):
+        lead["linkedin_url"] = lead["linkedin"]
+    if not lead.get("linkedin") and lead.get("linkedin_url"):
+        lead["linkedin"] = lead["linkedin_url"]
     if await db.leads.find_one({"workspace_id": user["workspace_id"], "email": lead["email"]}):
         raise HTTPException(400, "Lead with this email already exists")
     try:
@@ -173,6 +216,11 @@ async def bulk_leads(body: LeadBulk, user=Depends(current_user)):
         if await db.leads.find_one({"workspace_id": user["workspace_id"], "email": d["email"]}):
             skipped += 1
             continue
+        # Normalize linkedin → linkedin_url
+        if not d.get("linkedin_url") and d.get("linkedin"):
+            d["linkedin_url"] = d["linkedin"]
+        if not d.get("linkedin") and d.get("linkedin_url"):
+            d["linkedin"] = d["linkedin_url"]
         d.update({
             "id": new_id(),
             "workspace_id": user["workspace_id"],
@@ -446,11 +494,14 @@ async def lead_list_bulk_import(
 
         first_name = (row.get("first_name") or "").strip() or email.split("@")[0].replace(".", " ").replace("_", " ").title()
         tags = [t.strip() for t in (row.get("tags") or "").split(",") if t.strip()]
+        linkedin_url = (row.get("linkedin_url") or row.get("linkedin") or "").strip()
         doc = {
             "id": new_id(), "workspace_id": wid,
             "first_name": first_name, "last_name": (row.get("last_name") or "").strip(),
             "email": email, "company": (row.get("company") or "").strip(),
-            "title": (row.get("title") or "").strip(), "linkedin": "",
+            "title": (row.get("title") or "").strip(),
+            "linkedin": linkedin_url, "linkedin_url": linkedin_url,
+            "website": (row.get("website") or "").strip(),
             "phone": (row.get("phone") or "").strip() or None, "tags": tags,
             "status": "new", "icp_score": 55, "verified": True, "phone_verified": False,
             "dnc": False, "owner_id": None, "created_at": now_iso(),
@@ -652,3 +703,129 @@ async def update_deal(did: str, body: Dict[str, Any], user=Depends(current_user)
         {"$set": allowed},
     )
     return await db.deals.find_one({"id": did, "workspace_id": user["workspace_id"]}, {"_id": 0})
+
+
+# ----------------------------- Companies --------------------------------------
+@crm_router.get("/companies")
+async def list_companies(
+    page: int = 1,
+    page_size: int = 25,
+    user=Depends(current_user),
+):
+    query = {"workspace_id": user["workspace_id"]}
+    total = await db.companies.count_documents(query)
+    items = await db.companies.find(query, {"_id": 0}) \
+        .sort("name", 1) \
+        .skip((page - 1) * page_size) \
+        .to_list(page_size)
+    # Enrich with lead count per company
+    for c in items:
+        c["lead_count"] = await db.leads.count_documents({"workspace_id": user["workspace_id"], "company_id": c["id"]})
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@crm_router.post("/companies")
+async def create_company(body: CompanyIn, user=Depends(current_user)):
+    company = body.model_dump()
+    company["id"] = new_id()
+    company["workspace_id"] = user["workspace_id"]
+    company["created_at"] = now_iso()
+    await db.companies.insert_one(company)
+    company.pop("_id", None)
+    return company
+
+
+@crm_router.get("/companies/{cid}")
+async def get_company(cid: str, user=Depends(current_user)):
+    c = await db.companies.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "not found")
+    c["lead_count"] = await db.leads.count_documents({"workspace_id": user["workspace_id"], "company_id": cid})
+    c["leads"] = await db.leads.find({"workspace_id": user["workspace_id"], "company_id": cid}, {"_id": 0}) \
+        .sort("created_at", -1).to_list(100)
+    return c
+
+
+@crm_router.put("/companies/{cid}")
+async def update_company(cid: str, body: CompanyUpdate, user=Depends(current_user)):
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not updates:
+        raise HTTPException(400, "No fields to update")
+    await db.companies.update_one(
+        {"id": cid, "workspace_id": user["workspace_id"]},
+        {"$set": updates},
+    )
+    return await db.companies.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+
+
+@crm_router.delete("/companies/{cid}")
+async def delete_company(cid: str, user=Depends(current_user)):
+    r = await db.companies.delete_one({"id": cid, "workspace_id": user["workspace_id"]})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "not found")
+    # Clear company_id on leads referencing this company
+    await db.leads.update_many(
+        {"workspace_id": user["workspace_id"], "company_id": cid},
+        {"$set": {"company_id": None}},
+    )
+    await _audit(user, "crm.companies.delete", {"company_id": cid})
+    return {"ok": True}
+
+
+# ----------------------------- Company Lists ----------------------------------
+@crm_router.get("/company-lists")
+async def list_company_lists(user=Depends(current_user)):
+    items = await db.company_lists.find({"workspace_id": user["workspace_id"]}, {"_id": 0}) \
+        .sort("name", 1).to_list(200)
+    return items
+
+
+@crm_router.post("/company-lists")
+async def create_company_list(body: CompanyListIn, user=Depends(current_user)):
+    cl = body.model_dump()
+    cl["id"] = new_id()
+    cl["workspace_id"] = user["workspace_id"]
+    cl["created_at"] = now_iso()
+    await db.company_lists.insert_one(cl)
+    cl.pop("_id", None)
+    return cl
+
+
+@crm_router.put("/company-lists/{clid}")
+async def update_company_list(clid: str, body: CompanyListIn, user=Depends(current_user)):
+    updates = body.model_dump()
+    await db.company_lists.update_one(
+        {"id": clid, "workspace_id": user["workspace_id"]},
+        {"$set": updates},
+    )
+    return await db.company_lists.find_one({"id": clid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+
+
+@crm_router.delete("/company-lists/{clid}")
+async def delete_company_list(clid: str, user=Depends(current_user)):
+    r = await db.company_lists.delete_one({"id": clid, "workspace_id": user["workspace_id"]})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "not found")
+    await _audit(user, "crm.company_lists.delete", {"list_id": clid})
+    return {"ok": True}
+
+
+@crm_router.post("/company-lists/{clid}/companies")
+async def add_companies_to_list(clid: str, body: BulkIdsIn, user=Depends(current_user)):
+    cl = await db.company_lists.find_one({"id": clid, "workspace_id": user["workspace_id"]})
+    if not cl:
+        raise HTTPException(404, "list not found")
+    existing = set(cl.get("company_ids", []))
+    existing.update(body.ids)
+    await db.company_lists.update_one({"id": clid}, {"$set": {"company_ids": list(existing)}})
+    return {"ok": True, "count": len(body.ids)}
+
+
+@crm_router.delete("/company-lists/{clid}/companies/{cid}")
+async def remove_company_from_list(clid: str, cid: str, user=Depends(current_user)):
+    cl = await db.company_lists.find_one({"id": clid, "workspace_id": user["workspace_id"]})
+    if not cl:
+        raise HTTPException(404, "list not found")
+    ids = [x for x in cl.get("company_ids", []) if x != cid]
+    await db.company_lists.update_one({"id": clid}, {"$set": {"company_ids": ids}})
+    return {"ok": True}

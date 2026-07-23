@@ -4,7 +4,7 @@ import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import LeadListImportDrawer from "./LeadListImportDrawer";
 import { toast } from "sonner";
-import { Plus, Upload, Download, Phone, ArrowUpDown, ArrowDown, Tag, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Upload, Download, Phone, ArrowUpDown, ArrowDown, Tag, X, ChevronLeft, ChevronRight, Linkedin, Globe } from "lucide-react";
 import { SkeletonTableRows } from "../components/ui/loading-states";
 
 const BAND_STYLE = {
@@ -60,7 +60,7 @@ export default function Leads() {
   const [callLead, setCallLead] = useState(null);
   const [callAgentId, setCallAgentId] = useState("");
   const [calling, setCalling] = useState(false);
-  const [form, setForm] = useState({ first_name: "", last_name: "", email: "", company: "", title: "", phone: "" });
+  const [form, setForm] = useState({ first_name: "", last_name: "", email: "", company: "", title: "", linkedin_url: "", website: "", phone: "" });
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -108,7 +108,7 @@ export default function Leads() {
       await api.post("/leads", form);
       toast.success("Lead added");
       setModal(false);
-      setForm({ first_name: "", last_name: "", email: "", company: "", title: "", phone: "" });
+      setForm({ first_name: "", last_name: "", email: "", company: "", title: "", linkedin_url: "", website: "", phone: "" });
       load();
     } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
   };
@@ -269,6 +269,7 @@ export default function Leads() {
                   <th className="table-header text-left p-3">Name</th>
                   <th className="table-header text-left p-3">Email</th>
                   <th className="table-header text-left p-3">Company</th>
+                  <th className="table-header text-left p-3">Links</th>
                   <th className="table-header text-left p-3">Tags</th>
                   <th className="table-header text-left p-3">Owner</th>
                   <th className="table-header text-left p-3">Phone</th>
@@ -276,7 +277,7 @@ export default function Leads() {
                   <th className="p-3"></th>
                 </tr>
               </thead>
-              <tbody><SkeletonTableRows rows={8} cols={9} /></tbody>
+              <tbody><SkeletonTableRows rows={8} cols={10} /></tbody>
             </table>
           </div>
         ) : filtered.length === 0 ? (
@@ -296,6 +297,7 @@ export default function Leads() {
                   <th className="table-header text-left p-3">Name</th>
                   <th className="table-header text-left p-3">Email</th>
                   <th className="table-header text-left p-3">Company</th>
+                  <th className="table-header text-left p-3">Links</th>
                   <th className="table-header text-left p-3">Tags</th>
                   <th className="table-header text-left p-3">Owner</th>
                   <th className="table-header text-left p-3">Phone</th>
@@ -321,6 +323,29 @@ export default function Leads() {
                     </td>
                     <td className="p-3 font-mono text-ink-secondary">{l.email}</td>
                     <td className="p-3">{l.company}</td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-2">
+                        {(l.linkedin_url || l.linkedin) && (
+                          <a href={l.linkedin_url || l.linkedin}
+                            target="_blank" rel="noreferrer"
+                            className="text-ink-muted hover:text-accent"
+                            title="LinkedIn profile">
+                            <Linkedin size={14} />
+                          </a>
+                        )}
+                        {l.website && (
+                          <a href={l.website.startsWith("http") ? l.website : `https://${l.website}`}
+                            target="_blank" rel="noreferrer"
+                            className="text-ink-muted hover:text-accent"
+                            title="Website">
+                            <Globe size={14} />
+                          </a>
+                        )}
+                        {!(l.linkedin_url || l.linkedin || l.website) && (
+                          <span className="text-ink-disabled">—</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="p-3">
                       {(l.tags?.length > 0) ? (
                         <div className="flex flex-wrap gap-1">
@@ -390,6 +415,8 @@ export default function Leads() {
             <input required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="new-lead-email" className="w-full border border-line px-3 py-2 rounded-sm" />
             <input placeholder="Company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} data-testid="new-lead-company" className="w-full border border-line px-3 py-2 rounded-sm" />
             <input placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} data-testid="new-lead-title" className="w-full border border-line px-3 py-2 rounded-sm" />
+            <input placeholder="LinkedIn URL" value={form.linkedin_url || ""} onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })} className="w-full border border-line px-3 py-2 rounded-sm" />
+            <input placeholder="Website URL" value={form.website || ""} onChange={(e) => setForm({ ...form, website: e.target.value })} className="w-full border border-line px-3 py-2 rounded-sm" />
             <input placeholder="Phone (E.164, e.g. +14155551234)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="new-lead-phone" className="w-full border border-line px-3 py-2 rounded-sm" />
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>

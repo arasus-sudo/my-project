@@ -39,6 +39,7 @@ const PITCH_NAV = [
 const CRM_NAV = [
   { to: "/app/crm", label: "Overview", icon: LayoutDashboard, end: true, tid: "crm-nav-overview" },
   { to: "/app/crm/leads", label: "Leads", icon: Users, tid: "crm-nav-leads" },
+  { to: "/app/crm/companies", label: "Companies", icon: Building2, tid: "crm-nav-companies" },
   { to: "/app/crm/search", label: "Lead Search", icon: Search, tid: "crm-nav-search" },
   { to: "/app/crm/lists", label: "Lead Lists", icon: ListChecks, tid: "crm-nav-lists" },
   { to: "/app/crm/pipeline", label: "Pipeline", icon: Kanban, tid: "crm-nav-pipeline" },
@@ -133,29 +134,38 @@ export const AGENTS = [
   // Putting any other agent at index 0 breaks that fallback for every Pitch
   // EQ page (wrong sidebar nav + wrong header label near the logo).
   { k: "pitch", label: "Pitch EQ", tag: "Outbound", root: "/app", nav: PITCH_NAV, tid: "agent-pitch", icon: Send,
-    blurb: "Cold email — sequences, unified inbox, and EQ-scored outreach." },
+    category: "sales", blurb: "Cold email — sequences, unified inbox, and EQ-scored outreach." },
   { k: "crm", label: "CRM", tag: "CRM", root: "/app/crm", nav: CRM_NAV, tid: "agent-crm", icon: Users,
-    blurb: "Shared lead repository, lists, and activity timeline — every agent stores and pulls leads from here." },
-  { k: "create", label: "Create EQ", tag: "Carousel", root: "/app/create-eq", nav: CREATE_NAV, tid: "agent-create", icon: Layers,
-    blurb: "Drafted carousels and decks, Canva-style editing." },
+    category: "sales", blurb: "Shared lead repository, lists, and activity timeline — every agent stores and pulls leads from here." },
   { k: "voice", label: "Voice EQ", tag: "Calling", root: "/app/voice-eq", nav: VOICE_NAV, tid: "agent-voice", icon: PhoneCall,
-    blurb: "Autonomous calling agent — dials leads, qualifies, updates the CRM." },
+    category: "sales", blurb: "Autonomous calling agent — dials leads, qualifies, updates the CRM." },
   { k: "schedule", label: "Schedule EQ", tag: "Booking", root: "/app/schedule-eq", nav: SCHEDULE_NAV, tid: "agent-schedule", icon: CalendarRange,
-    blurb: "Calendly-style booking with real availability and automated qualifying." },
+    category: "sales", blurb: "Calendly-style booking with real availability and automated qualifying." },
   { k: "proposal", label: "Proposal EQ", tag: "Proposals", root: "/app/proposal-eq", nav: PROPOSAL_NAV, tid: "agent-proposal", icon: FileBarChart,
-    blurb: "Researches leads and drafts proposals — export to PDF or PPTX." },
-  { k: "social", label: "Social EQ", tag: "Social", root: "/app/social-eq", nav: SOCIAL_NAV, tid: "agent-social", icon: Share2,
-    blurb: "Drafts and schedules posts — publishing always needs your approval." },
-  { k: "site", label: "Site EQ", tag: "Website Chat", root: "/app/site-eq", nav: SITE_NAV, tid: "agent-site", icon: Globe,
-    blurb: "A chat widget for your website — answers from your own content, hands off to a human when it can't." },
+    category: "sales", blurb: "Researches leads and drafts proposals — export to PDF or PPTX." },
   { k: "sms", label: "SMS EQ", tag: "Texting", root: "/app/sms-eq", nav: SMS_NAV, tid: "agent-sms", icon: Smartphone,
-    blurb: "Broadcast messaging, two-way conversations, and contact management." },
+    category: "sales", blurb: "Broadcast messaging, two-way conversations, and contact management." },
   { k: "whatsapp", label: "WhatsApp EQ", tag: "WhatsApp", root: "/app/whatsapp-eq", nav: WHATSAPP_NAV, tid: "agent-whatsapp", icon: Phone,
-    blurb: "WhatsApp Business messaging, templates, and broadcasts." },
+    category: "sales", blurb: "WhatsApp Business messaging, templates, and broadcasts." },
+  { k: "create", label: "Create EQ", tag: "Carousel", root: "/app/create-eq", nav: CREATE_NAV, tid: "agent-create", icon: Layers,
+    category: "marketing", blurb: "Drafted carousels and decks, Canva-style editing." },
+  { k: "social", label: "Social EQ", tag: "Social", root: "/app/social-eq", nav: SOCIAL_NAV, tid: "agent-social", icon: Share2,
+    category: "marketing", blurb: "Drafts and schedules posts — publishing always needs your approval." },
+  { k: "site", label: "Site EQ", tag: "Website Chat", root: "/app/site-eq", nav: SITE_NAV, tid: "agent-site", icon: Globe,
+    category: "marketing", blurb: "A chat widget for your website — answers from your own content, hands off to a human when it can't." },
   { k: "hrms", label: "HRMS EQ", tag: "HR", root: "/app/hrms-eq", nav: HRMS_NAV, tid: "agent-hrms", icon: Briefcase,
-    blurb: "Employee lifecycle, recruitment, leave, and performance management." },
+    category: "operations", blurb: "Employee lifecycle, recruitment, leave, and performance management." },
   { k: "accounting", label: "Accounting EQ", tag: "Finance", root: "/app/accounting-eq", nav: ACCOUNTING_NAV, tid: "agent-accounting", icon: DollarSign,
-    blurb: "Double-entry ledger, invoicing, AP bills, and financial reports." },
+    category: "operations", blurb: "Double-entry ledger, invoicing, AP bills, and financial reports." },
+];
+
+// Command-center grouping (SuiteHome.jsx) — sales/revenue agents, brand &
+// content agents, and back-office agents render as three labeled sections
+// instead of one flat grid.
+export const AGENT_CATEGORIES = [
+  { key: "sales", label: "Sales" },
+  { key: "marketing", label: "Marketing" },
+  { key: "operations", label: "Operations" },
 ];
 
 export const AGENT_BADGE = { crm: "M", pitch: "P", create: "C", voice: "V", schedule: "S", proposal: "R", social: "O", site: "W", sms: "T", whatsapp: "WA", hrms: "H", accounting: "F" };

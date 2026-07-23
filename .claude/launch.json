@@ -12,6 +12,12 @@
       "runtimeExecutable": "cmd",
       "runtimeArgs": ["/c", "cd /d D:\\SUITEOFAGETNS\\web && npm run dev -- -p 3001"],
       "port": 3001
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd /d D:\\SUITEOFAGETNS\\backend && .\\venv\\Scripts\\python.exe -m uvicorn server:app --reload --port 8001"],
+      "port": 8001
     }
   ]
 }

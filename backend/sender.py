@@ -6,6 +6,7 @@ twilio_client / linkedin_client / mailbox_client.
 """
 
 import logging
+import re
 from datetime import datetime, timedelta, timezone as dt_timezone
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
@@ -28,7 +29,8 @@ def _apply_opener(text: str, opener: str) -> str:
     if not text or "{{personalized_opener}}" not in text:
         return text or ""
     if opener:
-        return text.replace("{{personalized_opener}}", opener)
+        result = text.replace("{{personalized_opener}}", opener.strip())
+        return re.sub(r"\n{3,}", "\n\n", result)
     return "\n".join(l for l in text.split("\n") if "{{personalized_opener}}" not in l).strip()
 
 

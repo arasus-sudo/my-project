@@ -8,7 +8,7 @@ import {
   FileSearch, Save, Play, Plus, Trash2, Loader2, Check, AlertTriangle, Flame,
   Mail, Eye, ThumbsUp, Signature, Search, Megaphone,
   Zap, ChevronLeft, ChevronRight, ChevronDown,
-  Edit2, RotateCw, Flag, List, Tag, X,
+  Edit2, RotateCw, Flag, List, Tag, X, PenSquare,
   Phone, MessageSquare, Send, MessageCircle,
 } from "lucide-react";
 
@@ -122,10 +122,20 @@ export default function CampaignBuilder() {
   const [reviewIndex, setReviewIndex] = useState(0);
   const [reviewMode, setReviewMode] = useState(false);
   const [editingOpener, setEditingOpener] = useState(null); // {leadId, opener}
+  const [genJobId, setGenJobId] = useState("");
+  // Shared by every generation entry point (save / run-engine / add-leads) so
+  // Preview always shows accurate live progress instead of a bare "no emails
+  // yet" dead end while a background job is still writing them.
+  const [genProgress, setGenProgress] = useState(null); // {done, total} | null when idle
 
-  const loadCampaignLeads = () => {
-    if (!id) return;
-    api.get(`/campaigns/${id}/leads`).then((r) => setCampaignLeads(r.data.leads || [])).catch(() => {});
+  // Track actual campaign ID — may differ from useParams id when creating new
+  const [activeCampaignId, setActiveCampaignId] = useState(id);
+  useEffect(() => { setActiveCampaignId(id); }, [id]);
+
+  const loadCampaignLeads = (overrideId) => {
+    const cid = overrideId || activeCampaignId || id;
+    if (!cid) return;
+    api.get(`/campaigns/${cid}/leads`).then((r) => setCampaignLeads(r.data.leads || [])).catch(() => {});
   };
 
   useEffect(() => {
@@ -241,24 +251,58 @@ export default function CampaignBuilder() {
     setSelectAllPanel(false);
   };
 
+  // Shared by every generation trigger below: polls generation-status until
+  // the job completes, keeping `genProgress` live so Preview can render a
+  // real "N/M generated" bar instead of dropping into review mode before any
+  // email actually exists.
+  const pollGeneration = (cid, jobId, generating) => {
+    setGenJobId(jobId);
+    setGenProgress({ done: 0, total: generating || 0 });
+    setReviewMode(true);
+    setReviewIndex(0);
+    const poll = setInterval(async () => {
+      try {
+        const st = await api.get(`/campaigns/${cid}/generation-status`);
+        const allJobs = Object.values(st.data.jobs);
+        const running = allJobs.find((j) => j.status === "running");
+        const job = running || allJobs[allJobs.length - 1] || null;
+        if (!job) { clearInterval(poll); setGenProgress(null); setEngineRunning(false); return; }
+        setGenProgress({ done: job.done || 0, total: job.total || generating || 0 });
+        loadCampaignLeads(cid);
+        if (job.status === "complete") {
+          clearInterval(poll);
+          setGenProgress(null);
+          setEngineRunning(false);
+          loadCampaignLeads(cid);
+          toast.success(`Generated ${job.done} email${job.done === 1 ? "" : "s"}`);
+        }
+      } catch { clearInterval(poll); setGenProgress(null); setEngineRunning(false); }
+    }, 3000);
+  };
+
   // Add selected panel leads to campaign and auto-generate emails
   const addSelectedToCampaign = async () => {
-    if (!id || selectedPanelLeads.length === 0) return;
+    const cid = activeCampaignId || id;
+    if (!cid || selectedPanelLeads.length === 0) return;
     try {
-      const { data } = await api.post(`/campaigns/${id}/leads/batch`, { lead_ids: selectedPanelLeads });
+      const { data } = await api.post(`/campaigns/${cid}/leads/batch`, { lead_ids: selectedPanelLeads });
       if (data.added === 0) {
         toast.info("Leads already in campaign");
         return;
       }
       toast.success(`Added ${data.added} lead${data.added === 1 ? '' : 's'} — generating emails...`);
-      const campaign = await api.get(`/campaigns/${id}`);
+      const campaign = await api.get(`/campaigns/${cid}`);
       setSelectedLeads(campaign.data.lead_ids || []);
-      loadCampaignLeads();
-      const engine = await api.post(`/campaigns/${id}/run-engine`);
-      toast.success(`Generated ${engine.data.generated} personalized emails`);
-      loadCampaignLeads();
-      setReviewMode(true);
-      setReviewIndex(0);
+      loadCampaignLeads(cid);
+      const engine = await api.post(`/campaigns/${cid}/run-engine`);
+      if (engine.data.job_id) {
+        pollGeneration(cid, engine.data.job_id, engine.data.generating);
+      } else {
+        toast.success(`Generated ${engine.data.generated || 0} personalized emails`);
+        loadCampaignLeads(cid);
+        setReviewMode(true);
+        setReviewIndex(0);
+      }
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Failed to add leads");
     }
@@ -292,30 +336,17 @@ export default function CampaignBuilder() {
 
   // Run Campaign Engine - generates personalized openers for all leads
   const runCampaignEngine = async () => {
-    if (!id) return;
+    const cid = activeCampaignId || id;
+    if (!cid) return;
     setEngineRunning(true);
     try {
-      const { data } = await api.post(`/campaigns/${id}/run-engine`);
+      const { data } = await api.post(`/campaigns/${cid}/run-engine`);
       if (data.job_id) {
         toast.success(`Generating emails for ${data.generating} leads in background`);
-        const poll = setInterval(async () => {
-          try {
-            const st = await api.get(`/campaigns/${id}/generation-status`);
-            const job = Object.values(st.data.jobs)[0];
-            if (!job) { clearInterval(poll); setEngineRunning(false); return; }
-            if (job.status === "complete") {
-              clearInterval(poll);
-              setEngineRunning(false);
-              loadCampaignLeads();
-              setReviewMode(true);
-              setReviewIndex(0);
-              toast.success(`Generated ${job.done} emails`);
-            }
-          } catch { clearInterval(poll); setEngineRunning(false); }
-        }, 3000);
+        pollGeneration(cid, data.job_id, data.generating);
       } else {
         toast.success(`Campaign engine processed ${data.generated} emails`);
-        loadCampaignLeads();
+        loadCampaignLeads(cid);
         setReviewMode(true);
         setReviewIndex(0);
         setEngineRunning(false);
@@ -370,16 +401,6 @@ export default function CampaignBuilder() {
 
   const prevReview = () => {
     if (reviewIndex > 0) setReviewIndex(reviewIndex - 1);
-  };
-
-  const startReview = () => {
-    setReviewMode(true);
-    setReviewIndex(0);
-  };
-
-  const exitReview = () => {
-    setReviewMode(false);
-    setReviewIndex(0);
   };
 
   // Assigned-leads / review-progress summary, driven by the same data the
@@ -516,34 +537,23 @@ export default function CampaignBuilder() {
         body_text: htmlToText(rest.body_html || "") || rest.body || "",
       }));
       const payload = { name, goal, steps: cleanSteps, lead_ids: selectedLeads, signature_id: signatureId || null, send_window_start: sendWindowStart, send_window_end: sendWindowEnd, timezone };
-      let cid = id;
+      let cid = activeCampaignId || id;
       if (!cid) {
         const { data } = await api.post("/campaigns", payload);
         cid = data.id;
+        setActiveCampaignId(cid);
+        window.history.replaceState(null, "", `/app/campaigns/${cid}`);
       } else {
-        await api.put(`/campaigns/${id}`, payload);
+        await api.put(`/campaigns/${cid}`, payload);
       }
       if (cid && selectedLeads.length > 0) {
         try {
           const engine = await api.post(`/campaigns/${cid}/run-engine`);
           if (engine.data.job_id) {
             toast.success(`Generating emails for ${engine.data.generating} leads in background`);
-            const poll = setInterval(async () => {
-              try {
-                const st = await api.get(`/campaigns/${cid}/generation-status`);
-                const job = Object.values(st.data.jobs)[0];
-                if (!job) { clearInterval(poll); return; }
-                if (job.status === "complete") {
-                  clearInterval(poll);
-                  loadCampaignLeads();
-                  setReviewMode(true);
-                  setReviewIndex(0);
-                  toast.success(`Generated ${job.done} emails`);
-                }
-              } catch { clearInterval(poll); }
-            }, 3000);
+            pollGeneration(cid, engine.data.job_id, engine.data.generating);
           } else {
-            loadCampaignLeads();
+            loadCampaignLeads(cid);
             setReviewMode(true);
             setReviewIndex(0);
             toast.success(`Saved — emails ready`);
@@ -559,7 +569,8 @@ export default function CampaignBuilder() {
   };
 
   const launch = async (skipPending) => {
-    if (!id) { toast.error("Save first"); return; }
+    const cid = activeCampaignId || id;
+    if (!cid) { toast.error("Save first"); return; }
     if (skipPending === undefined && !leadStats.canLaunch && leadStats.approved > 0) {
       toast.info(`Send to ${leadStats.approved} approved leads only?`, {
         description: `${leadStats.total - leadStats.approved} leads need review and will be skipped`,
@@ -570,7 +581,7 @@ export default function CampaignBuilder() {
     }
     setBusy(true);
     try {
-      const { data } = await api.post(`/campaigns/${id}/launch${skipPending ? "?skip_pending=true" : ""}`);
+      const { data } = await api.post(`/campaigns/${cid}/launch${skipPending ? "?skip_pending=true" : ""}`);
       toast.success(`Launched — ${data.queued} email${data.queued === 1 ? "" : "s"} queued`, {
         description: "They go out inside your sending window, spread across your mailboxes.",
       });
@@ -595,6 +606,15 @@ export default function CampaignBuilder() {
         right={
           <div className="flex gap-2">
             <button data-testid="save-campaign" onClick={save} disabled={busy} className="btn-secondary"><Save size={14} /> Save</button>
+            <button
+              data-testid="toggle-preview"
+              onClick={() => setReviewMode((v) => !v)}
+              disabled={leadStats.total === 0}
+              title={leadStats.total === 0 ? "Add at least one lead to preview generated emails" : ""}
+              className="btn-secondary"
+            >
+              {reviewMode ? <><PenSquare size={14} /> Edit template</> : <><Eye size={14} /> Preview</>}
+            </button>
             <button
               data-testid="launch-campaign"
               onClick={launch}
@@ -637,7 +657,7 @@ export default function CampaignBuilder() {
                 <button
                   onClick={() => setActiveStep(i)}
                   data-testid={`step-${i}`}
-                  <div className="w-full text-left p-3 border transition-colors duration-150 ${i === activeStep ? "border-ink bg-surfacehover" : "border-line hover:bg-surfacehover"} rounded-xl"}
+                  className={`w-full text-left p-3 border transition-colors duration-150 ${i === activeStep ? "border-ink bg-surfacehover" : "border-line hover:bg-surfacehover"} rounded-xl`}
                 >
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-1.5">
@@ -770,271 +790,157 @@ export default function CampaignBuilder() {
         {/* Editor */}
         <section className="col-span-full lg:col-span-6 p-4 sm:p-6 bg-bone space-y-4">
           {reviewMode ? (
-            /* REVIEW MODE — replaces editor */
-            <div className="shadow-card p-6 sm:p-8 rounded-2xl">
+            /* REVIEW MODE — split pane: template left, generated email right */
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
               {(() => {
                 const reviewEmails = campaignLeads.filter(l => l.personalized);
                 const current = reviewEmails[reviewIndex];
-                if (!current) return <div className="text-center py-8 text-body text-ink-muted">No emails to review</div>;
-                return (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between border-b border-line pb-3">
-                      <div className="flex items-center gap-3">
-                        <span className="text-caption text-ink-muted font-mono">{reviewIndex + 1} / {reviewEmails.length}</span>
-                        <span className={`text-caption font-medium ${current.email_status === "approved" ? "text-success" : current.email_status === "rejected" ? "text-danger" : "text-warning"}`}>
-                          {current.email_status === "approved" ? "Approved" : current.email_status === "rejected" ? "Rejected" : "Draft"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={prevReview} disabled={reviewIndex === 0} className="btn-ghost text-xs px-2 py-1"><ChevronLeft size={12} /> Prev</button>
-                        <button onClick={nextReview} disabled={reviewIndex >= reviewEmails.length - 1} className="btn-ghost text-xs px-2 py-1">Next <ChevronRight size={12} /></button>
-                        <button onClick={exitReview} className="btn-ghost text-xs text-ink-muted px-2 py-1">Exit</button>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-medium">{current.first_name} {current.last_name}</span>
-                        <span className="text-caption text-ink-muted ml-2">{current.company}{current.title ? ` · ${current.title}` : ''}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {current.personalized_opener && (
-                          <button onClick={() => setEditingOpener({ leadId: current.id, opener: current.personalized_opener })} className="btn-ghost text-xs flex items-center gap-1">
-                            <Edit2 size={12} /> Edit Opener
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="ui-label mb-1">Subject</div>
-                      <div className="w-full text-body font-semibold border border-line rounded-xl px-3 py-2">{current.email_subject || "(no subject)"}</div>
-                    </div>
-                    <div>
-                      <div className="ui-label mb-1">Body</div>
-                      <div className="max-h-80 overflow-y-auto text-body text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded-xl p-3 bg-white">
-                        {current.email_body || current.email_body_html ? (
-                          <div dangerouslySetInnerHTML={{ __html: current.email_body_html || current.email_body?.replace(/\n/g, "<br>") || "" }} />
-                        ) : (
-                          <div className="text-ink-muted italic">No content</div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Write from real research */}
-                    <div className="shadow-card p-4 rounded-2xl">
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <FileSearch size={14} className="text-ink" />
-                        <div className="text-caption font-semibold">Write from real research</div>
-                      </div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <select
-                          value={previewLead?.id || ""}
-                          onChange={(e) => setPreviewLeadId(e.target.value)}
-                          className="border border-line rounded-lg px-2 py-1 text-caption flex-1 min-w-0"
-                        >
-                          {leads.length === 0 && <option value="">No leads yet</option>}
-                          {leads.map((l) => (
-                            <option key={l.id} value={l.id}>
-                              {l.first_name} {l.last_name} · {l.company || "—"}
-                            </option>
-                          ))}
-                        </select>
-                        <button onClick={writeWithAI} disabled={busy || !leads.length}
-                          className="btn-primary text-xs disabled:opacity-50 shrink-0">
-                          {chainStep ? <Loader2 size={12} className="animate-spin" /> : <FileSearch size={12} />}
-                          {chainStep ? "Writing…" : "Draft with research"}
-                        </button>
-                      </div>
-                      {chainStep && (
-                        <div className="flex items-center gap-1 mb-2" data-testid="chain-progress">
-                          {CHAIN_STEPS.map((s, i) => {
-                            const idx = CHAIN_STEPS.findIndex((x) => x.key === chainStep);
-                            const done = chainStep && i < idx;
-                            const active = chainStep === s.key;
-                            return (
-                              <div key={s.key} className="flex items-center gap-1 flex-1">
-                                <div className={`flex items-center gap-1 text-tiny font-mono uppercase tracking-wider ${
-                                  active ? "text-ink font-semibold" : done ? "text-ink-muted" : "text-ink-disabled"
-                                }`}>
-                                  {done ? <Check size={12} /> : active ? <Loader2 size={12} className="animate-spin" /> : <span className="w-[9px]" />}
-                                  {s.label}
-                                </div>
-                                {i < CHAIN_STEPS.length - 1 && <div className="flex-1 h-px bg-line" />}
-                              </div>
-                            );
-                          })}
+                const template = steps[activeStep] || steps[0] || {};
+                if (!current) return (
+                  <div className="lg:col-span-2 shadow-card rounded-2xl bg-white p-12 text-center">
+                    {genProgress ? (
+                      <>
+                        <Loader2 size={22} className="animate-spin mx-auto text-ink-muted mb-3" />
+                        <div className="text-body font-medium">
+                          Generating personalized emails… {genProgress.done}/{genProgress.total || "?"}
                         </div>
-                      )}
-                      {draftMeta && (
-                        <div className="space-y-1">
-                          {draftMeta.has_angle ? (
-                            <div className="flex items-start gap-1.5 text-tiny bg-bone border border-line rounded-xl px-2 py-1.5">
-                              <Flame size={12} className="text-ink mt-0.5 shrink-0" />
-                              <div>
-                                <div className="font-medium">{draftMeta.angle?.angle}</div>
-                                {draftMeta.angle?.trigger && (
-                                  <div className="text-ink-muted mt-0.5">{draftMeta.angle.trigger}</div>
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-start gap-1.5 text-tiny bg-warning/10 border border-warning/30 rounded-xl px-2 py-1.5 text-warning">
-                              <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-                              <div>
-                                <div className="font-medium">
-                                  {draftMeta.has_signal
-                                    ? "Researched — but no usable trigger."
-                                    : "No public signals found for this company."}
-                                </div>
-                                <div className="mt-0.5">{draftMeta.note}</div>
-                              </div>
-                            </div>
-                          )}
-                          {!!draftMeta.changes?.length && (
-                            <details className="text-tiny text-ink-muted">
-                              <summary className="cursor-pointer hover:text-ink">What the humanise pass changed</summary>
-                              <ul className="mt-1 pl-3 list-disc space-y-0.5">
-                                {draftMeta.changes.map((c, i) => <li key={i}>{c}</li>)}
-                              </ul>
-                            </details>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Signature */}
-                    <div className="shadow-card p-4 rounded-2xl">
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <Signature size={14} className="text-ink" />
-                        <div className="text-caption font-semibold">Signature</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <select value={signatureId} onChange={(e) => setSignatureId(e.target.value)}
-                          className="border border-line rounded-lg px-2 py-1 text-caption flex-1 min-w-0">
-                          <option value="">No signature</option>
-                          {signatures.map((s) => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
-                          ))}
-                        </select>
-                        <button onClick={() => setShowSignatureModal(true)} className="btn-ghost text-xs shrink-0" title="New signature">
-                          <Plus size={12} />
-                        </button>
-                        {signatureId && (
-                          <button onClick={() => { const s = signatures.find((x) => x.id === signatureId); if (s) deleteSignature(s.id); }}
-                            className="btn-ghost text-xs text-danger/70 shrink-0" title="Delete signature">
-                            <Trash2 size={12} />
-                          </button>
-                        )}
-                      </div>
-                      {signatureId && (() => {
-                        const sig = signatures.find((s) => s.id === signatureId);
-                        if (!sig) return null;
-                        return (
-                          <div className="mt-1 text-tiny text-ink-tertiary border-t border-line pt-1"
-                            dangerouslySetInnerHTML={{ __html: sig.content_html || sig.content_text || '' }} />
-                        );
-                      })()}
-                    </div>
-
-                    {/* Personalized Emails */}
-                    {id && (
-                      <div className="shadow-card p-4 rounded-2xl">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-1.5">
-                            <Mail size={14} className="text-ink" />
-                            <div className="text-caption font-semibold">Personalized Emails</div>
+                        <div className="text-caption text-ink-muted mt-1">This updates live — no need to refresh.</div>
+                        {genProgress.total > 0 && (
+                          <div className="h-1.5 max-w-xs mx-auto mt-4 bg-line rounded-full overflow-hidden">
+                            <div className="h-full bg-accent transition-all duration-500" style={{ width: `${Math.min(100, (genProgress.done / genProgress.total) * 100)}%` }} />
                           </div>
-                          <span className="text-caption text-ink-muted">{campaignLeads.filter((l) => l.personalized).length}/{campaignLeads.length}</span>
-                        </div>
-                        {campaignLeads.length > 0 && (
-                          <>
-                            <div className="flex items-center gap-1 mb-2">
-                              {campaignLeads.some(l => !l.personalized) && (
-                                <button onClick={runCampaignEngine} disabled={engineRunning} className="btn-primary text-xs flex items-center gap-1">
-                                  {engineRunning ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
-                                  {engineRunning ? "Engine…" : "Generate All"}
-                                </button>
-                              )}
-                              {campaignLeads.some(l => l.personalized && l.email_status !== "approved") && (
-                                <button onClick={approveAllEmails} className="btn-secondary text-xs flex items-center gap-1">
-                                  <ThumbsUp size={12} />
-                                  Approve All
-                                </button>
-                              )}
-                              {campaignLeads.every(l => l.personalized) && campaignLeads.length > 0 && (
-                                <button onClick={startReview} className="btn-secondary text-xs flex items-center gap-1">
-                                  <Eye size={12} />
-                                  Review
-                                </button>
-                              )}
-                            </div>
-                            <div className="max-h-48 overflow-y-auto space-y-1">
-                              {campaignLeads.map((cl, idx) => (
-                                <div key={cl.id} className="flex items-center gap-1.5 px-1 py-1 rounded-lg hover:bg-surfacehover cursor-pointer transition-colors duration-150"
-                                  onClick={() => { setReviewIndex(idx); setReviewMode(true); }}>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-caption font-medium truncate">{cl.first_name} {cl.last_name}</div>
-                                    <div className="text-tiny text-ink-muted truncate">{cl.company}{cl.title ? ` · ${cl.title}` : ''}</div>
-                                  </div>
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    {cl.personalized ? (
-                                      <>
-                                        <span className={`text-tiny font-mono ${cl.email_status === "approved" ? "text-success" : cl.email_status === "rejected" ? "text-danger" : "text-warning"}`}>
-                                          {cl.email_status === "approved" ? "Approved" : cl.email_status === "rejected" ? "Rejected" : "Draft"}
-                                        </span>
-                                        {cl.email_status !== "approved" && (
-                                          <button onClick={(e) => { e.stopPropagation(); approveEmail(cl.id); }} className="btn-ghost text-success p-0.5" title="Approve"><ThumbsUp size={12} /></button>
-                                        )}
-                                      </>
-                                    ) : (
-                                      <button onClick={(e) => { e.stopPropagation(); generateLeadEmail(cl.id); }} disabled={generatingEmail === cl.id} className="btn-primary text-tiny px-1.5 py-0.5">
-                                        {generatingEmail === cl.id ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </>
                         )}
-                      </div>
-                    )}
-
-                    {editingOpener && editingOpener.leadId === current.id && (
-                      <div className="bg-warning/10 border border-warning/30 rounded-xl p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-medium text-warning">Edit Personalized Opener</span>
-                          <button onClick={() => setEditingOpener(null)} className="btn-ghost text-xs">Cancel</button>
-                        </div>
-                        <textarea
-                          value={editingOpener.opener}
-                          onChange={(e) => setEditingOpener({...editingOpener, opener: e.target.value})}
-                          className="w-full min-h-[60px] border border-line rounded-lg px-3 py-2 text-input font-mono"
-                        />
-                        <div className="flex justify-end gap-2 mt-2">
-                          <button onClick={() => regenerateOpener(current.id)} className="btn-ghost text-xs flex items-center gap-1">
-                            <RotateCw size={12} /> Regenerate
+                      </>
+                    ) : (
+                      <>
+                        <Mail size={22} className="mx-auto text-ink-disabled mb-3" />
+                        <div className="text-body font-medium text-ink-muted">No personalized emails yet</div>
+                        <p className="text-caption text-ink-muted mt-1 max-w-sm mx-auto">
+                          {leadStats.total === 0
+                            ? "Assign leads from the sidebar, then generate to preview each one here."
+                            : "Run the campaign engine to write a personalized version of your template for each assigned lead."}
+                        </p>
+                        {leadStats.total > 0 && (
+                          <button onClick={runCampaignEngine} disabled={engineRunning} className="btn-primary mt-4 text-sm">
+                            {engineRunning ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                            Generate emails
                           </button>
-                          <button onClick={() => saveOpener(current.id, editingOpener.opener)} className="btn-primary text-xs flex items-center gap-1">
-                            <Check size={12} /> Save Opener
-                          </button>
-                        </div>
-                      </div>
+                        )}
+                      </>
                     )}
-                    <div className="flex items-center gap-2 pt-3 border-t border-line">
-                      {current.email_status === "approved" ? (
-                        <>
-                          <span className="btn-ghost text-success flex items-center gap-1 text-xs"><Check size={12} /> Approved</span>
-                          <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-danger flex items-center gap-1 text-xs"><Flag size={12} /> Reject</button>
-                        </>
-                      ) : (
-                        <>
-                          <button onClick={() => approveEmail(current.id)} className="btn-primary text-xs flex items-center gap-1"><Check size={12} /> Approve</button>
-                          <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-danger flex items-center gap-1 text-xs"><Flag size={12} /> Reject</button>
-                        </>
-                      )}
-                      <button onClick={() => deleteLeadEmail(current.id)} className="btn-ghost text-xs text-danger ml-auto flex items-center gap-1"><Trash2 size={12} /> Remove</button>
-                    </div>
                   </div>
+                );
+                return (
+                  <>
+                    {/* LEFT: Template with placeholders */}
+                    <div className="shadow-card rounded-2xl bg-white">
+                      <div className="p-4 border-b border-line flex items-center justify-between">
+                        <div className="ui-label">Template</div>
+                        <span className="text-tiny text-ink-muted font-mono">{reviewIndex + 1} / {reviewEmails.length}</span>
+                      </div>
+                      <div className="p-4 space-y-3 max-h-[calc(100vh-280px)] overflow-y-auto">
+                        <div>
+                          <div className="text-tiny text-ink-muted mb-1 font-mono">SUBJECT</div>
+                          <div className="text-caption font-semibold font-mono text-ink-secondary">{template.subject || "(no subject)"}</div>
+                        </div>
+                        <div>
+                          <div className="text-tiny text-ink-muted mb-1 font-mono">BODY</div>
+                          <div className="text-caption text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded-xl p-3 bg-bone">
+                            {template.body_html ? (
+                              <div className="prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: template.body_html.replace(/\{\{personalized_opener\}\}/g, '<mark class="bg-warning/20 text-warning px-0.5 rounded">{{personalized_opener}}</mark>') }} />
+                            ) : (
+                              <div className="whitespace-pre-wrap font-mono text-sm text-ink-secondary leading-relaxed">{template.body}</div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 pt-2 border-t border-line">
+                          <button onClick={prevReview} disabled={reviewIndex === 0} className="btn-ghost text-xs px-2 py-1"><ChevronLeft size={12} /> Prev</button>
+                          <button onClick={nextReview} disabled={reviewIndex >= reviewEmails.length - 1} className="btn-ghost text-xs px-2 py-1">Next <ChevronRight size={12} /></button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* RIGHT: Generated email preview + controls */}
+                    <div className="shadow-card rounded-2xl bg-white">
+                      <div className="p-4 border-b border-line flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {/* Jump straight to any contact instead of paging one at a time —
+                              matches Apollo/Clay's contact picker in their preview panes. */}
+                          <select
+                            value={current.id}
+                            onChange={(e) => setReviewIndex(Math.max(0, reviewEmails.findIndex((l) => l.id === e.target.value)))}
+                            data-testid="review-lead-picker"
+                            className="font-medium bg-transparent border-0 focus:outline-none focus:ring-0 max-w-[160px] truncate cursor-pointer"
+                          >
+                            {reviewEmails.map((l) => (
+                              <option key={l.id} value={l.id}>{l.first_name} {l.last_name}</option>
+                            ))}
+                          </select>
+                          <span className={`text-tiny font-mono px-1.5 py-0.5 rounded-full shrink-0 ${current.email_status === "approved" ? "bg-success/10 text-success" : current.email_status === "rejected" ? "bg-danger/10 text-danger" : "bg-warning/10 text-warning"}`}>
+                            {current.email_status === "approved" ? "Approved" : current.email_status === "rejected" ? "Rejected" : "Draft"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {current.personalized_opener && (
+                            editingOpener?.leadId === current.id ? (
+                              <button onClick={() => setEditingOpener(null)} className="btn-ghost text-xs"><X size={12} /> Cancel</button>
+                            ) : (
+                              <button onClick={() => setEditingOpener({ leadId: current.id, opener: current.personalized_opener })} className="btn-ghost text-xs flex items-center gap-1">
+                                <Edit2 size={12} /> Opener
+                              </button>
+                            )
+                          )}
+                          <button onClick={() => regenerateOpener(current.id)} disabled={generatingEmail === current.id} className="btn-ghost text-xs flex items-center gap-1">
+                            <RotateCw size={12} className={generatingEmail === current.id ? "animate-spin" : ""} /> Regenerate
+                          </button>
+                        </div>
+                      </div>
+                      <div className="p-4 space-y-3 max-h-[calc(100vh-280px)] overflow-y-auto">
+                        {/* Opener editing */}
+                        {editingOpener?.leadId === current.id && (
+                          <div className="bg-bone border border-line rounded-xl p-3 space-y-2">
+                            <div className="text-tiny font-mono text-ink-muted">Edit personalized opener</div>
+                            <textarea value={editingOpener.opener} onChange={(e) => setEditingOpener({ ...editingOpener, opener: e.target.value })}
+                              rows={3} className="w-full border border-line px-2 py-1.5 rounded-lg text-sm font-sans" />
+                            <div className="flex justify-end gap-2">
+                              <button onClick={() => setEditingOpener(null)} className="btn-secondary text-xs">Cancel</button>
+                              <button onClick={() => saveOpener(current.id, editingOpener.opener)} className="btn-primary text-xs"><Check size={12} /> Save</button>
+                            </div>
+                          </div>
+                        )}
+                        <div>
+                          <div className="text-tiny text-ink-muted mb-1 font-mono">SUBJECT</div>
+                          <div className="text-caption font-semibold font-mono text-ink-secondary border border-line rounded-xl px-3 py-2">
+                            {current.email_subject || "(no subject)"}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-tiny text-ink-muted mb-1 font-mono">BODY</div>
+                          <div className="max-h-96 overflow-y-auto text-caption text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded-xl p-3 bg-white">
+                            {current.email_body || current.email_body_html ? (
+                              <div dangerouslySetInnerHTML={{ __html: current.email_body_html || current.email_body?.replace(/\n/g, "<br>") || "" }} />
+                            ) : (
+                              <div className="text-ink-muted italic">No content</div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 pt-3 border-t border-line">
+                          {current.email_status === "approved" ? (
+                            <>
+                              <span className="flex items-center gap-1 text-xs text-success font-medium"><Check size={14} /> Approved</span>
+                              <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-xs text-danger flex items-center gap-1 ml-auto"><Flag size={12} /> Reject</button>
+                            </>
+                          ) : (
+                            <>
+                              <button onClick={() => approveEmail(current.id)} className="btn-primary text-xs flex items-center gap-1"><Check size={12} /> Approve</button>
+                              <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-xs text-danger flex items-center gap-1"><Flag size={12} /> Reject</button>
+                            </>
+                          )}
+                          <button onClick={() => deleteLeadEmail(current.id)} className="btn-ghost text-xs text-ink-muted hover:text-danger ml-auto flex items-center gap-1"><Trash2 size={12} /> Remove</button>
+                        </div>
+                      </div>
+                    </div>
+                  </>
                 );
               })()}
             </div>
@@ -1064,7 +970,7 @@ export default function CampaignBuilder() {
                   <div className="ui-label mb-2">Subject</div>
                   <input value={step.subject} onChange={(e) => updateStep({ subject: e.target.value })}
                     data-testid="editor-subject"
-                    className="w-full text-card-title font-display font-semibold border-0 border-b border-line py-2 focus:outline-none focus:border-ink bg-transparent"
+                    className="w-full text-body font-display font-semibold border-0 border-b border-line py-2 focus:outline-none focus:border-ink bg-transparent"
                     placeholder="Quick idea for {{company}}" />
                   <div className="mt-5 flex items-center justify-between">
                     <div className="ui-label">Body</div>
@@ -1104,7 +1010,7 @@ export default function CampaignBuilder() {
               {(step.channel || "") === "sms" && (
                 <>
                   <div className="ui-label mb-1">SMS Body</div>
-                  <p className="text-tiny text-ink-muted mb-2">Short message. Merge fields supported: {{{{first_name}}}}, {{{{company}}}}, etc.</p>
+                  <p className="text-tiny text-ink-muted mb-2">Short message. Merge fields supported: {'{{'}first_name{'}}'}, {'{{'}company{'}}'}, etc.</p>
                   <textarea value={step.body || ""} onChange={(e) => updateStep({ body: e.target.value })}
                     rows={3} maxLength={160} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-sm text-ink"
                     placeholder="Hi {{first_name}}, quick reminder about {{company}}..." />
@@ -1192,6 +1098,8 @@ export default function CampaignBuilder() {
                   </div>
                 </>
               )}
+            </div>
+          )}
 
           {/* Signature modal */}
           {showSignatureModal && (

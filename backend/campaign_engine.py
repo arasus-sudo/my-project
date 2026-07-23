@@ -116,7 +116,7 @@ Schema:
     "channels_strategy": "str"
   }},
   "email_sequence": [
-    {{"day": int, "subject": "str with {{{{first_name}}}}, {{{{company}}}}, {{{{title}}}}", "body": "Full email body string with merge fields. Start with greeting 'Hi {{{{first_name}}}},' then {{{{personalized_opener}}}} on its own line, then fixed body sections, then a CTA question. NEVER include any sign-off, salutation, or signature — no Best regards, no Sincerely, no [Your Name], no [Your Title], no [Your Company], no signature block of any kind. The system appends the signature separately. Example:\n\nHi {{{{first_name}}}},\n\n{{{{personalized_opener}}}}\n\n[About Us]\n\n[Our Service]\n\n[CTA question]\n\nDo NOT write the actual opener — write {{{{personalized_opener}}}} literally.", "goal": "str"}}
+    {{"day": int, "subject": "str with {{{{first_name}}}}, {{{{company}}}}, {{{{title}}}}", "body": "Full email body string with merge fields. Start with greeting 'Hey {{{{first_name}}}},' on its own line, then a blank line, then {{{{personalized_opener}}}} on its own line, then blank line, then fixed body paragraphs. End with a CTA question on its own line. NEVER include any sign-off, salutation, or signature — no Best regards, no Sincerely, no [Your Name], no [Your Title], no [Your Company], no signature block of any kind. The system appends the signature separately. Example:\n\nHey {{{{first_name}}}},\n\n{{{{personalized_opener}}}}\n\n[About Us]\n\n[Our Service]\n\n[CTA question]\n\nDo NOT write the actual opener — write {{{{personalized_opener}}}} literally. Use proper blank lines between each section for clean spacing.", "goal": "str"}}
   ],
   "linkedin_sequence": {{
     "connection_request": "str",
@@ -138,11 +138,13 @@ Schema:
 Generate realistic, specific content for the actual service and target industry. Use {{{{first_name}}}}, {{{{company}}}}, {{{{title}}}} merge fields. Email sequence must have 4-5 emails.
 
 CRITICAL — Every email body MUST:
-1. Contain {{{{personalized_opener}}}} as a literal placeholder on its own line after the greeting
-2. End with a CTA question — NO sign-off, NO salutation, NO signature of any kind
-3. NOT contain: Best, Best regards, Sincerely, [Your Name], [Your Title], [Your Company], or any signature block
+1. Start with 'Hey {{{{first_name}}}},' on its own line followed by a blank line
+2. Contain {{{{personalized_opener}}}} as a literal placeholder on its own line, with a blank line before and after
+3. Use clean blank-line paragraph spacing between every section
+4. End with a CTA question — NO sign-off, NO salutation, NO signature of any kind
+5. NOT contain: Best, Best regards, Sincerely, [Your Name], [Your Title], [Your Company], or any signature block
 
-If any body includes a sign-off or lacks {{{{personalized_opener}}}}, the campaign is INVALID. Generate 3-4 sentence body sections after the opener. Stop at the CTA — no closing line."""
+If any body includes a sign-off or lacks {{{{personalized_opener}}}}, the campaign is INVALID. Generate 3-4 sentence body sections after the opener. Stop at the CTA — no closing line. Use proper \\n\\n spacing between each section for clean rendering."""
 
 
 # ---------------------------------------------------------------------------
