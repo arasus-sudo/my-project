@@ -9,7 +9,7 @@ import InnoiraLogo from "../components/InnoiraLogo";
 import {
   LogOut, ArrowRight, Settings as SettingsIcon, Activity as ActivityIcon,
   Mail, PhoneCall, CalendarCheck, FileBarChart, Share2, Zap, Users, TrendingUp,
-  AlertCircle, Circle, Coins,
+  AlertCircle, Circle, Coins, Smartphone, Phone,
 } from "lucide-react";
 
 /** Each fetcher returns a rich per-agent status: what it's doing right now,
@@ -101,6 +101,57 @@ const AGENT_STATUS = {
       needs: pending, needsLabel: "posts to approve", needsHref: "/app/social-eq/queue",
     };
   },
+  crm: async () => {
+    const [leads, deals, quarantine] = await Promise.all([
+      api.get("/leads?page_size=1"),
+      api.get("/deals"),
+      api.get("/quarantine").catch(() => ({ data: [] })),
+    ]);
+    const openDeals = deals.data.filter((d) => !["won", "lost"].includes(d.stage));
+    return {
+      active: openDeals.length > 0,
+      working: openDeals.length > 0 ? `${openDeals.length} deal${openDeals.length > 1 ? "s" : ""} in pipeline` : "No open deals",
+      metrics: [
+        { label: "Leads", value: leads.data.total },
+        { label: "Deals", value: deals.data.length },
+      ],
+      needs: quarantine.data.length, needsLabel: "leads quarantined", needsHref: "/app/crm",
+    };
+  },
+  sms: async () => {
+    const [broadcasts, analytics] = await Promise.all([
+      api.get("/sms-eq/broadcasts"),
+      api.get("/sms-eq/analytics").catch(() => ({ data: null })),
+    ]);
+    const active = broadcasts.data.filter((b) => b.status === "active").length;
+    const drafts = broadcasts.data.filter((b) => b.status === "draft").length;
+    return {
+      active: active > 0,
+      working: active > 0 ? `${active} broadcast${active > 1 ? "s" : ""} sending` : drafts > 0 ? `${drafts} draft broadcast${drafts > 1 ? "s" : ""}` : "No broadcasts running",
+      metrics: [
+        { label: "Broadcasts", value: analytics.data?.total_broadcasts ?? broadcasts.data.length },
+        { label: "Sent", value: analytics.data?.total_sent ?? 0 },
+      ],
+      needs: drafts, needsLabel: "draft broadcasts", needsHref: "/app/sms-eq/broadcasts",
+    };
+  },
+  whatsapp: async () => {
+    const [broadcasts, analytics] = await Promise.all([
+      api.get("/whatsapp-eq/broadcasts"),
+      api.get("/whatsapp-eq/analytics").catch(() => ({ data: null })),
+    ]);
+    const active = broadcasts.data.filter((b) => b.status === "active").length;
+    const drafts = broadcasts.data.filter((b) => b.status === "draft").length;
+    return {
+      active: active > 0,
+      working: active > 0 ? `${active} broadcast${active > 1 ? "s" : ""} sending` : drafts > 0 ? `${drafts} draft broadcast${drafts > 1 ? "s" : ""}` : "No broadcasts running",
+      metrics: [
+        { label: "Broadcasts", value: analytics.data?.total_broadcasts ?? broadcasts.data.length },
+        { label: "Contacts", value: analytics.data?.total_contacts ?? "—" },
+      ],
+      needs: drafts, needsLabel: "draft broadcasts", needsHref: "/app/whatsapp-eq/broadcasts",
+    };
+  },
 };
 
 const ACTIVITY_META = {
@@ -109,6 +160,9 @@ const ACTIVITY_META = {
   scheduler: { icon: CalendarCheck, label: "Schedule EQ" },
   proposal: { icon: FileBarChart, label: "Proposal EQ" },
   social: { icon: Share2, label: "Social EQ" },
+  crm: { icon: Users, label: "CRM" },
+  sms: { icon: Smartphone, label: "SMS EQ" },
+  whatsapp: { icon: Phone, label: "WhatsApp EQ" },
 };
 
 export default function SuiteHome() {

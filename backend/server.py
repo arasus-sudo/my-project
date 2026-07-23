@@ -1188,15 +1188,20 @@ async def approve_all_campaign_emails(cid: str, user=Depends(current_user)):
 
 @api.post("/campaigns/{cid}/leads/{lead_id}/update-opener")
 async def update_lead_opener(cid: str, lead_id: str, body: Dict[str, Any], user=Depends(current_user)):
-    """Manually update the personalized opener for a lead (from user edit)."""
+    """Manually set/update a lead's opener — works even if the lead has never
+    been through AI generation. First edit on an ungenerated lead creates a
+    draft personalized_emails entry instead of requiring generation first."""
     wid = user["workspace_id"]
     campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
     if not campaign:
         raise HTTPException(404, "Campaign not found")
+    if lead_id not in (campaign.get("lead_ids") or []):
+        raise HTTPException(404, "Lead not assigned to this campaign")
     new_opener = body.get("opener", "")
     if not new_opener:
         raise HTTPException(400, "opener is required")
     step_template = (campaign.get("steps") or [{}])[0]
+    template_subject = step_template.get("subject", "")
     template_body = step_template.get("body", "")
     template_html = step_template.get("body_html", "")
     merged_body = template_body.replace("{{personalized_opener}}", new_opener)
@@ -1211,7 +1216,20 @@ async def update_lead_opener(cid: str, lead_id: str, body: Dict[str, Any], user=
         }}
     )
     if result.modified_count == 0:
-        raise HTTPException(404, "Personalized email not found")
+        # No existing entry for this lead — never AI-generated. Create a
+        # manual draft entry instead of requiring generation first.
+        entry = {
+            "lead_id": lead_id, "subject": template_subject,
+            "body": merged_body, "body_html": merged_html,
+            "personalized_opener": new_opener, "status": "draft",
+            "generated_at": now_iso(), "manual": True,
+        }
+        result2 = await db.campaigns.update_one(
+            {"id": cid, "workspace_id": wid},
+            {"$push": {"personalized_emails": entry}},
+        )
+        if result2.modified_count == 0:
+            raise HTTPException(404, "Campaign not found")
     await _audit(user, "campaign.lead.opener_updated", {"campaign_id": cid, "lead_id": lead_id})
     return {"status": "draft", "personalized_opener": new_opener, "body": merged_body}
 

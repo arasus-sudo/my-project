@@ -385,14 +385,10 @@ export default function CampaignBuilder() {
     }
   };
 
-  // Review navigation
-  const getReviewEmails = () => {
-    return campaignLeads.filter(l => l.personalized).sort((a, b) => {
-      const idxA = campaignLeads.findIndex(l => l.id === a.id);
-      const idxB = campaignLeads.findIndex(l => l.id === b.id);
-      return idxA - idxB;
-    });
-  };
+  // Review navigation — every assigned lead is previewable (the backend
+  // resolves merge fields against the raw template even before any AI
+  // generation runs), not just leads that have already been personalized.
+  const getReviewEmails = () => campaignLeads;
 
   const nextReview = () => {
     const emails = getReviewEmails();
@@ -791,9 +787,22 @@ export default function CampaignBuilder() {
         <section className="col-span-full lg:col-span-6 p-4 sm:p-6 bg-bone space-y-4">
           {reviewMode ? (
             /* REVIEW MODE — split pane: template left, generated email right */
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
+            <div className="space-y-3">
+              {campaignLeads.length > 0 && (
+                <div className="flex items-center justify-between gap-2 shadow-card rounded-2xl bg-white px-4 py-2.5">
+                  <div className="text-caption text-ink-muted">
+                    <span className="font-medium text-ink">{leadStats.approved}</span> approved · {" "}
+                    <span className="font-medium text-ink">{leadStats.rejected}</span> rejected · {" "}
+                    <span className="font-medium text-ink">{leadStats.total - leadStats.reviewed}</span> awaiting review
+                  </div>
+                  <button onClick={approveAllEmails} disabled={leadStats.total === 0} className="btn-secondary text-xs" data-testid="approve-all-emails">
+                    <Check size={12} /> Approve all
+                  </button>
+                </div>
+              )}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
               {(() => {
-                const reviewEmails = campaignLeads.filter(l => l.personalized);
+                const reviewEmails = getReviewEmails();
                 const current = reviewEmails[reviewIndex];
                 const template = steps[activeStep] || steps[0] || {};
                 if (!current) return (
@@ -814,18 +823,14 @@ export default function CampaignBuilder() {
                     ) : (
                       <>
                         <Mail size={22} className="mx-auto text-ink-disabled mb-3" />
-                        <div className="text-body font-medium text-ink-muted">No personalized emails yet</div>
+                        <div className="text-body font-medium text-ink-muted">
+                          {leadStats.total === 0 ? "No leads assigned yet" : "Select a lead to preview"}
+                        </div>
                         <p className="text-caption text-ink-muted mt-1 max-w-sm mx-auto">
                           {leadStats.total === 0
-                            ? "Assign leads from the sidebar, then generate to preview each one here."
-                            : "Run the campaign engine to write a personalized version of your template for each assigned lead."}
+                            ? "Assign leads from the sidebar — every lead previews with your template's merge fields filled in, even before you generate."
+                            : "Pick a lead from the dropdown on the right to see its preview."}
                         </p>
-                        {leadStats.total > 0 && (
-                          <button onClick={runCampaignEngine} disabled={engineRunning} className="btn-primary mt-4 text-sm">
-                            {engineRunning ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
-                            Generate emails
-                          </button>
-                        )}
                       </>
                     )}
                   </div>
@@ -881,30 +886,33 @@ export default function CampaignBuilder() {
                           </span>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          {current.personalized_opener && (
-                            editingOpener?.leadId === current.id ? (
-                              <button onClick={() => setEditingOpener(null)} className="btn-ghost text-xs"><X size={12} /> Cancel</button>
-                            ) : (
-                              <button onClick={() => setEditingOpener({ leadId: current.id, opener: current.personalized_opener })} className="btn-ghost text-xs flex items-center gap-1">
-                                <Edit2 size={12} /> Opener
-                              </button>
-                            )
+                          {editingOpener?.leadId === current.id ? (
+                            <button onClick={() => setEditingOpener(null)} className="btn-ghost text-xs"><X size={12} /> Cancel</button>
+                          ) : (
+                            <button onClick={() => setEditingOpener({ leadId: current.id, opener: current.personalized_opener })} className="btn-ghost text-xs flex items-center gap-1">
+                              <Edit2 size={12} /> {current.personalized_opener ? "Opener" : "Add opener"}
+                            </button>
                           )}
                           <button onClick={() => regenerateOpener(current.id)} disabled={generatingEmail === current.id} className="btn-ghost text-xs flex items-center gap-1">
-                            <RotateCw size={12} className={generatingEmail === current.id ? "animate-spin" : ""} /> Regenerate
+                            <RotateCw size={12} className={generatingEmail === current.id ? "animate-spin" : ""} /> {current.personalized ? "Regenerate" : "Generate with AI"}
                           </button>
                         </div>
                       </div>
                       <div className="p-4 space-y-3 max-h-[calc(100vh-280px)] overflow-y-auto">
-                        {/* Opener editing */}
+                        {/* Opener editing — available even before any AI generation has
+                            run, so a user can write/edit it by hand and immediately see
+                            an approvable draft without spending a generation credit. */}
                         {editingOpener?.leadId === current.id && (
                           <div className="bg-bone border border-line rounded-xl p-3 space-y-2">
-                            <div className="text-tiny font-mono text-ink-muted">Edit personalized opener</div>
+                            <div className="text-tiny font-mono text-ink-muted">
+                              {current.personalized_opener ? "Edit personalized opener" : "Write an opener"}
+                            </div>
                             <textarea value={editingOpener.opener} onChange={(e) => setEditingOpener({ ...editingOpener, opener: e.target.value })}
-                              rows={3} className="w-full border border-line px-2 py-1.5 rounded-lg text-sm font-sans" />
+                              rows={3} placeholder="A one-line hook personal to this lead…"
+                              className="w-full border border-line px-2 py-1.5 rounded-lg text-sm font-sans" />
                             <div className="flex justify-end gap-2">
                               <button onClick={() => setEditingOpener(null)} className="btn-secondary text-xs">Cancel</button>
-                              <button onClick={() => saveOpener(current.id, editingOpener.opener)} className="btn-primary text-xs"><Check size={12} /> Save</button>
+                              <button onClick={() => saveOpener(current.id, editingOpener.opener)} disabled={!editingOpener.opener?.trim()} className="btn-primary text-xs"><Check size={12} /> Save</button>
                             </div>
                           </div>
                         )}
@@ -925,7 +933,9 @@ export default function CampaignBuilder() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 pt-3 border-t border-line">
-                          {current.email_status === "approved" ? (
+                          {!current.personalized ? (
+                            <span className="text-caption text-ink-muted">Write an opener above (or generate with AI) to enable approval.</span>
+                          ) : current.email_status === "approved" ? (
                             <>
                               <span className="flex items-center gap-1 text-xs text-success font-medium"><Check size={14} /> Approved</span>
                               <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-xs text-danger flex items-center gap-1 ml-auto"><Flag size={12} /> Reject</button>
@@ -936,13 +946,16 @@ export default function CampaignBuilder() {
                               <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-xs text-danger flex items-center gap-1"><Flag size={12} /> Reject</button>
                             </>
                           )}
-                          <button onClick={() => deleteLeadEmail(current.id)} className="btn-ghost text-xs text-ink-muted hover:text-danger ml-auto flex items-center gap-1"><Trash2 size={12} /> Remove</button>
+                          {current.personalized && (
+                            <button onClick={() => deleteLeadEmail(current.id)} className="btn-ghost text-xs text-ink-muted hover:text-danger ml-auto flex items-center gap-1"><Trash2 size={12} /> Remove</button>
+                          )}
                         </div>
                       </div>
                     </div>
                   </>
                 );
               })()}
+              </div>
             </div>
           ) : (
             /* TEMPLATE EDITOR — multi-channel */
