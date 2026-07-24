@@ -29,6 +29,7 @@ const CRM = lazy(() => import("./pages/CRM"));
 const Pipeline = lazy(() => import("./pages/Pipeline"));
 const LeadLists = lazy(() => import("./pages/LeadLists"));
 const CustomFieldsSettings = lazy(() => import("./pages/CustomFieldsSettings"));
+const Signatures = lazy(() => import("./pages/Signatures"));
 const Companies = lazy(() => import("./pages/Companies"));
 const { CompaniesList, CompanyDetail } = Companies;
 const LeadSearch = lazy(() => import("./pages/LeadSearch"));
@@ -157,6 +158,7 @@ function App() {
               <Route path="crm/pipeline" element={<Pipeline />} />
               <Route path="crm/companies" element={<CompaniesList />} />
               <Route path="crm/companies/:id" element={<CompanyDetail />} />
+              <Route path="signatures" element={<Signatures />} />
               {/* Legacy leads routes redirect to CRM */}
               <Route path="leads" element={<Navigate to="/app/crm/leads" replace />} />
               <Route path="leads/:id" element={<Navigate to="/app/crm/leads/:id" replace />} />

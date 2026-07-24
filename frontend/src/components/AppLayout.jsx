@@ -44,6 +44,7 @@ const CRM_NAV = [
   { to: "/app/crm/lists", label: "Lead Lists", icon: ListChecks, tid: "crm-nav-lists" },
   { to: "/app/crm/pipeline", label: "Pipeline", icon: Kanban, tid: "crm-nav-pipeline" },
   { to: "/app/crm/custom-fields", label: "Custom Fields", icon: SettingsIcon, tid: "crm-nav-custom-fields" },
+  { to: "/app/signatures", label: "Signatures", icon: PenSquare, tid: "nav-signatures" },
 ];
 
 const CREATE_NAV = [

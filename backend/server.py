@@ -1598,6 +1598,20 @@ async def delete_signature(sid: str, user=Depends(current_user)):
     return {"ok": True}
 
 
+@api.put("/signatures/{sid}")
+async def update_signature(sid: str, body: SignatureIn, user=Depends(current_user)):
+    sig = body.model_dump()
+    sig["updated_at"] = now_iso()
+    result = await db.signatures.update_one(
+        {"id": sid, "workspace_id": user["workspace_id"]},
+        {"$set": sig}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Signature not found")
+    updated = await db.signatures.find_one({"id": sid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    return updated
+
+
 # ---- Open / click tracking (PUBLIC — called by the recipient's mail client) ----
 _PIXEL = base64.b64decode(
     b"R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
