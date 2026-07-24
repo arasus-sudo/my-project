@@ -42,9 +42,13 @@ jobs:
       - name: Package and deploy backend
         run: |
           cd backend
-          zip -r /tmp/deploy.zip . -x "*__pycache__*" "*venv*" "*.venv*" ".git*"
+          rm -f deploy.zip backend-deploy.zip
+          zip -r /tmp/deploy.zip . \
+            -x "*__pycache__*" "*venv*" "*.venv*" ".git*" "*.log" "*.err" "*.txt" ".env" "deploy.zip" "backend-deploy.zip"
+          zip -r /tmp/deploy.zip requirements.txt
           az webapp deploy \
             --resource-group ${{ env.AZURE_RG }} \
             --name ${{ env.BACKEND_NAME }} \
             --src-path /tmp/deploy.zip \
-            --type zip
+            --type zip \
+            --verbose

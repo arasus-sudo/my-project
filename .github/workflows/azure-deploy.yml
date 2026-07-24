@@ -43,7 +43,7 @@ jobs:
         run: |
           cd backend
           # Remove stale artifacts before zipping
-          rm -f deploy.zip
+          rm -f deploy.zip backend-deploy.zip
           zip -r /tmp/deploy.zip . \
             -x "*__pycache__*" \
             -x "*/__pycache__/*" \
@@ -53,15 +53,20 @@ jobs:
             -x ".git*" \
             -x "*.log" \
             -x "*.err" \
+            -x "*.txt" \
             -x ".env" \
-            -x "deploy.zip"
+            -x "deploy.zip" \
+            -x "backend-deploy.zip"
+          # Re-add requirements.txt explicitly (caught by *.txt exclusion above)
+          zip -r /tmp/deploy.zip requirements.txt
           echo "Zip size: $(du -sh /tmp/deploy.zip | cut -f1)"
-          ls /tmp/deploy.zip
+          ls -lh /tmp/deploy.zip
           az webapp deploy \
             --resource-group ${{ env.AZURE_RG }} \
             --name ${{ env.BACKEND_NAME }} \
             --src-path /tmp/deploy.zip \
-            --type zip
+            --type zip \
+            --verbose
 
       - name: Verify deployment
         run: |
