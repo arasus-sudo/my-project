@@ -9,6 +9,7 @@ quarantine/suppression review flow.
 
 import csv
 import io
+import json
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -16,12 +17,38 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from pymongo.errors import DuplicateKeyError
 
-from server import db, current_user, now_iso, new_id, _audit, _log_activity
+from server import db, current_user, now_iso, new_id, _audit, _log_activity, _is_admin, _llm_chat, _extract_json
 from import_utils import _parse_rows
 
 crm_router = APIRouter()
 
 STAGES = ["new", "qualified", "meeting", "proposal", "won", "lost"]
+
+# Soft-delete: {"deleted_at": None} matches both explicitly-null and (for
+# every pre-existing document) missing `deleted_at` fields under Mongo's
+# normal null-equality semantics, so this is safe to merge into every
+# existing read query without a migration.
+NOT_DELETED = {"deleted_at": None}
+
+
+def _active(workspace_id: str, **extra) -> Dict[str, Any]:
+    return {"workspace_id": workspace_id, **NOT_DELETED, **extra}
+
+
+def require_role(*allowed: str):
+    """Gate a route to workspace roles in `allowed` (suite admins always pass).
+
+    The workspace ROLES set (org_admin/campaign_manager/sdr/viewer) is declared
+    in server.py but wasn't enforced anywhere in this module — a viewer could
+    delete/merge/reshape data same as an admin. This closes that gap for the
+    handful of destructive or schema-shaping actions that need it; reads and
+    normal create/edit stay open to every workspace role.
+    """
+    async def _dep(user=Depends(current_user)):
+        if user.get("role") not in allowed and not _is_admin(user):
+            raise HTTPException(403, "Not permitted for your role")
+        return user
+    return _dep
 
 LEAD_IMPORT_TEMPLATE_COLUMNS = ("first_name", "last_name", "email", "company", "title", "phone", "tags")
 
@@ -56,6 +83,7 @@ class LeadUpdate(BaseModel):
     status: Optional[str] = None
     owner_id: Optional[str] = None
     dnc: Optional[bool] = None
+    custom_fields: Optional[Dict[str, Any]] = None
 
 
 class CompanyIn(BaseModel):
@@ -161,7 +189,7 @@ async def list_leads(
     page_size: int = 25,
     user=Depends(current_user),
 ):
-    query = {"workspace_id": user["workspace_id"]}
+    query = _active(user["workspace_id"])
     total = await db.leads.count_documents(query)
     items = await db.leads.find(query, {"_id": 0}) \
         .sort("created_at", -1) \
@@ -174,9 +202,9 @@ async def list_leads(
 
 @crm_router.get("/leads/export")
 async def export_leads(user=Depends(current_user)):
-    items = await db.leads.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(2000)
+    items = await db.leads.find(_active(user["workspace_id"]), {"_id": 0}).to_list(2000)
     await _enrich_owner_names(items)
-    return _leads_csv_response(items, "leads-export.csv")
+    return await _leads_csv_response(items, "leads-export.csv", user["workspace_id"])
 
 
 @crm_router.post("/leads")
@@ -186,7 +214,10 @@ async def create_lead(body: LeadIn, user=Depends(current_user)):
     lead["workspace_id"] = user["workspace_id"]
     lead["email"] = lead["email"].lower()
     lead["status"] = "new"
-    lead["icp_score"] = 60 + (len(lead.get("company", "")) % 40)
+    # icp_score is intentionally left unset here — it's only meaningful once
+    # intent_engine.score_lead() has real signal to work with (see "Research
+    # this lead" in pitch_eq.py). A number derived from the company name's
+    # length is worse than no number, because reps trust it.
     lead["verified"] = "@" in lead["email"] and "." in lead["email"].split("@")[-1]
     lead["phone_verified"] = False
     lead["dnc"] = False
@@ -197,8 +228,9 @@ async def create_lead(body: LeadIn, user=Depends(current_user)):
         lead["linkedin_url"] = lead["linkedin"]
     if not lead.get("linkedin") and lead.get("linkedin_url"):
         lead["linkedin"] = lead["linkedin_url"]
-    if await db.leads.find_one({"workspace_id": user["workspace_id"], "email": lead["email"]}):
+    if await db.leads.find_one(_active(user["workspace_id"], email=lead["email"])):
         raise HTTPException(400, "Lead with this email already exists")
+    lead["deleted_at"] = None
     try:
         await db.leads.insert_one(lead)
     except DuplicateKeyError:
@@ -213,7 +245,7 @@ async def bulk_leads(body: LeadBulk, user=Depends(current_user)):
     for item in body.leads:
         d = item.model_dump()
         d["email"] = d["email"].lower()
-        if await db.leads.find_one({"workspace_id": user["workspace_id"], "email": d["email"]}):
+        if await db.leads.find_one(_active(user["workspace_id"], email=d["email"])):
             skipped += 1
             continue
         # Normalize linkedin → linkedin_url
@@ -225,11 +257,12 @@ async def bulk_leads(body: LeadBulk, user=Depends(current_user)):
             "id": new_id(),
             "workspace_id": user["workspace_id"],
             "status": "new",
-            "icp_score": 55 + (len(d.get("company", "")) % 45),
+            # icp_score intentionally unset — see create_lead's comment above.
             "verified": True,
             "phone_verified": False,
             "dnc": False,
             "owner_id": None,
+            "deleted_at": None,
             "created_at": now_iso(),
         })
         try:
@@ -242,12 +275,15 @@ async def bulk_leads(body: LeadBulk, user=Depends(current_user)):
 
 
 @crm_router.post("/leads/bulk-delete")
-async def bulk_delete_leads(body: BulkIdsIn, user=Depends(current_user)):
+async def bulk_delete_leads(body: BulkIdsIn, user=Depends(require_role("org_admin", "campaign_manager"))):
     if not body.ids:
         raise HTTPException(400, "No ids provided")
-    result = await db.leads.delete_many({"id": {"$in": body.ids}, "workspace_id": user["workspace_id"]})
-    await _audit(user, "crm.leads.bulk_delete", {"count": result.deleted_count})
-    return {"deleted": result.deleted_count}
+    result = await db.leads.update_many(
+        _active(user["workspace_id"], id={"$in": body.ids}),
+        {"$set": {"deleted_at": now_iso(), "deleted_by": user["id"]}},
+    )
+    await _audit(user, "crm.leads.bulk_delete", {"count": result.modified_count})
+    return {"deleted": result.modified_count}
 
 
 @crm_router.post("/leads/bulk-update")
@@ -273,10 +309,30 @@ async def update_lead(lead_id: str, body: LeadUpdate, user=Depends(current_user)
         raise HTTPException(400, "No fields to update")
     if "email" in update:
         update["email"] = update["email"].lower()
+
+    # custom_fields is a per-key merge (dot-notation $set), never a blanket
+    # replace — a payload that only sets one field must not clobber the rest.
+    custom_fields = update.pop("custom_fields", None)
+    if custom_fields:
+        defs = await db.custom_field_defs.find(
+            {"workspace_id": user["workspace_id"], "entity": "lead", "archived": {"$ne": True}}, {"_id": 0},
+        ).to_list(200)
+        defs_by_key = {d["key"]: d for d in defs}
+        for key, value in custom_fields.items():
+            if key not in defs_by_key:
+                raise HTTPException(400, f"Unknown custom field: {key}")
+            fdef = defs_by_key[key]
+            if fdef["type"] == "number" and value not in (None, ""):
+                try:
+                    value = float(value)
+                except (TypeError, ValueError):
+                    raise HTTPException(400, f"{fdef['name']} must be a number")
+            update[f"custom_fields.{key}"] = value
+
     update["updated_at"] = now_iso()
     try:
         result = await db.leads.update_one(
-            {"id": lead_id, "workspace_id": user["workspace_id"]},
+            _active(user["workspace_id"], id=lead_id),
             {"$set": update},
         )
     except DuplicateKeyError:
@@ -289,20 +345,67 @@ async def update_lead(lead_id: str, body: LeadUpdate, user=Depends(current_user)
 
 
 @crm_router.delete("/leads/{lead_id}")
-async def delete_lead(lead_id: str, user=Depends(current_user)):
-    await db.leads.delete_one({"id": lead_id, "workspace_id": user["workspace_id"]})
+async def delete_lead(lead_id: str, user=Depends(require_role("org_admin", "campaign_manager"))):
+    r = await db.leads.update_one(
+        _active(user["workspace_id"], id=lead_id),
+        {"$set": {"deleted_at": now_iso(), "deleted_by": user["id"]}},
+    )
+    if r.modified_count:
+        await _audit(user, "crm.leads.delete", {"lead_id": lead_id})
     return {"ok": True}
 
 
 @crm_router.get("/leads/{lead_id}")
 async def get_lead(lead_id: str, user=Depends(current_user)):
-    lead = await db.leads.find_one({"id": lead_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    lead = await db.leads.find_one(_active(user["workspace_id"], id=lead_id), {"_id": 0})
     if not lead:
         raise HTTPException(404, "not found")
     lead["deal"] = await db.deals.find_one({"lead_id": lead_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
     await _enrich_campaign_names([lead])
     await _enrich_owner_names([lead])
     return lead
+
+
+class ConvertLeadIn(BaseModel):
+    title: Optional[str] = None
+    value: float = 0
+    stage: str = "qualified"
+
+
+@crm_router.post("/leads/{lead_id}/convert")
+async def convert_lead(lead_id: str, body: ConvertLeadIn, user=Depends(current_user)):
+    """The one explicit "I'm qualifying this lead right now" action a rep can
+    take — distinct from the automatic deal creation Voice/Schedule/Proposal EQ
+    already do. Creating a deal here also advances the lead's own status,
+    which plain `POST /deals` deliberately does not (it's a generic form, not
+    a conversion moment)."""
+    lead = await db.leads.find_one({"id": lead_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not lead:
+        raise HTTPException(404, "lead not found")
+    existing = await db.deals.find_one({"lead_id": lead_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if existing:
+        raise HTTPException(400, {"error": "deal_exists", "deal_id": existing["id"]})
+
+    stage = body.stage if body.stage in STAGES else "qualified"
+    title = body.title or f"{lead.get('company') or (lead.get('first_name', '') + ' ' + lead.get('last_name', '')).strip()} — Opportunity"
+    deal = {
+        "id": new_id(), "workspace_id": user["workspace_id"], "lead_id": lead_id,
+        "title": title, "value": body.value, "stage": stage, "notes": "",
+        "created_at": now_iso(),
+    }
+    await db.deals.insert_one(deal)
+    deal.pop("_id", None)
+
+    if lead.get("status") != stage:
+        await db.leads.update_one(
+            {"id": lead_id, "workspace_id": user["workspace_id"]},
+            {"$set": {"status": "qualified", "updated_at": now_iso()}},
+        )
+
+    await _log_activity(user["workspace_id"], lead_id, "crm", "lead_converted",
+                         f"{user.get('name') or user.get('email')} converted this lead to a deal: “{title}”",
+                         {"deal_id": deal["id"]})
+    return deal
 
 
 @crm_router.get("/leads/{lead_id}/timeline")
@@ -417,7 +520,7 @@ async def list_workspace_tasks(status: Optional[str] = None, user=Depends(curren
 # ── Lead Lists ─────────────────────────────────────────────────────────────
 @crm_router.get("/crm/lists")
 async def list_lead_lists(user=Depends(current_user)):
-    return await db.lead_lists.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return await db.lead_lists.find(_active(user["workspace_id"]), {"_id": 0}).sort("created_at", -1).to_list(200)
 
 
 @crm_router.post("/crm/lists")
@@ -428,6 +531,7 @@ async def create_lead_list(body: Dict[str, Any], user=Depends(current_user)):
         "name": body.get("name", "Untitled list"),
         "description": body.get("description", ""),
         "lead_ids": [],
+        "deleted_at": None,
         "created_at": now_iso(),
         "updated_at": now_iso(),
     }
@@ -454,6 +558,7 @@ async def lead_list_bulk_import(
     list_id: Optional[str] = None,
     list_name: Optional[str] = None,
     list_description: Optional[str] = None,
+    column_map: Optional[str] = None,
     user=Depends(current_user),
 ):
     wid = user["workspace_id"]
@@ -463,8 +568,19 @@ async def lead_list_bulk_import(
     except Exception as ex:
         raise HTTPException(400, f"could not parse file: {ex}")
 
+    # Apply column mapping if provided — remap CSV headers to lead field names
+    if column_map:
+        try:
+            mapping = json.loads(column_map)
+        except json.JSONDecodeError:
+            raise HTTPException(400, "column_map must be a valid JSON object")
+        remapped = []
+        for row in rows:
+            remapped.append({mapping.get(k, k): v for k, v in row.items()})
+        rows = remapped
+
     if list_id:
-        target_list = await db.lead_lists.find_one({"id": list_id, "workspace_id": wid}, {"_id": 0})
+        target_list = await db.lead_lists.find_one(_active(wid, id=list_id), {"_id": 0})
         if not target_list:
             raise HTTPException(404, "list not found")
     else:
@@ -472,7 +588,7 @@ async def lead_list_bulk_import(
             "id": new_id(), "workspace_id": wid,
             "name": (list_name or "Untitled list").strip() or "Untitled list",
             "description": (list_description or "").strip(),
-            "lead_ids": [], "created_at": now_iso(), "updated_at": now_iso(),
+            "lead_ids": [], "deleted_at": None, "created_at": now_iso(), "updated_at": now_iso(),
         }
         await db.lead_lists.insert_one(dict(target_list))
 
@@ -486,7 +602,7 @@ async def lead_list_bulk_import(
             errors.append(f"Row {i}: missing or invalid email")
             continue
 
-        existing = await db.leads.find_one({"workspace_id": wid, "email": email}, {"_id": 0, "id": 1})
+        existing = await db.leads.find_one(_active(wid, email=email), {"_id": 0, "id": 1})
         if existing:
             lead_ids_to_add.append(existing["id"])
             linked_existing += 1
@@ -503,13 +619,13 @@ async def lead_list_bulk_import(
             "linkedin": linkedin_url, "linkedin_url": linkedin_url,
             "website": (row.get("website") or "").strip(),
             "phone": (row.get("phone") or "").strip() or None, "tags": tags,
-            "status": "new", "icp_score": 55, "verified": True, "phone_verified": False,
-            "dnc": False, "owner_id": None, "created_at": now_iso(),
+            "status": "new", "verified": True, "phone_verified": False,
+            "dnc": False, "owner_id": None, "deleted_at": None, "created_at": now_iso(),
         }
         try:
             await db.leads.insert_one(doc)
         except DuplicateKeyError:
-            existing2 = await db.leads.find_one({"workspace_id": wid, "email": email}, {"_id": 0, "id": 1})
+            existing2 = await db.leads.find_one(_active(wid, email=email), {"_id": 0, "id": 1})
             if existing2:
                 lead_ids_to_add.append(existing2["id"])
                 linked_existing += 1
@@ -546,7 +662,7 @@ async def export_lead_list(list_id: str, user=Depends(current_user)):
     ).to_list(2000)
     await _enrich_owner_names(items)
     fname = f"{lst['name'].replace(' ', '-').lower()}-export.csv"
-    return _leads_csv_response(items, fname)
+    return await _leads_csv_response(items, fname, user["workspace_id"])
 
 
 @crm_router.put("/crm/lists/{list_id}")
@@ -565,8 +681,11 @@ async def update_lead_list(list_id: str, body: Dict[str, Any], user=Depends(curr
 
 
 @crm_router.delete("/crm/lists/{list_id}")
-async def delete_lead_list(list_id: str, user=Depends(current_user)):
-    await db.lead_lists.delete_one({"id": list_id, "workspace_id": user["workspace_id"]})
+async def delete_lead_list(list_id: str, user=Depends(require_role("org_admin", "campaign_manager"))):
+    await db.lead_lists.update_one(
+        _active(user["workspace_id"], id=list_id),
+        {"$set": {"deleted_at": now_iso(), "deleted_by": user["id"]}},
+    )
     return {"ok": True}
 
 
@@ -591,16 +710,20 @@ async def remove_lead_from_list(list_id: str, lead_id: str, user=Depends(current
     return {"ok": True}
 
 
-def _leads_csv_response(items: List[Dict[str, Any]], filename: str) -> PlainTextResponse:
+async def _leads_csv_response(items: List[Dict[str, Any]], filename: str, workspace_id: str) -> PlainTextResponse:
     buf = io.StringIO()
     columns = ["first_name", "last_name", "email", "company", "title", "phone", "status",
                "tags", "owner_name", "verified", "dnc", "created_at"]
+    field_defs = await db.custom_field_defs.find(
+        {"workspace_id": workspace_id, "entity": "lead"}, {"_id": 0, "key": 1, "name": 1},
+    ).sort("order", 1).to_list(200)
     writer = csv.writer(buf)
-    writer.writerow(columns)
+    writer.writerow(columns + [f["name"] for f in field_defs])
     for it in items:
         row = [it.get(c) for c in columns]
         tags_idx = columns.index("tags")
         row[tags_idx] = ",".join(it.get("tags") or [])
+        row.extend((it.get("custom_fields") or {}).get(f["key"], "") for f in field_defs)
         writer.writerow(row)
     return PlainTextResponse(
         buf.getvalue(), media_type="text/csv",
@@ -712,7 +835,7 @@ async def list_companies(
     page_size: int = 25,
     user=Depends(current_user),
 ):
-    query = {"workspace_id": user["workspace_id"]}
+    query = _active(user["workspace_id"])
     total = await db.companies.count_documents(query)
     items = await db.companies.find(query, {"_id": 0}) \
         .sort("name", 1) \
@@ -729,6 +852,7 @@ async def create_company(body: CompanyIn, user=Depends(current_user)):
     company = body.model_dump()
     company["id"] = new_id()
     company["workspace_id"] = user["workspace_id"]
+    company["deleted_at"] = None
     company["created_at"] = now_iso()
     await db.companies.insert_one(company)
     company.pop("_id", None)
@@ -737,7 +861,7 @@ async def create_company(body: CompanyIn, user=Depends(current_user)):
 
 @crm_router.get("/companies/{cid}")
 async def get_company(cid: str, user=Depends(current_user)):
-    c = await db.companies.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    c = await db.companies.find_one(_active(user["workspace_id"], id=cid), {"_id": 0})
     if not c:
         raise HTTPException(404, "not found")
     c["lead_count"] = await db.leads.count_documents({"workspace_id": user["workspace_id"], "company_id": cid})
@@ -759,15 +883,15 @@ async def update_company(cid: str, body: CompanyUpdate, user=Depends(current_use
 
 
 @crm_router.delete("/companies/{cid}")
-async def delete_company(cid: str, user=Depends(current_user)):
-    r = await db.companies.delete_one({"id": cid, "workspace_id": user["workspace_id"]})
-    if r.deleted_count == 0:
-        raise HTTPException(404, "not found")
-    # Clear company_id on leads referencing this company
-    await db.leads.update_many(
-        {"workspace_id": user["workspace_id"], "company_id": cid},
-        {"$set": {"company_id": None}},
+async def delete_company(cid: str, user=Depends(require_role("org_admin", "campaign_manager"))):
+    r = await db.companies.update_one(
+        _active(user["workspace_id"], id=cid),
+        {"$set": {"deleted_at": now_iso(), "deleted_by": user["id"]}},
     )
+    if r.modified_count == 0:
+        raise HTTPException(404, "not found")
+    # Leads referencing this company keep their company_id — a soft-deleted
+    # company can be restored, and clearing the link would lose that on undo.
     await _audit(user, "crm.companies.delete", {"company_id": cid})
     return {"ok": True}
 
@@ -775,7 +899,7 @@ async def delete_company(cid: str, user=Depends(current_user)):
 # ----------------------------- Company Lists ----------------------------------
 @crm_router.get("/company-lists")
 async def list_company_lists(user=Depends(current_user)):
-    items = await db.company_lists.find({"workspace_id": user["workspace_id"]}, {"_id": 0}) \
+    items = await db.company_lists.find(_active(user["workspace_id"]), {"_id": 0}) \
         .sort("name", 1).to_list(200)
     return items
 
@@ -785,6 +909,7 @@ async def create_company_list(body: CompanyListIn, user=Depends(current_user)):
     cl = body.model_dump()
     cl["id"] = new_id()
     cl["workspace_id"] = user["workspace_id"]
+    cl["deleted_at"] = None
     cl["created_at"] = now_iso()
     await db.company_lists.insert_one(cl)
     cl.pop("_id", None)
@@ -802,9 +927,12 @@ async def update_company_list(clid: str, body: CompanyListIn, user=Depends(curre
 
 
 @crm_router.delete("/company-lists/{clid}")
-async def delete_company_list(clid: str, user=Depends(current_user)):
-    r = await db.company_lists.delete_one({"id": clid, "workspace_id": user["workspace_id"]})
-    if r.deleted_count == 0:
+async def delete_company_list(clid: str, user=Depends(require_role("org_admin", "campaign_manager"))):
+    r = await db.company_lists.update_one(
+        _active(user["workspace_id"], id=clid),
+        {"$set": {"deleted_at": now_iso(), "deleted_by": user["id"]}},
+    )
+    if r.modified_count == 0:
         raise HTTPException(404, "not found")
     await _audit(user, "crm.company_lists.delete", {"list_id": clid})
     return {"ok": True}
@@ -828,4 +956,397 @@ async def remove_company_from_list(clid: str, cid: str, user=Depends(current_use
         raise HTTPException(404, "list not found")
     ids = [x for x in cl.get("company_ids", []) if x != cid]
     await db.company_lists.update_one({"id": clid}, {"$set": {"company_ids": ids}})
+    return {"ok": True}
+
+
+# ----------------------------- Recycle bin ------------------------------------
+# Soft-deleted leads/companies/lists are recoverable here for 30 days, after
+# which run_recycle_bin_purge_tick (registered in server.py's scheduler)
+# hard-deletes them — bounded retention, not indefinite accumulation.
+RECYCLE_BIN_RETENTION_DAYS = 30
+
+def _recycle_types() -> Dict[str, Any]:
+    # Built lazily (not at module import time) since it just reads attributes
+    # off the already-initialized `db` — but kept as a function so the shape
+    # is documented in one place rather than four scattered dict literals.
+    return {
+        "lead": (db.leads, lambda d: (f"{d.get('first_name','')} {d.get('last_name','')}".strip() or d.get("email", ""))),
+        "company": (db.companies, lambda d: d.get("name", "")),
+        "list": (db.lead_lists, lambda d: d.get("name", "")),
+        "company_list": (db.company_lists, lambda d: d.get("name", "")),
+    }
+
+
+@crm_router.get("/crm/recycle-bin")
+async def list_recycle_bin(user=Depends(require_role("org_admin", "campaign_manager"))):
+    out = []
+    for type_key, (col, label_fn) in _recycle_types().items():
+        docs = await col.find(
+            {"workspace_id": user["workspace_id"], "deleted_at": {"$ne": None}}, {"_id": 0},
+        ).sort("deleted_at", -1).to_list(500)
+        for d in docs:
+            out.append({
+                "type": type_key, "id": d["id"], "name": label_fn(d),
+                "deleted_at": d.get("deleted_at"), "deleted_by": d.get("deleted_by"),
+            })
+    out.sort(key=lambda r: r["deleted_at"] or "", reverse=True)
+    return out
+
+
+@crm_router.post("/crm/recycle-bin/{type}/{item_id}/restore")
+async def restore_recycled(type: str, item_id: str, user=Depends(require_role("org_admin", "campaign_manager"))):
+    types = _recycle_types()
+    if type not in types:
+        raise HTTPException(404, "unknown type")
+    col, _ = types[type]
+    try:
+        result = await col.update_one(
+            {"id": item_id, "workspace_id": user["workspace_id"], "deleted_at": {"$ne": None}},
+            {"$set": {"deleted_at": None, "deleted_by": None}},
+        )
+    except DuplicateKeyError:
+        raise HTTPException(400, "A lead with this email already exists — resolve that first, then restore.")
+    if result.matched_count == 0:
+        raise HTTPException(404, "not found in recycle bin")
+    await _audit(user, "crm.recycle_bin.restore", {"type": type, "id": item_id})
+    return {"ok": True}
+
+
+@crm_router.delete("/crm/recycle-bin/{type}/{item_id}")
+async def purge_recycled(type: str, item_id: str, user=Depends(require_role("org_admin", "campaign_manager"))):
+    types = _recycle_types()
+    if type not in types:
+        raise HTTPException(404, "unknown type")
+    col, _ = types[type]
+    result = await col.delete_one(
+        {"id": item_id, "workspace_id": user["workspace_id"], "deleted_at": {"$ne": None}},
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(404, "not found in recycle bin")
+    await _audit(user, "crm.recycle_bin.purge", {"type": type, "id": item_id})
+    return {"ok": True}
+
+
+async def run_recycle_bin_purge_tick():
+    """Daily: hard-delete anything soft-deleted more than 30 days ago."""
+    from datetime import datetime, timedelta, timezone
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=RECYCLE_BIN_RETENTION_DAYS)).isoformat()
+    for _col, _label_fn in _recycle_types().values():
+        await _col.delete_many({"deleted_at": {"$ne": None, "$lt": cutoff}})
+
+
+# ----------------------------- Duplicate detection & merge --------------------
+# No embedding/vector infra exists anywhere in this repo, and lead volumes here
+# don't justify standing one up. Instead: cheap deterministic candidate
+# generation (same phone / same company-domain+lastname / near-identical email
+# local-part), then one small batched LLM call per workspace scan to assign a
+# confidence score. Merging is always a human-confirmed action — nothing here
+# auto-merges, since a false-positive merge is worse than a missed duplicate.
+
+
+def _normalize_phone(phone: Optional[str]) -> str:
+    digits = "".join(c for c in (phone or "") if c.isdigit())
+    return digits[-10:] if len(digits) >= 7 else ""
+
+
+def _edit_distance_le1(a: str, b: str) -> bool:
+    """True if `a` and `b` differ by at most one insert/delete/substitute."""
+    if a == b:
+        return False  # exact matches are already caught by the unique index
+    if abs(len(a) - len(b)) > 1:
+        return False
+    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
+    if len(shorter) == len(longer):
+        return sum(1 for x, y in zip(shorter, longer) if x != y) <= 1
+    i = j = 0
+    skipped = False
+    while i < len(shorter) and j < len(longer):
+        if shorter[i] != longer[j]:
+            if skipped:
+                return False
+            skipped = True
+            j += 1
+        else:
+            i += 1
+            j += 1
+    return True
+
+
+def _find_dedup_candidates(leads: List[Dict[str, Any]]) -> Dict[frozenset, str]:
+    pairs: Dict[frozenset, str] = {}
+
+    by_phone: Dict[str, List[Dict[str, Any]]] = {}
+    for l in leads:
+        p = _normalize_phone(l.get("phone"))
+        if p:
+            by_phone.setdefault(p, []).append(l)
+    for group in by_phone.values():
+        for i in range(len(group)):
+            for j in range(i + 1, len(group)):
+                pairs[frozenset((group[i]["id"], group[j]["id"]))] = "phone"
+
+    by_domain_last: Dict[Any, List[Dict[str, Any]]] = {}
+    by_domain: Dict[str, List[Dict[str, Any]]] = {}
+    for l in leads:
+        email = l.get("email") or ""
+        if "@" not in email:
+            continue
+        domain = email.split("@", 1)[1]
+        last = (l.get("last_name") or "").strip().lower()
+        if domain and last:
+            by_domain_last.setdefault((domain, last), []).append(l)
+        by_domain.setdefault(domain, []).append(l)
+    for group in by_domain_last.values():
+        for i in range(len(group)):
+            for j in range(i + 1, len(group)):
+                pairs.setdefault(frozenset((group[i]["id"], group[j]["id"])), "domain_lastname")
+
+    for group in by_domain.values():
+        if len(group) > 50:  # cap — avoid O(n^2) on a domain shared by hundreds of leads
+            continue
+        for i in range(len(group)):
+            for j in range(i + 1, len(group)):
+                a, b = group[i], group[j]
+                if _edit_distance_le1((a.get("email") or "").split("@")[0], (b.get("email") or "").split("@")[0]):
+                    pairs.setdefault(frozenset((a["id"], b["id"])), "email_similar")
+
+    return pairs
+
+
+async def _dedup_llm_confidence(lead_by_id: Dict[str, Dict[str, Any]],
+                                 candidates: List[Dict[str, str]]) -> Dict[str, float]:
+    """One batched call per scan (not one per pair) — cheap and keeps this
+    background job from making N LLM calls when N candidates are found."""
+    from server import ANTHROPIC_API_KEY
+    if not ANTHROPIC_API_KEY or not candidates:
+        return {}
+
+    def _brief(lid: str) -> Dict[str, Any]:
+        l = lead_by_id[lid]
+        return {
+            "name": f"{l.get('first_name', '')} {l.get('last_name', '')}".strip(),
+            "email": l.get("email"), "phone": l.get("phone"), "company": l.get("company"),
+        }
+
+    payload = [{"key": f'{c["id_a"]}|{c["id_b"]}', "a": _brief(c["id_a"]), "b": _brief(c["id_b"])}
+               for c in candidates[:30]]
+    system = (
+        "You judge whether two CRM lead records are the same real person entered twice "
+        "(e.g. a typo'd email, or captured via two different channels). For each pair, "
+        'decide a confidence 0-1 that they are the same person. STRICT JSON only: '
+        '{"results": [{"key": str, "confidence": float}, ...]}'
+    )
+    try:
+        raw = await _llm_chat(system, json.dumps(payload), "crm-dedup-scan")
+        parsed = _extract_json(raw) or {}
+        results = parsed.get("results") if isinstance(parsed, dict) else parsed
+        return {r["key"]: max(0.0, min(1.0, float(r.get("confidence", 0.5))))
+                for r in (results or []) if r.get("key")}
+    except Exception:
+        return {}
+
+
+async def run_dedup_scan_tick():
+    """Hourly: find new duplicate-lead candidates per workspace and record
+    them for human review — nothing here writes to `db.leads` itself."""
+    workspace_ids = await db.leads.distinct("workspace_id", NOT_DELETED)
+    for wid in workspace_ids:
+        leads = await db.leads.find(
+            _active(wid),
+            {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "phone": 1, "company": 1},
+        ).to_list(5000)
+        if len(leads) < 2:
+            continue
+
+        pairs = _find_dedup_candidates(leads)
+        if not pairs:
+            continue
+
+        new_candidates = []
+        for pair_key, reason in pairs.items():
+            id_a, id_b = sorted(pair_key)
+            existing = await db.dedup_candidates.find_one({
+                "workspace_id": wid,
+                "$or": [{"lead_id_a": id_a, "lead_id_b": id_b}, {"lead_id_a": id_b, "lead_id_b": id_a}],
+            })
+            if not existing:
+                new_candidates.append({"id_a": id_a, "id_b": id_b, "reason": reason})
+        if not new_candidates:
+            continue
+
+        lead_by_id = {l["id"]: l for l in leads}
+        confidences = await _dedup_llm_confidence(lead_by_id, new_candidates)
+        docs = [{
+            "id": new_id(), "workspace_id": wid,
+            "lead_id_a": c["id_a"], "lead_id_b": c["id_b"],
+            "match_reason": c["reason"],
+            "confidence": confidences.get(f'{c["id_a"]}|{c["id_b"]}', 0.5),
+            "status": "pending", "created_at": now_iso(),
+        } for c in new_candidates]
+        await db.dedup_candidates.insert_many(docs)
+
+
+class MergeDuplicateIn(BaseModel):
+    survivor_id: str
+    overrides: Dict[str, Any] = {}
+
+
+@crm_router.get("/crm/duplicates")
+async def list_duplicates(user=Depends(require_role("org_admin", "campaign_manager"))):
+    candidates = await db.dedup_candidates.find(
+        {"workspace_id": user["workspace_id"], "status": "pending"}, {"_id": 0},
+    ).sort("confidence", -1).to_list(200)
+    lead_ids = {c["lead_id_a"] for c in candidates} | {c["lead_id_b"] for c in candidates}
+    if not lead_ids:
+        return []
+    leads = await db.leads.find(
+        {"id": {"$in": list(lead_ids)}, "workspace_id": user["workspace_id"]}, {"_id": 0},
+    ).to_list(len(lead_ids))
+    lead_map = {l["id"]: l for l in leads}
+    out = []
+    for c in candidates:
+        a, b = lead_map.get(c["lead_id_a"]), lead_map.get(c["lead_id_b"])
+        if not a or not b:  # one side already deleted/merged elsewhere — stale candidate
+            continue
+        out.append({**c, "lead_a": a, "lead_b": b})
+    return out
+
+
+@crm_router.post("/crm/duplicates/{candidate_id}/merge")
+async def merge_duplicate(candidate_id: str, body: MergeDuplicateIn,
+                           user=Depends(require_role("org_admin", "campaign_manager"))):
+    cand = await db.dedup_candidates.find_one({"id": candidate_id, "workspace_id": user["workspace_id"]})
+    if not cand or cand["status"] != "pending":
+        raise HTTPException(404, "candidate not found or already resolved")
+    lead_ids = {cand["lead_id_a"], cand["lead_id_b"]}
+    if body.survivor_id not in lead_ids:
+        raise HTTPException(400, "survivor_id must be one of the two candidate leads")
+    loser_id = (lead_ids - {body.survivor_id}).pop()
+
+    survivor = await db.leads.find_one(_active(user["workspace_id"], id=body.survivor_id))
+    loser = await db.leads.find_one(_active(user["workspace_id"], id=loser_id))
+    if not survivor or not loser:
+        raise HTTPException(404, "one of the leads no longer exists")
+
+    # Reassign everything keyed by lead_id onto the survivor.
+    for col in (db.lead_notes, db.lead_tasks, db.activities, db.deals):
+        await col.update_many({"lead_id": loser_id, "workspace_id": user["workspace_id"]},
+                               {"$set": {"lead_id": body.survivor_id}})
+
+    if body.overrides:
+        safe_overrides = {k: v for k, v in body.overrides.items() if k in LeadUpdate.model_fields}
+        if safe_overrides:
+            safe_overrides["updated_at"] = now_iso()
+            await db.leads.update_one({"id": body.survivor_id, "workspace_id": user["workspace_id"]},
+                                       {"$set": safe_overrides})
+
+    await db.leads.update_one(
+        {"id": loser_id, "workspace_id": user["workspace_id"]},
+        {"$set": {"deleted_at": now_iso(), "deleted_by": user["id"]}},
+    )
+    await db.dedup_candidates.update_one({"id": candidate_id}, {"$set": {"status": "merged"}})
+    # Any other pending candidate involving the now-deleted lead is stale.
+    await db.dedup_candidates.update_many(
+        {"workspace_id": user["workspace_id"], "status": "pending",
+         "$or": [{"lead_id_a": loser_id}, {"lead_id_b": loser_id}]},
+        {"$set": {"status": "dismissed"}},
+    )
+    await _log_activity(user["workspace_id"], body.survivor_id, "crm", "leads_merged",
+                         f"{user.get('name') or user.get('email')} merged a duplicate lead into this one",
+                         {"merged_lead_id": loser_id})
+    await _audit(user, "crm.duplicates.merge", {"survivor_id": body.survivor_id, "loser_id": loser_id})
+    return {"ok": True, "survivor_id": body.survivor_id}
+
+
+@crm_router.post("/crm/duplicates/{candidate_id}/dismiss")
+async def dismiss_duplicate(candidate_id: str, user=Depends(require_role("org_admin", "campaign_manager"))):
+    result = await db.dedup_candidates.update_one(
+        {"id": candidate_id, "workspace_id": user["workspace_id"], "status": "pending"},
+        {"$set": {"status": "dismissed"}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "not found")
+    return {"ok": True}
+
+
+# ----------------------------- Custom fields -----------------------------------
+# v1 scope: leads only (the same "leads first, extend later" pattern the rest
+# of this module already follows), 4 simple types — matches what Twenty itself
+# ships, not a bigger type system nobody's asked for.
+CUSTOM_FIELD_TYPES = {"text", "number", "date", "select"}
+
+
+class CustomFieldDefIn(BaseModel):
+    entity: str = "lead"
+    name: str
+    type: str
+    options: List[str] = []
+
+
+class CustomFieldDefUpdate(BaseModel):
+    name: Optional[str] = None
+    options: Optional[List[str]] = None
+    archived: Optional[bool] = None
+    order: Optional[int] = None
+
+
+def _slugify_key(name: str) -> str:
+    key = "".join(c.lower() if c.isalnum() else "_" for c in name).strip("_")
+    while "__" in key:
+        key = key.replace("__", "_")
+    return key or new_id()[:8]
+
+
+@crm_router.get("/crm/custom-fields")
+async def list_custom_fields(entity: Optional[str] = None, user=Depends(current_user)):
+    q = {"workspace_id": user["workspace_id"]}
+    if entity:
+        q["entity"] = entity
+    return await db.custom_field_defs.find(q, {"_id": 0}).sort("order", 1).to_list(200)
+
+
+@crm_router.post("/crm/custom-fields")
+async def create_custom_field(body: CustomFieldDefIn, user=Depends(require_role("org_admin"))):
+    if body.type not in CUSTOM_FIELD_TYPES:
+        raise HTTPException(400, f"type must be one of {sorted(CUSTOM_FIELD_TYPES)}")
+    if body.type == "select" and not body.options:
+        raise HTTPException(400, "select fields need at least one option")
+    key = _slugify_key(body.name)
+    if await db.custom_field_defs.find_one({
+        "workspace_id": user["workspace_id"], "entity": body.entity, "key": key, "archived": {"$ne": True},
+    }):
+        raise HTTPException(400, "A field with this name already exists")
+    count = await db.custom_field_defs.count_documents({"workspace_id": user["workspace_id"], "entity": body.entity})
+    doc = {
+        "id": new_id(), "workspace_id": user["workspace_id"], "entity": body.entity,
+        "name": body.name, "key": key, "type": body.type, "options": body.options,
+        "archived": False, "order": count, "created_at": now_iso(),
+    }
+    await db.custom_field_defs.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@crm_router.put("/crm/custom-fields/{fid}")
+async def update_custom_field(fid: str, body: CustomFieldDefUpdate, user=Depends(require_role("org_admin"))):
+    updates = body.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(400, "No fields to update")
+    result = await db.custom_field_defs.update_one(
+        {"id": fid, "workspace_id": user["workspace_id"]}, {"$set": updates},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "not found")
+    return await db.custom_field_defs.find_one({"id": fid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+
+
+@crm_router.delete("/crm/custom-fields/{fid}")
+async def archive_custom_field(fid: str, user=Depends(require_role("org_admin"))):
+    # Archive, never hard-delete — a field with existing values on records
+    # shouldn't silently lose that data just because the definition is gone.
+    result = await db.custom_field_defs.update_one(
+        {"id": fid, "workspace_id": user["workspace_id"]}, {"$set": {"archived": True}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "not found")
     return {"ok": True}

@@ -1234,6 +1234,166 @@ async def update_lead_opener(cid: str, lead_id: str, body: Dict[str, Any], user=
     return {"status": "draft", "personalized_opener": new_opener, "body": merged_body}
 
 
+class BulkStatusIn(BaseModel):
+    lead_ids: List[str]
+    status: str  # "approved" | "rejected"
+
+
+@api.post("/campaigns/{cid}/leads/bulk-status")
+async def bulk_set_lead_status(cid: str, body: BulkStatusIn, user=Depends(current_user)):
+    """Approve/reject a chosen subset of leads in one call — the multi-select
+    counterpart to approve-all, for when only some of a batch is ready."""
+    if body.status not in ("approved", "rejected"):
+        raise HTTPException(400, "status must be 'approved' or 'rejected'")
+    if not body.lead_ids:
+        raise HTTPException(400, "No leads selected")
+    wid = user["workspace_id"]
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0, "personalized_emails": 1})
+    if not campaign:
+        raise HTTPException(404, "not found")
+    id_set = set(body.lead_ids)
+    matched = sum(1 for p in campaign.get("personalized_emails", []) if p["lead_id"] in id_set)
+    if matched == 0:
+        return {"updated": 0}
+    await db.campaigns.update_one(
+        {"id": cid},
+        {"$set": {"personalized_emails.$[elem].status": body.status}},
+        array_filters=[{"elem.lead_id": {"$in": body.lead_ids}}],
+    )
+    await _audit(user, "campaign.leads.bulk_status", {"campaign_id": cid, "count": matched, "status": body.status})
+    return {"updated": matched, "status": body.status}
+
+
+@api.post("/campaigns/{cid}/leads/{lead_id}/send-test")
+async def send_test_campaign_email(cid: str, lead_id: str, user=Depends(current_user)):
+    """Send the currently resolved preview for one lead to the logged-in
+    user's own inbox — through the same transactional send path as booking
+    confirmations (real Resend/mailbox if configured, safely mocked and
+    recorded otherwise). Free — this is a read-and-verify action, not an
+    AI generation."""
+    wid = user["workspace_id"]
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(404, "Campaign not found")
+    lead = await db.leads.find_one({"id": lead_id, "workspace_id": wid}, {"_id": 0})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+
+    def _resolve(s: str) -> str:
+        if not s:
+            return s
+        for k in ("first_name", "last_name", "company", "title"):
+            v = lead.get(k, "")
+            if v:
+                s = s.replace("{{" + k + "}}", v)
+        return s
+
+    personalized = campaign.get("personalized_emails", [])
+    entry = next((p for p in personalized if p["lead_id"] == lead_id), None)
+    step_template = (campaign.get("steps") or [{}])[0]
+    if entry:
+        subject = _resolve(entry.get("subject", ""))
+        body_html = _resolve(entry.get("body_html", "")) or _resolve(entry.get("body", "")).replace("\n", "<br>")
+    else:
+        subject = _resolve(step_template.get("subject", ""))
+        raw_body = (step_template.get("body", "") or "").replace("{{personalized_opener}}", "")
+        body_html = _resolve(step_template.get("body_html", "") or raw_body.replace("\n", "<br>"))
+
+    import email_client
+    banner = (
+        f"<p style='color:#8E8E93;font-size:12px;margin:0 0 16px'>"
+        f"Test send — previewing the email {lead.get('first_name', '')} {lead.get('last_name', '')} "
+        f"would receive.</p>"
+    )
+    result = await email_client.send_email(
+        to=user["email"], subject=f"[TEST] {subject}", html=banner + body_html, workspace_id=wid,
+    )
+    await _audit(user, "campaign.lead.test_sent", {"campaign_id": cid, "lead_id": lead_id, "mocked": result.get("mocked")})
+    return {"sent_to": user["email"], "mocked": result.get("mocked", True)}
+
+
+@api.post("/campaigns/{cid}/leads/regenerate-all")
+async def regenerate_all_lead_emails(cid: str, user=Depends(current_user)):
+    """Re-run AI personalization for every assigned lead, including ones
+    already personalized — for when the template changed and existing
+    drafts are stale. generate-all deliberately skips already-done leads;
+    this is the explicit "start over" action."""
+    wid = user["workspace_id"]
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(404, "not found")
+    service_info = {}
+    service_id = campaign.get("ai_meta", {}).get("service_id") or campaign.get("service_id")
+    if service_id:
+        svc = await db.service_library.find_one({"id": service_id, "workspace_id": wid}, {"_id": 0})
+        if svc:
+            service_info = {k: v for k, v in svc.items() if k not in ("id", "workspace_id", "created_at", "updated_at", "status", "_id")}
+    lead_ids = campaign.get("lead_ids", [])
+    if not lead_ids:
+        return {"generated": 0, "message": "No leads assigned"}
+    campaign_steps = campaign.get("steps", [])
+    step_template = campaign_steps[0] if campaign_steps else {}
+    template_body = step_template.get("body", "")
+    template_html = step_template.get("body_html", "")
+    template_subject = step_template.get("subject", "")
+    ai_meta = campaign.get("ai_meta", {})
+    campaign_name = ai_meta.get("service_name", campaign.get("goal", ""))
+    campaign_goal = campaign.get("goal", "")
+    campaign_tone = campaign.get("tone", "professional")
+
+    from research_worker import get_research, summarize_for_prompt
+    sem = asyncio.Semaphore(4)
+    errors = []
+
+    async def _regenerate_one(lid: str):
+        async with sem:
+            try:
+                lead = await db.leads.find_one({"id": lid, "workspace_id": wid}, {"_id": 0})
+                if not lead:
+                    return
+                lead_context = {k: lead.get(k) for k in ("first_name", "last_name", "title", "company", "email", "linkedin_url")}
+                research_pack = await get_research(wid, lead)
+                research_summary = summarize_for_prompt(research_pack)
+                opener_raw = await _llm_chat(
+                    "You are Pitch EQ's personalization agent. Generate ONLY a personalized ice-breaker opener. Rules: 1) Use real details from research — never invent. 2) 1-2 sentences max. 3) Conversational, not salesy. 4) No greeting, pitch, or CTA. Return STRICT JSON: {\"opener\": \"...\"}",
+                    f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\nLEAD RESEARCH:\n{research_summary}\n\nCAMPAIGN SERVICE: {campaign_name}\nCAMPAIGN GOAL: {campaign_goal}\nCAMPAIGN TONE: {campaign_tone}\n\nGenerate a personalized ice-breaker opener for this specific lead.",
+                    f"regenall-opnr-{lid[:8]}", user=user, max_tokens=512
+                )
+                opener_data = _extract_json(opener_raw) or {}
+                personalized_opener = opener_data.get("opener", "")
+                merged_body = template_body.replace("{{personalized_opener}}", personalized_opener)
+                merged_html = template_html.replace("{{personalized_opener}}", personalized_opener) if template_html else ""
+
+                entry = {
+                    "lead_id": lid, "subject": template_subject,
+                    "body": merged_body, "body_html": merged_html,
+                    "personalized_opener": personalized_opener,
+                    "research": {"summary": research_summary, "has_signal": research_pack.get("has_signal", False)},
+                    "status": "draft", "generated_at": now_iso(),
+                }
+                # Overwrite in place if this lead already has an entry, otherwise append.
+                result = await db.campaigns.update_one(
+                    {"id": cid, "personalized_emails.lead_id": lid},
+                    {"$set": {
+                        "personalized_emails.$.subject": entry["subject"],
+                        "personalized_emails.$.body": entry["body"],
+                        "personalized_emails.$.body_html": entry["body_html"],
+                        "personalized_emails.$.personalized_opener": entry["personalized_opener"],
+                        "personalized_emails.$.research": entry["research"],
+                        "personalized_emails.$.status": "draft",
+                        "personalized_emails.$.generated_at": entry["generated_at"],
+                    }},
+                )
+                if result.modified_count == 0:
+                    await db.campaigns.update_one({"id": cid}, {"$push": {"personalized_emails": entry}})
+            except Exception as ex:
+                errors.append({"lead_id": lid, "error": str(ex)})
+
+    await asyncio.gather(*[_regenerate_one(lid) for lid in lead_ids])
+    await _audit(user, "campaign.leads.regenerated_all", {"campaign_id": cid, "count": len(lead_ids) - len(errors)})
+    return {"generated": len(lead_ids) - len(errors), "errors": errors}
+
+
 @api.post("/upload-image")
 async def upload_image(file: UploadFile = File(...), user=Depends(current_user)):
     ALLOWED = {"image/png", "image/jpeg", "image/gif", "image/webp"}
@@ -2109,7 +2269,6 @@ async def prospect_import(body: ProspectImportIn, user=Depends(current_user)):
             "status": "new",
             "verified": (p.get("verification") or {}).get("status") == "valid",
             "verification": p.get("verification"),
-            "icp_score": 70,
             "icebreaker": icebreaker,
             "persona_hypothesis": p.get("persona_hypothesis", ""),
             "source": "imported",
@@ -3793,7 +3952,19 @@ async def _create_indexes():
         # Was unique=False (app-side dedupe check only, race-prone). Every insert
         # path (create_lead, bulk_leads, lead-list bulk-import in crm.py) now
         # also catches DuplicateKeyError, so this can be a real constraint.
-        await db.leads.create_index([("workspace_id", 1), ("email", 1)], unique=True)
+        # Scoped to non-deleted leads (partialFilterExpression) so soft-deleting
+        # a lead (recycle bin) doesn't permanently block re-creating a new lead
+        # with the same email. Drop + recreate defensively — Mongo errors on a
+        # same-name index whose options differ from an already-existing one,
+        # and this collection may still carry the pre-partial-filter version.
+        try:
+            await db.leads.drop_index("workspace_id_1_email_1")
+        except Exception:
+            pass
+        await db.leads.create_index(
+            [("workspace_id", 1), ("email", 1)], unique=True,
+            partialFilterExpression={"deleted_at": None},
+        )
         await db.lead_notes.create_index([("workspace_id", 1), ("lead_id", 1), ("created_at", -1)])
         await db.lead_tasks.create_index([("workspace_id", 1), ("status", 1), ("due_at", 1)])
         await db.lead_tasks.create_index([("workspace_id", 1), ("lead_id", 1)])
@@ -3807,6 +3978,9 @@ async def _create_indexes():
         await db.activities.create_index([("workspace_id", 1), ("lead_id", 1), ("at", -1)])
         await db.lead_lists.create_index([("workspace_id", 1), ("id", 1)])
         await db.lead_lists.create_index([("workspace_id", 1), ("updated_at", -1)])
+        await db.dedup_candidates.create_index([("workspace_id", 1), ("status", 1)])
+        await db.dedup_candidates.create_index([("workspace_id", 1), ("lead_id_a", 1), ("lead_id_b", 1)])
+        await db.custom_field_defs.create_index([("workspace_id", 1), ("entity", 1), ("order", 1)])
         # -- SMS EQ indexes --
         await db.sms_templates.create_index([("workspace_id", 1), ("id", 1)])
         await db.sms_contacts.create_index([("workspace_id", 1), ("id", 1)])
@@ -3877,6 +4051,7 @@ async def _start_scheduler():
         from site_eq import run_site_recrawl_tick
         from sms_eq import run_sms_send_tick
         from whatsapp_eq import run_whatsapp_send_tick
+        from crm import run_recycle_bin_purge_tick, run_dedup_scan_tick
 
         scheduler = AsyncIOScheduler(timezone="UTC")
         # Every 15 min: any confirmed booking ~24h out gets one reminder. The job
@@ -3916,10 +4091,20 @@ async def _start_scheduler():
         # sends.
         scheduler.add_job(run_whatsapp_send_tick, "interval", minutes=2,
                           id="whatsapp_send", max_instances=1, coalesce=True)
+        # Recycle bin: hard-deletes anything soft-deleted (leads/companies/
+        # lists) more than 30 days ago. Daily is plenty — this is cleanup,
+        # not a user-facing latency path.
+        scheduler.add_job(run_recycle_bin_purge_tick, "interval", hours=24,
+                          id="recycle_bin_purge", max_instances=1, coalesce=True)
+        # Finds candidate duplicate leads (same phone / same company+lastname /
+        # near-identical email) and records them for human review — never
+        # auto-merges. Hourly is plenty; this is a review queue, not a live path.
+        scheduler.add_job(run_dedup_scan_tick, "interval", hours=1,
+                          id="crm_dedup_scan", max_instances=1, coalesce=True)
         scheduler.start()
         logger.info("scheduler started (reminders 15m, sends 2m, reply polling 10m, "
                    "social publish 2m, social engagement 10m, RSS poll 30m, site recrawl 24h, "
-                   "sms send 2m, whatsapp send 2m)")
+                   "sms send 2m, whatsapp send 2m, recycle bin purge 24h, dedup scan 1h)")
     except Exception as ex:
         logger.warning("scheduler failed to start: %s", ex)
 

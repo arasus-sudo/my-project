@@ -23,6 +23,17 @@ const BAND_STYLE = {
 
 const STATUS_OPTIONS = ["new", "contacted", "qualified", "unqualified", "unresponsive"];
 
+// Same derivation crm_adapters.py uses internally — prefer an explicit website,
+// fall back to the lead's email domain.
+function deriveDomain(lead) {
+  if (lead?.website) {
+    try { return new URL(lead.website.startsWith("http") ? lead.website : `https://${lead.website}`).hostname; }
+    catch { return lead.website.replace(/^https?:\/\//, "").split("/")[0]; }
+  }
+  if (lead?.email && lead.email.includes("@")) return lead.email.split("@")[1];
+  return null;
+}
+
 export default function LeadDetail() {
   const { id } = useParams();
   const [lead, setLead] = useState(null);
@@ -41,6 +52,9 @@ export default function LeadDetail() {
   const [noteText, setNoteText] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [taskForm, setTaskForm] = useState({ title: "", due_at: "", assignee_id: "" });
+  const [companyIntel, setCompanyIntel] = useState(null);
+  const [companyIntelStatus, setCompanyIntelStatus] = useState("idle"); // idle | loading | none | crawling
+  const [customFieldDefs, setCustomFieldDefs] = useState([]);
 
   const load = useCallback(() => {
     Promise.all([
@@ -53,11 +67,13 @@ export default function LeadDetail() {
       api.get(`/leads/${id}/tasks`).catch(() => ({ data: [] })),
       api.get("/team").catch(() => ({ data: [] })),
       api.get("/companies?page_size=500").catch(() => ({ data: { items: [] } })),
-    ]).then(([l, t, r, ls, vc, nt, tk, tm, co]) => {
+      api.get("/crm/custom-fields", { params: { entity: "lead" } }).catch(() => ({ data: [] })),
+    ]).then(([l, t, r, ls, vc, nt, tk, tm, co, cf]) => {
       setLead(l.data); setTimeline(t.data); setResearch(r.data);
       setLists(ls.data); setVoiceCalls(vc.data || []);
       setNotes(nt.data || []); setTasks(tk.data || []); setTeam(tm.data || []);
       setCompanies(co.data?.items || []);
+      setCustomFieldDefs((cf.data || []).filter((f) => !f.archived));
       setLoading(false);
     });
   }, [id]);
@@ -80,6 +96,13 @@ export default function LeadDetail() {
       const { data } = await api.put(`/leads/${id}`, { tags });
       setLead(data);
     } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+  };
+
+  const setCustomField = async (key, value) => {
+    try {
+      const { data } = await api.put(`/leads/${id}`, { custom_fields: { [key]: value } });
+      setLead(data);
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed to save field"); }
   };
 
   const setOwner = async (ownerId) => {
@@ -152,6 +175,54 @@ export default function LeadDetail() {
     } catch (err) {
       if (!isCreditError(err)) toast.error("Research failed");
     } finally { setEnriching(false); }
+  };
+
+  const loadCompanyIntel = useCallback(async (domain) => {
+    setCompanyIntelStatus("loading");
+    try {
+      const { data } = await api.get(`/company-intel/crawl/${domain}`);
+      setCompanyIntel(data);
+      setCompanyIntelStatus("done");
+    } catch {
+      setCompanyIntel(null);
+      setCompanyIntelStatus("none");
+    }
+  }, []);
+
+  useEffect(() => {
+    const domain = deriveDomain(lead);
+    if (domain) loadCompanyIntel(domain);
+    else setCompanyIntelStatus("none");
+  }, [lead, loadCompanyIntel]);
+
+  const [converting, setConverting] = useState(false);
+  const convertLead = async () => {
+    setConverting(true);
+    try {
+      await api.post(`/leads/${id}/convert`, {});
+      toast.success("Converted to deal");
+      load();
+    } catch (err) {
+      if (err?.response?.data?.detail?.error === "deal_exists") {
+        toast.error("This lead already has a deal");
+      } else {
+        toast.error("Convert failed");
+      }
+    } finally { setConverting(false); }
+  };
+
+  const crawlCompany = async () => {
+    const domain = deriveDomain(lead);
+    if (!domain) return;
+    setCompanyIntelStatus("crawling");
+    try {
+      const { data } = await api.post("/company-intel/crawl", { url: domain });
+      setCompanyIntel(data.data);
+      setCompanyIntelStatus("done");
+    } catch (err) {
+      setCompanyIntelStatus("none");
+      if (!isCreditError(err)) toast.error("Company research failed");
+    }
   };
 
   const startEdit = () => {
@@ -293,6 +364,52 @@ export default function LeadDetail() {
                     <ShieldOff size={12} /> {lead.dnc ? "Clear do-not-contact" : "Mark do not contact"}
                   </button>
                 </div>
+                <div className="pt-2">
+                  {lead.deal ? (
+                    <Link to="/app/crm/pipeline" data-testid="view-existing-deal" className="btn-secondary text-xs w-full justify-center">
+                      View deal — {lead.deal.title}
+                    </Link>
+                  ) : (
+                    <button onClick={convertLead} disabled={converting} data-testid="convert-to-deal"
+                      className="btn-primary text-xs w-full justify-center disabled:opacity-50">
+                      {converting ? <Loader2 size={12} className="animate-spin" /> : null}
+                      Convert to Deal
+                    </button>
+                  )}
+                </div>
+                {customFieldDefs.length > 0 && (
+                  <div className="pt-2 space-y-1.5 border-t border-line/50">
+                    <div className="ui-label">Custom fields</div>
+                    {customFieldDefs.map((f) => {
+                      const value = (lead.custom_fields || {})[f.key] ?? "";
+                      if (f.type === "select") {
+                        return (
+                          <div key={f.id}>
+                            <label className="text-tiny text-ink-muted">{f.name}</label>
+                            <select value={value} onChange={(e) => setCustomField(f.key, e.target.value)}
+                              data-testid={`custom-field-${f.key}`}
+                              className="w-full border border-line px-2 py-1.5 rounded text-caption">
+                              <option value="">—</option>
+                              {(f.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={f.id}>
+                          <label className="text-tiny text-ink-muted">{f.name}</label>
+                          <input
+                            type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                            defaultValue={value}
+                            data-testid={`custom-field-${f.key}`}
+                            onBlur={(e) => { if (e.target.value !== String(value)) setCustomField(f.key, e.target.value); }}
+                            className="w-full border border-line px-2 py-1.5 rounded text-caption"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </>
             )}
             {lead.campaign_names?.length > 0 && (
@@ -515,6 +632,60 @@ export default function LeadDetail() {
               </div>
             )}
           </div>
+
+          {/* Company intelligence */}
+          {deriveDomain(lead) && (
+            <div className="shadow-card p-6 sm:p-8 rounded-2xl" data-testid="company-intel-panel">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="ui-label flex items-center gap-1.5"><Building2 size={14} /> Company</div>
+                {companyIntelStatus !== "loading" && (
+                  <button onClick={crawlCompany} disabled={companyIntelStatus === "crawling"}
+                    data-testid="company-research-btn" className="btn-secondary text-xs disabled:opacity-50">
+                    {companyIntelStatus === "crawling" ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
+                    {companyIntelStatus === "crawling" ? "Researching…" : companyIntel ? "Refresh" : "Research company"}
+                  </button>
+                )}
+              </div>
+
+              {companyIntelStatus === "loading" ? (
+                <p className="text-caption text-ink-muted mt-3">Checking for an existing profile…</p>
+              ) : !companyIntel?.profile || Object.keys(companyIntel.profile).length === 0 ? (
+                <p className="text-caption text-ink-muted mt-3">
+                  Not researched yet. We'll crawl {deriveDomain(lead)} and build an AI profile —
+                  industry, pain points, competitors — so you have context before you reach out.
+                </p>
+              ) : (
+                <div className="mt-4 space-y-4">
+                  {companyIntel.profile.description && (
+                    <p className="text-caption text-ink-secondary">{companyIntel.profile.description}</p>
+                  )}
+                  <div className="flex flex-wrap gap-1.5">
+                    {companyIntel.profile.industry && <span className="kbd">{companyIntel.profile.industry}</span>}
+                    {companyIntel.profile.company_size && <span className="kbd">{companyIntel.profile.company_size}</span>}
+                    {companyIntel.profile.buying_stage && <span className="kbd">{companyIntel.profile.buying_stage}</span>}
+                  </div>
+                  {companyIntel.profile.pain_points?.length > 0 && (
+                    <div>
+                      <div className="ui-label mb-1.5">Pain points</div>
+                      <ul className="space-y-1">
+                        {companyIntel.profile.pain_points.slice(0, 5).map((p, i) => (
+                          <li key={i} className="text-caption text-ink-secondary">· {p}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {companyIntel.profile.competitors?.length > 0 && (
+                    <div>
+                      <div className="ui-label mb-1.5">Competitors</div>
+                      <div className="flex flex-wrap gap-1">
+                        {companyIntel.profile.competitors.slice(0, 6).map((c) => <span key={c} className="kbd">{c}</span>)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Tasks */}
           <div className="shadow-card p-4 sm:p-6 rounded-2xl">

@@ -119,7 +119,9 @@ export default function Inbox() {
               <div className="text-tiny text-ink-muted font-mono">{active.lead.title}</div>
               <div className="text-tiny text-ink-muted font-mono">{active.lead.company}</div>
               <div className="mt-4 ui-label">ICP score</div>
-              <div className="font-mono text-2xl font-bold text-ink">{active.lead.icp_score}</div>
+              <div className="font-mono text-2xl font-bold text-ink">
+                {typeof active.lead.icp_score === "number" ? active.lead.icp_score : "—"}
+              </div>
               <div className="mt-4 ui-label">Classification</div>
               <div className="text-body mt-1">{LABELS[active.classification]?.t || "Other"}</div>
             </>

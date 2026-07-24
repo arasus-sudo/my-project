@@ -127,6 +127,9 @@ export default function CampaignBuilder() {
   // Preview always shows accurate live progress instead of a bare "no emails
   // yet" dead end while a background job is still writing them.
   const [genProgress, setGenProgress] = useState(null); // {done, total} | null when idle
+  const [selectedReview, setSelectedReview] = useState([]); // lead ids checked in the review rail
+  const [sendingTest, setSendingTest] = useState(false);
+  const [regeneratingAll, setRegeneratingAll] = useState(false);
 
   // Track actual campaign ID — may differ from useParams id when creating new
   const [activeCampaignId, setActiveCampaignId] = useState(id);
@@ -332,6 +335,53 @@ export default function CampaignBuilder() {
       toast.success("Email rejected");
       loadCampaignLeads();
     } catch { toast.error("Rejection failed"); }
+  };
+
+  // Multi-select bulk approve/reject — the counterpart to Approve all for
+  // when only some of the batch is ready to go.
+  const bulkSetReviewStatus = async (status) => {
+    if (!id || selectedReview.length === 0) return;
+    try {
+      const { data } = await api.post(`/campaigns/${id}/leads/bulk-status`, { lead_ids: selectedReview, status });
+      toast.success(`${data.updated} email(s) ${status}`);
+      setSelectedReview([]);
+      loadCampaignLeads();
+    } catch { toast.error(`Bulk ${status} failed`); }
+  };
+
+  const toggleReviewSelected = (leadId) => {
+    setSelectedReview((prev) => prev.includes(leadId) ? prev.filter((x) => x !== leadId) : [...prev, leadId]);
+  };
+
+  const sendTestEmail = async (leadId) => {
+    if (!id) return;
+    setSendingTest(true);
+    try {
+      const { data } = await api.post(`/campaigns/${id}/leads/${leadId}/send-test`);
+      toast.success(data.mocked ? `Test recorded (no mailbox connected — see Mailboxes)` : `Test sent to ${data.sent_to}`);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Test send failed");
+    } finally {
+      setSendingTest(false);
+    }
+  };
+
+  // "Start over" regeneration — unlike generate-all (which skips leads that
+  // already have a draft), this reprocesses every assigned lead, for when
+  // the template changed and existing drafts are stale.
+  const regenerateAllEmails = async () => {
+    if (!id) return;
+    setRegeneratingAll(true);
+    try {
+      const { data } = await api.post(`/campaigns/${id}/leads/regenerate-all`);
+      toast.success(`Regenerated ${data.generated} email(s)`);
+      if (data.errors?.length) console.warn("Regenerate errors:", data.errors);
+      loadCampaignLeads();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Regenerate-all failed");
+    } finally {
+      setRegeneratingAll(false);
+    }
   };
 
   // Run Campaign Engine - generates personalized openers for all leads
@@ -789,24 +839,68 @@ export default function CampaignBuilder() {
             /* REVIEW MODE — split pane: template left, generated email right */
             <div className="space-y-3">
               {campaignLeads.length > 0 && (
-                <div className="flex items-center justify-between gap-2 shadow-card rounded-2xl bg-white px-4 py-2.5">
-                  <div className="text-caption text-ink-muted">
-                    <span className="font-medium text-ink">{leadStats.approved}</span> approved · {" "}
-                    <span className="font-medium text-ink">{leadStats.rejected}</span> rejected · {" "}
-                    <span className="font-medium text-ink">{leadStats.total - leadStats.reviewed}</span> awaiting review
+                <div className="shadow-card rounded-2xl bg-white">
+                  <div className="flex items-center justify-between gap-2 px-4 py-2.5 flex-wrap">
+                    <div className="text-caption text-ink-muted">
+                      <span className="font-medium text-ink">{leadStats.approved}</span> approved · {" "}
+                      <span className="font-medium text-ink">{leadStats.rejected}</span> rejected · {" "}
+                      <span className="font-medium text-ink">{leadStats.total - leadStats.reviewed}</span> awaiting review
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={regenerateAllEmails} disabled={regeneratingAll || leadStats.total === 0} className="btn-ghost text-xs" data-testid="regenerate-all-emails">
+                        {regeneratingAll ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />} Regenerate all
+                      </button>
+                      <button onClick={approveAllEmails} disabled={leadStats.total === 0} className="btn-secondary text-xs" data-testid="approve-all-emails">
+                        <Check size={12} /> Approve all
+                      </button>
+                    </div>
                   </div>
-                  <button onClick={approveAllEmails} disabled={leadStats.total === 0} className="btn-secondary text-xs" data-testid="approve-all-emails">
-                    <Check size={12} /> Approve all
-                  </button>
+                  {selectedReview.length > 0 && (
+                    <div className="flex items-center gap-2 px-4 py-2 border-t border-line bg-accent-soft/40">
+                      <span className="text-caption font-medium">{selectedReview.length} selected</span>
+                      <button onClick={() => bulkSetReviewStatus("approved")} className="btn-primary text-xs ml-auto" data-testid="bulk-approve">
+                        <Check size={12} /> Approve selected
+                      </button>
+                      <button onClick={() => bulkSetReviewStatus("rejected")} className="btn-ghost text-xs text-danger" data-testid="bulk-reject">
+                        <Flag size={12} /> Reject selected
+                      </button>
+                      <button onClick={() => setSelectedReview([])} className="btn-ghost text-xs text-ink-muted">Clear</button>
+                    </div>
+                  )}
                 </div>
               )}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
+              <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_1fr] gap-4 h-full">
               {(() => {
                 const reviewEmails = getReviewEmails();
                 const current = reviewEmails[reviewIndex];
                 const template = steps[activeStep] || steps[0] || {};
+                const rail = reviewEmails.length > 0 && (
+                  <div className="shadow-card rounded-2xl bg-white overflow-hidden flex flex-col max-h-[calc(100vh-280px)]">
+                    <div className="p-3 border-b border-line flex items-center justify-between">
+                      <span className="ui-label">Leads</span>
+                      <input type="checkbox"
+                        checked={selectedReview.length === reviewEmails.length}
+                        onChange={(e) => setSelectedReview(e.target.checked ? reviewEmails.map((l) => l.id) : [])}
+                        title="Select all" />
+                    </div>
+                    <div className="overflow-y-auto flex-1">
+                      {reviewEmails.map((l, i) => (
+                        <div key={l.id}
+                          className={`flex items-center gap-2 px-3 py-2 border-b border-line cursor-pointer hover:bg-surfacehover transition-colors ${i === reviewIndex ? "bg-accent-soft" : ""}`}
+                          onClick={() => setReviewIndex(i)}>
+                          <input type="checkbox" onClick={(e) => e.stopPropagation()}
+                            checked={selectedReview.includes(l.id)} onChange={() => toggleReviewSelected(l.id)} />
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${l.email_status === "approved" ? "bg-success" : l.email_status === "rejected" ? "bg-danger" : l.personalized ? "bg-warning" : "bg-ink-disabled"}`} />
+                          <span className="text-caption truncate flex-1">{l.first_name} {l.last_name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
                 if (!current) return (
-                  <div className="lg:col-span-2 shadow-card rounded-2xl bg-white p-12 text-center">
+                  <>
+                    {rail}
+                    <div className="lg:col-span-2 shadow-card rounded-2xl bg-white p-12 text-center">
                     {genProgress ? (
                       <>
                         <Loader2 size={22} className="animate-spin mx-auto text-ink-muted mb-3" />
@@ -829,14 +923,16 @@ export default function CampaignBuilder() {
                         <p className="text-caption text-ink-muted mt-1 max-w-sm mx-auto">
                           {leadStats.total === 0
                             ? "Assign leads from the sidebar — every lead previews with your template's merge fields filled in, even before you generate."
-                            : "Pick a lead from the dropdown on the right to see its preview."}
+                            : "Pick a lead from the list on the left to see its preview."}
                         </p>
                       </>
                     )}
-                  </div>
+                    </div>
+                  </>
                 );
                 return (
                   <>
+                    {rail}
                     {/* LEFT: Template with placeholders */}
                     <div className="shadow-card rounded-2xl bg-white">
                       <div className="p-4 border-b border-line flex items-center justify-between">
@@ -869,23 +965,15 @@ export default function CampaignBuilder() {
                     <div className="shadow-card rounded-2xl bg-white">
                       <div className="p-4 border-b border-line flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          {/* Jump straight to any contact instead of paging one at a time —
-                              matches Apollo/Clay's contact picker in their preview panes. */}
-                          <select
-                            value={current.id}
-                            onChange={(e) => setReviewIndex(Math.max(0, reviewEmails.findIndex((l) => l.id === e.target.value)))}
-                            data-testid="review-lead-picker"
-                            className="font-medium bg-transparent border-0 focus:outline-none focus:ring-0 max-w-[160px] truncate cursor-pointer"
-                          >
-                            {reviewEmails.map((l) => (
-                              <option key={l.id} value={l.id}>{l.first_name} {l.last_name}</option>
-                            ))}
-                          </select>
+                          <span className="font-medium truncate max-w-[140px]">{current.first_name} {current.last_name}</span>
                           <span className={`text-tiny font-mono px-1.5 py-0.5 rounded-full shrink-0 ${current.email_status === "approved" ? "bg-success/10 text-success" : current.email_status === "rejected" ? "bg-danger/10 text-danger" : "bg-warning/10 text-warning"}`}>
                             {current.email_status === "approved" ? "Approved" : current.email_status === "rejected" ? "Rejected" : "Draft"}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                          <button onClick={() => sendTestEmail(current.id)} disabled={sendingTest} className="btn-ghost text-xs flex items-center gap-1" data-testid="send-test-email" title="Email this exact preview to yourself">
+                            {sendingTest ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Send test
+                          </button>
                           {editingOpener?.leadId === current.id ? (
                             <button onClick={() => setEditingOpener(null)} className="btn-ghost text-xs"><X size={12} /> Cancel</button>
                           ) : (
@@ -931,6 +1019,11 @@ export default function CampaignBuilder() {
                               <div className="text-ink-muted italic">No content</div>
                             )}
                           </div>
+                          {/\{\{\s*\w+\s*\}\}/.test(current.email_body || "") && (
+                            <div className="flex items-center gap-1.5 text-tiny text-warning mt-1.5">
+                              <AlertTriangle size={11} /> Contains an unresolved merge field — this lead may be missing that field.
+                            </div>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 pt-3 border-t border-line">
                           {!current.personalized ? (

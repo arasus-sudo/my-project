@@ -28,6 +28,7 @@ const UnifiedInbox = lazy(() => import("./pages/UnifiedInbox"));
 const CRM = lazy(() => import("./pages/CRM"));
 const Pipeline = lazy(() => import("./pages/Pipeline"));
 const LeadLists = lazy(() => import("./pages/LeadLists"));
+const CustomFieldsSettings = lazy(() => import("./pages/CustomFieldsSettings"));
 const Companies = lazy(() => import("./pages/Companies"));
 const { CompaniesList, CompanyDetail } = Companies;
 const LeadSearch = lazy(() => import("./pages/LeadSearch"));
@@ -152,6 +153,7 @@ function App() {
               <Route path="crm/leads/:id" element={<LeadDetail />} />
               <Route path="crm/search" element={<LeadSearch />} />
               <Route path="crm/lists" element={<LeadLists />} />
+              <Route path="crm/custom-fields" element={<CustomFieldsSettings />} />
               <Route path="crm/pipeline" element={<Pipeline />} />
               <Route path="crm/companies" element={<CompaniesList />} />
               <Route path="crm/companies/:id" element={<CompanyDetail />} />

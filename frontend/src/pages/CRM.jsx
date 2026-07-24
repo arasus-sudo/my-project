@@ -6,8 +6,10 @@ import { toast } from "sonner";
 import {
   Users, ListChecks, Kanban, BarChart3, Plus, Target, Activity, Phone, Mail,
   CalendarClock, FileText, MessageSquare, ArrowRight, Share2, Search,
-  CheckSquare, ShieldAlert, ChevronDown, ChevronUp, Building2,
+  CheckSquare, ShieldAlert, ChevronDown, ChevronUp, Building2, Trash2, RotateCcw, Copy,
 } from "lucide-react";
+
+const RECYCLE_TYPE_LABEL = { lead: "Lead", company: "Company", list: "Lead list", company_list: "Company list" };
 import { SkeletonKpiGrid, SkeletonListRows } from "../components/ui/loading-states";
 
 const QUARANTINE_REASON_LABEL = {
@@ -24,9 +26,13 @@ export default function CRM() {
   const [tasks, setTasks] = useState([]);
   const [quarantine, setQuarantine] = useState([]);
   const [quarantineOpen, setQuarantineOpen] = useState(false);
+  const [recycleBin, setRecycleBin] = useState([]);
+  const [recycleBinOpen, setRecycleBinOpen] = useState(false);
+  const [duplicates, setDuplicates] = useState([]);
+  const [duplicatesOpen, setDuplicatesOpen] = useState(true);
 
   const load = async () => {
-    const [leadsRes, dealsRes, listsRes, activityRes, tasksRes, quarantineRes, companiesRes] = await Promise.all([
+    const [leadsRes, dealsRes, listsRes, activityRes, tasksRes, quarantineRes, companiesRes, recycleBinRes, duplicatesRes] = await Promise.all([
       api.get("/leads?page_size=2000").catch(() => ({ data: { items: [] } })),
       api.get("/deals").catch(() => ({ data: [] })),
       api.get("/crm/lists").catch(() => ({ data: [] })),
@@ -34,6 +40,8 @@ export default function CRM() {
       api.get("/crm/tasks", { params: { status: "open" } }).catch(() => ({ data: [] })),
       api.get("/quarantine").catch(() => ({ data: [] })),
       api.get("/companies?page_size=1").catch(() => ({ data: { total: 0 } })),
+      api.get("/crm/recycle-bin").catch(() => ({ data: [] })),
+      api.get("/crm/duplicates").catch(() => ({ data: [] })),
     ]);
     const leads = leadsRes.data.items || leadsRes.data;
     const deals = dealsRes.data;
@@ -41,6 +49,8 @@ export default function CRM() {
     setRecentActivity((activityRes.data || []).slice(0, 10));
     setTasks((tasksRes.data || []).slice(0, 8));
     setQuarantine(quarantineRes.data || []);
+    setRecycleBin(recycleBinRes.data || []);
+    setDuplicates(duplicatesRes.data || []);
     setStats({
       totalLeads: leads.length,
       totalDeals: deals.length,
@@ -64,6 +74,37 @@ export default function CRM() {
       await api.delete(`/suppressions/${encodeURIComponent(email)}`);
       toast.success(`Un-suppressed ${email}`);
       dismissQuarantine(qid);
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+  };
+
+  const restoreRecycled = async (item) => {
+    try {
+      await api.post(`/crm/recycle-bin/${item.type}/${item.id}/restore`);
+      toast.success(`Restored ${item.name || RECYCLE_TYPE_LABEL[item.type]}`);
+      setRecycleBin((r) => r.filter((x) => !(x.type === item.type && x.id === item.id)));
+    } catch (err) { toast.error(err?.response?.data?.detail || "Restore failed"); }
+  };
+
+  const purgeRecycled = async (item) => {
+    try {
+      await api.delete(`/crm/recycle-bin/${item.type}/${item.id}`);
+      toast.success("Deleted permanently");
+      setRecycleBin((r) => r.filter((x) => !(x.type === item.type && x.id === item.id)));
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+  };
+
+  const mergeDuplicate = async (candidate, survivorId) => {
+    try {
+      await api.post(`/crm/duplicates/${candidate.id}/merge`, { survivor_id: survivorId });
+      toast.success("Merged");
+      setDuplicates((d) => d.filter((x) => x.id !== candidate.id));
+    } catch (err) { toast.error(err?.response?.data?.detail || "Merge failed"); }
+  };
+
+  const dismissDuplicate = async (candidateId) => {
+    try {
+      await api.post(`/crm/duplicates/${candidateId}/dismiss`);
+      setDuplicates((d) => d.filter((x) => x.id !== candidateId));
     } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
   };
 
@@ -228,6 +269,46 @@ export default function CRM() {
           )}
         </div>
 
+        {/* Possible duplicates */}
+        {duplicates.length > 0 && (
+          <div>
+            <button onClick={() => setDuplicatesOpen((o) => !o)} className="ui-label mb-3 flex items-center gap-1.5 w-full">
+              <Copy size={14} /> Possible duplicates ({duplicates.length})
+              {duplicatesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {duplicatesOpen && (
+              <div className="space-y-2">
+                {duplicates.map((c) => (
+                  <div key={c.id} className="shadow-card p-4 rounded-2xl bg-white">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-caption text-ink-muted">
+                        Matched on {c.match_reason?.replace("_", " + ")} · {Math.round((c.confidence || 0) * 100)}% confidence
+                      </span>
+                      <button onClick={() => dismissDuplicate(c.id)} className="text-caption text-ink-muted hover:text-ink">
+                        Not a duplicate
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[c.lead_a, c.lead_b].map((l) => (
+                        <div key={l.id} className="border border-line rounded-xl p-3">
+                          <div className="text-body font-medium truncate">{l.first_name} {l.last_name}</div>
+                          <div className="text-caption text-ink-muted font-mono truncate">{l.email}</div>
+                          {l.phone && <div className="text-caption text-ink-muted font-mono">{l.phone}</div>}
+                          {l.company && <div className="text-caption text-ink-muted truncate">{l.company}</div>}
+                          <button onClick={() => mergeDuplicate(c, l.id)}
+                            className="btn-secondary text-xs w-full justify-center mt-2">
+                            Keep this one
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Quarantined leads */}
         {quarantine.length > 0 && (
           <div>
@@ -251,6 +332,39 @@ export default function CRM() {
                         <Link to={`/app/crm/leads/${q.lead_id}`} className="btn-secondary text-xs">Fix on lead</Link>
                       )}
                       <button onClick={() => dismissQuarantine(q.id)} className="text-caption text-ink-muted hover:text-ink">Dismiss</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Recycle bin */}
+        {recycleBin.length > 0 && (
+          <div>
+            <button onClick={() => setRecycleBinOpen((o) => !o)} className="ui-label mb-3 flex items-center gap-1.5 w-full">
+              <Trash2 size={14} /> Recycle bin ({recycleBin.length})
+              {recycleBinOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {recycleBinOpen && (
+              <div className="space-y-2">
+                {recycleBin.map((item) => (
+                  <div key={`${item.type}-${item.id}`} className="shadow-card p-3 rounded-xl flex items-center justify-between gap-3 bg-white">
+                    <div className="min-w-0">
+                      <div className="text-body truncate">{item.name || "(untitled)"}</div>
+                      <div className="text-caption text-ink-muted">
+                        {RECYCLE_TYPE_LABEL[item.type] || item.type}
+                        {item.deleted_at && ` · deleted ${new Date(item.deleted_at).toLocaleDateString()}`}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => restoreRecycled(item)} className="btn-secondary text-xs">
+                        <RotateCcw size={12} /> Restore
+                      </button>
+                      <button onClick={() => purgeRecycled(item)} className="text-caption text-ink-muted hover:text-danger">
+                        Delete permanently
+                      </button>
                     </div>
                   </div>
                 ))}

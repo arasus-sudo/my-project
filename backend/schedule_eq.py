@@ -586,7 +586,7 @@ async def create_booking(workspace_id: str, event_type_slug: str, body: BookingI
             "id": new_id(), "workspace_id": workspace_id,
             "first_name": name_parts[0], "last_name": name_parts[1] if len(name_parts) > 1 else "",
             "email": email, "company": "", "title": "", "linkedin": "",
-            "phone": body.guest_phone, "tags": [], "status": "new", "icp_score": 60,
+            "phone": body.guest_phone, "tags": [], "status": "new",
             "verified": True, "phone_verified": False, "dnc": False, "created_at": now_iso(),
         }
         await db.leads.insert_one(lead)

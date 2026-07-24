@@ -60,7 +60,7 @@ export default function Leads() {
   const [callLead, setCallLead] = useState(null);
   const [callAgentId, setCallAgentId] = useState("");
   const [calling, setCalling] = useState(false);
-  const [form, setForm] = useState({ first_name: "", last_name: "", email: "", company: "", title: "", linkedin_url: "", website: "", phone: "" });
+  const [form, setForm] = useState({ first_name: "", last_name: "", email: "", company: "", title: "", linkedin_url: "", website: "", phone: "", tags: "" });
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -105,10 +105,11 @@ export default function Leads() {
   const add = async (e) => {
     e.preventDefault();
     try {
-      await api.post("/leads", form);
+      const payload = { ...form, tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [] };
+      await api.post("/leads", payload);
       toast.success("Lead added");
       setModal(false);
-      setForm({ first_name: "", last_name: "", email: "", company: "", title: "", linkedin_url: "", website: "", phone: "" });
+      setForm({ first_name: "", last_name: "", email: "", company: "", title: "", linkedin_url: "", website: "", phone: "", tags: "" });
       load();
     } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
   };
@@ -418,6 +419,7 @@ export default function Leads() {
             <input placeholder="LinkedIn URL" value={form.linkedin_url || ""} onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })} className="w-full border border-line px-3 py-2 rounded-sm" />
             <input placeholder="Website URL" value={form.website || ""} onChange={(e) => setForm({ ...form, website: e.target.value })} className="w-full border border-line px-3 py-2 rounded-sm" />
             <input placeholder="Phone (E.164, e.g. +14155551234)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="new-lead-phone" className="w-full border border-line px-3 py-2 rounded-sm" />
+            <input placeholder="Tags (comma-separated, e.g. warm, enterprise)" value={form.tags || ""} onChange={(e) => setForm({ ...form, tags: e.target.value })} className="w-full border border-line px-3 py-2 rounded-sm" />
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>
               <button type="submit" data-testid="save-new-lead" className="btn-primary">Add lead</button>
