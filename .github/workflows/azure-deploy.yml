@@ -42,7 +42,25 @@ jobs:
       - name: Package and deploy backend
         run: |
           cd backend
-          zip -r /tmp/deploy.zip . -x "*__pycache__*" "*venv*" "*.venv*" ".git*"
+          # Remove stale artifacts before zipping
+          rm -f deploy.zip zip_deploy.py
+          zip -r /tmp/deploy.zip . \
+            -x "*__pycache__*" \
+            -x "*/__pycache__/*" \
+            -x "*venv*" \
+            -x "*/venv/*" \
+            -x "*.venv*" \
+            -x ".git*" \
+            -x "*.log" \
+            -x "*.err" \
+            -x "*.txt" \
+            -x ".env" \
+            -x "deploy.zip" \
+            -x "make_zip.py" \
+            -x "deploy_zip.py" \
+            -x "zip_deploy.py" \
+            -x "zip_deploy_full.py"
+          echo "Zip size: $(du -sh /tmp/deploy.zip | cut -f1)"
           az webapp deploy \
             --resource-group ${{ env.AZURE_RG }} \
             --name ${{ env.BACKEND_NAME }} \
