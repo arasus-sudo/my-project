@@ -32,6 +32,13 @@ jobs:
             --name ${{ env.BACKEND_NAME }} \
             --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true
 
+      - name: Set startup command
+        run: |
+          az webapp config set \
+            --resource-group ${{ env.AZURE_RG }} \
+            --name ${{ env.BACKEND_NAME }} \
+            --startup-file "gunicorn -w 4 -k uvicorn.workers.UvicornWorker server:app"
+
       - name: Package and deploy backend
         run: |
           cd backend

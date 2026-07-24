@@ -61,6 +61,7 @@ class CampaignGenerateIn(BaseModel):
     product_name: Optional[str] = None
     signature: Optional[str] = None
     cta_override: Optional[str] = None
+    custom_prompt: Optional[str] = None  # Full custom prompt with {placeholders}
 
 
 # ---------------------------------------------------------------------------
@@ -268,15 +269,33 @@ async def generate_campaign(body: CampaignGenerateIn, user=Depends(current_user)
 
     cta_instruction = f"- CTA override: every email's closing question MUST be exactly this: {body.cta_override}\n" if body.cta_override else ""
 
-    prompt = CAMPAIGN_GENERATION_PROMPT.format(
-        service_profile=json.dumps(service_profile, indent=2),
-        company_intel=json.dumps(company_intel, indent=2) if company_intel else "No company intelligence available",
-        goal=body.goal,
-        tone=body.tone,
-        channels=json.dumps(body.channels),
-        campaign_type=body.campaign_type,
-        cta_instruction=cta_instruction,
-    )
+    if body.custom_prompt:
+        prompt = body.custom_prompt.format(
+            service_name=service.get("name", ""),
+            service_profile=json.dumps(service_profile, indent=2),
+            company_intel=json.dumps(company_intel, indent=2) if company_intel else "No company intelligence available",
+            goal=body.goal,
+            tone=body.tone,
+            channels=", ".join(body.channels),
+            campaign_type=body.campaign_type,
+            cta_override=body.cta_override or "",
+            target_audience=json.dumps(body.target_audience, indent=2),
+            industry=body.target_audience.get("industry", ""),
+            location=body.target_audience.get("location", ""),
+            company_size=body.target_audience.get("company_size", ""),
+            titles=body.target_audience.get("titles", ""),
+            decision_makers=body.target_audience.get("decision_makers", ""),
+        )
+    else:
+        prompt = CAMPAIGN_GENERATION_PROMPT.format(
+            service_profile=json.dumps(service_profile, indent=2),
+            company_intel=json.dumps(company_intel, indent=2) if company_intel else "No company intelligence available",
+            goal=body.goal,
+            tone=body.tone,
+            channels=json.dumps(body.channels),
+            campaign_type=body.campaign_type,
+            cta_instruction=cta_instruction,
+        )
 
     try:
         raw = await _llm_chat(CAMPAIGN_STRATEGY_SYSTEM, prompt, f"campaign-gen-{new_id()[:8]}", user=user, max_tokens=32000)

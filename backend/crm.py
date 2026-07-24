@@ -10,6 +10,7 @@ quarantine/suppression review flow.
 import csv
 import io
 import json
+import re
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -405,6 +406,157 @@ async def get_lead(lead_id: str, user=Depends(current_user)):
     await _enrich_campaign_names([lead])
     await _enrich_owner_names([lead])
     return lead
+
+
+@crm_router.get("/leads/{lead_id}/duplicates")
+async def find_lead_duplicates(lead_id: str, user=Depends(current_user)):
+    """Find potential duplicates for a specific lead by email local part match."""
+    lead = await db.leads.find_one(_active(user["workspace_id"], id=lead_id), {"_id": 0})
+    if not lead:
+        raise HTTPException(404, "not found")
+    email = (lead.get("email") or "").lower().strip()
+    if not email or "@" not in email:
+        return {"duplicates": []}
+    local_part = email.split("@")[0]
+    domain = email.split("@")[1]
+    # Match leads with same email, or same local part + different domain, or same domain + similar name
+    query = _active(user["workspace_id"], id={"$ne": lead_id})
+    query["$or"] = [
+        {"email": {"$regex": f"^{re.escape(local_part)}@", "$options": "i"}},
+        {"email": {"$regex": f"@^{re.escape(domain)}", "$options": "i"}},
+    ]
+    duplicates = await db.leads.find(query, {"_id": 0}).to_list(20)
+    await _enrich_campaign_names(duplicates)
+    return {"duplicates": duplicates, "total": len(duplicates)}
+
+
+@crm_router.post("/leads/merge")
+async def merge_leads(body: Dict[str, Any], user=Depends(current_user)):
+    """Merge two leads. primary_id survives, secondary_id is deleted.
+    Fields from secondary fill gaps in primary. Tags, campaign/lists references are merged."""
+    primary_id = body.get("primary_id")
+    secondary_id = body.get("secondary_id")
+    if not primary_id or not secondary_id:
+        raise HTTPException(400, "primary_id and secondary_id required")
+    if primary_id == secondary_id:
+        raise HTTPException(400, "Cannot merge a lead with itself")
+    wid = user["workspace_id"]
+    primary = await db.leads.find_one(_active(wid, id=primary_id), {"_id": 0})
+    secondary = await db.leads.find_one(_active(wid, id=secondary_id), {"_id": 0})
+    if not primary or not secondary:
+        raise HTTPException(404, "One or both leads not found")
+    # Merge fields — secondary fills gaps where primary is empty
+    mergeable = {"first_name", "last_name", "company", "title", "phone",
+                 "linkedin", "linkedin_url", "website", "company_id"}
+    update = {}
+    for field in mergeable:
+        if not primary.get(field) and secondary.get(field):
+            update[field] = secondary[field]
+    # Merge tags
+    merged_tags = list(set(primary.get("tags", []) + secondary.get("tags", [])))
+    update["tags"] = merged_tags
+    # Merge raw_* fields — secondary fills gaps
+    for k, v in secondary.items():
+        if k.startswith("raw_") and v and not primary.get(k):
+            update[k] = v
+    if update:
+        await db.leads.update_one({"id": primary_id}, {"$set": update})
+    # Update all lists that reference secondary to reference primary instead
+    lists_with_secondary = await db.lead_lists.find(
+        {"workspace_id": wid, "lead_ids": secondary_id, "deleted_at": None},
+        {"_id": 0, "id": 1, "lead_ids": 1}
+    ).to_list(50)
+    for lst in lists_with_secondary:
+        new_ids = [primary_id if lid == secondary_id else lid for lid in lst.get("lead_ids", [])]
+        await db.lead_lists.update_one({"id": lst["id"]}, {"$set": {"lead_ids": list(set(new_ids))}})
+    # Update all campaigns that reference secondary
+    campaigns_with_secondary = await db.campaigns.find(
+        {"workspace_id": wid, "lead_ids": secondary_id},
+        {"_id": 0, "id": 1, "lead_ids": 1}
+    ).to_list(50)
+    for c in campaigns_with_secondary:
+        new_ids = [primary_id if lid == secondary_id else lid for lid in c.get("lead_ids", [])]
+        await db.campaigns.update_one({"id": c["id"]}, {"$set": {"lead_ids": list(set(new_ids))}})
+    # Update campaign_ids on primary
+    all_campaign_ids = list(set(primary.get("campaign_ids", []) + secondary.get("campaign_ids", [])))
+    await db.leads.update_one({"id": primary_id}, {"$set": {"campaign_ids": all_campaign_ids}})
+    # Move deals from secondary to primary
+    await db.deals.update_many(
+        {"lead_id": secondary_id, "workspace_id": wid},
+        {"$set": {"lead_id": primary_id}}
+    )
+    # Delete secondary
+    await db.leads.update_one({"id": secondary_id}, {"$set": {
+        "deleted_at": now_iso(), "merged_into": primary_id, "deleted_by": user["id"]
+    }})
+    await _audit(user, "crm.leads.merge", {"primary_id": primary_id, "secondary_id": secondary_id})
+    merged = await db.leads.find_one({"id": primary_id, "workspace_id": wid}, {"_id": 0})
+    await _enrich_campaign_names([merged])
+    return {"ok": True, "lead": merged}
+
+
+@crm_router.get("/duplicates")
+async def list_all_duplicates(user=Depends(current_user)):
+    """Find all potential duplicates across the workspace by same email."""
+    wid = user["workspace_id"]
+    pipeline = [
+        {"$match": {"workspace_id": wid, "deleted_at": None}},
+        {"$group": {"_id": "$email", "ids": {"$push": "$id"}, "count": {"$sum": 1}}},
+        {"$match": {"count": {"$gt": 1}}},
+        {"$sort": {"count": -1}},
+    ]
+    exact = await db.leads.aggregate(pipeline).to_list(50)
+    groups = []
+    for g in exact:
+        leads = await db.leads.find(
+            {"workspace_id": wid, "id": {"$in": g["ids"]}, "deleted_at": None},
+            {"_id": 0}
+        ).to_list(10)
+        await _enrich_campaign_names(leads)
+        groups.append({"email": g["_id"], "count": g["count"], "leads": leads})
+    # Also find fuzzy matches: same email local part, different domain
+    all_leads = await db.leads.find(
+        {"workspace_id": wid, "deleted_at": None},
+        {"_id": 0, "id": 1, "email": 1, "first_name": 1, "last_name": 1, "company": 1}
+    ).to_list(2000)
+    local_map = {}
+    for l in all_leads:
+        e = (l.get("email") or "").lower().strip()
+        if "@" in e:
+            local = e.split("@")[0]
+            local_map.setdefault(local, []).append(l)
+    fuzzy = []
+    for local, matches in local_map.items():
+        if len(matches) > 1:
+            fuzzy.append({"local_part": local, "count": len(matches), "leads": matches})
+    fuzzy.sort(key=lambda x: -x["count"])
+    return {"exact_duplicates": groups, "fuzzy_duplicates": fuzzy[:20]}
+
+
+@crm_router.get("/duplicates/count")
+async def duplicates_count(user=Depends(current_user)):
+    """Get total count of duplicate emails."""
+    wid = user["workspace_id"]
+    pipeline = [
+        {"$match": {"workspace_id": wid, "deleted_at": None}},
+        {"$group": {"_id": "$email", "count": {"$sum": 1}}},
+        {"$match": {"count": {"$gt": 1}}},
+        {"$count": "duplicate_emails"},
+    ]
+    result = await db.leads.aggregate(pipeline).to_list(1)
+    count = result[0]["duplicate_emails"] if result else 0
+    affected = 0
+    if count > 0:
+        pipe2 = [
+            {"$match": {"workspace_id": wid, "deleted_at": None}},
+            {"$group": {"_id": "$email", "ids": {"$push": "$id"}, "count": {"$sum": 1}}},
+            {"$match": {"count": {"$gt": 1}}},
+            {"$project": {"total_affected": {"$size": "$ids"}}},
+            {"$group": {"_id": None, "total": {"$sum": "$total_affected"}}},
+        ]
+        r2 = await db.leads.aggregate(pipe2).to_list(1)
+        affected = r2[0]["total"] if r2 else 0
+    return {"duplicate_emails": count, "affected_leads": affected}
 
 
 class ConvertLeadIn(BaseModel):

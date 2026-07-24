@@ -68,7 +68,9 @@ export default function CampaignWizard() {
     company_intel_id: "",
     signature: "",
     cta_override: "",
+    custom_prompt: "",
   });
+  const [useCustomPrompt, setUseCustomPrompt] = useState(false);
 
   const load = async () => {
     try {
@@ -113,7 +115,7 @@ export default function CampaignWizard() {
   const generate = async () => {
     setGenerating(true);
     try {
-      const { data } = await api.post("/campaign-engine/generate", {
+      const payload = {
         service_id: form.service_id,
         goal: form.goal,
         target_audience: form.target_audience,
@@ -123,7 +125,9 @@ export default function CampaignWizard() {
         company_intel_id: form.company_intel_id || undefined,
         signature: form.signature || undefined,
         cta_override: form.cta_override || undefined,
-      });
+        custom_prompt: useCustomPrompt ? form.custom_prompt : undefined,
+      };
+      const { data } = await api.post("/campaign-engine/generate", payload);
       setCampaign(data.campaign);
       toast.success("Campaign generated!");
       // Move the URL to the reviewable route (matching the id-aware load()
@@ -798,7 +802,26 @@ export default function CampaignWizard() {
               </div>
             </div>
 
-            <button onClick={generate} disabled={generating} className="btn-primary text-base py-3 px-8 disabled:opacity-50">
+            <div className="max-w-lg mx-auto text-left">
+              <label className="flex items-center gap-2 text-body font-medium cursor-pointer mb-2">
+                <input type="checkbox" checked={useCustomPrompt}
+                  onChange={(e) => setUseCustomPrompt(e.target.checked)} className="w-4 h-4" />
+                Use custom prompt
+              </label>
+              {useCustomPrompt && (
+                <div className="space-y-2">
+                  <p className="text-caption text-ink-muted">
+                    Paste a custom prompt with placeholders: <code className="font-mono bg-ash px-1 rounded">{`{service_name}`}</code>, <code className="font-mono bg-ash px-1 rounded">{`{goal}`}</code>, <code className="font-mono bg-ash px-1 rounded">{`{tone}`}</code>, <code className="font-mono bg-ash px-1 rounded">{`{industry}`}</code>, <code className="font-mono bg-ash px-1 rounded">{`{titles}`}</code>, <code className="font-mono bg-ash px-1 rounded">{`{company_intel}`}</code>, <code className="font-mono bg-ash px-1 rounded">{`{service_profile}`}</code>
+                  </p>
+                  <textarea value={form.custom_prompt} onChange={set("custom_prompt")}
+                    rows={10}
+                    className="input-premium w-full font-mono text-caption"
+                    placeholder="Paste your custom prompt here. Use {service_name}, {goal}, {tone}, {industry}, etc. as placeholders that will be filled in automatically." />
+                </div>
+              )}
+            </div>
+
+            <button onClick={generate} disabled={generating || (useCustomPrompt && !form.custom_prompt.trim())} className="btn-primary text-base py-3 px-8 disabled:opacity-50">
               {generating ? (
                 <><Loader2 size={16} className="animate-spin" /> Generating Campaign...</>
               ) : (
