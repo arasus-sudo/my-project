@@ -807,7 +807,7 @@ async def lead_list_bulk_import(
         doc = {
             "id": new_id(), "workspace_id": wid,
             "first_name": first_name, "last_name": (row.get("last_name") or "").strip(),
-            "email": email, "company": (row.get("company") or "").strip(),
+            "email": email, "company": (row.get("company") or row.get("raw_company_name") or row.get("company_name") or "").strip(),
             "title": (row.get("title") or "").strip(),
             "linkedin": linkedin_url, "linkedin_url": linkedin_url,
             "website": (row.get("website") or "").strip(),
@@ -819,10 +819,11 @@ async def lead_list_bulk_import(
         KNOWN_LEAD_KEYS = {"id", "workspace_id", "first_name", "last_name", "email", "company",
             "title", "linkedin", "linkedin_url", "website", "phone", "tags", "status",
             "verified", "phone_verified", "dnc", "owner_id", "deleted_at", "created_at",
-            "campaign_ids", "intent", "icp_score", "notes", "tasks"}
+            "campaign_ids", "intent", "icp_score", "notes", "tasks", "company_name",
+            "raw_company_name"}
         for k, v in row.items():
             if k not in KNOWN_LEAD_KEYS and v is not None and str(v).strip():
-                doc["raw_" + k] = str(v).strip()
+                doc[k if k.startswith("raw_") else "raw_" + k] = str(v).strip()
         try:
             await db.leads.insert_one(doc)
         except DuplicateKeyError:

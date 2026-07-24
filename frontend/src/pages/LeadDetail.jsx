@@ -260,7 +260,7 @@ export default function LeadDetail() {
     <div>
       <PageHeader
         title={`${lead.first_name} ${lead.last_name || ""}`}
-        subtitle={lead.company || lead.email}
+        subtitle={lead.company || lead.raw_company_name || lead.company_name || lead.email}
         right={
           <div className="flex items-center gap-2">
             <button onClick={startEdit} className="btn-secondary text-xs"><Edit2 size={14} /> Edit</button>

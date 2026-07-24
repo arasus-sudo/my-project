@@ -348,7 +348,7 @@ export default function Leads() {
                       </Link>
                     </td>
                     <td className="p-3 font-mono text-ink-secondary">{l.email}</td>
-                    <td className="p-3">{l.company}</td>
+                    <td className="p-3">{l.company || l.raw_company_name || l.company_name || "—"}</td>
                     <td className="p-3">
                       <div className="flex items-center gap-2">
                         {(l.linkedin_url || l.linkedin) && (
