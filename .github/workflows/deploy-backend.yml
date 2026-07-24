@@ -5,12 +5,21 @@ on:
     branches: [main]
     paths: [backend/**]
 
+env:
+  BACKEND_NAME: innoira-api
+  AZURE_RG: rg-innoira
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -23,10 +32,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Deploy to Azure App Service
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: innoira-api
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: backend/
-          startup-command: gunicorn --bind=0.0.0.0:8000 --workers=1 --timeout=120 -k uvicorn.workers.UvicornWorker server:app
+      - name: Package and deploy backend
+        run: |
+          cd backend
+          zip -r /tmp/deploy.zip . -x "*__pycache__*" "*venv*" "*.venv*" ".git*"
+          az webapp deploy \
+            --resource-group ${{ env.AZURE_RG }} \
+            --name ${{ env.BACKEND_NAME }} \
+            --src-path /tmp/deploy.zip \
+            --type zip
