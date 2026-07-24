@@ -992,7 +992,7 @@ export default function CampaignBuilder() {
               )}
             </div>
           )}
-
+          </div>
         </aside>
 
         <section className={`flex-1 min-w-0 p-4 sm:p-6 bg-bone space-y-4 relative`}>
@@ -1257,7 +1257,7 @@ export default function CampaignBuilder() {
                               <button onClick={() => approveEmail(current.id)} className="btn-primary text-xs flex items-center gap-1"><Check size={12} /> Approve</button>
                               <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-xs text-danger flex items-center gap-1"><Flag size={12} /> Reject</button>
                             </>
-                          )}
+                          ))}
                           {current.personalized && (
                             <button onClick={() => deleteLeadEmail(current.id)} className="btn-ghost text-xs text-ink-muted hover:text-danger ml-auto flex items-center gap-1"><Trash2 size={12} /> Remove</button>
                           )}
