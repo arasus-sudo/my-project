@@ -43,7 +43,7 @@ jobs:
         run: |
           cd backend
           # Remove stale artifacts before zipping
-          rm -f deploy.zip zip_deploy.py
+          rm -f deploy.zip
           zip -r /tmp/deploy.zip . \
             -x "*__pycache__*" \
             -x "*/__pycache__/*" \
@@ -53,14 +53,10 @@ jobs:
             -x ".git*" \
             -x "*.log" \
             -x "*.err" \
-            -x "*.txt" \
             -x ".env" \
-            -x "deploy.zip" \
-            -x "make_zip.py" \
-            -x "deploy_zip.py" \
-            -x "zip_deploy.py" \
-            -x "zip_deploy_full.py"
+            -x "deploy.zip"
           echo "Zip size: $(du -sh /tmp/deploy.zip | cut -f1)"
+          ls /tmp/deploy.zip
           az webapp deploy \
             --resource-group ${{ env.AZURE_RG }} \
             --name ${{ env.BACKEND_NAME }} \
