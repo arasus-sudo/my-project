@@ -136,6 +136,7 @@ export default function CampaignBuilder() {
   const [phasedGeneration, setPhasedGeneration] = useState(false);
   const [batchStatus, setBatchStatus] = useState(null);
   const [advancingBatch, setAdvancingBatch] = useState(false);
+  const [showEqPanel, setShowEqPanel] = useState(true);
 
   // Track actual campaign ID — may differ from useParams id when creating new
   const [activeCampaignId, setActiveCampaignId] = useState(id);
@@ -967,7 +968,15 @@ export default function CampaignBuilder() {
         </aside>
 
         {/* Editor */}
-        <section className="col-span-full lg:col-span-6 p-4 sm:p-6 bg-bone space-y-4">
+        {/* Main editor/review */}
+        <section className={`col-span-full ${showEqPanel ? "lg:col-span-6" : "lg:col-span-9"} p-4 sm:p-6 bg-bone space-y-4 relative`}>
+          {!showEqPanel && (
+            <button onClick={() => setShowEqPanel(true)}
+              className="absolute top-4 right-4 w-5 h-5 flex items-center justify-center rounded hover:bg-white/50 text-ink-muted hover:text-ink transition-colors z-10"
+              title="Show EQ panel">
+              <ChevronLeft size={14} />
+            </button>
+          )}
           {reviewMode ? (
             /* REVIEW MODE — split pane: template left, generated email right */
             <div className="space-y-3">
@@ -1002,7 +1011,7 @@ export default function CampaignBuilder() {
                   )}
                 </div>
               )}
-              <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_1fr] gap-4 h-full">
+              <div className={`grid grid-cols-1 gap-4 h-full ${showEqPanel ? "lg:grid-cols-[200px_1fr_1fr]" : "lg:grid-cols-[180px_1fr_2fr]"}`}>
               {(() => {
                 const reviewEmails = getReviewEmails();
                 const current = reviewEmails[reviewIndex];
@@ -1377,7 +1386,12 @@ export default function CampaignBuilder() {
         </section>
 
         {/* EQ Panel */}
-        <aside className="col-span-full lg:col-span-3 border-l border-line bg-white p-6 sm:p-8">
+        <aside className={`col-span-full ${showEqPanel ? "lg:col-span-3" : "lg:col-span-0 lg:hidden"} border-l border-line bg-white p-6 sm:p-8 relative`}>
+          <button onClick={() => setShowEqPanel(false)}
+            className="absolute top-3 right-3 w-5 h-5 flex items-center justify-center rounded hover:bg-bone text-ink-muted hover:text-ink transition-colors"
+            title="Hide EQ panel">
+            <ChevronRight size={14} />
+          </button>
           <div className="ui-label text-ink">EQ Score</div>
           <div className="font-mono text-3xl sm:text-5xl font-bold tracking-tighter mt-1"
             style={{ color: eq ? (eq.overall > 70 ? "#212025" : eq.overall > 40 ? "#5A5A63" : "#B33636") : "#8A8B86" }}>
