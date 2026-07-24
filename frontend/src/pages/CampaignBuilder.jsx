@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
@@ -77,7 +77,7 @@ const htmlToText = (html) => {
   const el = document.createElement("div");
   el.innerHTML = sanitizeEmailHtml(html);
   el.querySelectorAll("p, li").forEach((n) => n.append("\n"));
-  return (el.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
+  return (el.textContent || "").replace(/\n{4,}/g, "\n\n\n").trim();
 };
 
 export default function CampaignBuilder() {
@@ -106,6 +106,16 @@ export default function CampaignBuilder() {
   const [signatures, setSignatures] = useState([]);
   const [signatureId, setSignatureId] = useState("");
   const [campaignType, setCampaignType] = useState("ai"); // "ai" or "template"
+  const isTemplate = campaignType === "template";
+  const [mailboxView, setMailboxView] = useState(false);
+
+  const fillMergeFields = useCallback((text, lead) => {
+    if (!text) return text;
+    return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) => {
+      const val = lead?.[key];
+      return val !== undefined && val !== null ? String(val) : `{{${key}}}`;
+    });
+  }, []);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [signatureName, setSignatureName] = useState("");
   const [signatureHtml, setSignatureHtml] = useState("");
@@ -137,6 +147,7 @@ export default function CampaignBuilder() {
   const [batchStatus, setBatchStatus] = useState(null);
   const [advancingBatch, setAdvancingBatch] = useState(false);
   const [showEqPanel, setShowEqPanel] = useState(true);
+  const [showStepsPanel, setShowStepsPanel] = useState(true);
 
   // Track actual campaign ID — may differ from useParams id when creating new
   const [activeCampaignId, setActiveCampaignId] = useState(id);
@@ -361,6 +372,16 @@ export default function CampaignBuilder() {
       toast.success(`${data.approved} email(s) approved`);
       loadCampaignLeads();
     } catch { toast.error("Approve-all failed"); }
+  };
+
+  const dismissAllEmails = async () => {
+    if (!id) return;
+    try {
+      await api.delete(`/campaigns/${id}/leads/email`);
+      toast.success("All emails dismissed");
+      setReviewMode(false);
+      loadCampaignLeads();
+    } catch { toast.error("Dismiss failed"); }
   };
 
   const rejectEmail = async (leadId) => {
@@ -772,9 +793,16 @@ export default function CampaignBuilder() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 min-h-[calc(100vh-90px)]">
+      <div className="flex min-h-[calc(100vh-90px)]">
         {/* Steps sidebar */}
-        <aside className="col-span-full lg:col-span-3 border-r border-line bg-white p-4">
+        <aside className={`${showStepsPanel ? "w-72" : "w-0 overflow-hidden"} shrink-0 border-r border-line bg-white transition-all duration-200`}>
+          <div className={`p-4 ${showStepsPanel ? "" : "invisible"}`}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="ui-label">Sequence</div>
+              <button onClick={() => setShowStepsPanel(false)} className="text-ink-muted hover:text-ink transition-colors" title="Hide steps">
+                <ChevronLeft size={14} />
+              </button>
+            </div>
           <div className="ui-label mb-3">Sequence</div>
           <ol className="space-y-2">
             {steps.map((s, i) => (
@@ -967,9 +995,14 @@ export default function CampaignBuilder() {
 
         </aside>
 
-        {/* Editor */}
-        {/* Main editor/review */}
-        <section className={`col-span-full ${showEqPanel ? "lg:col-span-6" : "lg:col-span-9"} p-4 sm:p-6 bg-bone space-y-4 relative`}>
+        <section className={`flex-1 min-w-0 p-4 sm:p-6 bg-bone space-y-4 relative`}>
+          {!showStepsPanel && (
+            <button onClick={() => setShowStepsPanel(true)}
+              className="absolute top-4 left-4 w-5 h-5 flex items-center justify-center rounded hover:bg-white/50 text-ink-muted hover:text-ink transition-colors z-10"
+              title="Show steps">
+              <ChevronRight size={14} />
+            </button>
+          )}
           {!showEqPanel && (
             <button onClick={() => setShowEqPanel(true)}
               className="absolute top-4 right-4 w-5 h-5 flex items-center justify-center rounded hover:bg-white/50 text-ink-muted hover:text-ink transition-colors z-10"
@@ -991,6 +1024,9 @@ export default function CampaignBuilder() {
                     <div className="flex items-center gap-2">
                       <button onClick={regenerateAllEmails} disabled={regeneratingAll || leadStats.total === 0} className="btn-ghost text-xs" data-testid="regenerate-all-emails">
                         {regeneratingAll ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />} Regenerate all
+                      </button>
+                      <button onClick={dismissAllEmails} disabled={leadStats.total === 0} className="btn-ghost text-xs text-danger" data-testid="dismiss-all-emails">
+                        <X size={12} /> Dismiss all
                       </button>
                       <button onClick={approveAllEmails} disabled={leadStats.total === 0} className="btn-secondary text-xs" data-testid="approve-all-emails">
                         <Check size={12} /> Approve all
@@ -1116,6 +1152,8 @@ export default function CampaignBuilder() {
                           <button onClick={() => sendTestEmail(current.id)} disabled={sendingTest} className="btn-ghost text-xs flex items-center gap-1" data-testid="send-test-email" title="Email this exact preview to yourself">
                             {sendingTest ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Send test
                           </button>
+                          {!isTemplate && (
+                            <>
                           {editingOpener?.leadId === current.id ? (
                             <button onClick={() => setEditingOpener(null)} className="btn-ghost text-xs"><X size={12} /> Cancel</button>
                           ) : (
@@ -1126,13 +1164,15 @@ export default function CampaignBuilder() {
                           <button onClick={() => regenerateOpener(current.id)} disabled={generatingEmail === current.id} className="btn-ghost text-xs flex items-center gap-1">
                             <RotateCw size={12} className={generatingEmail === current.id ? "animate-spin" : ""} /> {current.personalized ? "Regenerate" : "Generate with AI"}
                           </button>
+                            </>
+                          )}
                         </div>
                       </div>
                       <div className="p-4 space-y-3 max-h-[calc(100vh-280px)] overflow-y-auto">
                         {/* Opener editing — available even before any AI generation has
                             run, so a user can write/edit it by hand and immediately see
-                            an approvable draft without spending a generation credit. */}
-                        {editingOpener?.leadId === current.id && (
+                            an approvable draft without spending a generation credit. */
+                        !isTemplate && editingOpener?.leadId === current.id && (
                           <div className="bg-bone border border-line rounded-xl p-3 space-y-2">
                             <div className="text-tiny font-mono text-ink-muted">
                               {current.personalized_opener ? "Edit personalized opener" : "Write an opener"}
@@ -1147,20 +1187,44 @@ export default function CampaignBuilder() {
                           </div>
                         )}
                         <div>
-                          <div className="text-tiny text-ink-muted mb-1 font-mono">SUBJECT</div>
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="text-tiny text-ink-muted font-mono">SUBJECT</div>
+                            <button onClick={() => setMailboxView(!mailboxView)}
+                              className="text-tiny text-ink-muted hover:text-ink flex items-center gap-1 transition-colors">
+                              {mailboxView ? <Edit2 size={11} /> : <Eye size={11} />}
+                              {mailboxView ? "Edit view" : "Mailbox view"}
+                            </button>
+                          </div>
                           <div className="text-caption font-semibold font-mono text-ink-secondary border border-line rounded-xl px-3 py-2">
-                            {current.email_subject || "(no subject)"}
+                            {fillMergeFields(current.email_subject || "(no subject)", current)}
                           </div>
                         </div>
                         <div>
                           <div className="text-tiny text-ink-muted mb-1 font-mono">BODY</div>
-                          <div className="max-h-96 overflow-y-auto text-caption text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded-xl p-3 bg-white">
+                          {mailboxView ? (
+                            <div className="border border-line rounded-xl bg-white overflow-hidden">
+                              <div className="text-xs text-ink-muted px-4 py-2 border-b border-line space-y-0.5 font-mono">
+                                <div><span className="font-medium text-ink">From:</span> {name || "PitchEQ"}</div>
+                                <div><span className="font-medium text-ink">To:</span> {current.email || "lead@example.com"}</div>
+                                <div><span className="font-medium text-ink">Date:</span> {new Date().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</div>
+                              </div>
+                              <div className="p-4 text-sm text-ink leading-relaxed prose-email">
+                                {current.email_body_html ? (
+                                  <div dangerouslySetInnerHTML={{ __html: fillMergeFields(current.email_body_html, current) }} />
+                                ) : (
+                                  <div className="whitespace-pre-wrap font-sans">{fillMergeFields(current.email_body, current)}</div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                          <div className="max-h-96 overflow-y-auto text-caption text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded-xl p-3 bg-white prose-email">
                             {current.email_body || current.email_body_html ? (
-                              <div dangerouslySetInnerHTML={{ __html: current.email_body_html || current.email_body?.replace(/\n/g, "<br>") || "" }} />
+                              <div dangerouslySetInnerHTML={{ __html: fillMergeFields(current.email_body_html || current.email_body?.replace(/\n/g, "<br>") || "", current) }} />
                             ) : (
                               <div className="text-ink-muted italic">No content</div>
                             )}
                           </div>
+                          )}
                           {/\{\{\s*\w+\s*\}\}/.test(current.email_body || "") && (
                             <div className="flex items-center gap-1.5 text-tiny text-warning mt-1.5">
                               <AlertTriangle size={11} /> Contains an unresolved merge field — this lead may be missing that field.
@@ -1168,7 +1232,20 @@ export default function CampaignBuilder() {
                           )}
                         </div>
                         <div className="flex items-center gap-2 pt-3 border-t border-line">
-                          {!current.personalized ? (
+                          {isTemplate ? (
+                            current.email_status === "approved" ? (
+                              <>
+                                <span className="flex items-center gap-1 text-xs text-success font-medium"><Check size={14} /> Approved</span>
+                                <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-xs text-danger flex items-center gap-1 ml-auto"><Flag size={12} /> Reject</button>
+                              </>
+                            ) : (
+                              <>
+                                <button onClick={() => approveEmail(current.id)} className="btn-primary text-xs flex items-center gap-1"><Check size={12} /> Approve</button>
+                                <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-xs text-danger flex items-center gap-1"><Flag size={12} /> Reject</button>
+                              </>
+                            )
+                          ) : (
+                          !current.personalized ? (
                             <span className="text-caption text-ink-muted">Write an opener above (or generate with AI) to enable approval.</span>
                           ) : current.email_status === "approved" ? (
                             <>
@@ -1386,12 +1463,15 @@ export default function CampaignBuilder() {
         </section>
 
         {/* EQ Panel */}
-        <aside className={`col-span-full ${showEqPanel ? "lg:col-span-3" : "lg:col-span-0 lg:hidden"} border-l border-line bg-white p-6 sm:p-8 relative`}>
-          <button onClick={() => setShowEqPanel(false)}
-            className="absolute top-3 right-3 w-5 h-5 flex items-center justify-center rounded hover:bg-bone text-ink-muted hover:text-ink transition-colors"
-            title="Hide EQ panel">
-            <ChevronRight size={14} />
-          </button>
+        <aside className={`${showEqPanel ? "w-80" : "w-0 overflow-hidden"} shrink-0 border-l border-line bg-white transition-all duration-200 relative`}>
+          <div className={`p-6 sm:p-8 ${showEqPanel ? "" : "invisible"}`}>
+          {showEqPanel && (
+            <button onClick={() => setShowEqPanel(false)}
+              className="absolute top-3 right-3 w-5 h-5 flex items-center justify-center rounded hover:bg-bone text-ink-muted hover:text-ink transition-colors"
+              title="Hide EQ panel">
+              <ChevronRight size={14} />
+            </button>
+          )}
           <div className="ui-label text-ink">EQ Score</div>
           <div className="font-mono text-3xl sm:text-5xl font-bold tracking-tighter mt-1"
             style={{ color: eq ? (eq.overall > 70 ? "#212025" : eq.overall > 40 ? "#5A5A63" : "#B33636") : "#8A8B86" }}>
@@ -1429,6 +1509,7 @@ export default function CampaignBuilder() {
               <div className="font-mono text-sm">{status}</div>
             </div>
           )}
+          </div>
         </aside>
       </div>
     </div>

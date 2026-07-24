@@ -868,11 +868,12 @@ async def get_campaign_leads(cid: str, user=Depends(current_user)):
     def _resolve(s: str, lead: Dict[str, Any]) -> str:
         if not s:
             return s
-        for k in ("first_name", "last_name", "company", "title"):
-            v = lead.get(k, "")
-            if v:
-                s = s.replace("{{" + k + "}}", v)
-        return s
+        import re
+        def rep(m):
+            key = m.group(1).strip()
+            v = lead.get(key, "")
+            return v if v else m.group(0)
+        return re.sub(r"\{\{\s*(\w+)\s*\}\}", rep, s)
 
     result = []
     for lead in leads:
@@ -912,78 +913,40 @@ async def generate_all_lead_emails(cid: str, user=Depends(current_user)):
     campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
     if not campaign:
         raise HTTPException(404, "not found")
-    service_info = {}
-    service_id = campaign.get("ai_meta", {}).get("service_id") or campaign.get("service_id")
-    if service_id:
-        svc = await db.service_library.find_one({"id": service_id, "workspace_id": wid}, {"_id": 0})
-        if svc:
-            service_info = {k: v for k, v in svc.items() if k not in ("id", "workspace_id", "created_at", "updated_at", "status", "_id")}
     lead_ids = campaign.get("lead_ids", [])
     personalized = campaign.get("personalized_emails", [])
     already_done = {p["lead_id"] for p in personalized}
     to_generate = [lid for lid in lead_ids if lid not in already_done]
     if not to_generate:
         return {"generated": 0, "message": "All leads already have personalized emails"}
-    results, errors = [], []
     campaign_steps = campaign.get("steps", [])
     step_template = campaign_steps[0] if campaign_steps else {}
-    template_body = step_template.get("body", "")
-    template_html = step_template.get("body_html", "")
-    template_subject = step_template.get("subject", "")
-    ai_meta = campaign.get("ai_meta", {})
-    campaign_name = ai_meta.get("service_name", campaign.get("goal", ""))
-    campaign_goal = campaign.get("goal", "")
-    campaign_tone = campaign.get("tone", "professional")
+    results, errors = [], []
 
-    from research_worker import get_research, summarize_for_prompt
-    sem = asyncio.Semaphore(4)
+    is_template = campaign.get("campaign_type") == "template"
+    if is_template:
+        for lid in to_generate:
+            try:
+                await db.campaigns.update_one(
+                    {"id": cid},
+                    {"$push": {"personalized_emails": {
+                        "lead_id": lid,
+                        "subject": step_template.get("subject", ""),
+                        "body": step_template.get("body", "") or "",
+                        "body_html": step_template.get("body_html", "") or "",
+                        "personalized_opener": "",
+                        "status": "draft",
+                        "generated_at": now_iso(),
+                    }}}
+                )
+                results.append(lid)
+            except Exception as ex:
+                errors.append({"lead_id": lid, "error": str(ex)})
+        await _audit(user, "campaign.leads.email_generated_all", {"campaign_id": cid, "count": len(results)})
+        return {"generated": len(results), "errors": errors}
 
-    async def _generate_one(lid: str):
-        async with sem:
-            lead = await db.leads.find_one({"id": lid, "workspace_id": wid}, {"_id": 0})
-            if not lead:
-                return
-            lead_context = {k: lead.get(k) for k in ("first_name", "last_name", "title", "company", "email", "linkedin_url")}
-            research_pack = await get_research(wid, lead)
-            research_summary = summarize_for_prompt(research_pack)
-
-            opener_raw = await _llm_chat(
-                "You are Pitch EQ's personalization agent. Generate ONLY a personalized ice-breaker opener. Rules: 1) Use real details from research — never invent. 2) 1-2 sentences max. 3) Conversational, not salesy. 4) No greeting, pitch, or CTA. Return STRICT JSON: {\"opener\": \"...\"}",
-                f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\nLEAD RESEARCH:\n{research_summary}\n\nCAMPAIGN SERVICE: {campaign_name}\nCAMPAIGN GOAL: {campaign_goal}\nCAMPAIGN TONE: {campaign_tone}\n\nGenerate a personalized ice-breaker opener for this specific lead.",
-                f"genall-opnr-{lid[:8]}", user=user, max_tokens=512
-            )
-            opener_data = _extract_json(opener_raw) or {}
-            personalized_opener = opener_data.get("opener", "")
-
-            # Merge opener into template
-            merged_body = template_body.replace("{{personalized_opener}}", personalized_opener)
-            merged_html = template_html.replace("{{personalized_opener}}", personalized_opener) if template_html else ""
-
-            await db.campaigns.update_one(
-                {"id": cid},
-                {"$push": {"personalized_emails": {
-                    "lead_id": lid, "subject": template_subject,
-                    "body": merged_body, "body_html": merged_html,
-                    "personalized_opener": personalized_opener,
-                    "research": {"summary": research_summary, "has_signal": research_pack.get("has_signal", False)},
-                    "status": "draft", "generated_at": now_iso(),
-                }}}
-            )
-            await db.generated_emails.insert_one({
-                "id": new_id(), "workspace_id": wid,
-                "campaign_id": cid, "lead_id": lid, "step": 0,
-                "subject": template_subject,
-                "body_html": merged_html, "body_text": merged_body,
-                "personalized_opener": personalized_opener,
-                "status": "draft", "source": "campaign_generation",
-                "generated_at": now_iso(), "sent_at": None,
-                "campaign_name": campaign.get("name", ""),
-                "lead_email": lead.get("email", ""),
-                "lead_name": f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip(),
-            })
-            results.append(lid)
-
-    outcomes = await asyncio.gather(*(_generate_one(lid) for lid in to_generate), return_exceptions=True)
+    if not await _rate_ok(user):
+        raise HTTPException(429, "Daily AI quota exceeded")
     for lid, outcome in zip(to_generate, outcomes):
         if isinstance(outcome, Exception):
             errors.append({"lead_id": lid, "error": str(outcome)})
@@ -1003,6 +966,19 @@ async def delete_campaign_lead_email(cid: str, lead_id: str, user=Depends(curren
         {"$pull": {"personalized_emails": {"lead_id": lead_id}}}
     )
     return {"ok": True}
+
+
+@api.delete("/campaigns/{cid}/leads/email")
+async def delete_all_campaign_lead_emails(cid: str, user=Depends(current_user)):
+    """Delete ALL personalized emails in a campaign (dismiss all)."""
+    wid = user["workspace_id"]
+    result = await db.campaigns.update_one(
+        {"id": cid, "workspace_id": wid},
+        {"$set": {"personalized_emails": []}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(404, "Campaign not found or no emails to delete")
+    return {"ok": True, "deleted": True}
 
 
 @api.post("/campaigns/{cid}/leads/batch")
@@ -1054,8 +1030,6 @@ async def add_leads_to_campaign(cid: str, body: Dict[str, Any], user=Depends(cur
 @api.post("/campaigns/{cid}/run-engine")
 async def run_campaign_engine(cid: str, user=Depends(current_user)):
     """Start background generation of personalized emails for all leads."""
-    if not await _rate_ok(user):
-        raise HTTPException(429, "Daily AI quota exceeded")
     wid = user["workspace_id"]
     campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
     if not campaign:
@@ -1063,6 +1037,11 @@ async def run_campaign_engine(cid: str, user=Depends(current_user)):
     lead_ids = campaign.get("lead_ids", [])
     if not lead_ids:
         raise HTTPException(400, "No leads assigned to campaign. Add leads first.")
+
+    is_template = campaign.get("campaign_type") == "template"
+    if not is_template:
+        if not await _rate_ok(user):
+            raise HTTPException(429, "Daily AI quota exceeded")
 
     # For phased generation, only include leads in the current batch
     if campaign.get("phased_generation"):
@@ -1128,7 +1107,6 @@ async def _run_generation_background(cid: str, wid: str, to_generate: list, camp
                     opener_data = _extract_json(opener_raw) or {}
                     personalized_opener = (opener_data.get("opener", "") or "").strip()
                     merged_body = (step_template.get("body", "") or "").replace("{{personalized_opener}}", personalized_opener)
-                    merged_body = re.sub(r"\n{3,}", "\n\n", merged_body)
                     merged_html = (step_template.get("body_html", "") or "").replace("{{personalized_opener}}", personalized_opener) if step_template.get("body_html") else ""
                     await db.campaigns.update_one(
                         {"id": cid},

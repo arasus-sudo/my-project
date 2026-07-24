@@ -29,8 +29,7 @@ def _apply_opener(text: str, opener: str) -> str:
     if not text or "{{personalized_opener}}" not in text:
         return text or ""
     if opener:
-        result = text.replace("{{personalized_opener}}", opener.strip())
-        return re.sub(r"\n{3,}", "\n\n", result)
+        return text.replace("{{personalized_opener}}", opener.strip())
     return "\n".join(l for l in text.split("\n") if "{{personalized_opener}}" not in l).strip()
 
 

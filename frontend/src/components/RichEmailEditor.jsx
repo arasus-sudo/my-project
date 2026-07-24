@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -63,6 +63,7 @@ function ToolBtn({ active, disabled, onClick, title, children, testid }) {
 
 export default function RichEmailEditor({ value, onChange, placeholder = "Write your email…" }) {
   const [uploading, setUploading] = useState(false);
+  const internalUpdate = useRef(false);
 
   const editor = useEditor({
     extensions: [
@@ -84,6 +85,7 @@ export default function RichEmailEditor({ value, onChange, placeholder = "Write 
     },
     onUpdate: ({ editor: ed }) => {
       if (ed.isDestroyed) return;
+      internalUpdate.current = true;
       onChange(sanitizeEmailHtml(ed.getHTML()));
     },
   });
@@ -95,6 +97,10 @@ export default function RichEmailEditor({ value, onChange, placeholder = "Write 
   // rather than failing gracefully.
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
+    if (internalUpdate.current) {
+      internalUpdate.current = false;
+      return;
+    }
     const incoming = sanitizeEmailHtml(value) || "";
     if (incoming !== editor.getHTML()) {
       editor.commands.setContent(incoming, { emitUpdate: false });
