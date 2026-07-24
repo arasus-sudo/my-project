@@ -184,6 +184,7 @@ class SequenceStep(BaseModel):
 class CampaignIn(BaseModel):
     name: str
     goal: str = "Book meetings"
+    campaign_type: str = "ai"  # "ai" = personalized openers, "template" = basic merge fields only
     from_mailbox_id: Optional[str] = None
     steps: List[SequenceStep]
     lead_ids: List[str] = []
@@ -734,8 +735,6 @@ async def campaign_queue(cid: str, user=Depends(current_user)):
 async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(current_user)):
     """Research a lead via Perplexity, then draft a personalized cold email using
     the campaign's service context and step template."""
-    if not await _rate_ok(user):
-        raise HTTPException(429, "Daily AI quota exceeded")
     wid = user["workspace_id"]
     campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
     if not campaign:
@@ -743,6 +742,30 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
     lead = await db.leads.find_one({"id": lead_id, "workspace_id": wid}, {"_id": 0})
     if not lead:
         raise HTTPException(404, "Lead not found")
+    campaign_steps = campaign.get("steps", [])
+    step_template = campaign_steps[0] if campaign_steps else {}
+
+    is_template = campaign.get("campaign_type") == "template"
+    if is_template:
+        # Template campaign — no AI research or opener, just store the template body as-is
+        personalized = {
+            "lead_id": lead_id,
+            "subject": step_template.get("subject", ""),
+            "body": step_template.get("body", "") or "",
+            "body_html": step_template.get("body_html", "") or "",
+            "personalized_opener": "",
+            "status": "draft",
+            "generated_at": now_iso(),
+        }
+        await db.campaigns.update_one(
+            {"id": cid},
+            {"$push": {"personalized_emails": personalized}}
+        )
+        await _audit(user, "campaign.lead.email_generated", {"campaign_id": cid, "lead_id": lead_id})
+        return personalized
+
+    if not await _rate_ok(user):
+        raise HTTPException(429, "Daily AI quota exceeded")
     service_info = {}
     service_id = campaign.get("ai_meta", {}).get("service_id") or campaign.get("service_id")
     if service_id:
@@ -753,33 +776,19 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
     if lead.get("email") and "@" in lead["email"]:
         domain = lead["email"].split("@", 1)[1]
     lead_context = {k: lead.get(k) for k in ("first_name", "last_name", "title", "company", "email", "linkedin_url")}
-    # Step 1: Real research — site crawl + Google News + GitHub + Perplexity,
-    # cached 7 days. Replaces a generic LLM call that only claimed to research.
     from research_worker import get_research, summarize_for_prompt
     research_pack = await get_research(wid, lead)
     research_summary = summarize_for_prompt(research_pack)
     research = {"summary": research_summary, "has_signal": research_pack.get("has_signal", False)}
-    # Step 2: Generate personalized opener only (not full email)
-    campaign_steps = campaign.get("steps", [])
-    step_template = campaign_steps[0] if campaign_steps else {}
-    
-    # Build explicit campaign service context from ai_meta (most reliable)
     ai_meta = campaign.get("ai_meta", {})
-    campaign_service = ""
-    if ai_meta.get("service_name"):
-        campaign_service = f"CAMPAIGN SERVICE: {ai_meta['service_name']}\n"
-    if campaign.get("goal"):
-        campaign_service += f"CAMPAIGN GOAL: {campaign['goal']}\n"
-    if campaign.get("tone"):
-        campaign_service += f"CAMPAIGN TONE: {campaign['tone']}\n"
 
     opener_system = (
         "You are Pitch EQ's personalization agent. Generate ONLY a personalized ice-breaker opener for a cold email.\n"
         "Rules:\n"
         "1. Use real specific details from the lead research — never invent\n"
-        "2. Write 1-2 sentences max — a genuine ice breaker tied to something real (their role, company news, recent event, tech stack, funding, hiring, etc.)\n"
+        "2. Write 1-2 sentences max — a genuine ice breaker tied to something real\n"
         "3. Make it conversational and natural — not salesy\n"
-        "4. Do NOT include greeting, do NOT include the pitch, do NOT include CTA\n"
+        "4. Do NOT include greeting, pitch, or CTA\n"
         "5. Return STRICT JSON only: {\"opener\": \"...\"}"
     )
     opener_prompt = (
@@ -798,13 +807,11 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
     except Exception as ex:
         raise HTTPException(502, f"Opener generation failed: {ex}")
 
-    # Merge opener into template — trim opener, ensure clean line spacing
     opener_clean = (personalized_opener or "").strip()
     template_body = step_template.get("body", "")
     template_html = step_template.get("body_html", "")
     merged_body = template_body.replace("{{personalized_opener}}", opener_clean)
     merged_html = template_html.replace("{{personalized_opener}}", opener_clean) if template_html else ""
-    # Normalise multiple blank lines to exactly one blank line between sections
     merged_body = re.sub(r"\n{3,}", "\n\n", merged_body)
 
     personalized = {
@@ -812,7 +819,7 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
         "subject": step_template.get("subject", ""),
         "body": merged_body,
         "body_html": merged_html,
-        "personalized_opener": personalized_opener,  # Store opener separately for review/regeneration
+        "personalized_opener": personalized_opener,
         "research": research,
         "status": "draft",
         "generated_at": now_iso(),
@@ -1063,29 +1070,44 @@ async def _run_generation_background(cid: str, wid: str, to_generate: list, camp
                 lead = await db.leads.find_one({"id": lid, "workspace_id": wid}, {"_id": 0})
                 if not lead:
                     return
+                is_template = campaign.get("campaign_type") == "template"
                 lead_context = {k: lead.get(k) for k in ("first_name", "last_name", "title", "company", "email", "linkedin_url")}
-                research_pack = await get_research(wid, lead)
-                research_summary = summarize_for_prompt(research_pack)
-                opener_raw = await _llm_chat(
-                    "You are Pitch EQ's personalization agent. Generate ONLY a personalized ice-breaker opener. Rules: 1) Use real details from research — never invent. 2) 1-2 sentences max. 3) Conversational, not salesy. 4) No greeting, pitch, or CTA. Return STRICT JSON: {\"opener\": \"...\"}",
-                    f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\nLEAD RESEARCH:\n{research_summary}\n\nCAMPAIGN SERVICE: {campaign_name}\nCAMPAIGN GOAL: {campaign_goal}\nCAMPAIGN TONE: {campaign_tone}\n\nGenerate a personalized ice-breaker opener for this specific lead.",
-                    f"gen-{lid[:8]}", user=user, max_tokens=512
-                )
-                opener_data = _extract_json(opener_raw) or {}
-                personalized_opener = (opener_data.get("opener", "") or "").strip()
-                merged_body = (step_template.get("body", "") or "").replace("{{personalized_opener}}", personalized_opener)
-                merged_body = re.sub(r"\n{3,}", "\n\n", merged_body)
-                merged_html = (step_template.get("body_html", "") or "").replace("{{personalized_opener}}", personalized_opener) if step_template.get("body_html") else ""
-                await db.campaigns.update_one(
-                    {"id": cid},
-                    {"$push": {"personalized_emails": {
-                        "lead_id": lid, "subject": step_template.get("subject", ""),
-                        "body": merged_body, "body_html": merged_html,
-                        "personalized_opener": personalized_opener,
-                        "research": {"summary": research_summary, "has_signal": research_pack.get("has_signal", False)},
-                        "status": "draft", "generated_at": now_iso(),
-                    }}}
-                )
+                if is_template:
+                    # Template campaign — no personalized opener, basic merge fields only
+                    body = step_template.get("body", "") or ""
+                    body_html = step_template.get("body_html", "") or ""
+                    await db.campaigns.update_one(
+                        {"id": cid},
+                        {"$push": {"personalized_emails": {
+                            "lead_id": lid, "subject": step_template.get("subject", ""),
+                            "body": body, "body_html": body_html,
+                            "personalized_opener": "",
+                            "status": "draft", "generated_at": now_iso(),
+                        }}}
+                    )
+                else:
+                    research_pack = await get_research(wid, lead)
+                    research_summary = summarize_for_prompt(research_pack)
+                    opener_raw = await _llm_chat(
+                        "You are Pitch EQ's personalization agent. Generate ONLY a personalized ice-breaker opener. Rules: 1) Use real details from research — never invent. 2) 1-2 sentences max. 3) Conversational, not salesy. 4) No greeting, pitch, or CTA. Return STRICT JSON: {\"opener\": \"...\"}",
+                        f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\nLEAD RESEARCH:\n{research_summary}\n\nCAMPAIGN SERVICE: {campaign_name}\nCAMPAIGN GOAL: {campaign_goal}\nCAMPAIGN TONE: {campaign_tone}\n\nGenerate a personalized ice-breaker opener for this specific lead.",
+                        f"gen-{lid[:8]}", user=user, max_tokens=512
+                    )
+                    opener_data = _extract_json(opener_raw) or {}
+                    personalized_opener = (opener_data.get("opener", "") or "").strip()
+                    merged_body = (step_template.get("body", "") or "").replace("{{personalized_opener}}", personalized_opener)
+                    merged_body = re.sub(r"\n{3,}", "\n\n", merged_body)
+                    merged_html = (step_template.get("body_html", "") or "").replace("{{personalized_opener}}", personalized_opener) if step_template.get("body_html") else ""
+                    await db.campaigns.update_one(
+                        {"id": cid},
+                        {"$push": {"personalized_emails": {
+                            "lead_id": lid, "subject": step_template.get("subject", ""),
+                            "body": merged_body, "body_html": merged_html,
+                            "personalized_opener": personalized_opener,
+                            "research": {"summary": research_summary, "has_signal": research_pack.get("has_signal", False)},
+                            "status": "draft", "generated_at": now_iso(),
+                        }}}
+                    )
             except Exception as ex:
                 await db.campaigns.update_one({"id": cid}, {"$push": {f"generation_{gen_id}.errors": {"lead_id": lid, "error": str(ex)}}})
             finally:

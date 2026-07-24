@@ -104,6 +104,7 @@ export default function CampaignBuilder() {
   const [leadSearch, setLeadSearch] = useState("");
   const [signatures, setSignatures] = useState([]);
   const [signatureId, setSignatureId] = useState("");
+  const [campaignType, setCampaignType] = useState("ai"); // "ai" or "template"
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [signatureName, setSignatureName] = useState("");
   const [signatureHtml, setSignatureHtml] = useState("");
@@ -582,7 +583,7 @@ export default function CampaignBuilder() {
         body_html: sanitizeEmailHtml(rest.body_html || rest.body || ""),
         body_text: htmlToText(rest.body_html || "") || rest.body || "",
       }));
-      const payload = { name, goal, steps: cleanSteps, lead_ids: selectedLeads, signature_id: signatureId || null, send_window_start: sendWindowStart, send_window_end: sendWindowEnd, timezone };
+      const payload = { name, goal, campaign_type: campaignType, steps: cleanSteps, lead_ids: selectedLeads, signature_id: signatureId || null, send_window_start: sendWindowStart, send_window_end: sendWindowEnd, timezone };
       let cid = activeCampaignId || id;
       if (!cid) {
         const { data } = await api.post("/campaigns", payload);
@@ -693,6 +694,21 @@ export default function CampaignBuilder() {
           )}
         </div>
       )}
+      {/* Campaign Type Toggle */}
+      <div className="px-4 sm:px-6 pt-3 pb-2 flex items-center gap-4">
+        <div className="ui-label shrink-0">Campaign type</div>
+        <div className="flex items-center gap-1 bg-bone border border-line rounded-xl p-0.5">
+          <button onClick={() => setCampaignType("ai")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${campaignType === "ai" ? "bg-ink text-white shadow-sm" : "text-ink-muted hover:text-ink"}`}>
+            AI Campaign <span className="text-tiny opacity-70">(personal openers)</span>
+          </button>
+          <button onClick={() => setCampaignType("template")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${campaignType === "template" ? "bg-ink text-white shadow-sm" : "text-ink-muted hover:text-ink"}`}>
+            Template <span className="text-tiny opacity-70">(basic merge fields)</span>
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 min-h-[calc(100vh-90px)]">
         {/* Steps sidebar */}
         <aside className="col-span-full lg:col-span-3 border-r border-line bg-white p-4">
@@ -822,8 +838,27 @@ export default function CampaignBuilder() {
               <div className="text-caption text-ink-muted text-center py-6">No leads match the selected filters</div>
             )}
           </div>
-          <button onClick={() => setSelectedLeads(filteredLeads.map((l) => l.id))} className="text-caption text-ink mt-2 hover:underline" data-testid="select-all-leads">Select all</button>
-          <button onClick={() => setSelectedLeads([])} className="text-caption text-ink-muted mt-2 hover:underline ml-3" data-testid="deselect-all-leads">Deselect all</button>
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <button onClick={() => setSelectedLeads(filteredLeads.map((l) => l.id))} className="text-caption text-ink hover:underline" data-testid="select-all-leads">Select all</button>
+            <button onClick={() => setSelectedLeads([])} className="text-caption text-ink-muted hover:underline" data-testid="deselect-all-leads">Deselect all</button>
+            <span className="text-tiny text-ink-muted">|</span>
+            <input type="number" min={1} max={filteredLeads.length} placeholder="N"
+              data-testid="select-n-input"
+              className="w-14 border border-line rounded px-1.5 py-0.5 text-tiny text-center"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const n = parseInt(e.target.value, 10);
+                  if (n > 0) setSelectedLeads(filteredLeads.slice(0, n).map((l) => l.id));
+                }
+              }} />
+            <button onClick={() => {
+              const input = document.querySelector('[data-testid="select-n-input"]');
+              if (input) {
+                const n = parseInt(input.value, 10);
+                if (n > 0) setSelectedLeads(filteredLeads.slice(0, n).map((l) => l.id));
+              }
+            }} className="text-tiny text-ink-muted hover:text-ink hover:underline">Select</button>
+          </div>
           {selectedLeads.length > 0 && (
             <button onClick={save} disabled={busy} className="btn-primary w-full mt-3 text-sm flex items-center justify-center gap-1">
               {busy ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}

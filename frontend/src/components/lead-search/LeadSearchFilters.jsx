@@ -89,7 +89,7 @@ const FILTER_GROUPS = [
 function FilterPill({ label, active, onClick }) {
   return (
     <button onClick={onClick}
-      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${active ? "bg-accent/10 border-accent text-accent font-medium" : "border-line text-ink-muted hover:border-accent/50 hover:text-ink"}`}>
+      className={`text-tiny px-2 py-0.5 rounded-full border transition-colors ${active ? "bg-accent/10 border-accent text-accent font-medium" : "border-line text-ink-muted hover:border-accent/50 hover:text-ink"}`}>
       {label}
     </button>
   );
@@ -100,16 +100,16 @@ function FilterControl({ item, value, onChange }) {
     return (
       <input value={value || ""} onChange={(e) => onChange(e.target.value)}
         placeholder={item.placeholder}
-        className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
+        className="w-full border border-line rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
     );
   }
   if (item.type === "toggle") {
     return (
       <label className="flex items-center gap-2.5 cursor-pointer py-0.5 select-none">
-        <div className={`relative w-9 h-5 rounded-full transition-colors ${value ? "bg-accent" : "bg-gray-200"}`}>
-          <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${value ? "translate-x-4" : ""}`} />
+        <div className={`relative w-7 h-4 rounded-full transition-colors ${value ? "bg-accent" : "bg-gray-200"}`}>
+          <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow-sm transition-transform ${value ? "translate-x-3" : ""}`} />
         </div>
-        <span className="text-sm text-ink select-none">{item.label}</span>
+        <span className="text-xs text-ink select-none">{item.label}</span>
       </label>
     );
   }
@@ -155,7 +155,7 @@ function FilterControl({ item, value, onChange }) {
           }
         }}
           placeholder={item.placeholder}
-          className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
+          className="w-full border border-line rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
       </div>
     );
   }
@@ -184,7 +184,7 @@ function FilterControl({ item, value, onChange }) {
           }
         }}
           placeholder={item.placeholder}
-          className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
+          className="w-full border border-line rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
       </div>
     );
   }
@@ -224,9 +224,9 @@ function FilterControl({ item, value, onChange }) {
 
 function ActiveFilterChip({ label, onRemove }) {
   return (
-    <span className="inline-flex items-center gap-1 bg-accent/5 border border-accent/20 rounded-full px-2.5 py-1 text-xs text-accent font-medium">
+    <span className="inline-flex items-center gap-1 bg-accent/5 border border-accent/20 rounded-full px-2 py-0.5 text-tiny text-accent font-medium">
       {label}
-      <button onClick={onRemove} className="hover:bg-accent/10 rounded-full p-0.5"><X size={10} /></button>
+      <button onClick={onRemove} className="hover:bg-accent/10 rounded-full p-0.5"><X size={9} /></button>
     </span>
   );
 }
@@ -280,8 +280,8 @@ export default function LeadSearchFilters({ filters, onChange, onClear, onSearch
   return (
     <div className="h-full flex flex-col bg-white border-r border-line">
       {/* Header */}
-      <div className="shrink-0 px-4 py-3 border-b border-line">
-        <div className="flex items-center justify-between mb-3">
+      <div className="shrink-0 px-4 py-2.5 border-b border-line">
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <SlidersHorizontal size={15} className="text-ink" />
             <span className="font-display font-semibold text-sm">Filters</span>
@@ -315,14 +315,14 @@ export default function LeadSearchFilters({ filters, onChange, onClear, onSearch
               onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
               placeholder="Search name…"
               className="flex-1 border border-line rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
-            <button onClick={handleSave} className="btn-primary text-xs py-1.5 px-2.5">Save</button>
+            <button onClick={handleSave} className="btn-primary text-xs py-1 px-2">Save</button>
           </div>
         )}
       </div>
 
       {/* Active filter chips */}
       {activeFilters.length > 0 && (
-        <div className="shrink-0 px-4 py-2 border-b border-line flex flex-wrap gap-1.5">
+        <div className="shrink-0 px-4 py-1.5 border-b border-line flex flex-wrap gap-1">
           {activeFilters.slice(0, 8).map(([key]) => {
             const item = FILTER_GROUPS.flatMap((g) => g.items).find((i) => i.key === key);
             return item ? <ActiveFilterChip key={key} label={item.label} onRemove={() => handleClear(key)} /> : null;
@@ -339,10 +339,10 @@ export default function LeadSearchFilters({ filters, onChange, onClear, onSearch
           return (
             <div key={group.key} className="border-b border-line last:border-0">
               <button onClick={() => toggleGroup(group.key)}
-                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-ash/30 transition-colors">
-                <div className="flex items-center gap-2">
-                  <Icon size={14} className="text-ink-muted" />
-                  <span className="text-xs font-semibold uppercase tracking-wider text-ink-muted">{group.label}</span>
+                className="w-full flex items-center justify-between px-4 py-2 hover:bg-ash/30 transition-colors">
+                <div className="flex items-center gap-1.5">
+                  <Icon size={12} className="text-ink-muted" />
+                  <span className="text-tiny font-semibold uppercase tracking-wider text-ink-muted">{group.label}</span>
                   {group.key === "saved" && savedSearches?.length > 0 && (
                     <span className="text-xs bg-accent/10 text-accent rounded-full px-1.5 py-0.5 font-mono">{savedSearches.length}</span>
                   )}
@@ -350,13 +350,13 @@ export default function LeadSearchFilters({ filters, onChange, onClear, onSearch
                 <ChevronDown size={13} className={`text-ink-muted transition-transform ${isOpen ? "rotate-180" : ""}`} />
               </button>
               {isOpen && (
-                <div className="px-4 pb-4 space-y-2">
+                <div className="px-4 pb-3 space-y-1.5">
                   {group.key === "saved" ? (
                     savedSearches?.length > 0 ? (
                       savedSearches.map((s) => (
-                        <div key={s.id} className="flex items-center justify-between group hover:bg-ash/30 rounded-lg px-2 py-1.5 -mx-2">
+                        <div key={s.id} className="flex items-center justify-between group hover:bg-ash/30 rounded-lg px-2 py-1 -mx-2">
                           <button onClick={() => onLoadSearch(s)}
-                            className="text-sm text-left flex-1 truncate hover:text-accent transition-colors">
+                            className="text-xs text-left flex-1 truncate hover:text-accent transition-colors">
                             <span className="font-medium">{s.name}</span>
                           </button>
                           <button onClick={() => onDeleteSearch(s.id)}
@@ -371,7 +371,7 @@ export default function LeadSearchFilters({ filters, onChange, onClear, onSearch
                   ) : group.items.map((item) => (
                     <div key={item.key}>
                       {item.type !== "toggle" && (
-                        <label className="text-xs font-medium text-ink-muted block mb-1">{item.label}</label>
+                        <label className="text-tiny font-medium text-ink-muted block mb-0.5">{item.label}</label>
                       )}
                       <FilterControl item={item} value={filters[item.key]}
                         onChange={(val) => handleChange(item.key, val)} />
@@ -385,11 +385,11 @@ export default function LeadSearchFilters({ filters, onChange, onClear, onSearch
       </div>
 
       {/* Footer with search button */}
-      <div className="shrink-0 px-4 py-3 border-t border-line bg-ash/30 space-y-2">
+      <div className="shrink-0 px-4 py-2.5 border-t border-line bg-ash/30 space-y-1.5">
         <button onClick={onSearch} disabled={searchBusy}
-          className="w-full btn-primary text-sm disabled:opacity-60 flex items-center justify-center gap-2">
-          {searchBusy ? <><Loader2 size={14} className="animate-spin" /> Searching…</>
-            : <><Search size={14} /> Search</>}
+          className="w-full btn-primary text-xs disabled:opacity-60 flex items-center justify-center gap-1.5">
+          {searchBusy ? <><Loader2 size={12} className="animate-spin" /> Searching</>
+            : <><Search size={12} /> Search</>}
         </button>
         <div className="flex items-center justify-between text-xs text-ink-muted">
           <span>{providers?.join(" + ") || "All providers"}</span>

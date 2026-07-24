@@ -291,9 +291,19 @@ export default function Leads() {
             <table className="w-full text-table min-w-[900px]">
               <thead>
                 <tr className="border-b border-line">
-                  <th className="p-3 w-8">
-                    <input type="checkbox" checked={filtered.length > 0 && filtered.every((l) => selected.has(l.id))}
-                      onChange={selectAllVisible} data-testid="select-all-leads" />
+                  <th className="p-3 w-20">
+                    <div className="flex items-center gap-1">
+                      <input type="checkbox" checked={filtered.length > 0 && filtered.every((l) => selected.has(l.id))}
+                        onChange={selectAllVisible} data-testid="select-all-leads" className="shrink-0" />
+                      <input type="number" min={1} max={filtered.length} placeholder="N"
+                        className="w-10 border border-line rounded px-1 py-0.5 text-tiny text-center"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            const n = parseInt(e.target.value, 10);
+                            if (n > 0) setSelected(new Set(filtered.slice(0, n).map((l) => l.id)));
+                          }
+                        }} />
+                    </div>
                   </th>
                   <th className="table-header text-left p-3">Name</th>
                   <th className="table-header text-left p-3">Email</th>
