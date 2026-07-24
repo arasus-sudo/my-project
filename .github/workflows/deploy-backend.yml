@@ -32,6 +32,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Enable Oryx build
+        run: |
+          az webapp config appsettings set \
+            --resource-group ${{ env.AZURE_RG }} \
+            --name ${{ env.BACKEND_NAME }} \
+            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true
+
       - name: Package and deploy backend
         run: |
           cd backend
