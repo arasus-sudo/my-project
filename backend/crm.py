@@ -200,6 +200,47 @@ async def list_leads(
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
+@crm_router.get("/leads/all-ids")
+async def list_all_lead_ids(
+    search: Optional[str] = None,
+    list_id: Optional[str] = None,
+    tags: Optional[str] = None,  # comma-separated
+    status: Optional[str] = None,
+    owner_id: Optional[str] = None,
+    band: Optional[str] = None,
+    user=Depends(current_user),
+):
+    query = _active(user["workspace_id"])
+    if search:
+        q = search.strip().lower()
+        query["$or"] = [
+            {"first_name": {"$regex": q, "$options": "i"}},
+            {"last_name": {"$regex": q, "$options": "i"}},
+            {"company": {"$regex": q, "$options": "i"}},
+            {"email": {"$regex": q, "$options": "i"}},
+            {"title": {"$regex": q, "$options": "i"}},
+        ]
+    if list_id:
+        lst = await db.lead_lists.find_one(_active(user["workspace_id"], id=list_id), {"lead_ids": 1})
+        if lst and lst.get("lead_ids"):
+            query["id"] = {"$in": lst["lead_ids"]}
+        else:
+            return {"ids": []}
+    if tags:
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+        if tag_list:
+            query["tags"] = {"$in": tag_list}
+    if status:
+        query["status"] = status
+    if owner_id:
+        query["owner_id"] = owner_id
+    if band:
+        query["intent.band"] = band
+    cursor = db.leads.find(query, {"id": 1, "_id": 0})
+    ids = [doc["id"] async for doc in cursor]
+    return {"ids": ids}
+
+
 @crm_router.get("/leads/export")
 async def export_leads(user=Depends(current_user)):
     items = await db.leads.find(_active(user["workspace_id"]), {"_id": 0}).to_list(2000)
@@ -622,6 +663,14 @@ async def lead_list_bulk_import(
             "status": "new", "verified": True, "phone_verified": False,
             "dnc": False, "owner_id": None, "deleted_at": None, "created_at": now_iso(),
         }
+        # Store all other remapped fields on the lead document
+        KNOWN_LEAD_KEYS = {"id", "workspace_id", "first_name", "last_name", "email", "company",
+            "title", "linkedin", "linkedin_url", "website", "phone", "tags", "status",
+            "verified", "phone_verified", "dnc", "owner_id", "deleted_at", "created_at",
+            "campaign_ids", "intent", "icp_score", "notes", "tasks"}
+        for k, v in row.items():
+            if k not in KNOWN_LEAD_KEYS and v is not None and str(v).strip():
+                doc["raw_" + k] = str(v).strip()
         try:
             await db.leads.insert_one(doc)
         except DuplicateKeyError:

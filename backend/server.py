@@ -192,6 +192,8 @@ class CampaignIn(BaseModel):
     send_window_end: str = "17:00"
     timezone: str = "UTC"
     signature_id: Optional[str] = None
+    batch_size: int = 10
+    phased_generation: bool = False
 
 
 class SignatureIn(BaseModel):
@@ -1026,6 +1028,26 @@ async def add_leads_to_campaign(cid: str, body: Dict[str, Any], user=Depends(cur
         {"id": {"$in": new_ids}},
         {"$addToSet": {"campaign_ids": cid}}
     )
+    # Assign batch numbers for phased generation
+    if campaign.get("phased_generation"):
+        batch_size = campaign.get("batch_size", 10)
+        total = len(campaign.get("lead_ids", [])) + len(new_ids)
+        # Compute starting batch for these new leads
+        existing_personalized = campaign.get("personalized_emails", [])
+        existing_batches = {p["lead_id"]: p.get("batch", 1) for p in existing_personalized}
+        start_idx = len(existing_personalized)
+        batch_updates = {}
+        for i, lid in enumerate(new_ids):
+            bn = ((start_idx + i) // batch_size) + 1
+            batch_updates[lid] = bn
+        # Write batch numbers into a sub-object on the campaign
+        for lid, bn in batch_updates.items():
+            await db.campaigns.update_one(
+                {"id": cid},
+                {"$set": {f"lead_batches.{lid}": bn}},
+                upsert=True
+            )
+        return {"added": len(new_ids), "lead_ids": new_ids, "batches": batch_updates}
     return {"added": len(new_ids), "lead_ids": new_ids}
 
 
@@ -1041,6 +1063,16 @@ async def run_campaign_engine(cid: str, user=Depends(current_user)):
     lead_ids = campaign.get("lead_ids", [])
     if not lead_ids:
         raise HTTPException(400, "No leads assigned to campaign. Add leads first.")
+
+    # For phased generation, only include leads in the current batch
+    if campaign.get("phased_generation"):
+        current_batch = campaign.get("current_batch", 1)
+        lead_batches = campaign.get("lead_batches", {})
+        batch_lead_ids = [lid for lid in lead_ids if lead_batches.get(lid, 1) == current_batch]
+        if not batch_lead_ids:
+            raise HTTPException(400, f"Batch {current_batch} has no leads assigned. Advance the batch or disable phased generation.")
+        lead_ids = batch_lead_ids
+
     personalized = campaign.get("personalized_emails", [])
     to_generate = [lid for lid in lead_ids if lid not in {p["lead_id"] for p in personalized}]
     if not to_generate:
@@ -1125,6 +1157,86 @@ async def campaign_generation_status(cid: str, user=Depends(current_user)):
         raise HTTPException(404, "not found")
     jobs = {k: v for k, v in campaign.items() if k.startswith("generation_")}
     return {"jobs": jobs}
+
+
+@api.post("/campaigns/{cid}/advance-batch")
+async def advance_campaign_batch(cid: str, user=Depends(current_user)):
+    """Advance to the next batch in phased generation and generate emails for it."""
+    wid = user["workspace_id"]
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(404, "Campaign not found")
+    if not campaign.get("phased_generation"):
+        raise HTTPException(400, "Phased generation is not enabled for this campaign")
+    current = campaign.get("current_batch", 1)
+    next_batch = current + 1
+    lead_batches = campaign.get("lead_batches", {})
+    lead_ids = campaign.get("lead_ids", [])
+    batch_lead_ids = [lid for lid in lead_ids if lead_batches.get(lid, 1) == next_batch]
+    if not batch_lead_ids:
+        total_batches = 0
+        if lead_ids and campaign.get("batch_size", 10) > 0:
+            total_batches = (len(lead_ids) + campaign.get("batch_size", 10) - 1) // campaign.get("batch_size", 10)
+        if next_batch > total_batches:
+            return {"advanced": False, "message": "All batches have been generated — campaign is complete"}
+        return {"advanced": False, "message": f"Batch {next_batch} has no leads assigned yet"}
+    await db.campaigns.update_one({"id": cid}, {"$set": {"current_batch": next_batch}})
+    # Trigger generation for the new batch
+    if not await _rate_ok(user):
+        raise HTTPException(429, "Daily AI quota exceeded")
+    personalized = campaign.get("personalized_emails", [])
+    to_generate = [lid for lid in batch_lead_ids if lid not in {p["lead_id"] for p in personalized}]
+    if to_generate:
+        gen_id = new_id()
+        await db.campaigns.update_one({"id": cid}, {"$set": {f"generation_{gen_id}": {"status": "running", "total": len(to_generate), "done": 0, "errors": []}}})
+        asyncio.create_task(_run_generation_background(cid, wid, to_generate, campaign, user, gen_id))
+        return {"advanced": True, "batch": next_batch, "generating": len(to_generate), "job_id": gen_id}
+    return {"advanced": True, "batch": next_batch, "generating": 0, "message": "All leads in this batch already have emails"}
+
+
+@api.get("/campaigns/{cid}/batch-status")
+async def campaign_batch_status(cid: str, user=Depends(current_user)):
+    """Get batch generation progress."""
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(404, "not found")
+    batch_size = campaign.get("batch_size", 10)
+    phased = campaign.get("phased_generation", False)
+    current_batch = campaign.get("current_batch", 1)
+    lead_ids = campaign.get("lead_ids", [])
+    lead_batches = campaign.get("lead_batches", {})
+    personalized = campaign.get("personalized_emails", [])
+    personalized_by_lead = {p["lead_id"]: p for p in personalized}
+
+    batches = {}
+    for lid in lead_ids:
+        bn = lead_batches.get(lid, 1)
+        if bn not in batches:
+            batches[bn] = {"total": 0, "generated": 0, "approved": 0, "rejected": 0, "draft": 0}
+        batches[bn]["total"] += 1
+        p = personalized_by_lead.get(lid)
+        if p:
+            batches[bn]["generated"] += 1
+            status = p.get("status", "")
+            if status == "approved":
+                batches[bn]["approved"] += 1
+            elif status == "rejected":
+                batches[bn]["rejected"] += 1
+            elif status == "draft":
+                batches[bn]["draft"] += 1
+
+    total_batches = max(batches.keys()) if batches else 1
+    all_approved = all(b["approved"] == b["total"] for b in batches.values()) if batches else False
+
+    return {
+        "phased": phased,
+        "current_batch": current_batch,
+        "total_batches": total_batches,
+        "batch_size": batch_size,
+        "total_leads": len(lead_ids),
+        "batches": batches,
+        "all_batches_complete": all_approved and current_batch >= total_batches,
+    }
 
 
 @api.post("/campaigns/{cid}/leads/{lead_id}/regenerate-opener")

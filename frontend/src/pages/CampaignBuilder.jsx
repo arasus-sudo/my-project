@@ -88,6 +88,7 @@ export default function CampaignBuilder() {
   const [steps, setSteps] = useState([DEFAULT_STEP()]);
   const [leads, setLeads] = useState([]);
   const [selectedLeads, setSelectedLeads] = useState([]);
+  const [selectFromAll, setSelectFromAll] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [eq, setEq] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -131,6 +132,10 @@ export default function CampaignBuilder() {
   const [selectedReview, setSelectedReview] = useState([]); // lead ids checked in the review rail
   const [sendingTest, setSendingTest] = useState(false);
   const [regeneratingAll, setRegeneratingAll] = useState(false);
+  const [batchSize, setBatchSize] = useState(10);
+  const [phasedGeneration, setPhasedGeneration] = useState(false);
+  const [batchStatus, setBatchStatus] = useState(null);
+  const [advancingBatch, setAdvancingBatch] = useState(false);
 
   // Track actual campaign ID — may differ from useParams id when creating new
   const [activeCampaignId, setActiveCampaignId] = useState(id);
@@ -141,6 +146,29 @@ export default function CampaignBuilder() {
     if (!cid) return;
     api.get(`/campaigns/${cid}/leads`).then((r) => setCampaignLeads(r.data.leads || [])).catch(() => {});
   };
+
+  // Select first N leads — from current filtered view or from ALL matching leads
+  const selectFirstN = async (inputEl) => {
+    if (!inputEl) return;
+    const n = parseInt(inputEl.value, 10);
+    if (!n || n < 1) return;
+    if (!selectFromAll) {
+      setSelectedLeads(filteredLeads.slice(0, n).map((l) => l.id));
+      return;
+    }
+    try {
+      const params = {};
+      if (leadSearch) params.search = leadSearch;
+      if (selectedListId) params.list_id = selectedListId;
+      if (selectedTags.length > 0) params.tags = selectedTags.join(",");
+      const { data } = await api.get("/leads/all-ids", { params });
+      setSelectedLeads((data.ids || []).slice(0, n));
+    } catch {
+      setSelectedLeads(filteredLeads.slice(0, n).map((l) => l.id));
+    }
+  };
+
+
 
   useEffect(() => {
     api.get("/leads?page_size=2000").then((r) => setLeads(r.data.items || r.data));
@@ -160,8 +188,11 @@ export default function CampaignBuilder() {
         if (c.send_window_start) setSendWindowStart(c.send_window_start);
         if (c.send_window_end) setSendWindowEnd(c.send_window_end);
         if (c.timezone) setTimezone(c.timezone);
+        setBatchSize(c.batch_size || 10);
+        setPhasedGeneration(c.phased_generation || false);
       });
       loadCampaignLeads();
+      api.get(`/campaigns/${id}/batch-status`).then((r) => setBatchStatus(r.data)).catch(() => {});
     }
   }, [id]);
 
@@ -278,6 +309,7 @@ export default function CampaignBuilder() {
           setGenProgress(null);
           setEngineRunning(false);
           loadCampaignLeads(cid);
+          refreshBatchStatus();
           toast.success(`Generated ${job.done} email${job.done === 1 ? "" : "s"}`);
         }
       } catch { clearInterval(poll); setGenProgress(null); setEngineRunning(false); }
@@ -583,7 +615,7 @@ export default function CampaignBuilder() {
         body_html: sanitizeEmailHtml(rest.body_html || rest.body || ""),
         body_text: htmlToText(rest.body_html || "") || rest.body || "",
       }));
-      const payload = { name, goal, campaign_type: campaignType, steps: cleanSteps, lead_ids: selectedLeads, signature_id: signatureId || null, send_window_start: sendWindowStart, send_window_end: sendWindowEnd, timezone };
+      const payload = { name, goal, campaign_type: campaignType, steps: cleanSteps, lead_ids: selectedLeads, signature_id: signatureId || null, send_window_start: sendWindowStart, send_window_end: sendWindowEnd, timezone, batch_size: batchSize, phased_generation: phasedGeneration };
       let cid = activeCampaignId || id;
       if (!cid) {
         const { data } = await api.post("/campaigns", payload);
@@ -608,6 +640,7 @@ export default function CampaignBuilder() {
         } catch (err) {
           toast.warning("Saved, but email generation failed: " + (err?.response?.data?.detail || err.message));
         }
+        api.get(`/campaigns/${cid}/batch-status`).then((r) => setBatchStatus(r.data)).catch(() => {});
       } else {
         toast.success("Saved");
       }
@@ -640,6 +673,35 @@ export default function CampaignBuilder() {
       });
     } finally { setBusy(false); }
   };
+
+  const advanceBatch = async () => {
+    const cid = activeCampaignId || id;
+    if (!cid) return;
+    setAdvancingBatch(true);
+    try {
+      const { data } = await api.post(`/campaigns/${cid}/advance-batch`);
+      if (data.advanced) {
+        toast.success(`Advanced to batch ${data.batch} — generating emails for ${data.generating} leads`);
+        if (data.job_id) pollGeneration(cid, data.job_id, data.generating);
+        api.get(`/campaigns/${cid}/batch-status`).then((r) => setBatchStatus(r.data)).catch(() => {});
+        loadCampaignLeads(cid);
+      } else {
+        toast.info(data.message);
+        api.get(`/campaigns/${cid}/batch-status`).then((r) => setBatchStatus(r.data)).catch(() => {});
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Failed to advance batch");
+    } finally { setAdvancingBatch(false); }
+  };
+
+  const refreshBatchStatus = () => {
+    const cid = activeCampaignId || id;
+    if (!cid) return;
+    api.get(`/campaigns/${cid}/batch-status`).then((r) => setBatchStatus(r.data)).catch(() => {});
+  };
+
+  const batchApproved = (bs, bn) => { const b = bs.batches?.[bn]; return b ? b.approved : 0; };
+  const batchTotal = (bs, bn) => { const b = bs.batches?.[bn]; return b ? b.total : 0; };
 
   return (
     <div className="animate-fade-in">
@@ -842,28 +904,64 @@ export default function CampaignBuilder() {
             <button onClick={() => setSelectedLeads(filteredLeads.map((l) => l.id))} className="text-caption text-ink hover:underline" data-testid="select-all-leads">Select all</button>
             <button onClick={() => setSelectedLeads([])} className="text-caption text-ink-muted hover:underline" data-testid="deselect-all-leads">Deselect all</button>
             <span className="text-tiny text-ink-muted">|</span>
-            <input type="number" min={1} max={filteredLeads.length} placeholder="N"
+            <input type="number" min={1} placeholder="N"
               data-testid="select-n-input"
               className="w-14 border border-line rounded px-1.5 py-0.5 text-tiny text-center"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const n = parseInt(e.target.value, 10);
-                  if (n > 0) setSelectedLeads(filteredLeads.slice(0, n).map((l) => l.id));
-                }
-              }} />
-            <button onClick={() => {
-              const input = document.querySelector('[data-testid="select-n-input"]');
-              if (input) {
-                const n = parseInt(input.value, 10);
-                if (n > 0) setSelectedLeads(filteredLeads.slice(0, n).map((l) => l.id));
-              }
-            }} className="text-tiny text-ink-muted hover:text-ink hover:underline">Select</button>
+              onKeyDown={(e) => { if (e.key === "Enter") selectFirstN(e.target); }} />
+            <button onClick={() => selectFirstN(document.querySelector('[data-testid="select-n-input"]'))}
+              className="text-tiny text-ink-muted hover:text-ink hover:underline">Select</button>
+            <label className="flex items-center gap-1 text-tiny text-ink-muted cursor-pointer ml-1">
+              <input type="checkbox" checked={selectFromAll} onChange={(e) => setSelectFromAll(e.target.checked)} className="w-3 h-3" />
+              All matching
+            </label>
           </div>
           {selectedLeads.length > 0 && (
             <button onClick={save} disabled={busy} className="btn-primary w-full mt-3 text-sm flex items-center justify-center gap-1">
               {busy ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
               Add & Generate ({selectedLeads.length} leads)
             </button>
+          )}
+
+          {/* Phased generation config */}
+          {leadStats.total > 0 && (
+            <div className="mt-4 p-3 bg-bone rounded-2xl border border-line space-y-2">
+              <label className="flex items-center gap-2 text-caption font-medium cursor-pointer">
+                <input type="checkbox" checked={phasedGeneration}
+                  onChange={(e) => setPhasedGeneration(e.target.checked)} className="w-3.5 h-3.5" />
+                Phased generation
+              </label>
+              {phasedGeneration && (
+                <div className="space-y-2 ml-5">
+                  <label className="flex items-center gap-2 text-tiny text-ink-muted">
+                    <span>Batch size:</span>
+                    <input type="number" min={1} max={500} value={batchSize}
+                      onChange={(e) => setBatchSize(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                      className="w-16 border border-line rounded px-1.5 py-0.5 text-tiny text-center" />
+                  </label>
+                  {batchStatus && batchStatus.phased && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-tiny">
+                        <span className="text-ink-muted">Batch {batchStatus.current_batch}/{batchStatus.total_batches}</span>
+                        <span className="text-ink-muted">
+                          {Object.values(batchStatus.batches || {}).reduce((s, b) => s + b.approved, 0)}/{batchStatus.total_leads} approved
+                        </span>
+                      </div>
+                      <div className="w-full bg-line rounded-full h-1.5 overflow-hidden">
+                        <div className="bg-primary h-full rounded-full transition-all duration-300"
+                          style={{ width: `${batchStatus.total_leads > 0 ? (Object.values(batchStatus.batches || {}).reduce((s, b) => s + b.approved, 0) / batchStatus.total_leads) * 100 : 0}%` }} />
+                      </div>
+                      {!batchStatus.all_batches_complete && batchApproved(batchStatus, batchStatus.current_batch) >= batchTotal(batchStatus, batchStatus.current_batch) && (
+                        <button onClick={advanceBatch} disabled={advancingBatch}
+                          className="text-xs text-primary hover:underline flex items-center gap-1">
+                          {advancingBatch ? <Loader2 size={12} className="animate-spin" /> : <ChevronRight size={12} />}
+                          Generate next batch ({batchStatus.current_batch + 1}/{batchStatus.total_batches})
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
         </aside>

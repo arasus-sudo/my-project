@@ -52,6 +52,7 @@ export default function Leads() {
   const [bandFilter, setBandFilter] = useState("");
   const [sortByIntent, setSortByIntent] = useState(false);
   const [selected, setSelected] = useState(new Set());
+  const [selectAllFromAll, setSelectAllFromAll] = useState(false);
   const [modal, setModal] = useState(false);
   const [importer, setImporter] = useState(false);
   const [listPicker, setListPicker] = useState(false);
@@ -295,14 +296,28 @@ export default function Leads() {
                     <div className="flex items-center gap-1">
                       <input type="checkbox" checked={filtered.length > 0 && filtered.every((l) => selected.has(l.id))}
                         onChange={selectAllVisible} data-testid="select-all-leads" className="shrink-0" />
-                      <input type="number" min={1} max={filtered.length} placeholder="N"
+                      <input type="number" min={1} placeholder="N"
                         className="w-10 border border-line rounded px-1 py-0.5 text-tiny text-center"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            const n = parseInt(e.target.value, 10);
-                            if (n > 0) setSelected(new Set(filtered.slice(0, n).map((l) => l.id)));
-                          }
+                        onKeyDown={async (e) => {
+                          if (e.key !== "Enter") return;
+                          const n = parseInt(e.target.value, 10);
+                          if (!n || n < 1) return;
+                          if (!selectAllFromAll) { setSelected(new Set(filtered.slice(0, n).map((l) => l.id))); return; }
+                          try {
+                            const params = {};
+                            if (q) params.search = q;
+                            if (statusFilter) params.status = statusFilter;
+                            if (tagFilter) params.tags = tagFilter;
+                            if (ownerFilter) params.owner_id = ownerFilter;
+                            if (bandFilter) params.band = bandFilter;
+                            const { data } = await api.get("/leads/all-ids", { params });
+                            setSelected(new Set((data.ids || []).slice(0, n)));
+                          } catch { setSelected(new Set(filtered.slice(0, n).map((l) => l.id))); }
                         }} />
+                      <label className="flex items-center gap-0.5 text-tiny text-ink-muted cursor-pointer whitespace-nowrap">
+                        <input type="checkbox" checked={selectAllFromAll} onChange={(e) => setSelectAllFromAll(e.target.checked)} className="w-3 h-3" />
+                        All
+                      </label>
                     </div>
                   </th>
                   <th className="table-header text-left p-3">Name</th>
