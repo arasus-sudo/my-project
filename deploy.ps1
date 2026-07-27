@@ -30,7 +30,7 @@ Write-Host "▶ [4/6] Configuring startup command..." -ForegroundColor Yellow
 # NOTE: --workers=1 is required because the APScheduler runs in-process.
 # With 2+ workers, each gets its own scheduler instance, causing duplicate
 # background jobs and race conditions on the send queue.
-az webapp config set --name $WebAppName --resource-group $ResourceGroup --startup-file "startup.sh" --output table
+az webapp config set --name $WebAppName --resource-group $ResourceGroup --startup-file "gunicorn --bind=0.0.0.0:8000 --workers=1 --timeout=120 -k uvicorn.workers.UvicornWorker server:app" --output table
 
 Write-Host "▶ Setting Python version..." -ForegroundColor Yellow
 az webapp config set --name $WebAppName --resource-group $ResourceGroup --linux-fx-version "PYTHON|3.11" --output table
@@ -55,7 +55,7 @@ for r, dirs, fs in os.walk('D:/SUITEOFAGETNS/backend'):
         z.write(path, arcname)
 z.close()
 "
-az webapp config appsettings set --name $WebAppName --resource-group $ResourceGroup --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false --output table 2>$null
+az webapp config appsettings set --name $WebAppName --resource-group $ResourceGroup --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true --output table 2>$null
 az webapp deploy --resource-group $ResourceGroup --name $WebAppName --src-path $zipPath --type zip
 Remove-Item $zipPath -Force
 if ($LASTEXITCODE -ne 0) { Write-Host "✗ Failed"; exit 1 }

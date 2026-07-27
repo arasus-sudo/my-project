@@ -26,28 +26,19 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Pre-install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt --target=/tmp/backend-vendor
-
-      - name: Disable Oryx build (deps pre-installed in vendor/)
+      - name: Enable Oryx build
         run: |
           az webapp config appsettings set \
             --resource-group ${{ env.AZURE_RG }} \
             --name ${{ env.BACKEND_NAME }} \
-            --settings \
-              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
-              PYTHONPATH=/home/site/wwwroot/vendor
+            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true
 
       - name: Package and deploy backend
         run: |
           cd backend
           rm -f deploy.zip backend-deploy.zip
-          mkdir -p vendor
-          cp -r /tmp/backend-vendor/* vendor/
           zip -r /tmp/deploy.zip . \
-            -x "*__pycache__*" "*venv*" "*.venv*" ".git*" "*.log" "*.err" "*.txt" ".env" "deploy.zip" "backend-deploy.zip" "vendor/bin/*"
+            -x "*__pycache__*" "*venv*" "*.venv*" ".git*" "*.log" "*.err" "*.txt" ".env" "deploy.zip" "backend-deploy.zip" "vendor/*"
           zip -r /tmp/deploy.zip requirements.txt
           az webapp deploy \
             --resource-group ${{ env.AZURE_RG }} \

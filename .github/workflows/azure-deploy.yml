@@ -20,45 +20,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Pre-install Python dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r backend/requirements.txt --target=/tmp/backend-vendor
-
       - name: Login to Azure
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Disable Oryx build (deps pre-installed)
+      - name: Enable Oryx build (handles pip install natively)
         run: |
           az webapp config appsettings set \
             --resource-group ${{ env.AZURE_RG }} \
             --name ${{ env.BACKEND_NAME }} \
-            --settings \
-              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
-              PYTHONPATH=/home/site/wwwroot/vendor
+            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true
 
-      - name: Set startup command
+      - name: Set startup command (gunicorn + 1 worker for APScheduler)
         run: |
           az webapp config set \
             --resource-group ${{ env.AZURE_RG }} \
             --name ${{ env.BACKEND_NAME }} \
-            --startup-file "startup.sh"
+            --startup-file "gunicorn --bind=0.0.0.0:8000 --timeout=120 --workers=1 -k uvicorn.workers.UvicornWorker server:app"
 
       - name: Package and deploy backend
         run: |
           cd backend
-          # Remove stale artifacts before zipping
           rm -f deploy.zip backend-deploy.zip
-          # Copy pre-installed deps into vendor/
-          mkdir -p vendor
-          cp -r /tmp/backend-vendor/* vendor/
           zip -r /tmp/deploy.zip . \
             -x "*__pycache__*" \
             -x "*/__pycache__/*" \
@@ -68,12 +52,10 @@ jobs:
             -x ".git*" \
             -x "*.log" \
             -x "*.err" \
-            -x "*.txt" \
             -x ".env" \
             -x "deploy.zip" \
             -x "backend-deploy.zip" \
-            -x "vendor/bin/*"
-          # Re-add requirements.txt (caught by *.txt above) and ensure vendor/bin isn't needed
+            -x "vendor/*"
           zip -r /tmp/deploy.zip requirements.txt
           echo "Zip size: $(du -sh /tmp/deploy.zip | cut -f1)"
           ls -lh /tmp/deploy.zip
