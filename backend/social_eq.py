@@ -50,6 +50,7 @@ from import_utils import _parse_rows, _parse_date
 import linkedin_client
 import instagram_client
 import youtube_client
+import veo_client
 
 log = logging.getLogger(__name__)
 
@@ -78,7 +79,7 @@ class PostGenIn(BaseModel):
     topic: str
     tone: str = "confident, professional"
     lead_id: Optional[str] = None
-    content_type: str = "static"  # "static" | "carousel"
+    content_type: str = "static"  # "static" | "carousel" | "video"
     first_comment: Optional[str] = None
 
 
@@ -140,7 +141,7 @@ async def _brand_kit_colors(workspace_id: str, brand_kit_id: Optional[str]) -> L
 
 async def _generate_media(user: Dict[str, Any], post_id: str, topic: str,
                           platform: str, content_type: str,
-                          brand_voice: Optional[Dict[str, Any]] = None) -> Dict[str, Optional[str]]:
+                          brand_voice: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """One image-generation path for both manual Compose and bulk-import, so
     a post looks and costs the same regardless of which route created it.
     For `content_type="carousel"` this also spins up a full editable
@@ -149,7 +150,26 @@ async def _generate_media(user: Dict[str, Any], post_id: str, topic: str,
     since native multi-image carousel publishing to each platform is a
     larger, separate build (see plan notes). Brand colors are baked into the
     generation prompt ("compliance by construction") rather than checked
-    post-hoc, since the shared LLM helper isn't a vision model."""
+    post-hoc, since the shared LLM helper isn't a vision model.
+
+    For `content_type="video"`, generation is async (Veo takes minutes, not
+    a same-request round trip) — this only submits the job and returns
+    `video_status: "processing"` + `video_operation_name`; `media_url` stays
+    None until `run_video_poll_tick` fills it in once Veo finishes."""
+    if content_type == "video":
+        colors = await _brand_kit_colors(user["workspace_id"], (brand_voice or {}).get("brand_kit_id"))
+        style_hint = f" Visual style: clean, modern, on-brand, using a color palette of {', '.join(colors)}." \
+            if colors else " Visual style: clean, modern, professional."
+        video_prompt = f"Short social media video about: {topic}.{style_hint}"
+        try:
+            op_name = await veo_client.submit_video_job(video_prompt)
+            return {"media_url": None, "carousel_project_id": None,
+                    "video_status": "processing", "video_operation_name": op_name}
+        except Exception as ex:
+            log.warning("video generation submit failed for post %s: %s", post_id, ex)
+            return {"media_url": None, "carousel_project_id": None,
+                    "video_status": "failed", "video_operation_name": None}
+
     media_url, carousel_project_id = None, None
     colors = await _brand_kit_colors(user["workspace_id"], (brand_voice or {}).get("brand_kit_id"))
     style_hint = f"Style: clean, modern, on-brand, using a color palette of {', '.join(colors)}." if colors \
@@ -175,7 +195,8 @@ async def _generate_media(user: Dict[str, Any], post_id: str, topic: str,
         except Exception as ex:
             log.warning("linked carousel project generation failed for post %s: %s", post_id, ex)
 
-    return {"media_url": media_url, "carousel_project_id": carousel_project_id}
+    return {"media_url": media_url, "carousel_project_id": carousel_project_id,
+            "video_status": None, "video_operation_name": None}
 
 
 @social_public_router.get("/social-eq/media/{post_id}/{filename}")
@@ -420,8 +441,11 @@ def _compose_caption(post: Dict[str, Any]) -> str:
 async def generate_post(body: PostGenIn, user=Depends(current_user)):
     if body.platform not in PROVIDERS:
         raise HTTPException(400, "unknown platform")
+    content_type = body.content_type if body.content_type in ("static", "carousel", "video") else "static"
     from billing import charge_credits
-    await charge_credits(user["workspace_id"], "social_draft", meta={"platform": body.platform})
+    await charge_credits(user["workspace_id"],
+                         "social_video_generate" if content_type == "video" else "social_draft",
+                         meta={"platform": body.platform})
     lead_context = None
     lead_id = body.lead_id
     if lead_id:
@@ -432,7 +456,6 @@ async def generate_post(body: PostGenIn, user=Depends(current_user)):
     brand_voice = await _get_brand_voice(user["workspace_id"])
     draft = await _draft_post(body.platform, body.topic, body.tone, lead_context, brand_voice)
     qc = await _apply_organiser_check(draft, brand_voice, user["workspace_id"])
-    content_type = body.content_type if body.content_type in ("static", "carousel") else "static"
     post_id = new_id()
     media = await _generate_media(user, post_id, body.topic, body.platform, content_type, brand_voice)
     doc = {
@@ -441,6 +464,7 @@ async def generate_post(body: PostGenIn, user=Depends(current_user)):
         "headline": draft.get("headline", ""), "body": draft.get("body", ""),
         "hashtags": draft.get("hashtags", []), "media_url": media["media_url"], "content_type": content_type,
         "carousel_project_id": media["carousel_project_id"], "source": "manual",
+        "video_status": media.get("video_status"), "video_operation_name": media.get("video_operation_name"),
         "first_comment": body.first_comment, "first_comment_posted": False,
         "status": "draft", "scheduled_for": None, "approval_token": None,
         "approved_by": None, "approved_at": None, "organiser_issues": qc.get("issues", []),
@@ -611,7 +635,9 @@ async def delete_post(pid: str, user=Depends(current_user)):
 async def _generate_post_for_row(user: Dict[str, Any], platform: str, topic: str, tone: str,
                                  cta: str, content_type: str, scheduled_for: Optional[str]) -> Dict[str, Any]:
     from billing import charge_credits
-    await charge_credits(user["workspace_id"], "social_draft", meta={"platform": platform, "source": "bulk_import"})
+    await charge_credits(user["workspace_id"],
+                         "social_video_generate" if content_type == "video" else "social_draft",
+                         meta={"platform": platform, "source": "bulk_import"})
 
     lead_context = f"Extra call to action: {cta}" if cta else None
     brand_voice = await _get_brand_voice(user["workspace_id"])
@@ -621,6 +647,11 @@ async def _generate_post_for_row(user: Dict[str, Any], platform: str, topic: str
     post_id = new_id()
     media = await _generate_media(user, post_id, topic, platform, content_type, brand_voice)
 
+    # A video post isn't ready to review until run_video_poll_tick fills in
+    # its media_url — it stays a draft (no approval_token yet, excluded from
+    # this batch's digest) until the poll tick flips it to pending_approval
+    # and fires a digest of its own once Veo actually finishes.
+    video_pending = content_type == "video"
     doc = {
         "id": post_id, "workspace_id": user["workspace_id"], "owner_id": user["id"],
         "lead_id": None, "platform": platform, "topic": topic,
@@ -628,9 +659,11 @@ async def _generate_post_for_row(user: Dict[str, Any], platform: str, topic: str
         "hashtags": draft.get("hashtags", []), "media_url": media["media_url"],
         "content_type": content_type, "carousel_project_id": media["carousel_project_id"],
         "source": "bulk_import",
+        "video_status": media.get("video_status"), "video_operation_name": media.get("video_operation_name"),
         "first_comment": None, "first_comment_posted": False,
-        "status": "pending_approval", "scheduled_for": scheduled_for,
-        "approval_token": secrets.token_urlsafe(32),
+        "status": "draft" if video_pending else "pending_approval",
+        "scheduled_for": scheduled_for,
+        "approval_token": None if video_pending else secrets.token_urlsafe(32),
         "approved_by": None, "approved_at": None, "organiser_issues": qc.get("issues", []),
         "published_at": None, "platform_post_id": None, "platform_post_url": None, "engagement": None,
         "created_at": now_iso(), "updated_at": now_iso(),
@@ -681,7 +714,7 @@ async def bulk_import(file: UploadFile = File(...), user=Depends(current_user)):
 
         platforms = [p.strip().lower() for p in row["platforms"].split(",") if p.strip()]
         content_type = (row.get("content_type") or "static").strip().lower()
-        if content_type not in ("static", "carousel"):
+        if content_type not in ("static", "carousel", "video"):
             content_type = "static"
         tone = (row.get("tone") or "confident, professional").strip()
         cta = (row.get("cta") or "").strip()
@@ -698,8 +731,12 @@ async def bulk_import(file: UploadFile = File(...), user=Depends(current_user)):
             except Exception as ex:
                 errors.append(f"Row {i} ({platform}): {ex}")
 
+    # Video posts aren't ready to review yet — run_video_poll_tick digests
+    # each one individually once Veo actually finishes.
+    digestible = [p for p in created_posts if p["status"] == "pending_approval"]
+    if digestible:
+        await _send_approval_digest(user, digestible)
     if created_posts:
-        await _send_approval_digest(user, created_posts)
         await _audit(user, "social_eq.bulk_import", {"created": created, "skipped": skipped})
 
     return {"created": created, "skipped": skipped, "errors": errors}

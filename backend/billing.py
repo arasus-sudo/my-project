@@ -108,6 +108,7 @@ CREDIT_COSTS: Dict[str, int] = {
     "social_setup": 8,             # richer LLM call with crawl input, matches site_crawl's tier
     "social_organiser_qc": 1,      # single small compliance check, same tier as social_reply_suggest
     "social_insights": 2,          # one batched weekly-analytics summary call
+    "social_video_generate": 60,   # Veo generation, same tier as proposal_generate — priciest content type
     # Sending, tracking and reply-polling are deliberately absent = free. We never
     # charge for delivery, or for reading data you already own.
 }
@@ -139,6 +140,7 @@ ACTION_LABELS = {
     "social_setup": "Brand positioning analyzed",
     "social_organiser_qc": "Post checked against brand guidelines",
     "social_insights": "Weekly performance insights",
+    "social_video_generate": "Social video generated",
 }
 
 ACTION_AGENT = {
@@ -166,6 +168,7 @@ ACTION_AGENT = {
     "social_setup": "social",
     "social_organiser_qc": "social",
     "social_insights": "social",
+    "social_video_generate": "social",
 }
 
 
