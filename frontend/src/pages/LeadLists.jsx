@@ -183,7 +183,7 @@ export default function LeadLists() {
                     <div className="flex items-center gap-3">
                       {isExpanded ? <ChevronDown size={16} className="text-ink-muted" /> : <ChevronRight size={16} className="text-ink-muted" />}
                       <div>
-                        <div className="text-card-title font-display font-semibold">{l.name}</div>
+                        <div className="text-body font-semibold">{l.name}</div>
                         {l.description && <div className="text-caption text-ink-muted">{l.description}</div>}
                         <div className="text-tiny text-ink-muted font-mono mt-1">{l.lead_ids?.length || 0} leads</div>
                       </div>
