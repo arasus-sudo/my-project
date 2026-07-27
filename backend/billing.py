@@ -109,6 +109,10 @@ CREDIT_COSTS: Dict[str, int] = {
     "social_organiser_qc": 1,      # single small compliance check, same tier as social_reply_suggest
     "social_insights": 2,          # one batched weekly-analytics summary call
     "social_video_generate": 60,   # Veo generation, same tier as proposal_generate — priciest content type
+    "whatsapp_ai_reply": 1,        # single grounded call, same tier as site_chat_reply
+    "whatsapp_kb_crawl": 8,        # matches site_crawl — multi-page fetch
+    # whatsapp_kb_upload is deliberately absent = free: pure text extraction, no LLM
+    # call, negligible compute — unlike crawl's real multi-page network fetching.
     # Sending, tracking and reply-polling are deliberately absent = free. We never
     # charge for delivery, or for reading data you already own.
 }
@@ -141,6 +145,8 @@ ACTION_LABELS = {
     "social_organiser_qc": "Post checked against brand guidelines",
     "social_insights": "Weekly performance insights",
     "social_video_generate": "Social video generated",
+    "whatsapp_ai_reply": "WhatsApp automated reply",
+    "whatsapp_kb_crawl": "WhatsApp knowledge base crawled",
 }
 
 ACTION_AGENT = {
@@ -169,6 +175,8 @@ ACTION_AGENT = {
     "social_organiser_qc": "social",
     "social_insights": "social",
     "social_video_generate": "social",
+    "whatsapp_ai_reply": "whatsapp",
+    "whatsapp_kb_crawl": "whatsapp",
 }
 
 

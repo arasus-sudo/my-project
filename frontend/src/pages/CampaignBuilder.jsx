@@ -5,7 +5,7 @@ import { PageHeader } from "../components/AppLayout";
 import RichEmailEditor, { sanitizeEmailHtml } from "../components/RichEmailEditor";
 import { toast } from "sonner";
 import {
-  FileSearch, Save, Play, Plus, Trash2, Loader2, Check, AlertTriangle, Flame,
+  FileSearch, Save, Play, Plus, Trash2, Loader2, Check, AlertTriangle, Flame, LayoutTemplate,
   Mail, Eye, ThumbsUp, Signature, Search, Megaphone,
   Zap, ChevronLeft, ChevronRight, ChevronDown,
   Edit2, RotateCw, Flag, List, Tag, X, PenSquare,
@@ -737,6 +737,14 @@ export default function CampaignBuilder() {
         right={
           <div className="flex gap-2">
             <button data-testid="save-campaign" onClick={save} disabled={busy} className="btn-secondary"><Save size={14} /> Save</button>
+            {id && (
+              <button onClick={async () => {
+                try {
+                  await api.post(`/campaigns/${id}/save-template`);
+                  toast.success("Campaign saved as template");
+                } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+              }} className="btn-secondary"><LayoutTemplate size={14} /> Template</button>
+            )}
             <button
               data-testid="toggle-preview"
               onClick={() => setReviewMode((v) => !v)}

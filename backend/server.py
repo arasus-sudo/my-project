@@ -613,17 +613,30 @@ async def list_campaigns(user=Depends(current_user)):
     items = await db.campaigns.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(500)
     for c in items:
         c["stats"] = await _campaign_stats(c["id"], user["workspace_id"])
+        c["lead_count"] = len(c.get("lead_ids") or [])
+        c["step_count"] = len(c.get("steps") or [])
+        steps = c.get("steps") or []
+        c["duration_days"] = max((s.get("day", 0) for s in steps), default=0)
     return items
 
 
 async def _campaign_stats(cid: str, wid: str) -> Dict[str, Any]:
     events = await db.events.find({"campaign_id": cid, "workspace_id": wid}, {"_id": 0}).to_list(5000)
+    sent = sum(1 for e in events if e["type"] == "sent")
+    opened = sum(1 for e in events if e["type"] == "opened")
+    replied = sum(1 for e in events if e["type"] == "replied")
+    clicked = sum(1 for e in events if e["type"] == "clicked")
+    meetings = sum(1 for e in events if e["type"] == "meeting_booked")
     return {
-        "sent": sum(1 for e in events if e["type"] == "sent"),
-        "opened": sum(1 for e in events if e["type"] == "opened"),
-        "clicked": sum(1 for e in events if e["type"] == "clicked"),
-        "replied": sum(1 for e in events if e["type"] == "replied"),
-        "meetings": sum(1 for e in events if e["type"] == "meeting_booked"),
+        "sent": sent,
+        "opened": opened,
+        "clicked": clicked,
+        "replied": replied,
+        "meetings": meetings,
+        "open_rate": round(opened / sent * 100, 1) if sent else 0,
+        "reply_rate": round(replied / sent * 100, 1) if sent else 0,
+        "click_rate": round(clicked / sent * 100, 1) if sent else 0,
+        "meeting_rate": round(meetings / sent * 100, 1) if sent else 0,
     }
 
 
@@ -3194,6 +3207,110 @@ async def delete_template(tid: str, user=Depends(current_user)):
     return {"ok": True}
 
 
+# ----------------------------- Campaign Templates -----------------------------
+class CampaignTemplateIn(BaseModel):
+    name: str
+    description: str = ""
+    goal: Optional[str] = "Book meetings"
+    campaign_type: Optional[str] = "ai"
+    from_mailbox_id: Optional[str] = None
+    steps: List[SequenceStep] = []
+    send_window_start: Optional[str] = "09:00"
+    send_window_end: Optional[str] = "17:00"
+    timezone: Optional[str] = "UTC"
+    signature_id: Optional[str] = None
+    batch_size: Optional[int] = 10
+    tags: List[str] = []
+
+
+@api.get("/campaign-templates")
+async def list_campaign_templates(user=Depends(current_user)):
+    return await db.campaign_templates.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+
+
+@api.post("/campaign-templates")
+async def create_campaign_template(body: CampaignTemplateIn, user=Depends(current_user)):
+    t = body.model_dump()
+    t.update({
+        "id": new_id(),
+        "workspace_id": user["workspace_id"],
+        "owner_id": user["id"],
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+        "use_count": 0,
+    })
+    await db.campaign_templates.insert_one(t)
+    t.pop("_id", None)
+    return t
+
+
+@api.post("/campaigns/{cid}/save-template")
+async def save_campaign_as_template(cid: str, user=Depends(current_user)):
+    c = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "campaign not found")
+    t = {
+        "id": new_id(),
+        "workspace_id": user["workspace_id"],
+        "owner_id": user["id"],
+        "name": c.get("name", ""),
+        "description": c.get("goal", ""),
+        "goal": c.get("goal", "Book meetings"),
+        "campaign_type": c.get("campaign_type", "ai"),
+        "from_mailbox_id": c.get("from_mailbox_id"),
+        "steps": c.get("steps", []),
+        "send_window_start": c.get("send_window_start", "09:00"),
+        "send_window_end": c.get("send_window_end", "17:00"),
+        "timezone": c.get("timezone", "UTC"),
+        "signature_id": c.get("signature_id"),
+        "batch_size": c.get("batch_size", 10),
+        "tags": [],
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+        "use_count": 0,
+    }
+    await db.campaign_templates.insert_one(t)
+    t.pop("_id", None)
+    await _audit(user, "campaign.save_template", {"campaign_id": cid, "template_id": t["id"], "name": t["name"]})
+    return t
+
+
+@api.post("/campaigns/from-template/{template_id}")
+async def create_campaign_from_template(template_id: str, body: CampaignIn, user=Depends(current_user)):
+    tmpl = await db.campaign_templates.find_one({"id": template_id, "workspace_id": user["workspace_id"]})
+    if not tmpl:
+        raise HTTPException(404, "template not found")
+    c = body.model_dump()
+    c.update({
+        "id": new_id(),
+        "workspace_id": user["workspace_id"],
+        "status": "draft",
+        "created_at": now_iso(),
+        "owner_id": user["id"],
+        "template_id": template_id,
+    })
+    await db.campaigns.insert_one(c)
+    c.pop("_id", None)
+    if c.get("lead_ids"):
+        await db.leads.update_many(
+            {"id": {"$in": c["lead_ids"]}},
+            {"$addToSet": {"campaign_ids": c["id"]}},
+        )
+    await db.campaign_templates.update_one(
+        {"id": template_id},
+        {"$inc": {"use_count": 1}},
+    )
+    return c
+
+
+@api.delete("/campaign-templates/{tid}")
+async def delete_campaign_template(tid: str, user=Depends(current_user)):
+    await db.campaign_templates.delete_one({"id": tid, "workspace_id": user["workspace_id"]})
+    return {"ok": True}
+
+
 # ----------------------------- Team & Invites --------------------------------
 ROLES = {"org_admin", "campaign_manager", "sdr", "viewer"}
 
@@ -4205,10 +4322,17 @@ async def _create_indexes():
         await db.whatsapp_templates.create_index([("workspace_id", 1), ("status", 1)])
         await db.whatsapp_contacts.create_index([("workspace_id", 1), ("id", 1)])
         await db.whatsapp_contacts.create_index([("workspace_id", 1), ("phone", 1)], unique=True)
-        await db.whatsapp_conversations.create_index([("workspace_id", 1), ("contact_id", 1)])
-        await db.whatsapp_conversations.create_index([("workspace_id", 1), ("session_status", 1), ("updated_at", -1)])
+        # Real field names are `phone`/`status` — these were indexing `contact_id`/
+        # `session_status`, fields that don't exist on any whatsapp_conversations
+        # document (stale from an earlier schema iteration, never updated).
+        await db.whatsapp_conversations.create_index([("workspace_id", 1), ("phone", 1)])
+        await db.whatsapp_conversations.create_index([("workspace_id", 1), ("status", 1), ("updated_at", -1)])
         await db.whatsapp_broadcasts.create_index([("workspace_id", 1), ("id", 1)])
         await db.whatsapp_broadcasts.create_index([("workspace_id", 1), ("status", 1)])
+        # Automated agent knowledge base
+        await db.whatsapp_kb_sources.create_index([("workspace_id", 1), ("id", 1)])
+        await db.whatsapp_kb_chunks.create_index([("workspace_id", 1), ("source_id", 1)])
+        await db.whatsapp_kb_chunks.create_index([("content", "text")])
         # -- HRMS EQ indexes --
         await db.employees.create_index([("workspace_id", 1), ("id", 1)])
         await db.employees.create_index([("workspace_id", 1), ("email", 1)], unique=True)

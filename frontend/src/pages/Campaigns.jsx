@@ -3,16 +3,25 @@ import { api } from "../lib/api";
 import { Link, useNavigate } from "react-router-dom";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Play, Pause, Plus, Workflow, Trash2 } from "lucide-react";
+import { Play, Pause, Plus, Workflow, Trash2, Copy, FileJson, LayoutTemplate, ChevronDown, X } from "lucide-react";
 import { SkeletonTableRows } from "../components/ui/loading-states";
 
 export default function Campaigns() {
   const nav = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [templates, setTemplates] = useState([]);
+  const [templatePicker, setTemplatePicker] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("");
 
   const load = () => api.get("/campaigns").then((r) => { setItems(r.data); setLoading(false); });
   useEffect(() => { load(); }, []);
+
+  const loadTemplates = async () => {
+    const r = await api.get("/campaign-templates").catch(() => ({ data: [] }));
+    setTemplates(r.data);
+  };
 
   const launch = async (id, skipPending) => {
     if (skipPending === undefined) {
@@ -44,6 +53,28 @@ export default function Campaigns() {
     try { await api.delete(`/campaigns/${id}`); toast.success("Campaign deleted"); load(); }
     catch { toast.error("Delete failed"); }
   };
+  const duplicate = async (c) => {
+    try {
+      const r = await api.post("/campaigns", { ...c, name: `${c.name} (copy)`, lead_ids: [] });
+      toast.success("Campaign duplicated");
+      nav(`/app/campaigns/${r.data.id}`);
+    } catch (err) { toast.error(err?.response?.data?.detail || "Duplicate failed"); }
+  };
+  const saveTemplate = async (c) => {
+    try {
+      await api.post(`/campaigns/${c.id}/save-template`);
+      toast.success("Saved as template");
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed to save template"); }
+  };
+  const deleteTemplate = async (tid) => {
+    if (!window.confirm("Delete this template?")) return;
+    try { await api.delete(`/campaign-templates/${tid}`); toast.success("Template deleted"); loadTemplates(); }
+    catch { toast.error("Delete failed"); }
+  };
+
+  const openTemplatePicker = () => { loadTemplates(); setTemplatePicker(true); };
+
+  const filtered = statusFilter ? items.filter((c) => c.status === statusFilter) : items;
 
   return (
     <div>
@@ -51,98 +82,221 @@ export default function Campaigns() {
         title="Campaigns"
         subtitle="Multi-step sequences with AI personalization and hard-stop on reply."
         right={
-          <div className="flex gap-2">
-            <button onClick={() => nav("/app/campaigns/wizard")} data-testid="btn-ai-campaign" className="btn-secondary"><Workflow size={14} /> Campaign Wizard</button>
-            <Link to="/app/campaigns/new" data-testid="btn-new-campaign" className="btn-primary"><Plus size={14} /> New campaign</Link>
+          <div className="flex items-center gap-2">
+            <button onClick={() => nav("/app/campaigns/wizard")} data-testid="btn-ai-campaign" className="btn-secondary text-xs"><Workflow size={14} /> Wizard</button>
+            <div className="relative">
+              <button onClick={() => setCreateOpen((o) => !o)} data-testid="btn-new-campaign" className="btn-primary text-xs">
+                <Plus size={14} /> Create
+                <ChevronDown size={12} className="ml-1" />
+              </button>
+              {createOpen && (
+                <div className="absolute right-0 top-full mt-1 bg-white border border-line rounded-xl shadow-card z-50 py-1 min-w-[180px]"
+                  onMouseLeave={() => setCreateOpen(false)}>
+                  <button onClick={() => { setCreateOpen(false); nav("/app/campaigns/new"); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-body hover:bg-ash text-left">
+                    <FileJson size={14} /> Blank campaign
+                  </button>
+                  <button onClick={() => { setCreateOpen(false); openTemplatePicker(); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-body hover:bg-ash text-left">
+                    <LayoutTemplate size={14} /> From template
+                  </button>
+                  <button onClick={() => { setCreateOpen(false); nav("/app/campaigns/wizard"); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-body hover:bg-ash text-left">
+                    <Workflow size={14} /> AI Wizard
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         }
       />
       <div className="animate-fade-in px-6 sm:px-8">
         {loading ? (
           <div className="card-floating p-4 border border-line bg-white overflow-x-auto rounded-2xl">
-            <table className="w-full text-table min-w-[700px]">
+            <table className="w-full text-table min-w-[800px]">
               <thead>
                 <tr className="border-b border-line">
                   <th className="table-header text-left p-4">Campaign</th>
                   <th className="table-header text-left p-4">Status</th>
+                  <th className="table-header text-right p-4">Leads</th>
                   <th className="table-header text-right p-4">Sent</th>
-                  <th className="table-header text-right p-4">Opens</th>
-                  <th className="table-header text-right p-4">Replies</th>
+                  <th className="table-header text-right p-4">Open</th>
+                  <th className="table-header text-right p-4">Reply</th>
                   <th className="table-header text-right p-4">Meetings</th>
                   <th className="p-4"></th>
                 </tr>
               </thead>
-              <tbody><SkeletonTableRows rows={5} cols={7} /></tbody>
+              <tbody><SkeletonTableRows rows={5} cols={8} /></tbody>
             </table>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="shadow-card p-10 text-center rounded-2xl">
-            <div className="text-section font-display font-semibold">No campaigns yet</div>
-            <p className="text-body text-ink-muted mt-2">Create your first sequence to start booking meetings.</p>
-            <Link to="/app/campaigns/new" className="btn-primary mt-6 inline-flex">Create campaign</Link>
           </div>
         ) : (
-          <div className="card-floating p-4 border border-line bg-white overflow-x-auto rounded-2xl">
-            <table className="w-full text-table min-w-[700px]">
-              <thead>
-                <tr className="border-b border-line">
-                  <th className="table-header text-left p-4">Campaign</th>
-                  <th className="table-header text-left p-4">Status</th>
-                  <th className="table-header text-right p-4">Sent</th>
-                  <th className="table-header text-right p-4">Opens</th>
-                  <th className="table-header text-right p-4">Replies</th>
-                  <th className="table-header text-right p-4">Meetings</th>
-                  <th className="p-4"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((c) => (
-                  <tr key={c.id} className="border-b border-line hover:bg-surfacehover transition-colors duration-150">
-                    <td className="p-4">
-                      <Link to={`/app/campaigns/${c.id}`} data-testid={`campaign-row-${c.id}`} className="font-medium hover:text-ink">{c.name}</Link>
-                      <div className="text-tiny text-ink-muted font-mono">{c.steps?.length || 0} steps · {c.lead_ids?.length || 0} leads</div>
-                      {c.lead_ids?.length > 0 && (
-                        <div className="text-tiny text-ink-muted font-mono mt-0.5">
-                          {c.lead_ids.length} lead{c.lead_ids.length === 1 ? "" : "s"} · {(c.personalized_emails || []).filter((p) => p.status === "approved").length} approved
-                        </div>
-                      )}
-                    </td>
-                    <td className="p-4">
-                      <StatusBadge status={c.status} />
-                    </td>
-                    <td className="p-4 text-right font-mono">{c.stats?.sent || 0}</td>
-                    <td className="p-4 text-right font-mono">{c.stats?.opened || 0}</td>
-                    <td className="p-4 text-right font-mono">{c.stats?.replied || 0}</td>
-                    <td className="p-4 text-right font-mono">{c.stats?.meetings || 0}</td>
-                    <td className="p-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {c.status === "active" ? (
-                          <button data-testid={`pause-${c.id}`} onClick={() => pause(c.id)} className="btn-ghost text-xs"><Pause size={12} />Pause</button>
-                        ) : (
-                          <button data-testid={`launch-${c.id}`} onClick={() => launch(c.id)} className="btn-ghost text-xs text-ink"><Play size={12} />Launch</button>
-                        )}
-                        <button data-testid={`delete-${c.id}`} onClick={() => remove(c.id)} className="btn-ghost text-xs text-danger hover:text-danger"><Trash2 size={12} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+                className="border border-line px-2 py-1.5 rounded-sm text-caption">
+                <option value="">All statuses</option>
+                <option value="draft">Draft</option>
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+                <option value="completed">Completed</option>
+              </select>
+              <span className="text-tiny text-ink-muted font-mono">{filtered.length} campaign{filtered.length === 1 ? "" : "s"}</span>
+            </div>
+
+            {filtered.length === 0 ? (
+              <div className="shadow-card p-10 text-center rounded-2xl">
+                <div className="text-section font-display font-semibold">No campaigns yet</div>
+                <p className="text-body text-ink-muted mt-2">Create your first sequence to start booking meetings.</p>
+                <div className="flex items-center justify-center gap-3 mt-6">
+                  <button onClick={() => nav("/app/campaigns/new")} className="btn-primary">Blank campaign</button>
+                  <button onClick={openTemplatePicker} className="btn-secondary">From template</button>
+                  <button onClick={() => nav("/app/campaigns/wizard")} className="btn-secondary">AI Wizard</button>
+                </div>
+              </div>
+            ) : (
+              <div className="card-floating border border-line bg-white overflow-x-auto rounded-2xl">
+                <table className="w-full text-table min-w-[900px]">
+                  <thead>
+                    <tr className="border-b border-line bg-ash/50">
+                      <th className="table-header text-left p-3">Campaign</th>
+                      <th className="table-header text-left p-3">Status</th>
+                      <th className="table-header text-right p-3">Leads</th>
+                      <th className="table-header text-right p-3">Sent</th>
+                      <th className="table-header text-right p-3">Open</th>
+                      <th className="table-header text-right p-3">Reply</th>
+                      <th className="table-header text-right p-3">Meetings</th>
+                      <th className="p-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((c) => (
+                      <tr key={c.id} className="border-b border-line hover:bg-surfacehover transition-colors duration-150">
+                        <td className="p-3">
+                          <Link to={`/app/campaigns/${c.id}`} data-testid={`campaign-row-${c.id}`}
+                            className="font-medium text-body hover:text-accent">{c.name}</Link>
+                          <div className="text-tiny text-ink-muted font-mono mt-0.5">
+                            {c.step_count || 0} steps · {c.duration_days || 0}d
+                          </div>
+                        </td>
+                        <td className="p-3"><StatusBadge status={c.status} /></td>
+                        <td className="p-3 text-right font-mono text-sm">{c.lead_count || 0}</td>
+                        <td className="p-3 text-right font-mono text-sm">{c.stats?.sent || 0}</td>
+                        <td className="p-3 text-right">
+                          <div className="font-mono text-sm">{c.stats?.open_rate || 0}%</div>
+                          <div className="text-tiny text-ink-muted">{c.stats?.opened || 0}</div>
+                        </td>
+                        <td className="p-3 text-right">
+                          <div className="font-mono text-sm">{c.stats?.reply_rate || 0}%</div>
+                          <div className="text-tiny text-ink-muted">{c.stats?.replied || 0}</div>
+                        </td>
+                        <td className="p-3 text-right font-mono text-sm">{c.stats?.meetings || 0}</td>
+                        <td className="p-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {c.status === "draft" && (
+                              <button onClick={() => launch(c.id)}
+                                className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Launch">
+                                <Play size={14} />
+                              </button>
+                            )}
+                            {c.status === "active" && (
+                              <button onClick={() => pause(c.id)}
+                                className="p-1.5 text-ink-muted hover:text-warning rounded hover:bg-ash" title="Pause">
+                                <Pause size={14} />
+                              </button>
+                            )}
+                            {c.status === "paused" && (
+                              <button onClick={() => launch(c.id)}
+                                className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Resume">
+                                <Play size={14} />
+                              </button>
+                            )}
+                            <button onClick={() => duplicate(c)}
+                              className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Duplicate">
+                              <Copy size={14} />
+                            </button>
+                            <button onClick={() => saveTemplate(c)}
+                              className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Save as template">
+                              <LayoutTemplate size={14} />
+                            </button>
+                            <button onClick={() => remove(c.id)}
+                              className="p-1.5 text-ink-muted hover:text-danger rounded hover:bg-ash" title="Delete">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {templatePicker && (
+        <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50">
+          <div className="bg-white border border-line p-6 rounded-2xl w-full max-w-lg space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-section font-display font-semibold">Create from template</div>
+              <button onClick={() => setTemplatePicker(false)} className="text-ink-muted hover:text-ink"><X size={16} /></button>
+            </div>
+            {templates.length === 0 ? (
+              <div className="text-body text-ink-muted py-6 text-center">
+                No templates yet. Save a campaign as a template first.
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {templates.map((t) => (
+                  <div key={t.id} className="flex items-center justify-between p-3 rounded-xl border border-line hover:bg-ash">
+                    <div>
+                      <div className="text-body font-medium">{t.name}</div>
+                      <div className="text-tiny text-ink-muted font-mono">{t.steps?.length || 0} steps · {t.description}</div>
+                    </div>
+                    <button onClick={async () => {
+                      try {
+                        const r = await api.post("/campaigns", {
+                          name: `${t.name}`,
+                          goal: t.goal || "Book meetings",
+                          campaign_type: t.campaign_type || "ai",
+                          steps: t.steps || [],
+                          lead_ids: [],
+                          send_window_start: t.send_window_start || "09:00",
+                          send_window_end: t.send_window_end || "17:00",
+                          timezone: t.timezone || "UTC",
+                          batch_size: t.batch_size || 10,
+                        });
+                        toast.success("Created from template");
+                        setTemplatePicker(false);
+                        nav(`/app/campaigns/${r.data.id}`);
+                      } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+                    }}
+                      className="btn-primary text-xs">Use</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end pt-2">
+              <button onClick={() => setTemplatePicker(false)} className="btn-secondary text-xs">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function StatusBadge({ status }) {
   const map = {
-    draft: "text-ink-muted border-neutral-300",
-    active: "text-success border-success",
-    paused: "text-warning border-warning",
-    completed: "text-ink-muted border-line",
+    draft: "bg-neutral-100 text-ink-muted border-line",
+    active: "bg-success/10 text-success border-success/30",
+    paused: "bg-warning/10 text-warning border-warning/30",
+    completed: "bg-ink/5 text-ink-muted border-line",
   };
   return (
-    <span className={`ui-label inline-block px-2 py-1 border ${map[status] || map.draft}`}>{status}</span>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-tiny font-medium border ${map[status] || map.draft}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${status === "active" ? "bg-success animate-pulse" : status === "paused" ? "bg-warning" : "bg-ink-muted"}`} />
+      {status}
+    </span>
   );
 }
