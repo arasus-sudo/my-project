@@ -143,3 +143,45 @@ def test_veo_poll_without_key_returns_not_done_with_error(monkeypatch):
     result = asyncio.run(veo_client.poll_video_job("operations/fake"))
     assert result["done"] is False
     assert result["error"]
+
+
+# ============================ WhatsApp EQ: automated agent helpers ============
+def test_placeholder_email_is_pydantic_valid():
+    """The whole point of this helper: unlike the pre-existing `@unknown`
+    synthetic-email convention, this one must actually pass EmailStr
+    validation (BookingIn.guest_email is Pydantic-validated, lead docs are not)."""
+    import whatsapp_eq
+    from pydantic import BaseModel, EmailStr
+
+    class _M(BaseModel):
+        e: EmailStr
+
+    email = whatsapp_eq._valid_placeholder_email("abcd1234efgh")
+    _M(e=email)  # must not raise
+
+
+def test_is_synthetic_email_recognises_both_placeholder_conventions():
+    import whatsapp_eq
+    assert whatsapp_eq._is_synthetic_email("wa-abcd1234@unknown")
+    assert whatsapp_eq._is_synthetic_email(whatsapp_eq._valid_placeholder_email("abcd1234"))
+    assert not whatsapp_eq._is_synthetic_email("real.customer@gmail.com")
+    assert not whatsapp_eq._is_synthetic_email("")
+
+
+def test_whatsapp_chunk_splits_on_size_and_keeps_all_words():
+    import whatsapp_eq
+    text = " ".join(f"word{i}" for i in range(500))
+    chunks = whatsapp_eq._chunk(text, size=100)
+    assert len(chunks) > 1
+    # No word lost across the split — reconstructing every chunk's words
+    # back into a set must match the original set (order doesn't matter here,
+    # just that chunking never drops content).
+    assert set(" ".join(chunks).split()) == set(text.split())
+
+
+def test_whatsapp_clean_reply_strips_markdown_and_citations():
+    import whatsapp_eq
+    raw = "**Sure!** Here's the *answer* [1][2].\n- point one\n- point two"
+    cleaned = whatsapp_eq._clean_reply(raw)
+    assert "**" not in cleaned and "*" not in cleaned
+    assert "[1]" not in cleaned and "[2]" not in cleaned

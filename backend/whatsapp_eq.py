@@ -802,17 +802,23 @@ async def _handle_automated_reply(conv: Dict[str, Any], wid: str, phone: str, bo
         return
 
     try:
-        chunks = await db.whatsapp_kb_chunks.find(
-            {"workspace_id": wid, "$text": {"$search": body}}, {"_id": 0, "content": 1, "page_url": 1},
-        ).limit(TOP_K_CHUNKS).to_list(TOP_K_CHUNKS)
-
-        if not chunks or not ANTHROPIC_API_KEY:
+        if not ANTHROPIC_API_KEY:
             await _send_and_log(cid, phone, "I don't have that on file yet — I've let our team know so a person can follow up.")
             await db.whatsapp_conversations.update_one({"id": cid}, {"$set": {"status": "needs_human", "updated_at": now_iso()}})
             return
 
+        # No KB match is only a dead end for FAQ intent — book_meeting/callback/
+        # share_link don't depend on crawled content at all, so a "how do I pay"
+        # message shouldn't hand off just because the text index found nothing.
+        # The LLM still sees an honest "no matching content" context and is told
+        # (below) never to invent facts for a faq answer specifically.
+        chunks = await db.whatsapp_kb_chunks.find(
+            {"workspace_id": wid, "$text": {"$search": body}}, {"_id": 0, "content": 1, "page_url": 1},
+        ).limit(TOP_K_CHUNKS).to_list(TOP_K_CHUNKS)
+
         bv = await _get_brand_voice(wid)
-        context = "\n\n".join(f"[{c.get('page_url') or 'document'}]\n{c['content']}" for c in chunks)
+        context = "\n\n".join(f"[{c.get('page_url') or 'document'}]\n{c['content']}" for c in chunks) \
+            if chunks else "(no matching knowledge base content for this message)"
         history = conv.get("messages", [])[-6:]
         history_text = "\n".join(f"{m.get('direction', '')}: {m.get('body', '')}" for m in history)
 

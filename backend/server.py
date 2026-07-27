@@ -208,6 +208,8 @@ class CampaignIn(BaseModel):
     signature_id: Optional[str] = None
     batch_size: int = 10
     phased_generation: bool = False
+    folder_id: Optional[str] = None
+    tags: List[str] = []
 
 
 class SignatureIn(BaseModel):
@@ -1671,6 +1673,42 @@ async def pause_campaign(cid: str, user=Depends(current_user)):
     await db.campaigns.update_one(
         {"id": cid, "workspace_id": user["workspace_id"]},
         {"$set": {"status": "paused"}},
+    )
+    return {"ok": True}
+
+
+@api.post("/campaigns/{cid}/complete")
+async def complete_campaign(cid: str, user=Depends(current_user)):
+    await db.campaigns.update_one(
+        {"id": cid, "workspace_id": user["workspace_id"]},
+        {"$set": {"status": "completed", "completed_at": now_iso()}},
+    )
+    return {"ok": True}
+
+
+@api.post("/campaigns/{cid}/archive")
+async def archive_campaign(cid: str, user=Depends(current_user)):
+    allowed = ["completed", "draft", "paused"]
+    c = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0, "status": 1})
+    if not c:
+        raise HTTPException(404, "not found")
+    if c.get("status") not in allowed:
+        raise HTTPException(400, f"Cannot archive a {c['status']} campaign. Pause or complete it first.")
+    await db.campaigns.update_one(
+        {"id": cid, "workspace_id": user["workspace_id"]},
+        {"$set": {"status": "archived", "archived_at": now_iso()}},
+    )
+    return {"ok": True}
+
+
+@api.post("/campaigns/{cid}/quarantine")
+async def quarantine_campaign(cid: str, user=Depends(current_user)):
+    c = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0, "status": 1})
+    if not c:
+        raise HTTPException(404, "not found")
+    await db.campaigns.update_one(
+        {"id": cid, "workspace_id": user["workspace_id"]},
+        {"$set": {"status": "quarantined", "quarantined_at": now_iso()}},
     )
     return {"ok": True}
 
@@ -3311,6 +3349,47 @@ async def delete_campaign_template(tid: str, user=Depends(current_user)):
     return {"ok": True}
 
 
+# ----------------------------- Campaign Folders --------------------------------
+class FolderIn(BaseModel):
+    name: str
+    color: Optional[str] = None
+
+
+@api.get("/campaign-folders")
+async def list_campaign_folders(user=Depends(current_user)):
+    return await db.campaign_folders.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).sort("name", 1).to_list(100)
+
+
+@api.post("/campaign-folders")
+async def create_campaign_folder(body: FolderIn, user=Depends(current_user)):
+    f = body.model_dump()
+    f.update({"id": new_id(), "workspace_id": user["workspace_id"], "created_at": now_iso()})
+    await db.campaign_folders.insert_one(f)
+    f.pop("_id", None)
+    return f
+
+
+@api.put("/campaign-folders/{fid}")
+async def update_campaign_folder(fid: str, body: FolderIn, user=Depends(current_user)):
+    await db.campaign_folders.update_one(
+        {"id": fid, "workspace_id": user["workspace_id"]},
+        {"$set": {"name": body.name, "color": body.color}},
+    )
+    return await db.campaign_folders.find_one({"id": fid}, {"_id": 0})
+
+
+@api.delete("/campaign-folders/{fid}")
+async def delete_campaign_folder(fid: str, user=Depends(current_user)):
+    await db.campaign_folders.delete_one({"id": fid, "workspace_id": user["workspace_id"]})
+    await db.campaigns.update_many(
+        {"folder_id": fid, "workspace_id": user["workspace_id"]},
+        {"$set": {"folder_id": None}},
+    )
+    return {"ok": True}
+
+
 # ----------------------------- Team & Invites --------------------------------
 ROLES = {"org_admin", "campaign_manager", "sdr", "viewer"}
 
@@ -3388,6 +3467,38 @@ async def analytics_campaigns(user=Depends(current_user)):
             })
         out.append({"id": c["id"], "name": c["name"], "status": c["status"], "by_step": by_step})
     return out
+
+
+@api.get("/campaigns/{cid}/ab-test-results")
+async def campaign_ab_test_results(cid: str, user=Depends(current_user)):
+    """Return A/B test variant performance for a campaign."""
+    events = await db.events.find({"campaign_id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(5000)
+    queue = await db.send_queue.find(
+        {"campaign_id": cid, "workspace_id": user["workspace_id"], "ab_variant": {"$ne": None}},
+        {"_id": 0, "ab_variant": 1, "id": 1},
+    ).to_list(2000)
+    variant_map = {q["id"]: q.get("ab_variant", "A") for q in queue}
+    a_sent = b_sent = a_opened = b_opened = a_replied = b_replied = 0
+    for e in events:
+        v = variant_map.get(e.get("queue_id", ""))
+        if not v:
+            continue
+        if v == "A":
+            a_sent += 1 if e["type"] == "sent" else 0
+            a_opened += 1 if e["type"] == "opened" else 0
+            a_replied += 1 if e["type"] == "replied" else 0
+        else:
+            b_sent += 1 if e["type"] == "sent" else 0
+            b_opened += 1 if e["type"] == "opened" else 0
+            b_replied += 1 if e["type"] == "replied" else 0
+    return {
+        "variant_a": {"sent": a_sent, "opened": a_opened, "replied": a_replied,
+                       "open_rate": round(a_opened / a_sent * 100, 1) if a_sent else 0,
+                       "reply_rate": round(a_replied / a_sent * 100, 1) if a_sent else 0},
+        "variant_b": {"sent": b_sent, "opened": b_opened, "replied": b_replied,
+                       "open_rate": round(b_opened / b_sent * 100, 1) if b_sent else 0,
+                       "reply_rate": round(b_replied / b_sent * 100, 1) if b_sent else 0},
+    }
 
 
 @api.get("/analytics/mailboxes")

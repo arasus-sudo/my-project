@@ -19,6 +19,17 @@ log = logging.getLogger(__name__)
 MAX_PER_TICK = 25
 RETRY_BACKOFF_MIN = 15
 
+# Bounce threshold for auto-quarantine (>2%).
+BOUNCE_QUARANTINE_THRESHOLD = 0.02
+
+
+def _resolve_spintax(text: str) -> str:
+    """Parse and resolve spintax: '{Hi|Hello|Hey}' -> random pick."""
+    import random
+    def _replace(m):
+        return random.choice(m.group(1).split("|"))
+    return re.sub(r"\{([^}]+)\}", _replace, text or "")
+
 CHANNEL_ICONS = {
     "email": "✉", "phone_call": "📞", "sms": "💬", "whatsapp": "📱",
     "linkedin_connect": "🔗", "linkedin_message": "💌", "linkedin_comment": "🗨",
@@ -122,6 +133,10 @@ async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[
             }
 
             if channel == "email":
+                import random as _rnd
+                ab_subj = step.get("ab_variant_subject", "")
+                ab_body = step.get("ab_variant_body", "")
+                use_variant = bool(ab_subj or ab_body)
                 if step_idx == 0:
                     subject = personal.get("subject", step.get("subject", ""))
                     body_html = personal.get("body_html", step.get("body_html") or step.get("body", ""))
@@ -131,6 +146,15 @@ async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[
                     subject = _apply_opener(step.get("subject", ""), opener)
                     body_html = _apply_opener(step.get("body_html") or step.get("body", ""), opener)
                     body_text = _apply_opener(step.get("body_text") or step.get("body", ""), opener)
+                if use_variant:
+                    variant_letter = _rnd.choice(["A", "B"])
+                    if variant_letter == "B":
+                        if ab_subj:
+                            subject = ab_subj if step_idx > 0 else personal.get("subject", ab_subj)
+                        if ab_body:
+                            body_html = ab_body if step_idx > 0 else personal.get("body_html", ab_body)
+                            body_text = ab_body
+                    queue_item["ab_variant"] = variant_letter
                 if signature_html and body_html:
                     body_html = body_html + "<br><br>" + signature_html
                 if signature_text and body_text:
@@ -248,6 +272,24 @@ async def run_send_tick(base_url: str = "") -> int:
             "channel": channel,
         })
         sent += 1
+
+    if sent:
+        touched_campaigns = set(row["campaign_id"] for row in due[:sent])
+        for cid in touched_campaigns:
+            events = await db.events.find(
+                {"campaign_id": cid, "workspace_id": row["workspace_id"]},
+                {"_id": 0, "type": 1},
+            ).to_list(2000)
+            total = len(events)
+            bounces = sum(1 for e in events if e.get("type") == "bounced")
+            if total > 20 and bounces / total > BOUNCE_QUARANTINE_THRESHOLD:
+                await db.campaigns.update_one({"id": cid}, {"$set": {"status": "quarantined", "quarantined_at": now_iso()}})
+                log.warning("auto-quarantined campaign %s: bounce rate %.1f%%", cid, bounces / total * 100)
+            else:
+                remaining = await db.send_queue.count_documents({"campaign_id": cid, "status": "pending"})
+                if remaining == 0:
+                    await db.campaigns.update_one({"id": cid}, {"$set": {"status": "completed", "completed_at": now_iso()}})
+                    log.info("auto-completed campaign %s", cid)
 
     log.info("run_send_tick: sent %s item(s)", sent)
     return sent
@@ -448,7 +490,7 @@ async def _mark_sent(mailbox: Dict[str, Any]):
 
 
 def _render(row: Dict[str, Any], lead: Dict[str, Any]) -> tuple:
-    """Substitute {{merge_fields}} against the lead for email."""
+    """Substitute {{merge_fields}} then resolve spintax for email."""
     import re
 
     def sub(s: str) -> str:
@@ -456,9 +498,9 @@ def _render(row: Dict[str, Any], lead: Dict[str, Any]) -> tuple:
             return str(lead.get(m.group(1).strip(), "") or "")
         return re.sub(r"\{\{\s*(\w+)\s*\}\}", rep, s or "")
 
-    subject = sub(row.get("subject", ""))
-    text = sub(row.get("body_text", ""))
-    html = sub(row.get("body_html", "")) or "".join(
+    subject = _resolve_spintax(sub(row.get("subject", "")))
+    text = _resolve_spintax(sub(row.get("body_text", "")))
+    html = _resolve_spintax(sub(row.get("body_html", ""))) or "".join(
         f"<p>{p}</p>" for p in text.split("\n\n") if p.strip())
     return subject, html, text
 

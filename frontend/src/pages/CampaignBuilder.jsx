@@ -145,6 +145,9 @@ export default function CampaignBuilder() {
   const [batchSize, setBatchSize] = useState(10);
   const [phasedGeneration, setPhasedGeneration] = useState(false);
   const [batchStatus, setBatchStatus] = useState(null);
+  const [folderId, setFolderId] = useState("");
+  const [folders, setFolders] = useState([]);
+  const [campaignTags, setCampaignTags] = useState("");
   const [advancingBatch, setAdvancingBatch] = useState(false);
   const [showEqPanel, setShowEqPanel] = useState(true);
   const [showStepsPanel, setShowStepsPanel] = useState(true);
@@ -185,6 +188,7 @@ export default function CampaignBuilder() {
   useEffect(() => {
     api.get("/leads?page_size=2000").then((r) => setLeads(r.data.items || r.data));
     api.get("/crm/lists").then((r) => setLeadLists(r.data || [])).catch(() => {});
+    api.get("/campaign-folders").then((r) => setFolders(r.data || [])).catch(() => {});
     if (id) {
       api.get(`/campaigns/${id}`).then((r) => {
         const c = r.data;
@@ -200,6 +204,8 @@ export default function CampaignBuilder() {
         if (c.send_window_start) setSendWindowStart(c.send_window_start);
         if (c.send_window_end) setSendWindowEnd(c.send_window_end);
         if (c.timezone) setTimezone(c.timezone);
+        if (c.folder_id) setFolderId(c.folder_id);
+        if (c.tags?.length) setCampaignTags(c.tags.join(", "));
         setBatchSize(c.batch_size || 10);
         setPhasedGeneration(c.phased_generation || false);
       });
@@ -637,7 +643,7 @@ export default function CampaignBuilder() {
         body_html: sanitizeEmailHtml(rest.body_html || rest.body || ""),
         body_text: htmlToText(rest.body_html || "") || rest.body || "",
       }));
-      const payload = { name, goal, campaign_type: campaignType, steps: cleanSteps, lead_ids: selectedLeads, signature_id: signatureId || null, send_window_start: sendWindowStart, send_window_end: sendWindowEnd, timezone, batch_size: batchSize, phased_generation: phasedGeneration };
+      const payload = { name, goal, campaign_type: campaignType, steps: cleanSteps, lead_ids: selectedLeads, signature_id: signatureId || null, send_window_start: sendWindowStart, send_window_end: sendWindowEnd, timezone, batch_size: batchSize, phased_generation: phasedGeneration, folder_id: folderId || null, tags: campaignTags ? campaignTags.split(",").map((t) => t.trim()).filter(Boolean) : [] };
       let cid = activeCampaignId || id;
       if (!cid) {
         const { data } = await api.post("/campaigns", payload);
@@ -869,6 +875,21 @@ export default function CampaignBuilder() {
           <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-ink-muted pointer-events-none" size={14} />
         </div>
       </div>
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-line">
+            <label className="form-label">Folder</label>
+            <select value={folderId} onChange={(e) => setFolderId(e.target.value)}
+              className="w-full border border-line px-2 py-1.5 rounded-lg text-caption mt-1">
+              <option value="">No folder</option>
+              {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </div>
+          <div className="mt-2">
+            <label className="form-label">Tags (comma-separated)</label>
+            <input value={campaignTags} onChange={(e) => setCampaignTags(e.target.value)}
+              placeholder="e.g. outbound, q4, ae-target"
+              className="w-full border border-line px-2 py-1.5 rounded-lg text-caption mt-1" />
           </div>
 
           <div className="ui-label mt-6 mb-2">Leads ({selectedLeads.length}/{leads.length})</div>
