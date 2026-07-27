@@ -105,6 +105,9 @@ CREDIT_COSTS: Dict[str, int] = {
     "sms_reply_suggest": 1,
     "candidate_score": 5,          # AI resume/fit analysis, same tier as lead_enrichment
     "bill_categorize_suggest": 1,  # single small LLM call, same tier as email_ai
+    "social_setup": 8,             # richer LLM call with crawl input, matches site_crawl's tier
+    "social_organiser_qc": 1,      # single small compliance check, same tier as social_reply_suggest
+    "social_insights": 2,          # one batched weekly-analytics summary call
     # Sending, tracking and reply-polling are deliberately absent = free. We never
     # charge for delivery, or for reading data you already own.
 }
@@ -133,6 +136,9 @@ ACTION_LABELS = {
     "sms_reply_suggest": "SMS AI reply suggested",
     "candidate_score": "Candidate AI-scored",
     "bill_categorize_suggest": "Bill category suggested",
+    "social_setup": "Brand positioning analyzed",
+    "social_organiser_qc": "Post checked against brand guidelines",
+    "social_insights": "Weekly performance insights",
 }
 
 ACTION_AGENT = {
@@ -157,6 +163,9 @@ ACTION_AGENT = {
     "sms_reply_suggest": "sms",
     "candidate_score": "hrms",
     "bill_categorize_suggest": "accounting",
+    "social_setup": "social",
+    "social_organiser_qc": "social",
+    "social_insights": "social",
 }
 
 
@@ -490,7 +499,8 @@ async def stripe_webhook(request: Request):
         try:
             event = stripe.Webhook.construct_event(raw, sig, STRIPE_WEBHOOK_SECRET)
         except Exception as ex:
-            raise HTTPException(400, f"signature verification failed: {ex}")
+            logger.warning("Stripe webhook signature verification failed")
+            raise HTTPException(400, "signature verification failed")
 
     etype = event.get("type")
     obj = (event.get("data") or {}).get("object") or {}

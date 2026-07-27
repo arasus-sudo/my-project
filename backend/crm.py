@@ -213,7 +213,7 @@ async def list_all_lead_ids(
 ):
     query = _active(user["workspace_id"])
     if search:
-        q = search.strip().lower()
+        q = re.escape(search.strip().lower())
         query["$or"] = [
             {"first_name": {"$regex": q, "$options": "i"}},
             {"last_name": {"$regex": q, "$options": "i"}},

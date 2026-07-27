@@ -40,19 +40,14 @@ mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ["DB_NAME"]]
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "pitcheq-dev-secret-change-me")
+JWT_SECRET = os.environ.get("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError(
+        "FATAL: JWT_SECRET environment variable is not set. "
+        "Generate one with: openssl rand -hex 32"
+    )
 JWT_ALG = "HS256"
 JWT_TTL_HOURS = 24 * 7
-
-# Deployment environment. "dev" (default) keeps local-friendly fallbacks;
-# anything else (staging/production) makes insecure defaults fatal at boot
-# rather than silently shipping them.
-APP_ENV = os.environ.get("ENV", "dev").lower()
-if APP_ENV != "dev" and JWT_SECRET == "pitcheq-dev-secret-change-me":
-    raise RuntimeError(
-        "FATAL: JWT_SECRET is still the built-in dev default but ENV=%s. "
-        "Set a strong JWT_SECRET before deploying." % APP_ENV
-    )
 
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 # Where the recipient's mail client reaches the open pixel / click redirect. Must
@@ -80,7 +75,7 @@ bearer = HTTPBearer(auto_error=False)
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     logger.error("Unhandled exception: %s", exc, exc_info=True)
-    return JSONResponse(status_code=500, content={"detail": f"Internal server error: {exc}"})
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 limiter = Limiter(key_func=get_remote_address, default_limits=[])
 app.state.limiter = limiter
@@ -107,11 +102,11 @@ def verify_pw(pw: str, hashed: str) -> bool:
         return False
 
 
-def make_token(user_id: str, workspace_id: str) -> str:
+def make_token(user_id: str, workspace_id: str, ttl_hours: Optional[float] = None) -> str:
     payload = {
         "uid": user_id,
         "wid": workspace_id,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_TTL_HOURS),
+        "exp": datetime.now(timezone.utc) + timedelta(hours=ttl_hours or JWT_TTL_HOURS),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
 
@@ -713,7 +708,7 @@ async def launch_campaign(cid: str, skip_pending: bool = False, user=Depends(cur
         raise HTTPException(400, str(ex))
     except Exception as ex:
         logger.error("enqueue_campaign crashed\n%s", _tb())
-        raise HTTPException(500, f"Campaign engine error: {ex}")
+        raise HTTPException(500, "Campaign engine error")
 
     await db.campaigns.update_one({"id": cid}, {"$set": {"status": "active", "launched_at": now_iso()}})
     await _audit(user, "campaign.launch", {"campaign_id": cid, **result})
@@ -1986,6 +1981,16 @@ def _crawl_text(url: str) -> str:
 def _fetch_url(url: str) -> str:
     if not url.startswith("http"):
         url = "https://" + url
+    from urllib.parse import urlparse
+    import socket
+    try:
+        host = urlparse(url).hostname
+        ip = socket.gethostbyname(host)
+        priv = ip.startswith(("127.", "10.", "169.254.", "192.168.", "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31."))
+        if priv or ip == "::1" or ip == "0.0.0.0":
+            return ""
+    except Exception:
+        return ""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 PitchEQ"})
         with urllib.request.urlopen(req, timeout=6) as r:
@@ -2153,12 +2158,22 @@ async def onb_accept(body: OnbAcceptIn, user=Depends(current_user)):
 
 
 # ----------------------------- Brand voice (company profile) -----------------
+class PostingCadence(BaseModel):
+    days_per_week: int = 3
+    preferred_platforms: List[str] = []
+
+
 class BrandVoiceIn(BaseModel):
     tone: str = "warm"
     offer: str = ""
     icp_description: str = ""
     banned_phrases: List[str] = []
     sample: str = ""
+    # Social EQ additions — same document, not a parallel "positioning profile".
+    content_pillars: List[str] = []
+    posting_cadence: PostingCadence = PostingCadence()
+    persona_type: Optional[str] = None  # individual|influencer|enterprise|startup|solo_company
+    brand_kit_id: Optional[str] = None  # which db.brandkits doc content generation should use
 
 
 @api.get("/workspace/brand-voice")
@@ -2169,6 +2184,10 @@ async def get_brand_voice(user=Depends(current_user)):
         "tone": bv.get("tone", "warm"), "offer": bv.get("offer", ""),
         "icp_description": bv.get("icp_description", ""),
         "banned_phrases": bv.get("banned_phrases", []), "sample": bv.get("sample", ""),
+        "content_pillars": bv.get("content_pillars", []),
+        "posting_cadence": bv.get("posting_cadence") or {"days_per_week": 3, "preferred_platforms": []},
+        "persona_type": bv.get("persona_type"),
+        "brand_kit_id": bv.get("brand_kit_id"),
     }
 
 
@@ -3479,13 +3498,21 @@ async def admin_whoami(user=Depends(current_user)):
 
 
 @api.post("/admin/impersonate/{uid}")
-async def impersonate(uid: str, admin=Depends(require_admin)):
+@limiter.limit("5/minute")
+async def impersonate(request: Request, uid: str, admin=Depends(require_admin)):
     target = await db.users.find_one({"id": uid}, {"_id": 0})
     if not target:
         raise HTTPException(404, "not found")
-    token = make_token(target["id"], target["workspace_id"])
-    await _audit(admin, "admin.impersonate", {"target_user_id": uid, "target_email": target.get("email")})
+    token = make_token(target["id"], target["workspace_id"], ttl_hours=1)
+    await _audit(admin, "admin.impersonate", {
+        "target_user_id": uid,
+        "target_email": target.get("email"),
+        "ip": request.client.host if request.client else None,
+        "user_agent": request.headers.get("user-agent"),
+    })
     return {"token": token,
+            "token_type": "impersonation",
+            "expires_in_hours": 1,
             "user": {"id": target["id"], "email": target["email"], "name": target["name"], "is_admin": _is_admin(target)},
             "workspace": await db.workspaces.find_one({"id": target["workspace_id"]}, {"_id": 0})}
 
@@ -4107,6 +4134,7 @@ async def _create_indexes():
         await db.dedup_candidates.create_index([("workspace_id", 1), ("status", 1)])
         await db.dedup_candidates.create_index([("workspace_id", 1), ("lead_id_a", 1), ("lead_id_b", 1)])
         await db.custom_field_defs.create_index([("workspace_id", 1), ("entity", 1), ("order", 1)])
+        await db.social_insights.create_index([("workspace_id", 1), ("generated_at", -1)])
         # -- SMS EQ indexes --
         await db.sms_templates.create_index([("workspace_id", 1), ("id", 1)])
         await db.sms_contacts.create_index([("workspace_id", 1), ("id", 1)])
@@ -4173,7 +4201,10 @@ async def _start_scheduler():
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         from schedule_eq import run_reminder_tick
         from sender import run_send_tick, run_reply_tick
-        from social_eq import run_social_publish_tick, run_social_engagement_tick, run_rss_poll_tick
+        from social_eq import (
+            run_social_publish_tick, run_social_engagement_tick, run_rss_poll_tick,
+            run_social_insights_tick, run_daily_social_content_tick,
+        )
         from site_eq import run_site_recrawl_tick
         from sms_eq import run_sms_send_tick
         from whatsapp_eq import run_whatsapp_send_tick
@@ -4227,21 +4258,32 @@ async def _start_scheduler():
         # auto-merges. Hourly is plenty; this is a review queue, not a live path.
         scheduler.add_job(run_dedup_scan_tick, "interval", hours=1,
                           id="crm_dedup_scan", max_instances=1, coalesce=True)
+        # Feedback Master: summarizes each workspace's last 7 days of published-post
+        # performance into a short "what worked / try next" note the daily content
+        # tick below reads back — daily is enough, this isn't a live path.
+        scheduler.add_job(run_social_insights_tick, "interval", hours=24,
+                          id="social_insights", max_instances=1, coalesce=True)
+        # The Social Branding Assistant loop's daily generation step: for every
+        # workspace that's completed setup, draft + QC today's post(s) and send
+        # the same approval digest bulk-import/RSS already use.
+        scheduler.add_job(run_daily_social_content_tick, "interval", hours=24,
+                          id="social_daily_content", max_instances=1, coalesce=True)
         scheduler.start()
         logger.info("scheduler started (reminders 15m, sends 2m, reply polling 10m, "
                    "social publish 2m, social engagement 10m, RSS poll 30m, site recrawl 24h, "
-                   "sms send 2m, whatsapp send 2m, recycle bin purge 24h, dedup scan 1h)")
+                   "sms send 2m, whatsapp send 2m, recycle bin purge 24h, dedup scan 1h, "
+                   "social insights 24h, social daily content 24h)")
     except Exception as ex:
         logger.warning("scheduler failed to start: %s", ex)
 
 
 # ── Lead Intelligence Provider Manager ──────────────────────────────
-cors_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
-if APP_ENV != "dev" and cors_origins == ["*"]:
-    raise RuntimeError("FATAL: CORS_ORIGINS is '*' but ENV=%s. Set explicit origins in production." % APP_ENV)
+cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
+if cors_origins == ["*"]:
+    raise RuntimeError("FATAL: CORS_ORIGINS='*' is not allowed (would expose credentials to any site). Set explicit origins.")
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=cors_origins != ["*"],
+    allow_credentials=True,
     allow_origins=cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
