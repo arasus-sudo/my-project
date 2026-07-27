@@ -86,7 +86,7 @@ jobs:
             --name ${{ env.BACKEND_NAME }} \
             --src-path /tmp/deploy.zip \
             --type zip \
-            --timeout 900 \
+            --timeout 1200 \
             --verbose
 
       - name: Verify deployment
