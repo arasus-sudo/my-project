@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, isCreditError } from "../lib/api";
 import { toast } from "sonner";
-import { Loader2, Search, X, Plus } from "lucide-react";
+import { Loader2, Search, X, Plus, Sparkles } from "lucide-react";
 
 /** Prospect Finder drawer — lead providers + LLM icebreaker */
 export default function ProspectFinder({ open, onClose, onDone }) {
@@ -13,7 +13,8 @@ export default function ProspectFinder({ open, onClose, onDone }) {
   const [leads, setLeads] = useState([]);
   const [selected, setSelected] = useState({});
   const [busy, setBusy] = useState(false);
-  const [icpDraft, setIcpDraft] = useState({ name: "", titles: "", industries: "", keywords: "", seniority: "" });
+  const [icpDraft, setIcpDraft] = useState({ name: "", titles: "", industries: "", locations: "", company_sizes: "", keywords: "", seniority: "" });
+  const [icpGenBusy, setIcpGenBusy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -72,6 +73,8 @@ export default function ProspectFinder({ open, onClose, onDone }) {
         name: icpDraft.name,
         titles: split(icpDraft.titles),
         industries: split(icpDraft.industries),
+        locations: split(icpDraft.locations),
+        company_sizes: split(icpDraft.company_sizes),
         keywords: split(icpDraft.keywords),
         seniority: split(icpDraft.seniority),
       };
@@ -79,9 +82,29 @@ export default function ProspectFinder({ open, onClose, onDone }) {
       setIcps([data, ...icps]);
       setForm({ ...form, icp_id: data.id });
       setIcpModalOpen(false);
-      setIcpDraft({ name: "", titles: "", industries: "", keywords: "", seniority: "" });
+      setIcpDraft({ name: "", titles: "", industries: "", locations: "", company_sizes: "", keywords: "", seniority: "" });
       toast.success("ICP saved");
     } catch { toast.error("ICP save failed"); }
+  };
+
+  const generateIcpFromDeals = async () => {
+    setIcpGenBusy(true);
+    try {
+      const { data } = await api.post("/icp/generate-from-deals");
+      setIcpDraft({
+        name: "Generated ICP",
+        titles: (data.titles || []).join(", "),
+        industries: (data.industries || []).join(", "),
+        locations: (data.locations || []).join(", "),
+        company_sizes: (data.company_sizes || []).join(", "),
+        keywords: (data.keywords || []).join(", "),
+        seniority: (data.seniority || []).join(", "),
+      });
+      toast.success("ICP generated from closed-won deals");
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "ICP generation failed");
+    }
+    setIcpGenBusy(false);
   };
 
   return (
@@ -180,11 +203,22 @@ export default function ProspectFinder({ open, onClose, onDone }) {
 
       {icpModalOpen && (
         <div className="fixed inset-0 bg-ink/50 flex items-center justify-center z-[60] p-4">
-          <form onSubmit={saveIcp} className="bg-white border border-line rounded-2xl p-6 w-full max-w-md space-y-3">
-            <div className="font-display font-bold text-xl">New ICP</div>
+          <form onSubmit={saveIcp} className="bg-white border border-line rounded-2xl p-6 w-full max-w-lg space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="font-display font-bold text-xl">New ICP</div>
+              <button type="button" onClick={generateIcpFromDeals} disabled={icpGenBusy}
+                className="btn-secondary text-xs">
+                {icpGenBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                Generate from won deals
+              </button>
+            </div>
             <input required placeholder="ICP name (e.g. 'SaaS founders')" value={icpDraft.name} onChange={(e) => setIcpDraft({ ...icpDraft, name: e.target.value })} data-testid="icp-name" className="w-full border border-line rounded-full px-3 py-2" />
             <input placeholder="Titles (comma-separated)" value={icpDraft.titles} onChange={(e) => setIcpDraft({ ...icpDraft, titles: e.target.value })} data-testid="icp-titles" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
             <input placeholder="Industries" value={icpDraft.industries} onChange={(e) => setIcpDraft({ ...icpDraft, industries: e.target.value })} data-testid="icp-industries" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+            <div className="grid grid-cols-2 gap-2">
+              <input placeholder="Locations (US, UK…)" value={icpDraft.locations} onChange={(e) => setIcpDraft({ ...icpDraft, locations: e.target.value })} className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+              <input placeholder="Company sizes (11-50, 51-200…)" value={icpDraft.company_sizes} onChange={(e) => setIcpDraft({ ...icpDraft, company_sizes: e.target.value })} className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+            </div>
             <input placeholder="Seniority (Director, VP, Head…)" value={icpDraft.seniority} onChange={(e) => setIcpDraft({ ...icpDraft, seniority: e.target.value })} data-testid="icp-seniority" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
             <input placeholder="Keywords / domains" value={icpDraft.keywords} onChange={(e) => setIcpDraft({ ...icpDraft, keywords: e.target.value })} data-testid="icp-keywords" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
             <div className="flex justify-end gap-2 pt-2">

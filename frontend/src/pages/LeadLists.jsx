@@ -246,13 +246,12 @@ export default function LeadLists() {
                       })}
                       <div className="flex items-center justify-between px-4 py-2 border-t border-line">
                         <span className="text-tiny text-ink-muted">
-                          Page {listPage} · {totalPages} ({listTotal} leads)
+                          {listTotal} lead{listTotal === 1 ? "" : "s"} · page {listPage} of {totalPages || 1}
                         </span>
                         <div className="flex items-center gap-1">
                           <button disabled={listPage <= 1}
                             onClick={() => changeListPage(l.id, listPage - 1)}
                             className="btn-secondary text-xs px-2 py-0.5 disabled:opacity-30">Prev</button>
-                          <span className="text-tiny text-ink-muted px-1">{listPage} / {totalPages || 1}</span>
                           <button disabled={listPage >= totalPages}
                             onClick={() => changeListPage(l.id, listPage + 1)}
                             className="btn-secondary text-xs px-2 py-0.5 disabled:opacity-30">Next</button>

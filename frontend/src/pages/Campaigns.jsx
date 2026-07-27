@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { Link, useNavigate } from "react-router-dom";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Play, Pause, Plus, Workflow, Trash2, Copy, FileJson, LayoutTemplate, ChevronDown, X, Archive, CheckCircle, Folder, BarChart3 } from "lucide-react";
+import { Play, Pause, Plus, Workflow, Trash2, Copy, FileJson, LayoutTemplate, ChevronDown, X, Archive, CheckCircle, Folder, BarChart3, AlertTriangle, Check, Loader2 } from "lucide-react";
 import { SkeletonTableRows } from "../components/ui/loading-states";
 
 export default function Campaigns() {
@@ -18,6 +18,10 @@ export default function Campaigns() {
   const [folders, setFolders] = useState([]);
   const [folderModal, setFolderModal] = useState(false);
   const [folderName, setFolderName] = useState("");
+  const [preflightOpen, setPreflightOpen] = useState(false);
+  const [preflightData, setPreflightData] = useState(null);
+  const [preflightLoading, setPreflightLoading] = useState(false);
+  const [preflightCampaignId, setPreflightCampaignId] = useState(null);
 
   const load = () => api.get("/campaigns").then((r) => { setItems(r.data); setLoading(false); });
   useEffect(() => { load(); api.get("/campaign-folders").then((r) => setFolders(r.data)).catch(() => {}); }, []);
@@ -27,7 +31,22 @@ export default function Campaigns() {
     setTemplates(r.data);
   };
 
-  const launch = async (id, skipPending) => {
+  const runPreflight = async (id) => {
+    setPreflightCampaignId(id);
+    setPreflightLoading(true);
+    setPreflightOpen(true);
+    try {
+      const r = await api.post(`/campaigns/${id}/preflight`);
+      setPreflightData(r.data);
+    } catch (err) {
+      setPreflightData({ checks: [], all_passed: false, error: err?.response?.data?.detail || "Preflight check failed" });
+    }
+    setPreflightLoading(false);
+  };
+
+  const launchAfterPreflight = async (id, skipPending) => {
+    setPreflightOpen(false);
+    setPreflightData(null);
     if (skipPending === undefined) {
       try {
         await api.post(`/campaigns/${id}/launch`);
@@ -36,7 +55,7 @@ export default function Campaigns() {
         if (err?.response?.status === 400 && err?.response?.data?.detail?.includes("Review incomplete")) {
           toast.info("Send approved leads only?", {
             description: "Some leads need review — send to only those already approved",
-            action: { label: "Send approved", onClick: () => launch(id, true) },
+            action: { label: "Send approved", onClick: () => launchAfterPreflight(id, true) },
             duration: 10000,
           });
         } else {
@@ -216,19 +235,19 @@ export default function Campaigns() {
                           <td className="p-3"><StatusBadge status={c.status} /></td>
                           <td className="p-3 text-right font-mono text-sm">{c.lead_count || 0}</td>
                           <td className="p-3 text-right font-mono text-sm">{c.stats?.sent || 0}</td>
-                          <td className="p-3 text-right">
-                            <div className="font-mono text-sm">{c.stats?.open_rate || 0}%</div>
-                            <div className="text-tiny text-ink-muted">{c.stats?.opened || 0}</div>
+                          <td className="p-3 text-right font-mono text-sm">
+                            {c.stats?.opened || 0}
+                            {c.stats?.sent > 0 && <span className="text-ink-muted text-tiny ml-1">({c.stats?.open_rate || 0}%)</span>}
                           </td>
-                          <td className="p-3 text-right">
-                            <div className="font-mono text-sm">{c.stats?.reply_rate || 0}%</div>
-                            <div className="text-tiny text-ink-muted">{c.stats?.replied || 0}</div>
+                          <td className="p-3 text-right font-mono text-sm">
+                            {c.stats?.replied || 0}
+                            {c.stats?.sent > 0 && <span className="text-ink-muted text-tiny ml-1">({c.stats?.reply_rate || 0}%)</span>}
                           </td>
                           <td className="p-3 text-right font-mono text-sm">{c.stats?.meetings || 0}</td>
                           <td className="p-3 text-right">
                             <div className="flex items-center justify-end gap-1">
                               {c.status === "draft" && (
-                                <button onClick={() => launch(c.id)}
+                                <button onClick={() => runPreflight(c.id)}
                                   className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Launch">
                                   <Play size={14} />
                                 </button>
@@ -240,7 +259,7 @@ export default function Campaigns() {
                                 </button>
                               )}
                               {c.status === "paused" && (
-                                <button onClick={() => launch(c.id)}
+                                <button onClick={() => runPreflight(c.id)}
                                   className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Resume">
                                   <Play size={14} />
                                 </button>
@@ -331,6 +350,65 @@ export default function Campaigns() {
             <div className="flex justify-end pt-2">
               <button onClick={() => setTemplatePicker(false)} className="btn-secondary text-xs">Cancel</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {preflightOpen && (
+        <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50">
+          <div className="bg-white border border-line p-6 rounded-2xl w-full max-w-lg space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="text-section font-display font-semibold">Launch Checklist</div>
+              <button onClick={() => { setPreflightOpen(false); setPreflightData(null); }} className="text-ink-muted hover:text-ink"><X size={16} /></button>
+            </div>
+            {preflightLoading ? (
+              <div className="flex items-center gap-3 py-8 justify-center">
+                <Loader2 size={20} className="animate-spin text-ink-muted" />
+                <span className="text-body text-ink-muted">Running pre-flight checks...</span>
+              </div>
+            ) : preflightData?.error ? (
+              <div className="text-center py-6">
+                <AlertTriangle size={32} className="mx-auto text-danger mb-2" />
+                <div className="text-body text-danger">{preflightData.error}</div>
+              </div>
+            ) : preflightData && (
+              <div className="space-y-2">
+                {preflightData.checks.map((check) => (
+                  <div key={check.id} className={`flex items-start gap-3 p-3 rounded-xl border ${
+                    check.passed ? "border-success/30 bg-success/5" : check.warn ? "border-warning/30 bg-warning/5" : "border-danger/30 bg-danger/5"
+                  }`}>
+                    {check.passed ? (
+                      <Check size={16} className="text-success mt-0.5 shrink-0" />
+                    ) : check.warn ? (
+                      <AlertTriangle size={16} className="text-warning mt-0.5 shrink-0" />
+                    ) : (
+                      <X size={16} className="text-danger mt-0.5 shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-body font-medium text-sm">{check.label}</div>
+                      <div className="text-tiny text-ink-muted">{check.detail}</div>
+                    </div>
+                    <span className={`text-tiny font-mono px-1.5 py-0.5 rounded-sm ${
+                      check.passed ? "text-success bg-success/10" : check.warn ? "text-warning bg-warning/10" : "text-danger bg-danger/10"
+                    }`}>
+                      {check.passed ? "PASS" : check.warn ? "WARN" : "FAIL"}
+                    </span>
+                  </div>
+                ))}
+                <div className="pt-3 flex items-center justify-between">
+                  <span className={`text-caption font-medium ${preflightData.all_passed ? "text-success" : "text-warning"}`}>
+                    {preflightData.all_passed ? "All checks passed" : `${preflightData.checks.filter(c => !c.passed).length} check(s) failed — review before launch`}
+                  </span>
+                  <div className="flex gap-2">
+                    <button onClick={() => { setPreflightOpen(false); setPreflightData(null); }} className="btn-secondary text-xs">Cancel</button>
+                    <button onClick={() => launchAfterPreflight(preflightCampaignId)}
+                      className="btn-primary text-xs">
+                      <Play size={12} /> Launch
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

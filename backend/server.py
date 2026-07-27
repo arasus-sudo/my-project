@@ -707,6 +707,106 @@ async def delete_campaign(cid: str, user=Depends(current_user)):
     return {"ok": True}
 
 
+@api.post("/campaigns/{cid}/preflight")
+async def campaign_preflight(cid: str, user=Depends(current_user)):
+    """Run a 7-point pre-flight checklist and return pass/fail per item."""
+    c = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "not found")
+    checks = []
+
+    # 1. Steps defined
+    steps = c.get("steps") or []
+    checks.append({
+        "id": "steps", "label": "Sequence steps defined",
+        "passed": len(steps) > 0,
+        "detail": f"{len(steps)} step(s)" if steps else "No steps configured",
+    })
+
+    # 2. Leads assigned
+    lead_ids = c.get("lead_ids") or []
+    checks.append({
+        "id": "leads", "label": "Leads assigned",
+        "passed": len(lead_ids) > 0,
+        "detail": f"{len(lead_ids)} lead(s)" if lead_ids else "No leads assigned",
+    })
+
+    # 3. Personalization reviewed
+    pmap = {p["lead_id"]: p for p in c.get("personalized_emails", [])}
+    approved = sum(1 for lid in lead_ids if pmap.get(lid, {}).get("status") == "approved")
+    ungen = sum(1 for lid in lead_ids if lid not in pmap)
+    checks.append({
+        "id": "personalization", "label": "Emails reviewed and approved",
+        "passed": approved == len(lead_ids) if lead_ids else True,
+        "detail": f"{approved}/{len(lead_ids)} approved" if lead_ids else "No leads to review",
+        "warn": ungen > 0,
+    })
+
+    # 4. Mailbox connected
+    has_email = any(s.get("channel", "email") == "email" for s in steps)
+    mailboxes = []
+    if has_email:
+        mailboxes = await db.mailboxes.find(
+            {"workspace_id": user["workspace_id"], "status": "connected"}, {"_id": 0}).to_list(20)
+    checks.append({
+        "id": "mailbox", "label": "Sending mailbox connected",
+        "passed": not has_email or len(mailboxes) > 0,
+        "detail": f"{len(mailboxes)} connected" if mailboxes else "No connected mailbox" if has_email else "No email steps",
+    })
+
+    # 5. DNS records valid
+    dns_ok = True
+    dns_detail = []
+    for mb in mailboxes:
+        dns = mb.get("dns") or {}
+        spf = dns.get("spf", False)
+        dkim = dns.get("dkim", False)
+        dmarc = dns.get("dmarc", False)
+        ok = spf and dkim and dmarc
+        if not ok:
+            dns_ok = False
+            missing = [lbl for lbl, v in [("SPF", spf), ("DKIM", dkim), ("DMARC", dmarc)] if not v]
+            dns_detail.append(f"{mb.get('email','?')}: missing {', '.join(missing)}")
+    checks.append({
+        "id": "dns", "label": "SPF / DKIM / DMARC configured",
+        "passed": not has_email or dns_ok,
+        "detail": "; ".join(dns_detail) if dns_detail else "All records valid" if has_email else "No email steps",
+    })
+
+    # 6. Variables resolve (no unresolved {{placeholders}})
+    unresolved = set()
+    for s in steps:
+        for field in ["subject", "body", "body_html", "body_text"]:
+            val = s.get(field, "")
+            if isinstance(val, str):
+                found = re.findall(r"\{\{\s*(\w+)\s*\}\}", val)
+                for f in found:
+                    if f not in ("first_name", "last_name", "email", "company", "title",
+                                  "phone", "linkedin_url", "website", "personalized_opener"):
+                        unresolved.add(f)
+    checks.append({
+        "id": "variables", "label": "Template variables resolve",
+        "passed": len(unresolved) == 0,
+        "detail": f"Unknown variables: {', '.join(sorted(unresolved))}" if unresolved else "All variables valid",
+    })
+
+    # 7. Content safety — spam trigger words
+    spam_words = ["free", "act now", "limited time", "congratulations", "click here",
+                   "buy now", "call now", "don't miss", "exclusive offer", "guaranteed"]
+    body_text = " ".join(s.get("body", "") + " " + s.get("body_text", "") + " " + s.get("body_html", "")
+                         for s in steps).lower()
+    found_spam = [w for w in spam_words if w in body_text]
+    checks.append({
+        "id": "spam", "label": "Content passes spam check",
+        "passed": len(found_spam) == 0,
+        "detail": f"Spam words detected: {', '.join(found_spam)}" if found_spam else "No spam triggers",
+        "warn": len(found_spam) > 0,
+    })
+
+    all_passed = all(c["passed"] for c in checks)
+    return {"checks": checks, "all_passed": all_passed, "campaign_id": cid}
+
+
 @api.post("/campaigns/{cid}/launch")
 async def launch_campaign(cid: str, skip_pending: bool = False, user=Depends(current_user)):
     """Enqueue a campaign for real sending.
@@ -2341,6 +2441,172 @@ async def delete_icp(icp_id: str, user=Depends(current_user)):
     await db.icps.delete_one({"id": icp_id, "workspace_id": user["workspace_id"]})
     await _audit(user, "icp.delete", {"icp_id": icp_id})
     return {"ok": True}
+
+
+# ---- AI ICP Generator (from closed-won deals) -----
+class IcpGenerationResult(BaseModel):
+    titles: List[str] = []
+    industries: List[str] = []
+    company_sizes: List[str] = []
+    locations: List[str] = []
+    seniority: List[str] = []
+    keywords: List[str] = []
+    description: str = ""
+    rationale: str = ""
+
+
+@api.post("/icp/generate-from-deals")
+async def icp_generate_from_deals(user=Depends(current_user)):
+    """Analyze closed-won deals and their associated leads to build an ICP profile."""
+    deals = await db.deals.find({
+        "workspace_id": user["workspace_id"],
+        "stage": "closed_won",
+    }, {"_id": 0}).to_list(50)
+    if not deals:
+        raise HTTPException(400, "No closed-won deals found — mark at least one deal as Closed Won first.")
+
+    lead_refs = set()
+    for d in deals:
+        for f in ("lead_id", "contact_id", "email"):
+            v = d.get(f)
+            if v:
+                lead_refs.add(v)
+        for c in (d.get("contacts") or []):
+            if isinstance(c, dict):
+                lead_refs.add(c.get("id") or c.get("email", ""))
+            elif isinstance(c, str):
+                lead_refs.add(c)
+
+    leads = await db.leads.find({
+        "workspace_id": user["workspace_id"],
+        "$or": [{"id": {"$in": list(lead_refs)}}, {"email": {"$in": list(lead_refs)}}],
+    }, {"_id": 0}).to_list(100)
+
+    sample = []
+    for d in deals:
+        row = {
+            "deal_name": d.get("name", "Unnamed"),
+            "deal_value": d.get("value", 0),
+            "company": d.get("company", ""),
+            "industry": d.get("industry", ""),
+        }
+        match = next((l for l in leads if l.get("id") == d.get("lead_id") or l.get("email") == d.get("email")), None)
+        if match:
+            row["lead_title"] = match.get("title", "")
+            row["lead_company"] = match.get("company", "")
+            row["lead_industry"] = match.get("industry", "")
+            row["lead_location"] = match.get("location", "")
+            row["lead_revenue"] = match.get("revenue", "")
+            row["lead_employees"] = match.get("employees", "")
+        sample.append(row)
+
+    prompt = f"""You are an ICP (Ideal Customer Profile) analyst. Analyze these {len(sample)} closed-won deals and their associated leads to generate an ICP.
+
+For each field, provide the most common values observed:
+- titles: job titles of buyers (array of strings)
+- industries: target industries (array of strings)
+- company_sizes: employee count ranges like ["1-10","11-50","51-200","201-500","501-1000","1001+"]
+- locations: target locations (array of strings)
+- seniority: seniority levels like ["C-Level","VP","Director","Manager","Individual"]
+- keywords: firmographic/buying-signal keywords
+- description: a concise 2-3 sentence ICP description
+- rationale: why this ICP fits based on the data
+
+Return valid JSON with these exact keys.
+
+Deal data:
+{json.dumps(sample, indent=2)}"""
+
+    try:
+        from ai_utils import llm_chat
+        result_text = await llm_chat(
+            system="You are an ICP analyst. Return ONLY valid JSON. No markdown, no backticks.",
+            user_text=prompt,
+            session_id=f"icp-gen-{user['workspace_id']}",
+            user=user,
+            max_tokens=4096,
+        )
+        result_text = result_text.strip().removeprefix("```json").removesuffix("```").strip()
+        result = json.loads(result_text)
+    except Exception as ex:
+        raise HTTPException(502, f"LLM generation failed: {ex}")
+
+    icp = IcpGenerationResult(
+        titles=result.get("titles", []),
+        industries=result.get("industries", []),
+        company_sizes=result.get("company_sizes", []),
+        locations=result.get("locations", []),
+        seniority=result.get("seniority", []),
+        keywords=result.get("keywords", []),
+        description=result.get("description", ""),
+        rationale=result.get("rationale", ""),
+    )
+
+    await _audit(user, "icp.generate_from_deals", {"deal_count": len(deals), "lead_count": len(leads)})
+    return icp.model_dump()
+
+
+# ---- Pre-enrichment filter engine + Audience estimation -----
+class EnrichmentFilterIn(BaseModel):
+    list_id: Optional[str] = None
+    industries: List[str] = []
+    min_employees: Optional[int] = None
+    max_employees: Optional[int] = None
+    min_revenue: Optional[float] = None
+    locations: List[str] = []
+    title_keywords: List[str] = []
+    seniority: List[str] = []
+    exclude_domains: List[str] = []
+
+
+@api.post("/enrichment/estimate")
+async def enrichment_estimate(filters: EnrichmentFilterIn, user=Depends(current_user)):
+    """Estimate audience reach/coverage before executing paid enrichment."""
+    from lead_sources import estimate_prospects
+    match, total, breakdown = await estimate_prospects(
+        workspace_id=user["workspace_id"],
+        filters=filters.model_dump(),
+    )
+    return {
+        "total_prospects": total,
+        "matched_prospects": match,
+        "match_rate_pct": round(match / total * 100, 1) if total else 0,
+        "coverage_breakdown": breakdown,
+        "filters_applied": filters.model_dump(exclude_none=True),
+    }
+
+
+@api.post("/enrichment/preflight")
+async def enrichment_preflight(filters: EnrichmentFilterIn, user=Depends(current_user)):
+    """Run pre-enrichment filter gates: dedup, firmographic, buying-signal checks."""
+    result = {
+        "duplicates_removed": 0,
+        "firmographic_passed": 0,
+        "firmographic_removed": 0,
+        "buying_signal_matched": 0,
+        "total_input": 0,
+        "total_after_filters": 0,
+        "gates": [],
+    }
+
+    from lead_sources import run_enrichment_filters
+    gates = await run_enrichment_filters(
+        workspace_id=user["workspace_id"],
+        filters=filters.model_dump(),
+    )
+    result["gates"] = gates
+    for g in gates:
+        if g["gate"] == "duplicates":
+            result["duplicates_removed"] = g.get("removed", 0)
+        elif g["gate"] == "firmographic":
+            result["firmographic_passed"] = g.get("passed", 0)
+            result["firmographic_removed"] = g.get("removed", 0)
+        elif g["gate"] == "buying_signal":
+            result["buying_signal_matched"] = g.get("matched", 0)
+
+    result["total_input"] = gates[0].get("input", 0) if gates else 0
+    result["total_after_filters"] = gates[-1].get("output", 0) if gates else 0
+    return result
 
 
 # ---- Prospeo + Icypeas wrappers -----
