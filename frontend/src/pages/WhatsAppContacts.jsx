@@ -9,7 +9,7 @@ export default function WhatsAppContacts() {
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", tags: "" });
 
-  const load = () => api.get("/whatsapp-eq/contacts").then((r) => setItems(r.data));
+  const load = () => api.get("/whatsapp-eq/contacts").then((r) => setItems(r.data.items || []));
   useEffect(() => { load(); }, []);
 
   const save = async (e) => {

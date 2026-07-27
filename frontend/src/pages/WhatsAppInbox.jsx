@@ -11,8 +11,9 @@ export default function WhatsAppInbox() {
 
   const load = async () => {
     const { data } = await api.get("/whatsapp-eq/conversations");
-    setConversations(data);
-    if (data.length && !active) setActive(data[0]);
+    const items = data.items || [];
+    setConversations(items);
+    if (items.length && !active) setActive(items[0]);
   };
   useEffect(() => { load(); }, []);
 
