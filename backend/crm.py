@@ -176,12 +176,41 @@ async def _enrich_campaign_names(items: List[Dict[str, Any]]):
 async def list_leads(
     page: int = 1,
     page_size: int = 25,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    tags: Optional[str] = None,
+    owner_id: Optional[str] = None,
+    band: Optional[str] = None,
+    sort_by: Optional[str] = None,
     user=Depends(current_user),
 ):
     query = _active(user["workspace_id"])
+    if search:
+        q = re.escape(search.strip().lower())
+        query["$or"] = [
+            {"first_name": {"$regex": q, "$options": "i"}},
+            {"last_name": {"$regex": q, "$options": "i"}},
+            {"company": {"$regex": q, "$options": "i"}},
+            {"email": {"$regex": q, "$options": "i"}},
+            {"title": {"$regex": q, "$options": "i"}},
+        ]
+    if status:
+        query["status"] = status
+    if tags:
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+        if tag_list:
+            query["tags"] = {"$in": tag_list}
+    if owner_id:
+        query["owner_id"] = owner_id
+    if band:
+        query["intent.band"] = band
+    if sort_by == "intent":
+        sort = [("intent.score", -1), ("created_at", -1)]
+    else:
+        sort = [("created_at", -1)]
     total = await db.leads.count_documents(query)
     items = await db.leads.find(query, {"_id": 0}) \
-        .sort("created_at", -1) \
+        .sort(sort) \
         .skip((page - 1) * page_size) \
         .to_list(page_size)
     await _enrich_campaign_names(items)
@@ -877,6 +906,36 @@ async def delete_lead_list(list_id: str, user=Depends(require_role("org_admin", 
         {"$set": {"deleted_at": now_iso(), "deleted_by": user["id"]}},
     )
     return {"ok": True}
+
+
+@crm_router.get("/crm/lists/{list_id}/leads")
+async def list_leads_in_list(
+    list_id: str,
+    page: int = 1,
+    page_size: int = 25,
+    search: Optional[str] = None,
+    user=Depends(current_user),
+):
+    lst = await db.lead_lists.find_one({"id": list_id, "workspace_id": user["workspace_id"]}, {"lead_ids": 1})
+    if not lst or not lst.get("lead_ids"):
+        return {"items": [], "total": 0, "page": page, "page_size": page_size}
+    query = {"id": {"$in": lst["lead_ids"]}, "workspace_id": user["workspace_id"]}
+    if search:
+        q = re.escape(search.strip().lower())
+        query["$or"] = [
+            {"first_name": {"$regex": q, "$options": "i"}},
+            {"last_name": {"$regex": q, "$options": "i"}},
+            {"company": {"$regex": q, "$options": "i"}},
+            {"email": {"$regex": q, "$options": "i"}},
+            {"title": {"$regex": q, "$options": "i"}},
+        ]
+    total = await db.leads.count_documents(query)
+    items = await db.leads.find(query, {"_id": 0}) \
+        .sort("created_at", -1) \
+        .skip((page - 1) * page_size) \
+        .to_list(page_size)
+    await _enrich_owner_names(items)
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @crm_router.post("/crm/lists/{list_id}/leads")

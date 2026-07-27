@@ -33,7 +33,7 @@ export default function CRM() {
 
   const load = async () => {
     const [leadsRes, dealsRes, listsRes, activityRes, tasksRes, quarantineRes, companiesRes, recycleBinRes, duplicatesRes] = await Promise.all([
-      api.get("/leads?page_size=2000").catch(() => ({ data: { items: [] } })),
+      api.get("/leads?page_size=1").catch(() => ({ data: { total: 0 } })),
       api.get("/deals").catch(() => ({ data: [] })),
       api.get("/crm/lists").catch(() => ({ data: [] })),
       api.get("/activities").catch(() => ({ data: [] })),
@@ -43,7 +43,6 @@ export default function CRM() {
       api.get("/crm/recycle-bin").catch(() => ({ data: [] })),
       api.get("/crm/duplicates").catch(() => ({ data: [] })),
     ]);
-    const leads = leadsRes.data.items || leadsRes.data;
     const deals = dealsRes.data;
     setLists(listsRes.data);
     setRecentActivity((activityRes.data || []).slice(0, 10));
@@ -52,7 +51,7 @@ export default function CRM() {
     setRecycleBin(recycleBinRes.data || []);
     setDuplicates(duplicatesRes.data || []);
     setStats({
-      totalLeads: leads.length,
+      totalLeads: leadsRes?.data?.total || 0,
       totalDeals: deals.length,
       pipelineValue: deals.reduce((s, d) => s + (d.value || 0), 0),
       dealsWon: deals.filter((d) => d.stage === "won").length,

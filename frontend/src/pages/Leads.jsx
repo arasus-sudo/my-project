@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
@@ -65,12 +65,24 @@ export default function Leads() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const pageSize = 25;
+  const [pageSize, setPageSize] = useState(25);
 
-  const load = (p) => api.get(`/leads?page=${p || page}&page_size=${pageSize}`).then((r) => {
+  const buildParams = (p, ps) => {
+    const params = { page: p || page, page_size: ps || pageSize };
+    if (q) params.search = q;
+    if (statusFilter) params.status = statusFilter;
+    if (tagFilter) params.tags = tagFilter;
+    if (ownerFilter) params.owner_id = ownerFilter;
+    if (bandFilter) params.band = bandFilter;
+    if (sortByIntent) params.sort_by = "intent";
+    return params;
+  };
+
+  const load = (p, ps) => api.get("/leads", { params: buildParams(p, ps) }).then((r) => {
     setLeads(r.data.items);
     setTotal(r.data.total);
     setPage(r.data.page);
+    setPageSize(r.data.page_size);
     setLoading(false);
   });
   useEffect(() => {
@@ -79,12 +91,6 @@ export default function Leads() {
     api.get("/team").then((r) => setTeam(r.data)).catch(() => {});
     api.get("/crm/lists").then((r) => setLists(r.data)).catch(() => {});
   }, []);
-
-  const allTags = useMemo(() => {
-    const s = new Set();
-    leads.forEach((l) => (l.tags || []).forEach((t) => s.add(t)));
-    return [...s].sort();
-  }, [leads]);
 
   const openCall = (lead) => {
     setCallLead(lead);
@@ -141,17 +147,12 @@ export default function Leads() {
     });
   };
 
-  const filtered = leads
-    .filter((l) => !q || `${l.first_name} ${l.last_name} ${l.email} ${l.company} ${l.title || ""}`.toLowerCase().includes(q.toLowerCase()))
-    .filter((l) => !statusFilter || l.status === statusFilter)
-    .filter((l) => !tagFilter || (l.tags || []).includes(tagFilter))
-    .filter((l) => !ownerFilter || l.owner_id === ownerFilter)
-    .filter((l) => !bandFilter || l.intent?.band === bandFilter)
-    // Unscored leads sort last rather than as zero — "we haven't looked yet" is
-    // not the same claim as "this lead is cold".
-    .sort((a, b) => (sortByIntent
-      ? (b.intent?.score ?? -1) - (a.intent?.score ?? -1)
-      : 0));
+  const filtered = leads;
+
+  useEffect(() => {
+    setPage(1);
+    load(1);
+  }, [q, statusFilter, tagFilter, ownerFilter, bandFilter, sortByIntent]);
 
   const selectAllVisible = () => {
     setSelected((s) => {
@@ -229,13 +230,9 @@ export default function Leads() {
             <option value="">All statuses</option>
             {["new", "contacted", "qualified", "unqualified", "unresponsive"].map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          {allTags.length > 0 && (
-            <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} data-testid="filter-tag"
-              className="border border-line px-2 py-2 rounded-sm text-input">
-              <option value="">All tags</option>
-              {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          )}
+          <input value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} data-testid="filter-tag"
+            placeholder="Tag filter…"
+            className="border border-line px-2 py-2 rounded-sm text-input w-28" />
           <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} data-testid="filter-owner"
             className="border border-line px-2 py-2 rounded-sm text-input">
             <option value="">All owners</option>
@@ -402,9 +399,17 @@ export default function Leads() {
               </tbody>
             </table>
             <div className="flex items-center justify-between pt-3 pb-1">
-              <span className="text-caption text-ink-muted">
-                {total > 0 && `Page ${page} · ${Math.ceil(total / pageSize)} total`}
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-caption text-ink-muted">
+                  {total > 0 && `Page ${page} · ${Math.ceil(total / pageSize)} total (${total} leads)`}
+                </span>
+                <select value={pageSize} onChange={(e) => { const v = parseInt(e.target.value, 10); setPageSize(v); setPage(1); load(1, v); }}
+                  className="border border-line px-2 py-1 rounded-sm text-caption">
+                  <option value="25">25 / page</option>
+                  <option value="50">50 / page</option>
+                  <option value="100">100 / page</option>
+                </select>
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   disabled={page <= 1}
