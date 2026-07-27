@@ -99,9 +99,9 @@ jobs:
           URL="https://${{ env.BACKEND_NAME }}.azurewebsites.net"
           echo "=== Checking root endpoints ==="
           curl -s -o /tmp/root_resp.txt -w "Root (GET /): HTTP %{http_code}\n" "$URL/" 2>/dev/null
-          curl -s -o /tmp/health_resp.txt -w "Health (GET /health): HTTP %{http_code}\n" "$URL/health" 2>/dev/null
-          curl -s -o /tmp/auth_resp.txt -w "Auth login (POST /auth/login): HTTP %{http_code}\n" \
-            -X POST -H "Content-Type: application/json" -d '{}' "$URL/auth/login" 2>/dev/null
+          curl -s -o /tmp/health_resp.txt -w "Health (GET /api/health): HTTP %{http_code}\n" "$URL/api/health" 2>/dev/null
+          curl -s -o /tmp/auth_resp.txt -w "Auth login (POST /api/auth/login): HTTP %{http_code}\n" \
+            -X POST -H "Content-Type: application/json" -d '{}' "$URL/api/auth/login" 2>/dev/null
           echo "=== Root response ==="
           head -5 /tmp/root_resp.txt 2>/dev/null || echo "(empty)"
           echo "=== Health response body ==="
@@ -110,7 +110,7 @@ jobs:
           head -5 /tmp/auth_resp.txt 2>/dev/null || echo "(empty)"
           echo "=== Waiting for backend (health check) ==="
           for i in $(seq 1 24); do
-            status=$(curl -s -o /dev/null -w "%{http_code}" "$URL/health" 2>/dev/null)
+            status=$(curl -s -o /dev/null -w "%{http_code}" "$URL/api/health" 2>/dev/null)
             if [ "$status" = "200" ]; then
               echo "Backend is up (HTTP $status)"
               exit 0
@@ -122,7 +122,7 @@ jobs:
           # Final diagnostic dump
           echo "=== Final endpoint check ==="
           curl -s -w "\nHTTP %{http_code}\n" "$URL/" 2>/dev/null
-          curl -s -w "\nHTTP %{http_code}\n" "$URL/health" 2>/dev/null
+          curl -s -w "\nHTTP %{http_code}\n" "$URL/api/health" 2>/dev/null
           exit 1
 
   deploy-frontend:
