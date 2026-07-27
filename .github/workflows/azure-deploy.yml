@@ -20,17 +20,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Pre-install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r backend/requirements.txt --target=/tmp/backend-vendor
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Disable Oryx build (startup.sh handles pip install)
+      - name: Disable Oryx build (deps pre-installed)
         run: |
           az webapp config appsettings set \
             --resource-group ${{ env.AZURE_RG }} \
             --name ${{ env.BACKEND_NAME }} \
-            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false
+            --settings \
+              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+              PYTHONPATH=/home/site/wwwroot/vendor
 
       - name: Set startup command
         run: |
@@ -44,6 +56,9 @@ jobs:
           cd backend
           # Remove stale artifacts before zipping
           rm -f deploy.zip backend-deploy.zip
+          # Copy pre-installed deps into vendor/
+          mkdir -p vendor
+          cp -r /tmp/backend-vendor/* vendor/
           zip -r /tmp/deploy.zip . \
             -x "*__pycache__*" \
             -x "*/__pycache__/*" \
@@ -56,8 +71,9 @@ jobs:
             -x "*.txt" \
             -x ".env" \
             -x "deploy.zip" \
-            -x "backend-deploy.zip"
-          # Re-add requirements.txt explicitly (caught by *.txt exclusion above)
+            -x "backend-deploy.zip" \
+            -x "vendor/bin/*"
+          # Re-add requirements.txt (caught by *.txt above) and ensure vendor/bin isn't needed
           zip -r /tmp/deploy.zip requirements.txt
           echo "Zip size: $(du -sh /tmp/deploy.zip | cut -f1)"
           ls -lh /tmp/deploy.zip
@@ -71,15 +87,17 @@ jobs:
       - name: Verify deployment
         run: |
           echo "Waiting for backend to start..."
-          for i in $(seq 1 12); do
-            status=$(curl -s -o /dev/null -w "%{http_code}" https://${{ env.BACKEND_NAME }}.azurewebsites.net/docs 2>/dev/null)
-            if [ "$status" != "000" ] && [ "$status" != "" ]; then
+          for i in $(seq 1 24); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" https://${{ env.BACKEND_NAME }}.azurewebsites.net/health 2>/dev/null)
+            if [ "$status" = "200" ]; then
               echo "Backend is up (HTTP $status)"
-              break
+              exit 0
             fi
             echo "Attempt $i: HTTP $status — waiting..."
             sleep 10
           done
+          echo "Backend failed to start within 4 minutes" 
+          exit 1
 
   deploy-frontend:
     runs-on: ubuntu-latest

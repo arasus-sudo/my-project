@@ -26,25 +26,28 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Pre-install Python dependencies
         run: |
-          cd backend
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r backend/requirements.txt --target=/tmp/backend-vendor
 
-      - name: Enable Oryx build
+      - name: Disable Oryx build (deps pre-installed in vendor/)
         run: |
           az webapp config appsettings set \
             --resource-group ${{ env.AZURE_RG }} \
             --name ${{ env.BACKEND_NAME }} \
-            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true
+            --settings \
+              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+              PYTHONPATH=/home/site/wwwroot/vendor
 
       - name: Package and deploy backend
         run: |
           cd backend
           rm -f deploy.zip backend-deploy.zip
+          mkdir -p vendor
+          cp -r /tmp/backend-vendor/* vendor/
           zip -r /tmp/deploy.zip . \
-            -x "*__pycache__*" "*venv*" "*.venv*" ".git*" "*.log" "*.err" "*.txt" ".env" "deploy.zip" "backend-deploy.zip"
+            -x "*__pycache__*" "*venv*" "*.venv*" ".git*" "*.log" "*.err" "*.txt" ".env" "deploy.zip" "backend-deploy.zip" "vendor/bin/*"
           zip -r /tmp/deploy.zip requirements.txt
           az webapp deploy \
             --resource-group ${{ env.AZURE_RG }} \
@@ -52,3 +55,18 @@ jobs:
             --src-path /tmp/deploy.zip \
             --type zip \
             --verbose
+
+      - name: Verify deployment
+        run: |
+          echo "Waiting for backend to start..."
+          for i in $(seq 1 24); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" https://${{ env.BACKEND_NAME }}.azurewebsites.net/health 2>/dev/null)
+            if [ "$status" = "200" ]; then
+              echo "Backend is up (HTTP $status)"
+              exit 0
+            fi
+            echo "Attempt $i: HTTP $status — waiting..."
+            sleep 10
+          done
+          echo "Backend failed to start within 4 minutes"
+          exit 1
