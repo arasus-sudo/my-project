@@ -49,7 +49,7 @@ jobs:
           az webapp config set \
             --resource-group ${{ env.AZURE_RG }} \
             --name ${{ env.BACKEND_NAME }} \
-            --startup-file "uvicorn server:app --host 0.0.0.0 --port 8000 --workers 1 --timeout-keep-alive 120"
+            --startup-file "python -m uvicorn server:app --host 0.0.0.0 --port 8000 --workers 1 --timeout-keep-alive 120"
 
       - name: Package and deploy backend
         run: |

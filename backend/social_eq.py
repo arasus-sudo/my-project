@@ -868,6 +868,63 @@ async def run_social_publish_tick() -> None:
             log.warning("scheduled publish failed for post %s: %s", p["id"], ex)
 
 
+# ----------------------------- Scheduler tick (Veo video poll) ---------------------
+async def run_video_poll_tick() -> None:
+    """Registered in server.py's APScheduler at 2-min intervals, same as
+    run_social_publish_tick. Drains posts whose video is still generating.
+    Claims each post before polling (status flip is the claim) so
+    overlapping ticks can't double-poll the same operation; reverts the
+    claim back to "processing" on a not-done or transient result so the
+    next tick retries — Veo generation runs for minutes, well past a single
+    2-min tick window. On done: saves the video, sets media_url, and — since
+    a video post shouldn't reach a human's inbox until the video actually
+    exists — only now flips the post to pending_approval with a real
+    approval_token and fires the existing approval digest, a fourth trigger
+    source alongside bulk-import/RSS/daily-pipeline."""
+    cursor = db.social_posts.find({"video_status": "processing"}, {"_id": 0})
+    async for p in cursor:
+        claimed = await db.social_posts.update_one(
+            {"id": p["id"], "video_status": "processing"}, {"$set": {"video_status": "polling"}})
+        if claimed.modified_count == 0:
+            continue  # another tick already grabbed it
+
+        try:
+            result = await veo_client.poll_video_job(p["video_operation_name"])
+        except Exception as ex:
+            log.warning("veo poll crashed for post %s: %s", p["id"], ex)
+            await db.social_posts.update_one({"id": p["id"]}, {"$set": {"video_status": "processing"}})
+            continue
+
+        if not result["done"]:
+            await db.social_posts.update_one({"id": p["id"]}, {"$set": {"video_status": "processing"}})
+            continue
+
+        if result.get("error") or not result.get("video_bytes"):
+            log.warning("veo generation failed for post %s: %s", p["id"], result.get("error"))
+            await db.social_posts.update_one({"id": p["id"]}, {"$set": {
+                "video_status": "failed", "updated_at": now_iso(),
+            }})
+            continue
+
+        filename = _save_media(p["id"], result["video_bytes"], ext="mp4")
+        media_url = f"/social-eq/media/{p['id']}/{filename}"
+        approval_token = secrets.token_urlsafe(32)
+        await db.social_posts.update_one({"id": p["id"]}, {"$set": {
+            "media_url": media_url, "video_status": "ready",
+            "status": "pending_approval", "approval_token": approval_token,
+            "updated_at": now_iso(),
+        }})
+
+        owner = await db.users.find_one({"id": p["owner_id"]}, {"_id": 0})
+        if owner:
+            updated_post = {**p, "media_url": media_url, "video_status": "ready",
+                            "status": "pending_approval", "approval_token": approval_token}
+            try:
+                await _send_approval_digest(owner, [updated_post])
+            except Exception as ex:
+                log.warning("video approval digest failed for post %s: %s", p["id"], ex)
+
+
 # ----------------------------- Engagement inbox ------------------------------------
 # Reading comments/engagement back is free (same "we never charge for reading
 # data you already own" convention as billing.py's reply-polling); only the

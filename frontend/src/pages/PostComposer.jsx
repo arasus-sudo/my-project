@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { PenSquare, Image as ImageIcon, Layers, Tags } from "lucide-react";
+import { PenSquare, Image as ImageIcon, Layers, Tags, Video } from "lucide-react";
 
 const PLATFORMS = [
   { id: "linkedin", label: "LinkedIn" },
@@ -14,6 +14,7 @@ const PLATFORMS = [
 const CONTENT_TYPES = [
   { id: "static", label: "Static image", icon: ImageIcon },
   { id: "carousel", label: "Carousel", icon: Layers },
+  { id: "video", label: "Video", icon: Video },
 ];
 
 export default function PostComposer() {
@@ -83,6 +84,11 @@ export default function PostComposer() {
                 Generates a cover image for the feed post, plus a full editable multi-slide deck in Create EQ you can open afterward.
               </p>
             )}
+            {contentType === "video" && (
+              <p className="text-tiny text-ink-muted mt-1.5">
+                Generates a short AI video (Google Veo). This takes a few minutes — check the Queue for progress instead of waiting here.
+              </p>
+            )}
           </div>
           <div>
             <label className="form-label block mb-1">Topic</label>
@@ -109,6 +115,17 @@ export default function PostComposer() {
         {preview && (
           <div className="shadow-card p-5 rounded-2xl space-y-3" data-testid="post-preview">
             <div className="ui-label">Preview</div>
+            {preview.video_status === "processing" && (
+              <div className="w-full rounded-xl border border-line border-dashed p-6 text-center">
+                <Video size={20} className="mx-auto text-ink-muted mb-2" />
+                <p className="text-caption text-ink-muted">Generating your video — this can take a few minutes. Check the Queue for progress.</p>
+              </div>
+            )}
+            {preview.video_status === "failed" && (
+              <div className="w-full rounded-xl border border-danger/40 p-4 text-center">
+                <p className="text-caption text-danger">Video generation failed. Try again from the Queue.</p>
+              </div>
+            )}
             {preview.media_url && (
               <img src={`${api.defaults.baseURL}${preview.media_url}`} alt="" className="w-full rounded-xl border border-line object-cover max-h-72" />
             )}

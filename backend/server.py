@@ -4203,7 +4203,7 @@ async def _start_scheduler():
         from sender import run_send_tick, run_reply_tick
         from social_eq import (
             run_social_publish_tick, run_social_engagement_tick, run_rss_poll_tick,
-            run_social_insights_tick, run_daily_social_content_tick,
+            run_social_insights_tick, run_daily_social_content_tick, run_video_poll_tick,
         )
         from site_eq import run_site_recrawl_tick
         from sms_eq import run_sms_send_tick
@@ -4268,11 +4268,16 @@ async def _start_scheduler():
         # the same approval digest bulk-import/RSS already use.
         scheduler.add_job(run_daily_social_content_tick, "interval", hours=24,
                           id="social_daily_content", max_instances=1, coalesce=True)
+        # Drains Veo video generations still in flight — the same 2-min trickle
+        # as the other short-interval ticks; generation itself takes minutes,
+        # so this just checks in until each job completes.
+        scheduler.add_job(run_video_poll_tick, "interval", minutes=2,
+                          id="video_poll", max_instances=1, coalesce=True)
         scheduler.start()
         logger.info("scheduler started (reminders 15m, sends 2m, reply polling 10m, "
                    "social publish 2m, social engagement 10m, RSS poll 30m, site recrawl 24h, "
                    "sms send 2m, whatsapp send 2m, recycle bin purge 24h, dedup scan 1h, "
-                   "social insights 24h, social daily content 24h)")
+                   "social insights 24h, social daily content 24h, video poll 2m)")
     except Exception as ex:
         logger.warning("scheduler failed to start: %s", ex)
 

@@ -131,6 +131,11 @@ export default function PostQueue() {
                       <span className={`ui-label inline-block px-2 py-0.5 border ${STATUS_COLOR[p.status] || STATUS_COLOR.draft}`}>
                         {STATUS_LABEL[p.status] || p.status}
                       </span>
+                      {p.content_type === "video" && p.video_status && p.video_status !== "ready" && (
+                        <span className={`ui-label inline-block px-2 py-0.5 border ml-1 ${p.video_status === "failed" ? "text-danger border-danger" : "text-warning border-warning"}`}>
+                          {p.video_status === "processing" ? "generating video" : p.video_status}
+                        </span>
+                      )}
                     </td>
                     <td className="p-3 text-right font-mono text-tiny">
                       {p.engagement ? `${p.engagement.likes}♥ ${p.engagement.comments}💬` : "—"}
@@ -159,7 +164,19 @@ export default function PostQueue() {
               <button onClick={() => setDetail(null)} className="text-ink-muted hover:text-ink shrink-0 ml-2"><X size={16} /></button>
             </div>
 
-            {detail.media_url && (
+            {detail.content_type === "video" && detail.video_status === "processing" && (
+              <div className="w-full rounded-xl border border-line border-dashed p-6 text-center">
+                <p className="text-caption text-ink-muted">Generating video — this can take a few minutes. Refresh to check progress.</p>
+              </div>
+            )}
+            {detail.content_type === "video" && detail.video_status === "failed" && (
+              <div className="w-full rounded-xl border border-danger/40 p-4 text-center">
+                <p className="text-caption text-danger">Video generation failed.</p>
+              </div>
+            )}
+            {detail.media_url && detail.content_type === "video" ? (
+              <video src={`${api.defaults.baseURL}${detail.media_url}`} controls className="w-full rounded-xl border border-line max-h-64" />
+            ) : detail.media_url && (
               <img src={`${api.defaults.baseURL}${detail.media_url}`} alt="" className="w-full rounded-xl border border-line object-cover max-h-64" />
             )}
 
@@ -211,7 +228,8 @@ export default function PostQueue() {
                   {detail.status !== "published" && (
                     <button onClick={startEdit} data-testid="edit-post-btn" className="btn-secondary text-xs"><Pencil size={12} /> Edit</button>
                   )}
-                  {(detail.status === "draft" || detail.status === "pending_approval" || detail.status === "scheduled") && (
+                  {(detail.status === "draft" || detail.status === "pending_approval" || detail.status === "scheduled") &&
+                    !(detail.content_type === "video" && detail.video_status === "processing") && (
                     <>
                       <button onClick={() => approve(detail.id)} data-testid="approve-post-btn" className="btn-secondary text-xs">
                         <CheckCircle2 size={12} /> Approve
