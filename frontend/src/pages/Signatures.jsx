@@ -4,6 +4,12 @@ import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import { Plus, PenSquare, Trash2, Check, X, Loader2, Signature as SignatureIcon } from "lucide-react";
 
+// The field is a plain <textarea>, so a signature typed with Enter-key line
+// breaks stores literal "\n" — which has no rendering meaning in HTML and
+// collapses to nothing in every mail client. Convert it for preview here;
+// draft_chain.to_html does the same conversion for the actual sent email.
+const withLineBreaks = (html) => (html || "").replace(/\n/g, "<br>");
+
 export default function Signatures() {
   const [sigs, setSigs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -101,7 +107,7 @@ export default function Signatures() {
             {form.content_html && (
               <div>
                 <span className="form-label">Preview</span>
-                <div className="mt-1 p-3 border border-line rounded-xl bg-white signature-preview" dangerouslySetInnerHTML={{ __html: form.content_html }} />
+                <div className="mt-1 p-3 border border-line rounded-xl bg-white signature-preview" dangerouslySetInnerHTML={{ __html: withLineBreaks(form.content_html) }} />
               </div>
             )}
             <label className="flex items-center gap-2 text-body cursor-pointer">
@@ -132,7 +138,7 @@ export default function Signatures() {
                     <span className="font-medium text-body">{sig.name}</span>
                     {sig.is_default && <span className="pill text-xs">Default</span>}
                   </div>
-                  <div className="mt-2 p-2 bg-white border border-line rounded-lg text-caption signature-preview" dangerouslySetInnerHTML={{ __html: sig.content_html }} />
+                  <div className="mt-2 p-2 bg-white border border-line rounded-lg text-caption signature-preview" dangerouslySetInnerHTML={{ __html: withLineBreaks(sig.content_html) }} />
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button onClick={() => openEdit(sig)} className="btn-ghost text-xs p-1.5" title="Edit"><PenSquare size={14} /></button>

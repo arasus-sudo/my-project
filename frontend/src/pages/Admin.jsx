@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Shield, LogOut, ChevronLeft, Ban, Trash2, RefreshCw } from "lucide-react";
+import { Shield, LogOut, ChevronLeft, Ban, Trash2, RefreshCw, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 export default function Admin() {
   const { user, logout } = useAuth();
@@ -11,18 +11,20 @@ export default function Admin() {
   const [summary, setSummary] = useState(null);
   const [workspaces, setWorkspaces] = useState([]);
   const [users, setUsers] = useState([]);
+  const [ticks, setTicks] = useState([]);
   const [tab, setTab] = useState("workspaces");
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
     setBusy(true);
     try {
-      const [s, w, u] = await Promise.all([
+      const [s, w, u, t] = await Promise.all([
         api.get("/admin/summary"),
         api.get("/admin/workspaces"),
         api.get("/admin/users"),
+        api.get("/admin/tick-health"),
       ]);
-      setSummary(s.data); setWorkspaces(w.data); setUsers(u.data);
+      setSummary(s.data); setWorkspaces(w.data); setUsers(u.data); setTicks(t.data);
     } catch (err) {
       if (err?.response?.status === 403) toast.error("Admin access only");
     } finally { setBusy(false); }
@@ -81,7 +83,7 @@ export default function Admin() {
 
         {/* Tabs */}
         <div className="flex items-center gap-1 mb-4">
-          {["workspaces", "users"].map((t) => (
+          {["workspaces", "users", "system"].map((t) => (
             <button key={t} onClick={() => setTab(t)} data-testid={`admin-tab-${t}`}
               className={`px-4 py-2 rounded-xl text-body ${tab === t ? "bg-ink text-white" : "hover:bg-white text-ink-muted"}`}>
               {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -181,6 +183,46 @@ export default function Admin() {
                       </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {tab === "system" && (
+          <div className="bg-white border border-line rounded-2xl card-floating overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-table min-w-[640px]">
+                <thead>
+                  <tr className="border-b border-line">
+                    {["Tick", "Last run", "Last success", "Runs", "Errors", "Last error"].map((h) => (
+                      <th key={h} className="table-header text-left p-3">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ticks.length === 0 && (
+                    <tr><td colSpan={6} className="p-6 text-center text-ink-muted">No ticks have run yet.</td></tr>
+                  )}
+                  {ticks.map((t) => {
+                    const failing = t.last_error && t.last_run_at !== t.last_success_at;
+                    return (
+                      <tr key={t.tick_id} className="border-b border-line hover:bg-ash">
+                        <td className="p-3 font-medium font-mono text-caption">{t.tick_id}</td>
+                        <td className="p-3 text-caption text-ink-muted font-mono">{t.last_run_at ? new Date(t.last_run_at).toLocaleString() : "—"}</td>
+                        <td className="p-3 text-caption text-ink-muted font-mono">{t.last_success_at ? new Date(t.last_success_at).toLocaleString() : "—"}</td>
+                        <td className="p-3 font-mono">{t.run_count || 0}</td>
+                        <td className="p-3 font-mono">{t.error_count || 0}</td>
+                        <td className="p-3 text-caption max-w-xs truncate">
+                          {failing ? (
+                            <span className="text-danger inline-flex items-center gap-1"><AlertTriangle size={12} /> {t.last_error}</span>
+                          ) : t.last_run_at ? (
+                            <span className="text-success inline-flex items-center gap-1"><CheckCircle2 size={12} /> OK</span>
+                          ) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

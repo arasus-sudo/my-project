@@ -7,6 +7,7 @@ import { Plus } from "lucide-react";
 export default function AccountingBills() {
   const [items, setItems] = useState([]);
   const [modal, setModal] = useState(false);
+  const [payingId, setPayingId] = useState(null);
   const [form, setForm] = useState({ vendor_name: "", vendor_email: "", date: new Date().toISOString().slice(0, 10), due_date: "", notes: "", lines: [{ description: "", quantity: "1", unit_price: "" }] });
 
   const load = () => api.get("/accounting-eq/bills").then((r) => setItems(r.data));
@@ -35,11 +36,14 @@ export default function AccountingBills() {
   };
 
   const payBill = async (id) => {
+    if (payingId) return; // guards a fast double-click from double-posting the payment
+    setPayingId(id);
     try {
       await api.put(`/accounting-eq/bills/${id}`, { status: "paid" });
       toast.success("Bill paid");
       load();
-    } catch { toast.error("Payment failed"); }
+    } catch (err) { toast.error(err.response?.data?.detail || "Payment failed"); }
+    finally { setPayingId(null); }
   };
 
   return (
@@ -57,7 +61,7 @@ export default function AccountingBills() {
             </div>
             <div className="flex items-center gap-2">
               <span className={`text-tiny px-2 py-0.5 rounded-full border ${b.status === "paid" ? "text-success border-success/30" : "text-warning border-warning"}`}>{b.status}</span>
-              {b.status === "unpaid" && <button onClick={() => payBill(b.id)} className="btn-primary">Pay</button>}
+              {b.status === "unpaid" && <button onClick={() => payBill(b.id)} disabled={payingId === b.id} className="btn-primary">{payingId === b.id ? "Paying…" : "Pay"}</button>}
             </div>
           </div>
         ))}

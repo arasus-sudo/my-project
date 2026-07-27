@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from server import db, now_iso, new_id, current_user, _audit, _log_activity, _llm_chat, ANTHROPIC_API_KEY
+from server import db, now_iso, new_id, current_user, _audit, _log_activity, _llm_chat, ANTHROPIC_API_KEY, require_role
 from billing import charge_credits
 from twilio_client import twilio_client
 
@@ -97,7 +97,7 @@ async def update_template(tid: str, body: SMSTemplateIn, user=Depends(current_us
     return {"ok": True}
 
 @sms_router.delete("/templates/{tid}")
-async def delete_template(tid: str, user=Depends(current_user)):
+async def delete_template(tid: str, user=Depends(require_role("org_admin", "campaign_manager"))):
     await db.sms_templates.delete_one({"id": tid, "workspace_id": user["workspace_id"]})
     return {"ok": True}
 
@@ -228,7 +228,7 @@ async def create_broadcast(body: SMSBroadcastIn, user=Depends(current_user)):
     return b
 
 @sms_router.post("/broadcasts/{bid}/launch")
-async def launch_broadcast(bid: str, user=Depends(current_user)):
+async def launch_broadcast(bid: str, user=Depends(require_role("org_admin", "campaign_manager"))):
     b = await db.sms_broadcasts.find_one(
         {"id": bid, "workspace_id": user["workspace_id"]}
     )

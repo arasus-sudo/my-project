@@ -30,7 +30,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
-from server import db, current_user, now_iso, new_id, _audit, _log_activity, _llm_chat, ANTHROPIC_API_KEY
+from server import db, current_user, now_iso, new_id, _audit, _log_activity, _llm_chat, ANTHROPIC_API_KEY, require_role
 
 log = logging.getLogger(__name__)
 
@@ -175,7 +175,7 @@ async def update_site(sid: str, body: SiteIn, user=Depends(current_user)):
 
 
 @site_router.delete("/sites/{sid}")
-async def delete_site(sid: str, user=Depends(current_user)):
+async def delete_site(sid: str, user=Depends(require_role("org_admin", "campaign_manager"))):
     await db.sites.delete_one({"id": sid, "workspace_id": user["workspace_id"]})
     await db.site_kb_chunks.delete_many({"site_id": sid})
     return {"ok": True}

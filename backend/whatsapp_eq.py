@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from server import db, now_iso, new_id, current_user, _audit, _llm_chat, ANTHROPIC_API_KEY
+from server import db, now_iso, new_id, current_user, _audit, _llm_chat, ANTHROPIC_API_KEY, require_role
 from billing import charge_credits
 from twilio_client import twilio_client
 
@@ -44,6 +44,16 @@ class WAReplyIn(BaseModel):
 # ---- Helpers ----
 def _sanitize_phone(raw: str) -> str:
     return re.sub(r"[^\d+]", "", raw).strip()
+
+
+def _session_expired(session_expires_at: Optional[str]) -> bool:
+    """WhatsApp only allows freeform replies inside a rolling 24h session
+    window — enforced here, not just documented. Pure and DB-free so it's
+    directly unit-testable. No expiry set at all means no session has been
+    opened yet, which is not the same as expired."""
+    if not session_expires_at:
+        return False
+    return datetime.now(dt_timezone.utc).isoformat() > session_expires_at
 
 # ---- Authenticated Routes ----
 
@@ -97,7 +107,7 @@ async def submit_template(tid: str, user=Depends(current_user)):
     return {"ok": True, "status": "approved"}
 
 @whatsapp_router.delete("/templates/{tid}")
-async def delete_template(tid: str, user=Depends(current_user)):
+async def delete_template(tid: str, user=Depends(require_role("org_admin", "campaign_manager"))):
     await db.whatsapp_templates.delete_one({"id": tid, "workspace_id": user["workspace_id"]})
     return {"ok": True}
 
@@ -136,8 +146,7 @@ async def reply_to_conversation(cid: str, body: WAReplyIn, user=Depends(current_
         raise HTTPException(404, "Conversation not found")
     
     # Check session window
-    session_expires = conv.get("session_expires_at")
-    if session_expires and datetime.now(dt_timezone.utc).isoformat() > session_expires:
+    if _session_expired(conv.get("session_expires_at")):
         raise HTTPException(400, "Conversation session expired — send a template message to re-open")
     
     msg = {
@@ -270,7 +279,7 @@ async def create_broadcast(body: WABroadcastIn, user=Depends(current_user)):
     return b
 
 @whatsapp_router.post("/broadcasts/{bid}/launch")
-async def launch_broadcast(bid: str, user=Depends(current_user)):
+async def launch_broadcast(bid: str, user=Depends(require_role("org_admin", "campaign_manager"))):
     b = await db.whatsapp_broadcasts.find_one(
         {"id": bid, "workspace_id": user["workspace_id"]}
     )

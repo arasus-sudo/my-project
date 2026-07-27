@@ -1,5 +1,17 @@
-"""Backend tests for iteration_2: Webhooks (Airtable/Notion/Generic) + HubSpot mock + regression."""
+"""Backend tests for iteration_2: Webhooks (Airtable/Notion/Generic) + HubSpot mock + regression.
+
+This is a LIVE-INTEGRATION suite, not a unit suite: every test makes a real
+`requests` call against an already-running server and a real, pre-seeded
+`test@test.com` login. It is deliberately excluded from a normal `pytest`
+run (see the reachability check below) so a default run stays a trustworthy
+green/red signal — without this, every default run failed with
+`ConnectionRefusedError` whenever no server happened to be up, which looked
+identical to a real regression. To actually run this suite: start the
+backend (`uvicorn server:app --port 8001`), ensure the `test@test.com` user
+exists, then run `pytest tests/test_webhooks_hubspot.py -n 0` directly.
+"""
 import os
+import socket
 import pytest
 import requests
 
@@ -16,6 +28,23 @@ BASE = (os.environ.get("REACT_APP_BACKEND_URL") or _read_frontend_env()).rstrip(
 API = f"{BASE}/api"
 EMAIL = "test@test.com"
 PASS = "TempPw@98765"
+
+
+def _server_reachable() -> bool:
+    from urllib.parse import urlparse
+    parsed = urlparse(BASE)
+    host, port = parsed.hostname or "localhost", parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        with socket.create_connection((host, port), timeout=1.5):
+            return True
+    except OSError:
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _server_reachable(),
+    reason=f"live-integration suite: no server reachable at {BASE} — see module docstring",
+)
 
 
 @pytest.fixture(scope="session")

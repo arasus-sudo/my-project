@@ -293,21 +293,16 @@ def test_text_alternative_is_generated():
 
 
 def test_chain_call_gives_up_loudly_on_malformed_json(monkeypatch):
-    """A step that returns junk must raise, not silently ship a broken draft."""
-    class _Msgs:
-        async def create(self, **k):
-            class B:
-                type = "text"
-                text = "sorry, I can't do that"
-            class R:
-                content = [B()]
-            return R()
+    """A step that returns junk must raise, not silently ship a broken draft.
 
-    class _Client:
-        def __init__(self, **k): self.messages = _Msgs()
+    `_chain_call` gets its completion via the shared `_llm_chat` helper
+    (server.py), not a direct `anthropic.AsyncAnthropic` client — draft_chain
+    was migrated onto that shared entry point, so the seam to mock is
+    `draft_chain._llm_chat` (imported directly into the module's namespace)."""
+    async def not_json(system, user_text, sid, max_tokens=900):
+        return "sorry, I can't do that"
 
-    monkeypatch.setattr(draft_chain.anthropic, "AsyncAnthropic", _Client)
-    monkeypatch.setattr(draft_chain, "ANTHROPIC_API_KEY", "k")
+    monkeypatch.setattr(draft_chain, "_llm_chat", not_json)
     monkeypatch.setattr(draft_chain, "MAX_ATTEMPTS", 1)
 
     with pytest.raises(draft_chain.ChainError):
@@ -315,20 +310,10 @@ def test_chain_call_gives_up_loudly_on_malformed_json(monkeypatch):
 
 
 def test_chain_call_rejects_json_missing_required_keys(monkeypatch):
-    class _Msgs:
-        async def create(self, **k):
-            class B:
-                type = "text"
-                text = '{"subject": "hi"}'      # missing "cta"
-            class R:
-                content = [B()]
-            return R()
+    async def missing_key(system, user_text, sid, max_tokens=900):
+        return '{"subject": "hi"}'      # missing "cta"
 
-    class _Client:
-        def __init__(self, **k): self.messages = _Msgs()
-
-    monkeypatch.setattr(draft_chain.anthropic, "AsyncAnthropic", _Client)
-    monkeypatch.setattr(draft_chain, "ANTHROPIC_API_KEY", "k")
+    monkeypatch.setattr(draft_chain, "_llm_chat", missing_key)
     monkeypatch.setattr(draft_chain, "MAX_ATTEMPTS", 1)
 
     with pytest.raises(draft_chain.ChainError):

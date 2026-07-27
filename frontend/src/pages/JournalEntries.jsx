@@ -9,6 +9,7 @@ export default function JournalEntries() {
   const [accounts, setAccounts] = useState([]);
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState(false);
+  const [posting, setPosting] = useState(false);
   const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), memo: "", reference: "", lines: [{ account_id: "", debit: "", credit: "", memo: "" }] });
 
   const load = () => api.get(`/accounting-eq/journal-entries?page=${page}`).then((r) => setData(r.data));
@@ -24,6 +25,8 @@ export default function JournalEntries() {
 
   const save = async (e) => {
     e.preventDefault();
+    if (posting) return; // guards a fast double-click from posting the same entry twice
+    setPosting(true);
     try {
       await api.post("/accounting-eq/journal-entries", {
         ...form,
@@ -34,6 +37,7 @@ export default function JournalEntries() {
       setForm({ date: new Date().toISOString().slice(0, 10), memo: "", reference: "", lines: [{ account_id: "", debit: "", credit: "", memo: "" }] });
       load();
     } catch (err) { toast.error(err.response?.data?.detail || "Post failed"); }
+    finally { setPosting(false); }
   };
 
   const totalPages = Math.ceil(data.total / 25);
@@ -104,7 +108,7 @@ export default function JournalEntries() {
               </div>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary">Post entry</button>
+                <button type="submit" disabled={posting} className="btn-primary">{posting ? "Posting…" : "Post entry"}</button>
               </div>
             </form>
           </div>

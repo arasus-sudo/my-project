@@ -9,13 +9,13 @@ provider clients.
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from server import (
     db, current_user, now_iso, new_id, _audit, _log_activity, _verify_email_syntax,
-    FRONTEND_URL,
+    FRONTEND_URL, limiter, _workspace_or_ip_key,
 )
 import lead_sources
 from lead_sources import ProviderError
@@ -186,7 +186,8 @@ async def _enrich(wid: str, lead: Dict[str, Any], force: bool = False) -> Dict[s
 
 
 @pitch_router.post("/leads/{lead_id}/enrich")
-async def enrich_lead(lead_id: str, force: bool = False, user=Depends(current_user)):
+@limiter.limit("20/minute", key_func=_workspace_or_ip_key)
+async def enrich_lead(request: Request, lead_id: str, force: bool = False, user=Depends(current_user)):
     wid = user["workspace_id"]
     lead = await db.leads.find_one({"id": lead_id, "workspace_id": wid}, {"_id": 0})
     if not lead:
@@ -221,7 +222,8 @@ async def get_lead_research(lead_id: str, user=Depends(current_user)):
 
 # ----------------------------- Draft chain --------------------------------------
 @pitch_router.post("/draft")
-async def draft_email(body: DraftIn, user=Depends(current_user)):
+@limiter.limit("20/minute", key_func=_workspace_or_ip_key)
+async def draft_email(request: Request, body: DraftIn, user=Depends(current_user)):
     """Research → Angle → Draft → Humanise. Returns structured HTML + text."""
     wid = user["workspace_id"]
     lead = await db.leads.find_one({"id": body.lead_id, "workspace_id": wid}, {"_id": 0})

@@ -9,6 +9,7 @@ export default function AccountingInvoices() {
   const [customers, setCustomers] = useState([]);
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState(false);
+  const [payingId, setPayingId] = useState(null);
   const [form, setForm] = useState({ customer_id: "", date: new Date().toISOString().slice(0, 10), due_date: "", tax_rate: "0", notes: "", lines: [{ description: "", quantity: "1", unit_price: "" }] });
 
   const load = () => api.get(`/accounting-eq/invoices?page=${page}`).then((r) => setData(r.data));
@@ -46,15 +47,15 @@ export default function AccountingInvoices() {
   };
 
   const recordPayment = async (id) => {
+    if (payingId) return; // guards a fast double-click from double-posting the payment
+    setPayingId(id);
     try {
-      await api.put(`/accounting-eq/invoices/${id}`, { status: "paid", amount_paid: 0 });
       const inv = data.items.find(i => i.id === id);
-      if (inv) {
-        await api.put(`/accounting-eq/invoices/${id}`, { status: "paid", amount_paid: inv.balance_due });
-      }
+      await api.put(`/accounting-eq/invoices/${id}`, { status: "paid", amount_paid: inv?.balance_due ?? 0 });
       toast.success("Payment recorded");
       load();
-    } catch { toast.error("Payment failed"); }
+    } catch (err) { toast.error(err.response?.data?.detail || "Payment failed"); }
+    finally { setPayingId(null); }
   };
 
   const STATUS_META = { draft: "Draft", sent: "Sent", paid: "Paid", overdue: "Overdue", partially_paid: "Partial", cancelled: "Cancelled" };
@@ -78,7 +79,7 @@ export default function AccountingInvoices() {
             <div className="flex items-center gap-2">
               <span className={`text-tiny px-2 py-0.5 rounded-full border ${inv.status === "paid" ? "text-success border-success/30" : inv.status === "draft" ? "text-ink-muted border-line" : "text-warning border-warning"}`}>{STATUS_META[inv.status]}</span>
               {inv.status === "draft" && <button onClick={() => sendInvoice(inv.id)} className="btn-secondary">Send</button>}
-              {inv.status === "sent" && <button onClick={() => recordPayment(inv.id)} className="btn-primary">Record payment</button>}
+              {inv.status === "sent" && <button onClick={() => recordPayment(inv.id)} disabled={payingId === inv.id} className="btn-primary">{payingId === inv.id ? "Recording…" : "Record payment"}</button>}
             </div>
           </div>
         ))}

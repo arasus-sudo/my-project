@@ -199,7 +199,11 @@ def to_html(final: Dict[str, Any], signature: str = "") -> str:
         parts.append(f'<p style="{_P_STYLE}">{_esc(final["cta"])}</p>')
     if signature:
         # Signature is user-authored HTML — preserve formatting and images.
-        parts.append(f'<div style="{_SIG_STYLE}">{signature}</div>')
+        # It's edited in a plain <textarea> (Signatures.jsx), so a literal
+        # newline the user typed is real HTML source, not a line break —
+        # without this, a multi-line signature collapses onto one line in
+        # every mail client (raw \n has no rendering meaning in HTML).
+        parts.append(f'<div style="{_SIG_STYLE}">{signature.replace(chr(10), "<br>")}</div>')
     parts.append("</div>")
     return "\n".join(parts)
 

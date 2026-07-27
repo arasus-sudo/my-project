@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from server import db, now_iso, new_id, current_user, _audit, _llm_chat, ANTHROPIC_API_KEY
+from server import db, now_iso, new_id, current_user, _audit, _llm_chat, ANTHROPIC_API_KEY, require_role, _is_admin
 from billing import charge_credits
 
 log = logging.getLogger(__name__)
@@ -18,6 +18,17 @@ log = logging.getLogger(__name__)
 hrms_router = APIRouter(prefix="/hrms-eq")
 
 PAGE_SIZE = 25
+
+
+# ---- Helpers ----
+def _leave_days(start_date: str, end_date: str) -> int:
+    """Inclusive day count for a leave request (a single-day request spans
+    the same start/end date and must count as 1 day, not 0) — pure and
+    DB-free so it's directly unit-testable, the classic off-by-one risk in
+    this kind of calculation."""
+    start = datetime.fromisoformat(start_date)
+    end = datetime.fromisoformat(end_date)
+    return (end - start).days + 1
 
 # ---- Models ----
 class EmployeeIn(BaseModel):
@@ -138,18 +149,20 @@ async def get_employee(eid: str, user=Depends(current_user)):
     return emp
 
 @hrms_router.put("/employees/{eid}")
-async def update_employee(eid: str, body: dict, user=Depends(current_user)):
+async def update_employee(eid: str, body: dict, user=Depends(require_role("org_admin", "campaign_manager"))):
+    # Gated: the update body can include `compensation`, so any workspace
+    # role editing an employee record could otherwise change pay figures.
     emp = await db.employees.find_one({"id": eid, "workspace_id": user["workspace_id"]})
     if not emp:
         raise HTTPException(404, "Employee not found")
-    
+
     update = {k: v for k, v in body.items() if v is not None and k != "workspace_id"}
     update["updated_at"] = now_iso()
     await db.employees.update_one({"id": eid}, {"$set": update})
     return {"ok": True}
 
 @hrms_router.delete("/employees/{eid}")
-async def delete_employee(eid: str, user=Depends(current_user)):
+async def delete_employee(eid: str, user=Depends(require_role("org_admin", "campaign_manager"))):
     await db.employees.delete_one({"id": eid, "workspace_id": user["workspace_id"]})
     return {"ok": True}
 
@@ -174,7 +187,7 @@ async def create_department(body: DepartmentIn, user=Depends(current_user)):
     return dept
 
 @hrms_router.put("/departments/{did}")
-async def update_department(did: str, body: dict, user=Depends(current_user)):
+async def update_department(did: str, body: dict, user=Depends(require_role("org_admin", "campaign_manager"))):
     await db.departments.update_one(
         {"id": did, "workspace_id": user["workspace_id"]},
         {"$set": {**body, "updated_at": now_iso()}}
@@ -182,7 +195,7 @@ async def update_department(did: str, body: dict, user=Depends(current_user)):
     return {"ok": True}
 
 @hrms_router.delete("/departments/{did}")
-async def delete_department(did: str, user=Depends(current_user)):
+async def delete_department(did: str, user=Depends(require_role("org_admin", "campaign_manager"))):
     await db.departments.delete_one({"id": did, "workspace_id": user["workspace_id"]})
     return {"ok": True}
 
@@ -440,15 +453,19 @@ async def update_leave_request(lid: str, body: dict, user=Depends(current_user))
     lr = await db.leave_requests.find_one({"id": lid, "workspace_id": user["workspace_id"]})
     if not lr:
         raise HTTPException(404, "Leave request not found")
-    
+
     new_status = body.get("status")
     if new_status in ("approved", "declined"):
+        # Approving/declining mutates leave_balances — gate to
+        # manager-tier roles even though editing your own pending request
+        # (the branch below) stays open to any workspace member.
+        if user.get("role") not in ("org_admin", "campaign_manager") and not _is_admin(user):
+            raise HTTPException(403, "Not permitted for your role")
         if new_status == "approved":
             # Update balance
-            start = datetime.fromisoformat(lr["start_date"])
-            end = datetime.fromisoformat(lr["end_date"])
-            days = (end - start).days + 1
-            
+            days = _leave_days(lr["start_date"], lr["end_date"])
+
+
             await db.leave_balances.update_one(
                 {
                     "workspace_id": user["workspace_id"],
@@ -480,7 +497,7 @@ async def get_leave_balances(employee_id: Optional[str] = None, user=Depends(cur
     return items
 
 @hrms_router.post("/leave-balances")
-async def set_leave_balance(body: dict, user=Depends(current_user)):
+async def set_leave_balance(body: dict, user=Depends(require_role("org_admin", "campaign_manager"))):
     await db.leave_balances.update_one(
         {
             "workspace_id": user["workspace_id"],

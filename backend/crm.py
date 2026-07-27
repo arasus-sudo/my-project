@@ -18,7 +18,10 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from pymongo.errors import DuplicateKeyError
 
-from server import db, current_user, now_iso, new_id, _audit, _log_activity, _is_admin, _llm_chat, _extract_json
+from server import (
+    db, current_user, now_iso, new_id, _audit, _log_activity, _is_admin, _llm_chat, _extract_json,
+    require_role,
+)
 from import_utils import _parse_rows
 
 crm_router = APIRouter()
@@ -35,21 +38,6 @@ NOT_DELETED = {"deleted_at": None}
 def _active(workspace_id: str, **extra) -> Dict[str, Any]:
     return {"workspace_id": workspace_id, **NOT_DELETED, **extra}
 
-
-def require_role(*allowed: str):
-    """Gate a route to workspace roles in `allowed` (suite admins always pass).
-
-    The workspace ROLES set (org_admin/campaign_manager/sdr/viewer) is declared
-    in server.py but wasn't enforced anywhere in this module — a viewer could
-    delete/merge/reshape data same as an admin. This closes that gap for the
-    handful of destructive or schema-shaping actions that need it; reads and
-    normal create/edit stay open to every workspace role.
-    """
-    async def _dep(user=Depends(current_user)):
-        if user.get("role") not in allowed and not _is_admin(user):
-            raise HTTPException(403, "Not permitted for your role")
-        return user
-    return _dep
 
 LEAD_IMPORT_TEMPLATE_COLUMNS = ("first_name", "last_name", "email", "company", "title", "phone", "tags")
 

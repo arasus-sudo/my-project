@@ -34,7 +34,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, FileResponse
 
 from pydantic import BaseModel
@@ -42,7 +42,7 @@ from pydantic import BaseModel
 from server import (
     db, current_user, now_iso, new_id, _audit, _log_activity,
     _llm_chat, _extract_json, ANTHROPIC_API_KEY, generate_ai_image,
-    FRONTEND_URL, PUBLIC_BASE_URL, _crawl_site,
+    FRONTEND_URL, PUBLIC_BASE_URL, _crawl_site, limiter, _workspace_or_ip_key,
 )
 from email_client import send_email
 from import_utils import _parse_rows, _parse_date
@@ -438,7 +438,8 @@ def _compose_caption(post: Dict[str, Any]) -> str:
 
 
 @social_router.post("/posts/generate")
-async def generate_post(body: PostGenIn, user=Depends(current_user)):
+@limiter.limit("20/minute", key_func=_workspace_or_ip_key)
+async def generate_post(request: Request, body: PostGenIn, user=Depends(current_user)):
     if body.platform not in PROVIDERS:
         raise HTTPException(400, "unknown platform")
     content_type = body.content_type if body.content_type in ("static", "carousel", "video") else "static"
@@ -468,7 +469,7 @@ async def generate_post(body: PostGenIn, user=Depends(current_user)):
         "first_comment": body.first_comment, "first_comment_posted": False,
         "status": "draft", "scheduled_for": None, "approval_token": None,
         "approved_by": None, "approved_at": None, "organiser_issues": qc.get("issues", []),
-        "published_at": None, "platform_post_id": None, "platform_post_url": None, "engagement": None,
+        "published_at": None, "platform_post_id": None, "platform_post_url": None, "engagement": None, "publish_charge_taken": False,
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.social_posts.insert_one(doc)
@@ -543,70 +544,83 @@ async def _publish_to_platform(workspace_id: str, p: Dict[str, Any]) -> Dict[str
     and the scheduler's automatic tick, so both paths bill, log, and simulate
     identically. Calls the real platform client when connected/un-mocked;
     otherwise (or on any real-publish failure) falls back to the same
-    deterministic-mock engagement numbers the app has always used."""
-    from billing import charge_credits
-    await charge_credits(workspace_id, "social_publish", meta={"post_id": p["id"], "platform": p["platform"]})
+    deterministic-mock engagement numbers the app has always used.
 
-    integration = await db.social_integrations.find_one(
-        {"workspace_id": workspace_id, "provider": p["platform"]}, {"_id": 0})
-    client = CLIENTS[p["platform"]]
-    client_mocked = client.status()["mocked"]
-    real_publish_supported = client.status().get("real_publish_supported", True)
+    Charges credits at most once per post (tracked via `publish_charge_taken`)
+    so retrying a `publish_failed` post never charges twice. Any exception
+    anywhere below — not just the ones the real-platform branch already
+    expects — resolves the post to `publish_failed` rather than leaving it
+    stuck mid-status: the scheduler tick claims a post by flipping it to
+    "publishing" first, and there is no UI action available for that status,
+    so an uncaught exception here would otherwise strand the post forever."""
+    if not p.get("publish_charge_taken"):
+        from billing import charge_credits
+        await charge_credits(workspace_id, "social_publish", meta={"post_id": p["id"], "platform": p["platform"]})
+        await db.social_posts.update_one({"id": p["id"]}, {"$set": {"publish_charge_taken": True}})
 
-    platform_post_id, post_url, mocked = None, "", True
-    if not client_mocked and integration and integration.get("connected") and real_publish_supported:
-        try:
-            caption = _compose_caption(p)
-            if p["platform"] == "linkedin":
-                image_bytes = None
-                if p.get("media_url"):
-                    path = _media_path(p["id"], Path(p["media_url"]).name)
-                    if path.is_file():
-                        image_bytes = path.read_bytes()
-                result = await client.publish(integration, caption, image_bytes=image_bytes)
-            elif p["platform"] == "instagram":
-                image_url = _public_media_url(p)
-                if not image_url:
-                    raise RuntimeError("Instagram requires a publicly-hosted image; none available for this post")
-                result = await client.publish(integration, caption, image_url)
-            else:
-                result = await client.publish(integration, caption)
-            platform_post_id = result.get("platform_post_id")
-            post_url = result.get("url", "")
-            mocked = bool(result.get("simulated", False))
+    try:
+        integration = await db.social_integrations.find_one(
+            {"workspace_id": workspace_id, "provider": p["platform"]}, {"_id": 0})
+        client = CLIENTS[p["platform"]]
+        client_mocked = client.status()["mocked"]
+        real_publish_supported = client.status().get("real_publish_supported", True)
 
-            # First-comment scheduling — best-effort: a failed comment must
-            # never fail (or retroactively un-publish) the post itself.
-            if p.get("first_comment") and hasattr(client, "create_comment"):
-                try:
-                    await client.create_comment(integration, platform_post_id, p["first_comment"])
-                    await db.social_posts.update_one({"id": p["id"]}, {"$set": {"first_comment_posted": True}})
-                except Exception as ex:
-                    log.warning("first-comment post failed for %s post %s: %s", p["platform"], p["id"], ex)
-        except Exception as ex:
-            log.warning("real publish failed for %s post %s: %s", p["platform"], p["id"], ex)
-            await db.social_posts.update_one({"id": p["id"]}, {"$set": {
-                "status": "publish_failed", "publish_error": str(ex), "updated_at": now_iso(),
-            }})
-            raise
+        platform_post_id, post_url, mocked = None, "", True
+        if not client_mocked and integration and integration.get("connected") and real_publish_supported:
+            try:
+                caption = _compose_caption(p)
+                if p["platform"] == "linkedin":
+                    image_bytes = None
+                    if p.get("media_url"):
+                        path = _media_path(p["id"], Path(p["media_url"]).name)
+                        if path.is_file():
+                            image_bytes = path.read_bytes()
+                    result = await client.publish(integration, caption, image_bytes=image_bytes)
+                elif p["platform"] == "instagram":
+                    image_url = _public_media_url(p)
+                    if not image_url:
+                        raise RuntimeError("Instagram requires a publicly-hosted image; none available for this post")
+                    result = await client.publish(integration, caption, image_url)
+                else:
+                    result = await client.publish(integration, caption)
+                platform_post_id = result.get("platform_post_id")
+                post_url = result.get("url", "")
+                mocked = bool(result.get("simulated", False))
 
-    engagement = None
-    if not platform_post_id:
-        seed = sum(ord(c) for c in p["id"]) % 500
-        engagement = {"likes": seed % 200, "comments": seed % 20, "shares": seed % 10, "views": (seed % 200) * 8}
-        platform_post_id = f"mock-{p['platform']}-{p['id'][:8]}"
+                # First-comment scheduling — best-effort: a failed comment must
+                # never fail (or retroactively un-publish) the post itself.
+                if p.get("first_comment") and hasattr(client, "create_comment"):
+                    try:
+                        await client.create_comment(integration, platform_post_id, p["first_comment"])
+                        await db.social_posts.update_one({"id": p["id"]}, {"$set": {"first_comment_posted": True}})
+                    except Exception as ex:
+                        log.warning("first-comment post failed for %s post %s: %s", p["platform"], p["id"], ex)
+            except Exception as ex:
+                log.warning("real publish failed for %s post %s: %s", p["platform"], p["id"], ex)
+                raise
 
-    await db.social_posts.update_one({"id": p["id"]}, {"$set": {
-        "status": "published", "published_at": now_iso(),
-        "platform_post_id": platform_post_id, "platform_post_url": post_url,
-        "engagement": engagement,
-    }})
-    await _audit({"workspace_id": workspace_id, "id": None, "email": "system"},
-                "social_eq.post.publish", {"id": p["id"], "platform": p["platform"], "mocked": mocked})
-    if p.get("lead_id"):
-        await _log_activity(workspace_id, p["lead_id"], "social", "post_published",
-                             f"Published a {p['platform']} post: {p['headline']}", {"post_id": p["id"]})
-    return {"ok": True, "mocked": mocked, "engagement": engagement, "platform_post_id": platform_post_id}
+        engagement = None
+        if not platform_post_id:
+            seed = sum(ord(c) for c in p["id"]) % 500
+            engagement = {"likes": seed % 200, "comments": seed % 20, "shares": seed % 10, "views": (seed % 200) * 8}
+            platform_post_id = f"mock-{p['platform']}-{p['id'][:8]}"
+
+        await db.social_posts.update_one({"id": p["id"]}, {"$set": {
+            "status": "published", "published_at": now_iso(),
+            "platform_post_id": platform_post_id, "platform_post_url": post_url,
+            "engagement": engagement,
+        }})
+        await _audit({"workspace_id": workspace_id, "id": None, "email": "system"},
+                    "social_eq.post.publish", {"id": p["id"], "platform": p["platform"], "mocked": mocked})
+        if p.get("lead_id"):
+            await _log_activity(workspace_id, p["lead_id"], "social", "post_published",
+                                 f"Published a {p['platform']} post: {p['headline']}", {"post_id": p["id"]})
+        return {"ok": True, "mocked": mocked, "engagement": engagement, "platform_post_id": platform_post_id}
+    except Exception as ex:
+        await db.social_posts.update_one({"id": p["id"], "status": {"$ne": "published"}}, {"$set": {
+            "status": "publish_failed", "publish_error": str(ex), "updated_at": now_iso(),
+        }})
+        raise
 
 
 @social_router.post("/posts/{pid}/publish")
@@ -665,7 +679,7 @@ async def _generate_post_for_row(user: Dict[str, Any], platform: str, topic: str
         "scheduled_for": scheduled_for,
         "approval_token": None if video_pending else secrets.token_urlsafe(32),
         "approved_by": None, "approved_at": None, "organiser_issues": qc.get("issues", []),
-        "published_at": None, "platform_post_id": None, "platform_post_url": None, "engagement": None,
+        "published_at": None, "platform_post_id": None, "platform_post_url": None, "engagement": None, "publish_charge_taken": False,
         "created_at": now_iso(), "updated_at": now_iso(),
     }
     await db.social_posts.insert_one(doc)
@@ -850,7 +864,11 @@ async def run_social_publish_tick() -> None:
     """Registered in server.py's APScheduler alongside reminders/sends/reply-
     polling. Picks up every `approved` post whose scheduled time has arrived
     (or has none) and publishes it. Claims each post before publishing
-    (status flip is the claim) so overlapping ticks can't double-publish."""
+    (status flip is the claim) so overlapping ticks can't double-publish.
+    `_publish_to_platform` itself guarantees any failure resolves the post
+    to `publish_failed` (never leaves it stuck at "publishing"), so this
+    except is just a log line — the post is always left in a state the
+    Queue UI has a retry action for."""
     now = now_iso()
     cursor = db.social_posts.find({
         "status": "approved",
@@ -1308,7 +1326,7 @@ async def run_daily_social_content_tick():
                     "status": "pending_approval", "scheduled_for": None,
                     "approval_token": secrets.token_urlsafe(32),
                     "approved_by": None, "approved_at": None, "organiser_issues": qc.get("issues", []),
-                    "published_at": None, "platform_post_id": None, "platform_post_url": None, "engagement": None,
+                    "published_at": None, "platform_post_id": None, "platform_post_url": None, "engagement": None, "publish_charge_taken": False,
                     "created_at": now_iso(), "updated_at": now_iso(),
                 }
                 await db.social_posts.insert_one(doc)

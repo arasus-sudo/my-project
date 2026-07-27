@@ -9,7 +9,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
-from server import db, now_iso, new_id, current_user, _audit, _llm_chat
+from server import db, now_iso, new_id, current_user, _audit, _llm_chat, require_role
 from billing import charge_credits
 
 log = logging.getLogger(__name__)
@@ -24,6 +24,24 @@ def _fmt_d(val):
     if val is None:
         return 0.0
     return float(Decimal(str(val)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def _validate_journal_line(debit: Decimal, credit: Decimal) -> None:
+    """A single line must be debit-only or credit-only, never both, never
+    neither. Pure and DB-free so it's directly unit-testable."""
+    if debit > 0 and credit > 0:
+        raise HTTPException(400, "Line cannot have both debit and credit")
+    if debit == 0 and credit == 0:
+        raise HTTPException(400, "Line must have debit or credit amount")
+
+
+def _check_balanced(total_debit: Decimal, total_credit: Decimal) -> None:
+    """The load-bearing double-entry invariant: every journal entry's total
+    debits must equal its total credits. Pure and DB-free so it's directly
+    unit-testable — this is the one check in this whole agent where a
+    silent bug would corrupt real financial data."""
+    if total_debit != total_credit:
+        raise HTTPException(400, f"Journal entry not balanced: debits={total_debit} credits={total_credit}")
 
 # ---- Account Types ----
 ASSET = "asset"
@@ -95,7 +113,7 @@ DEFAULT_ACCOUNTS = [
 
 
 @accounting_router.post("/accounts/seed-defaults")
-async def seed_default_accounts(user=Depends(current_user)):
+async def seed_default_accounts(user=Depends(require_role("org_admin", "campaign_manager"))):
     wid = user["workspace_id"]
     existing_categories = {
         a["category"] async for a in db.coa_accounts.find(
@@ -122,7 +140,7 @@ async def seed_default_accounts(user=Depends(current_user)):
 
 
 @accounting_router.put("/accounts/{aid}")
-async def update_account(aid: str, body: dict, user=Depends(current_user)):
+async def update_account(aid: str, body: dict, user=Depends(require_role("org_admin", "campaign_manager"))):
     await db.coa_accounts.update_one(
         {"id": aid, "workspace_id": user["workspace_id"]},
         {"$set": {**body, "updated_at": now_iso()}}
@@ -130,7 +148,7 @@ async def update_account(aid: str, body: dict, user=Depends(current_user)):
     return {"ok": True}
 
 @accounting_router.delete("/accounts/{aid}")
-async def delete_account(aid: str, user=Depends(current_user)):
+async def delete_account(aid: str, user=Depends(require_role("org_admin", "campaign_manager"))):
     # Check no journal lines reference this account
     exists = await db.journal_entries.find_one({
         "workspace_id": user["workspace_id"],
@@ -182,7 +200,7 @@ async def list_journal_entries(
     return {"items": items, "total": total, "page": page, "page_size": PAGE_SIZE}
 
 @accounting_router.post("/journal-entries")
-async def create_journal_entry(body: dict, user=Depends(current_user)):
+async def create_journal_entry(body: dict, user=Depends(require_role("org_admin", "campaign_manager"))):
     lines = body.get("lines", [])
     if not lines or len(lines) < 2:
         raise HTTPException(400, "Journal entry must have at least 2 lines")
@@ -202,12 +220,8 @@ async def create_journal_entry(body: dict, user=Depends(current_user)):
         
         debit = Decimal(str(line.get("debit", 0)))
         credit = Decimal(str(line.get("credit", 0)))
-        
-        if debit > 0 and credit > 0:
-            raise HTTPException(400, "Line cannot have both debit and credit")
-        if debit == 0 and credit == 0:
-            raise HTTPException(400, "Line must have debit or credit amount")
-        
+        _validate_journal_line(debit, credit)
+
         total_debit += debit
         total_credit += credit
         
@@ -220,9 +234,8 @@ async def create_journal_entry(body: dict, user=Depends(current_user)):
             "memo": line.get("memo", ""),
         })
     
-    if total_debit != total_credit:
-        raise HTTPException(400, f"Journal entry not balanced: debits={total_debit} credits={total_credit}")
-    
+    _check_balanced(total_debit, total_credit)
+
     entry = {
         "id": new_id(), "workspace_id": user["workspace_id"],
         "date": body.get("date", now_iso()[:10]),
@@ -418,7 +431,7 @@ async def create_invoice_from_proposal(proposal_id: str, user=Depends(current_us
     return inv
 
 @accounting_router.put("/invoices/{iid}")
-async def update_invoice(iid: str, body: dict, user=Depends(current_user)):
+async def update_invoice(iid: str, body: dict, user=Depends(require_role("org_admin", "campaign_manager"))):
     inv = await db.accounting_invoices.find_one(
         {"id": iid, "workspace_id": user["workspace_id"]}, {"_id": 0}
     )
@@ -492,6 +505,11 @@ async def update_invoice(iid: str, body: dict, user=Depends(current_user)):
                 )
     
     if body.get("status") in ("paid", "partially_paid"):
+        if inv["status"] == "paid":
+            # Without this, a retried request or a UI double-click re-posts
+            # the same cash/AR journal entry a second time — the block below
+            # only checks the incoming status, not the invoice's current one.
+            raise HTTPException(400, "Invoice is already marked paid")
         paid_amt = body.get("amount_paid", 0)
         new_paid = _fmt_d(float(inv.get("amount_paid", 0)) + paid_amt)
         new_balance = _fmt_d(inv["total"] - new_paid)
@@ -734,7 +752,7 @@ async def categorize_bill_suggest(bid: str, user=Depends(current_user)):
     }
 
 @accounting_router.put("/bills/{bid}")
-async def update_bill(bid: str, body: dict, user=Depends(current_user)):
+async def update_bill(bid: str, body: dict, user=Depends(require_role("org_admin", "campaign_manager"))):
     bill = await db.accounting_bills.find_one(
         {"id": bid, "workspace_id": user["workspace_id"]}, {"_id": 0}
     )
@@ -744,8 +762,12 @@ async def update_bill(bid: str, body: dict, user=Depends(current_user)):
     posting_warning = None
 
     if body.get("status") == "paid":
+        if bill["status"] == "paid":
+            # Same class of bug as update_invoice: without this check, a
+            # retried request re-posts the same expense/cash journal entry.
+            raise HTTPException(400, "Bill is already marked paid")
         paid_amt = bill["total"]
-        
+
         # Post expense + payment
         exp_acct = await db.coa_accounts.find_one({
             "workspace_id": user["workspace_id"],
