@@ -68,6 +68,7 @@ const Proposals = lazy(() => import("./pages/Proposals"));
 const ProposalBuilder = lazy(() => import("./pages/ProposalBuilder"));
 const PricingCatalog = lazy(() => import("./pages/PricingCatalog"));
 const SocialEQOverview = lazy(() => import("./pages/SocialEQOverview"));
+const SocialSetup = lazy(() => import("./pages/SocialSetup"));
 const PostComposer = lazy(() => import("./pages/PostComposer"));
 const PostQueue = lazy(() => import("./pages/PostQueue"));
 const SocialSettings = lazy(() => import("./pages/SocialSettings"));
@@ -189,6 +190,7 @@ function App() {
               <Route path="proposal-eq/pricing" element={<PricingCatalog />} />
               <Route path="proposal-eq/:id" element={<ProposalBuilder />} />
               <Route path="social-eq" element={<SocialEQOverview />} />
+              <Route path="social-eq/setup" element={<SocialSetup />} />
               <Route path="social-eq/compose" element={<PostComposer />} />
               <Route path="social-eq/queue" element={<PostQueue />} />
               <Route path="social-eq/settings" element={<SocialSettings />} />

@@ -1,14 +1,24 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { PenSquare, Clock, CheckCircle2, Send } from "lucide-react";
 
 export default function SocialEQOverview() {
+  const nav = useNavigate();
+  const [params] = useSearchParams();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { api.get("/social-eq/posts").then((r) => { setPosts(r.data); setLoading(false); }); }, []);
+
+  useEffect(() => {
+    if (params.get("setup") === "skipped") return;
+    api.get("/workspace/brand-voice").then((r) => {
+      if (!(r.data.content_pillars || []).length) nav("/app/social-eq/setup");
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const drafts = posts.filter((p) => p.status === "draft").length;
   const pending = posts.filter((p) => p.status === "scheduled" || p.status === "approved").length;

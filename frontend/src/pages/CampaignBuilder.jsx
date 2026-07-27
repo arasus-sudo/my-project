@@ -1061,6 +1061,12 @@ export default function CampaignBuilder() {
                         onChange={(e) => setSelectedReview(e.target.checked ? reviewEmails.map((l) => l.id) : [])}
                         title="Select all" />
                     </div>
+                    <div className="px-3 py-2 border-b border-line flex items-center gap-2">
+                      <input type="range" min={0} max={Math.max(0, reviewEmails.length - 1)} value={reviewIndex}
+                        onChange={(e) => setReviewIndex(Number(e.target.value))}
+                        className="flex-1 h-1 accent-ink cursor-pointer" />
+                      <span className="text-tiny font-mono text-ink-muted shrink-0">{reviewEmails.length > 0 ? `${reviewIndex + 1} / ${reviewEmails.length}` : "—"}</span>
+                    </div>
                     <div className="overflow-y-auto flex-1">
                       {reviewEmails.map((l, i) => (
                         <div key={l.id}

@@ -25,7 +25,7 @@ for r, dirs, fs in os.walk('D:/SUITEOFAGETNS/backend'):
 z.close()
 print('Zip created:', zp)
 "@
-az webapp config appsettings set --name $WebAppName --resource-group $ResourceGroup --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true --output table 2>$null
+az webapp config appsettings set --name $WebAppName --resource-group $ResourceGroup --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false --output table 2>$null
 
 Write-Host "▶ Deploying to Azure..." -ForegroundColor Yellow
 & "C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd" webapp deploy `

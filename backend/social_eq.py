@@ -42,7 +42,7 @@ from pydantic import BaseModel
 from server import (
     db, current_user, now_iso, new_id, _audit, _log_activity,
     _llm_chat, _extract_json, ANTHROPIC_API_KEY, generate_ai_image,
-    FRONTEND_URL, PUBLIC_BASE_URL,
+    FRONTEND_URL, PUBLIC_BASE_URL, _crawl_site,
 )
 from email_client import send_email
 from import_utils import _parse_rows, _parse_date
@@ -103,6 +103,12 @@ class RssFeedIn(BaseModel):
     active: bool = True
 
 
+class SetupAnalyzeIn(BaseModel):
+    persona_type: str
+    input_text: str = ""
+    url: str = ""
+
+
 # ----------------------------- Media hosting (public — Instagram must fetch it) --
 # LinkedIn's upload API takes raw bytes we send it directly, so it never needs
 # this route. Instagram's Content Publishing API only accepts a public
@@ -125,20 +131,33 @@ def _public_media_url(post: Dict[str, Any]) -> Optional[str]:
     return f"{PUBLIC_BASE_URL}/api{post['media_url']}"
 
 
+async def _brand_kit_colors(workspace_id: str, brand_kit_id: Optional[str]) -> List[str]:
+    if not brand_kit_id:
+        return []
+    kit = await db.brandkits.find_one({"id": brand_kit_id, "workspace_id": workspace_id}, {"_id": 0, "colors": 1})
+    return (kit or {}).get("colors") or []
+
+
 async def _generate_media(user: Dict[str, Any], post_id: str, topic: str,
-                          platform: str, content_type: str) -> Dict[str, Optional[str]]:
+                          platform: str, content_type: str,
+                          brand_voice: Optional[Dict[str, Any]] = None) -> Dict[str, Optional[str]]:
     """One image-generation path for both manual Compose and bulk-import, so
     a post looks and costs the same regardless of which route created it.
     For `content_type="carousel"` this also spins up a full editable
     multi-slide project in Create EQ (linked via `carousel_project_id`) —
     the social post itself still publishes with the cover image + caption,
     since native multi-image carousel publishing to each platform is a
-    larger, separate build (see plan notes)."""
+    larger, separate build (see plan notes). Brand colors are baked into the
+    generation prompt ("compliance by construction") rather than checked
+    post-hoc, since the shared LLM helper isn't a vision model."""
     media_url, carousel_project_id = None, None
+    colors = await _brand_kit_colors(user["workspace_id"], (brand_voice or {}).get("brand_kit_id"))
+    style_hint = f"Style: clean, modern, on-brand, using a color palette of {', '.join(colors)}." if colors \
+        else "Style: clean, modern, professional."
     image_prompt = (
-        f"Carousel cover image for a social post about: {topic}. Style: clean, modern, on-brand."
+        f"Carousel cover image for a social post about: {topic}. {style_hint}"
         if content_type == "carousel" else
-        f"Social media static post image about: {topic}. Style: clean, modern, professional."
+        f"Social media static post image about: {topic}. {style_hint}"
     )
     try:
         size = "1080x1080" if platform == "instagram" else "1080x1350"
@@ -260,11 +279,25 @@ def _fallback_draft(platform: str, topic: str) -> Dict[str, Any]:
     return {"headline": topic[:60], "body": f"Draft post about: {topic}", "hashtags": []}
 
 
-async def _draft_post(platform: str, topic: str, tone: str, lead_context: Optional[str]) -> Dict[str, Any]:
+async def _get_brand_voice(workspace_id: str) -> Dict[str, Any]:
+    ws = await db.workspaces.find_one({"id": workspace_id}, {"_id": 0, "brand_voice": 1})
+    return (ws or {}).get("brand_voice") or {}
+
+
+async def _draft_post(platform: str, topic: str, tone: str, lead_context: Optional[str],
+                       brand_voice: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     if not ANTHROPIC_API_KEY:
         return _fallback_draft(platform, topic)
+    brand_context = ""
+    if brand_voice:
+        if brand_voice.get("offer"):
+            brand_context += f" What we offer: {brand_voice['offer']}."
+        if brand_voice.get("icp_description"):
+            brand_context += f" Who we're speaking to: {brand_voice['icp_description']}."
+        if brand_voice.get("banned_phrases"):
+            brand_context += f" Never use these words/phrases: {', '.join(brand_voice['banned_phrases'])}."
     system = (
-        f"You are Social EQ, drafting a {platform} post. Tone: {tone}. "
+        f"You are Social EQ, drafting a {platform} post. Tone: {tone}.{brand_context} "
         f"{PLATFORM_GUIDANCE.get(platform, '')} "
         "STRICT JSON only: {\"headline\": str, \"body\": str, \"hashtags\": [str]}"
     )
@@ -277,6 +310,102 @@ async def _draft_post(platform: str, topic: str, tone: str, lead_context: Option
     except Exception:
         pass
     return _fallback_draft(platform, topic)
+
+
+def _setup_fallback() -> Dict[str, Any]:
+    return {
+        "tone": "warm", "offer": "", "icp_description": "",
+        "content_pillars": ["Behind the scenes", "Tips and insights", "Customer stories"],
+    }
+
+
+@social_router.post("/setup/analyze")
+async def social_setup_analyze(body: SetupAnalyzeIn, user=Depends(current_user)):
+    """First-pass positioning proposal for the Social EQ setup flow — the user
+    reviews/edits everything before it's saved, so this only needs to be a
+    good starting point, not perfect. Same _llm_chat -> _extract_json ->
+    safe-fallback-dict convention as company_intel.py's _build_ai_profile."""
+    crawled_text = ""
+    if body.url.strip():
+        pages = _crawl_site(body.url.strip(), max_pages=4)
+        crawled_text = "\n\n".join(f"URL: {u}\n{t[:3500]}" for u, t in pages.items())[:14000]
+
+    source_text = crawled_text or body.input_text.strip()
+    if not source_text:
+        raise HTTPException(400, "Provide a URL or a short description to analyze")
+
+    from billing import charge_credits
+    await charge_credits(user["workspace_id"], "social_setup", meta={"persona_type": body.persona_type})
+
+    if not ANTHROPIC_API_KEY:
+        return _setup_fallback()
+
+    persona_label = body.persona_type.replace("_", " ")
+    system = (
+        f"You help a {persona_label} define their social media brand voice and positioning. "
+        "Read the input below and propose a starting point for them to review and edit — "
+        "not a final answer, a good first draft. STRICT JSON only: "
+        '{"tone": one of ["warm","professional","direct","playful","formal"], '
+        '"offer": "1-2 sentences: what they do, sell, or offer", '
+        '"icp_description": "who their audience, ideal follower, or ideal customer is", '
+        '"content_pillars": ["3-5 short recurring topics or themes they should post about"]}'
+    )
+    try:
+        raw = await _llm_chat(system, source_text, f"social-setup-{user['id'][:8]}", user=user)
+        parsed = _extract_json(raw)
+        if parsed and parsed.get("content_pillars"):
+            return parsed
+    except Exception as ex:
+        log.warning("social_setup_analyze fallback: %s", ex)
+    return _setup_fallback()
+
+
+# ----------------------------- Organiser QC --------------------------------------
+async def _organiser_check(draft: Dict[str, Any], brand_voice: Optional[Dict[str, Any]],
+                            workspace_id: str) -> Dict[str, Any]:
+    """One small LLM call checking a draft against brand_voice (banned
+    phrases + tone match) before it reaches the digest. Never hard-blocks —
+    a human reviews every post in the digest regardless, so this is a
+    quality nudge (auto-fix when confident), not a gate that could stall the
+    pipeline. v1 is text-only; see plan notes on why visual/color QC is
+    deferred (the shared _llm_chat model isn't a vision model)."""
+    if not brand_voice or not ANTHROPIC_API_KEY:
+        return {"passed": True, "issues": [], "fixed_body": None}
+
+    system = (
+        "You are a brand-compliance checker for a social media post. Given the post and the "
+        "brand's banned phrases plus its intended tone, check whether it uses any banned phrase "
+        "and whether the tone roughly matches. STRICT JSON only: "
+        '{"passed": bool, "issues": [str], "fixed_body": str_or_null} '
+        "fixed_body should be a corrected version of the body ONLY if passed is false and the "
+        "fix is a small, confident edit (e.g. swap one phrase) — otherwise null. Never invent new "
+        "claims while fixing."
+    )
+    user_text = json.dumps({
+        "headline": draft.get("headline"), "body": draft.get("body"),
+        "intended_tone": brand_voice.get("tone"), "banned_phrases": brand_voice.get("banned_phrases", []),
+    })
+    try:
+        from billing import charge_credits
+        await charge_credits(workspace_id, "social_organiser_qc", meta={})
+        raw = await _llm_chat(system, user_text, f"seq-organiser-{new_id()[:8]}")
+        parsed = _extract_json(raw)
+        if parsed and "passed" in parsed:
+            return parsed
+    except Exception as ex:
+        log.warning("organiser check skipped: %s", ex)
+    return {"passed": True, "issues": [], "fixed_body": None}
+
+
+async def _apply_organiser_check(draft: Dict[str, Any], brand_voice: Optional[Dict[str, Any]],
+                                  workspace_id: str) -> Dict[str, Any]:
+    """Runs the QC pass and applies an auto-fix to `draft` in place when one
+    is offered. Returns the QC result so callers can store `issues` for
+    visibility in the queue/digest."""
+    qc = await _organiser_check(draft, brand_voice, workspace_id)
+    if not qc.get("passed") and qc.get("fixed_body"):
+        draft["body"] = qc["fixed_body"]
+    return qc
 
 
 def _compose_caption(post: Dict[str, Any]) -> str:
@@ -300,10 +429,12 @@ async def generate_post(body: PostGenIn, user=Depends(current_user)):
         if lead:
             lead_context = f"{lead.get('first_name')} at {lead.get('company')}"
 
-    draft = await _draft_post(body.platform, body.topic, body.tone, lead_context)
+    brand_voice = await _get_brand_voice(user["workspace_id"])
+    draft = await _draft_post(body.platform, body.topic, body.tone, lead_context, brand_voice)
+    qc = await _apply_organiser_check(draft, brand_voice, user["workspace_id"])
     content_type = body.content_type if body.content_type in ("static", "carousel") else "static"
     post_id = new_id()
-    media = await _generate_media(user, post_id, body.topic, body.platform, content_type)
+    media = await _generate_media(user, post_id, body.topic, body.platform, content_type, brand_voice)
     doc = {
         "id": post_id, "workspace_id": user["workspace_id"], "owner_id": user["id"],
         "lead_id": lead_id, "platform": body.platform, "topic": body.topic,
@@ -312,7 +443,7 @@ async def generate_post(body: PostGenIn, user=Depends(current_user)):
         "carousel_project_id": media["carousel_project_id"], "source": "manual",
         "first_comment": body.first_comment, "first_comment_posted": False,
         "status": "draft", "scheduled_for": None, "approval_token": None,
-        "approved_by": None, "approved_at": None,
+        "approved_by": None, "approved_at": None, "organiser_issues": qc.get("issues", []),
         "published_at": None, "platform_post_id": None, "platform_post_url": None, "engagement": None,
         "created_at": now_iso(), "updated_at": now_iso(),
     }
@@ -483,10 +614,12 @@ async def _generate_post_for_row(user: Dict[str, Any], platform: str, topic: str
     await charge_credits(user["workspace_id"], "social_draft", meta={"platform": platform, "source": "bulk_import"})
 
     lead_context = f"Extra call to action: {cta}" if cta else None
-    draft = await _draft_post(platform, topic, tone, lead_context)
+    brand_voice = await _get_brand_voice(user["workspace_id"])
+    draft = await _draft_post(platform, topic, tone, lead_context, brand_voice)
+    qc = await _apply_organiser_check(draft, brand_voice, user["workspace_id"])
 
     post_id = new_id()
-    media = await _generate_media(user, post_id, topic, platform, content_type)
+    media = await _generate_media(user, post_id, topic, platform, content_type, brand_voice)
 
     doc = {
         "id": post_id, "workspace_id": user["workspace_id"], "owner_id": user["id"],
@@ -498,7 +631,7 @@ async def _generate_post_for_row(user: Dict[str, Any], platform: str, topic: str
         "first_comment": None, "first_comment_posted": False,
         "status": "pending_approval", "scheduled_for": scheduled_for,
         "approval_token": secrets.token_urlsafe(32),
-        "approved_by": None, "approved_at": None,
+        "approved_by": None, "approved_at": None, "organiser_issues": qc.get("issues", []),
         "published_at": None, "platform_post_id": None, "platform_post_url": None, "engagement": None,
         "created_at": now_iso(), "updated_at": now_iso(),
     }
@@ -592,7 +725,7 @@ async def _send_approval_digest(user: Dict[str, Any], posts: List[Dict[str, Any]
               <td style="width:84px;vertical-align:top;">{thumb_html}</td>
               <td style="vertical-align:top;">
                 <div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:{_MUTED};font-weight:600;">
-                  {p['platform']} &middot; {p.get('scheduled_for', '')[:10]}
+                  {p['platform']} &middot; {(p.get('scheduled_for') or '')[:10]}
                 </div>
                 <div style="font-size:14px;color:{_INK};font-weight:600;margin-top:2px;">{p['headline']}</div>
                 <div style="font-size:13px;color:{_MUTED};margin-top:4px;line-height:1.5;">{(p.get('body') or '')[:180]}</div>
@@ -947,10 +1080,9 @@ async def run_rss_poll_tick() -> None:
 
 
 # ----------------------------- Analytics --------------------------------------------
-@social_router.get("/analytics")
-async def get_analytics(user=Depends(current_user)):
+async def _compute_analytics(workspace_id: str) -> Dict[str, Any]:
     posts = await db.social_posts.find(
-        {"workspace_id": user["workspace_id"], "status": "published"}, {"_id": 0}).to_list(2000)
+        {"workspace_id": workspace_id, "status": "published"}, {"_id": 0}).to_list(2000)
 
     by_platform: Dict[str, Dict[str, int]] = {}
     by_week: Dict[str, Dict[str, int]] = {}
@@ -988,3 +1120,108 @@ async def get_analytics(user=Depends(current_user)):
         "real_count": real_count, "mocked_count": mocked_count,
         "total_posts": len(posts),
     }
+
+
+@social_router.get("/analytics")
+async def get_analytics(user=Depends(current_user)):
+    return await _compute_analytics(user["workspace_id"])
+
+
+# ----------------------------- Feedback Master: insights tick ---------------------
+async def run_social_insights_tick():
+    """Daily: summarize each workspace's last 7 days of published-post
+    performance into a short 'what worked / try next' note, so the next
+    day's topic selection has something better than a flat rotation to go
+    on. Lightweight by design — a summarizer, not a live agent."""
+    if not ANTHROPIC_API_KEY:
+        return
+    workspace_ids = await db.social_posts.distinct("workspace_id", {"status": "published"})
+    for wid in workspace_ids:
+        try:
+            analytics = await _compute_analytics(wid)
+            if analytics["total_posts"] == 0:
+                continue
+            from billing import charge_credits
+            await charge_credits(wid, "social_insights", meta={})
+            system = (
+                "You analyze a workspace's recent social media performance. Given per-platform and "
+                "per-day aggregates plus the top posts, summarize briefly. STRICT JSON only: "
+                '{"what_worked": ["1-3 short observations"], "try_next": ["1-3 short suggestions for future topics/angles"]}'
+            )
+            raw = await _llm_chat(system, json.dumps(analytics), f"seq-insights-{wid[:8]}")
+            parsed = _extract_json(raw) or {}
+            if not parsed.get("what_worked") and not parsed.get("try_next"):
+                continue
+            await db.social_insights.insert_one({
+                "id": new_id(), "workspace_id": wid, "generated_at": now_iso(),
+                "what_worked": parsed.get("what_worked", []), "try_next": parsed.get("try_next", []),
+            })
+        except Exception as ex:
+            log.warning("social insights tick failed for workspace %s: %s", wid, ex)
+
+
+# ----------------------------- Daily content pipeline (closes the loop) -----------
+async def run_daily_social_content_tick():
+    """Daily: for every workspace that's completed Social EQ setup (has
+    content_pillars configured), generate today's post(s) — one per
+    configured platform — from the pillars (biased by the latest
+    Feedback Master insight), run each through the same draft -> media ->
+    organiser-QC pipeline every other creation path uses, then fire the
+    existing approval digest — a third trigger source alongside bulk-import
+    and RSS, not a parallel pipeline."""
+    workspaces = await db.workspaces.find(
+        {"brand_voice.content_pillars.0": {"$exists": True}}, {"_id": 0}).to_list(500)
+
+    for ws in workspaces:
+        wid = ws["id"]
+        bv = ws.get("brand_voice") or {}
+        pillars = bv.get("content_pillars") or []
+        platforms = (bv.get("posting_cadence") or {}).get("preferred_platforms") or []
+        if not pillars or not platforms:
+            continue
+
+        # Attribute owner_id / bill credits against the workspace's admin —
+        # same "first user" convention used at workspace creation.
+        owner = await db.users.find_one({"workspace_id": wid, "role": "org_admin"}, {"_id": 0}) \
+            or await db.users.find_one({"workspace_id": wid}, {"_id": 0})
+        if not owner:
+            continue
+
+        day_index = datetime.now(timezone.utc).timetuple().tm_yday
+        topic = pillars[day_index % len(pillars)]
+        insight = await db.social_insights.find_one(
+            {"workspace_id": wid}, {"_id": 0}, sort=[("generated_at", -1)])
+        if insight and insight.get("try_next"):
+            topic = f"{topic} — {insight['try_next'][0]}"
+
+        created_posts = []
+        for platform in platforms:
+            try:
+                from billing import charge_credits
+                await charge_credits(wid, "social_draft", meta={"platform": platform, "source": "daily_pipeline"})
+                draft = await _draft_post(platform, topic, bv.get("tone", "warm"), None, bv)
+                qc = await _apply_organiser_check(draft, bv, wid)
+                post_id = new_id()
+                media = await _generate_media(owner, post_id, topic, platform, "static", bv)
+                doc = {
+                    "id": post_id, "workspace_id": wid, "owner_id": owner["id"],
+                    "lead_id": None, "platform": platform, "topic": topic,
+                    "headline": draft.get("headline", ""), "body": draft.get("body", ""),
+                    "hashtags": draft.get("hashtags", []), "media_url": media["media_url"],
+                    "content_type": "static", "carousel_project_id": media["carousel_project_id"],
+                    "source": "daily_pipeline",
+                    "first_comment": None, "first_comment_posted": False,
+                    "status": "pending_approval", "scheduled_for": None,
+                    "approval_token": secrets.token_urlsafe(32),
+                    "approved_by": None, "approved_at": None, "organiser_issues": qc.get("issues", []),
+                    "published_at": None, "platform_post_id": None, "platform_post_url": None, "engagement": None,
+                    "created_at": now_iso(), "updated_at": now_iso(),
+                }
+                await db.social_posts.insert_one(doc)
+                doc.pop("_id", None)
+                created_posts.append(doc)
+            except Exception as ex:
+                log.warning("daily social content generation failed (workspace %s, platform %s): %s", wid, platform, ex)
+
+        if created_posts:
+            await _send_approval_digest(owner, created_posts)

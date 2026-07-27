@@ -282,19 +282,24 @@ function WorkspaceSection({ user, workspace }) {
 }
 
 const TONES = ["warm", "professional", "direct", "playful", "formal"];
+const PERSONA_TYPES = ["individual", "influencer", "enterprise", "startup", "solo_company"];
+const SOCIAL_PLATFORMS = ["linkedin", "instagram", "youtube"];
 
 function BrandVoiceSection() {
   const [bv, setBv] = useState(null);
   const [busy, setBusy] = useState(false);
   const [phraseInput, setPhraseInput] = useState("");
+  const [pillarInput, setPillarInput] = useState("");
 
   useEffect(() => {
     api.get("/workspace/brand-voice").then((r) => setBv(r.data)).catch(() => setBv({
       tone: "warm", offer: "", icp_description: "", banned_phrases: [], sample: "",
+      content_pillars: [], posting_cadence: { days_per_week: 3, preferred_platforms: [] }, persona_type: null,
     }));
   }, []);
 
   const patch = (p) => setBv((cur) => ({ ...cur, ...p }));
+  const patchCadence = (p) => setBv((cur) => ({ ...cur, posting_cadence: { ...cur.posting_cadence, ...p } }));
 
   const addPhrase = () => {
     const p = phraseInput.trim();
@@ -303,6 +308,19 @@ function BrandVoiceSection() {
     setPhraseInput("");
   };
   const removePhrase = (p) => patch({ banned_phrases: bv.banned_phrases.filter((x) => x !== p) });
+
+  const addPillar = () => {
+    const p = pillarInput.trim();
+    if (!p) return;
+    if (!bv.content_pillars.includes(p)) patch({ content_pillars: [...bv.content_pillars, p] });
+    setPillarInput("");
+  };
+  const removePillar = (p) => patch({ content_pillars: bv.content_pillars.filter((x) => x !== p) });
+
+  const togglePlatform = (plat) => {
+    const cur = bv.posting_cadence.preferred_platforms || [];
+    patchCadence({ preferred_platforms: cur.includes(plat) ? cur.filter((x) => x !== plat) : [...cur, plat] });
+  };
 
   const save = async () => {
     setBusy(true);
@@ -386,6 +404,62 @@ function BrandVoiceSection() {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="pt-3 border-t border-line space-y-5">
+        <div className="text-caption text-ink-muted -mb-1">
+          The fields below are read by Social EQ's daily content pipeline in addition to the tone/offer/ICP above.
+        </div>
+
+        <label className="block">
+          <span className="form-label">Persona type</span>
+          <select value={bv.persona_type || ""} onChange={(e) => patch({ persona_type: e.target.value || null })}
+            data-testid="brand-voice-persona-type" className="input-premium mt-1 w-full capitalize">
+            <option value="">Not set</option>
+            {PERSONA_TYPES.map((p) => <option key={p} value={p} className="capitalize">{p.replace("_", " ")}</option>)}
+          </select>
+        </label>
+
+        <div>
+          <span className="form-label">Content pillars <span className="text-ink-muted font-normal">(3-5 recurring topics)</span></span>
+          <div className="flex gap-2 mt-1">
+            <input value={pillarInput} onChange={(e) => setPillarInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPillar(); } }}
+              data-testid="brand-voice-pillar-input"
+              placeholder="e.g. product tips — press Enter to add"
+              className="input-premium flex-1" />
+            <button type="button" onClick={addPillar} data-testid="brand-voice-pillar-add" className="btn-secondary shrink-0">Add</button>
+          </div>
+          {bv.content_pillars.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {bv.content_pillars.map((p) => (
+                <span key={p} className="pill flex items-center gap-1">
+                  {p}
+                  <button type="button" onClick={() => removePillar(p)} className="hover:text-danger">×</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <span className="form-label">Posting cadence</span>
+          <div className="flex items-center gap-2 mt-1">
+            <input type="number" min={1} max={7} value={bv.posting_cadence.days_per_week}
+              onChange={(e) => patchCadence({ days_per_week: Number(e.target.value) || 1 })}
+              data-testid="brand-voice-cadence-days" className="input-premium w-20" />
+            <span className="text-caption text-ink-muted">days/week, on:</span>
+          </div>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {SOCIAL_PLATFORMS.map((plat) => (
+              <button type="button" key={plat} onClick={() => togglePlatform(plat)}
+                data-testid={`brand-voice-platform-${plat}`}
+                className={`pill capitalize ${bv.posting_cadence.preferred_platforms?.includes(plat) ? "bg-ink text-white" : ""}`}>
+                {plat}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="text-caption text-ink-tertiary pt-2 border-t border-line">
