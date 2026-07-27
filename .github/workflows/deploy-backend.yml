@@ -25,9 +25,11 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r backend/requirements.txt --target=/tmp/backend-vendor
+          # Force manylinux2014 wheel for cryptography (Azure glibc 2.31)
+          rm -rf /tmp/backend-vendor/cryptography*
           pip install cryptography==42.0.8 --target=/tmp/backend-vendor \
             --only-binary=:all: --platform manylinux_2_17_x86_64 \
-            --python-version 3.11 --implementation cp --force-reinstall --no-deps
+            --python-version 3.11 --implementation cp --no-deps
 
       - name: Login to Azure
         uses: azure/login@v2
