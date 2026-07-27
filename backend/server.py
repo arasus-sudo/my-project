@@ -82,6 +82,25 @@ app.state.limiter = limiter
 app.add_exception_handler(429, _rate_limit_exceeded_handler)
 
 
+def _workspace_or_ip_key(request: Request) -> str:
+    """Rate-limit key for authenticated AI-generation routes: per workspace
+    when a valid token is present (so one heavy user can't eat a whole
+    shared-IP office's quota, and a workspace can't dodge the limit by
+    rotating IPs), falling back to IP for anything without one. Credits
+    already meter cost per call — this is a coarser backstop against a
+    buggy/looping frontend or a compromised token hammering the endpoint,
+    not the primary cost control."""
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        try:
+            payload = jwt.decode(auth[7:], JWT_SECRET, algorithms=[JWT_ALG])
+            if payload.get("wid"):
+                return f"ws:{payload['wid']}"
+        except jwt.PyJWTError:
+            pass
+    return get_remote_address(request)
+
+
 # ----------------------------- Helpers ---------------------------------------
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -301,6 +320,12 @@ def personalize(template: str, lead: Dict[str, Any]) -> str:
         return str(lead.get(key) or f"{{{{{key}}}}}")
 
     return re.sub(r"\{\{([^}]+)\}\}", repl, template)
+
+
+# ----------------------------- Health Route -----------------------------------
+@api.get("/health")
+async def health():
+    return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 # ----------------------------- Auth Routes -----------------------------------
@@ -2535,6 +2560,11 @@ def _default_slides(topic: str, n: int) -> List[Dict[str, Any]]:
 
 @api.post("/carousel/generate")
 async def carousel_generate(body: CarouselGenIn, user=Depends(current_user)):
+    # Not rate-limited via @limiter here: this function is also called
+    # directly (not through HTTP) by social_eq.py's carousel content-type
+    # branch, which has no Request object to key off. carousel_ai_image
+    # below — the pure HTTP entry point for AI image generation — carries
+    # the rate limit instead.
     if body.platform not in PLATFORM_DIMS:
         raise HTTPException(400, "invalid platform")
     slides: List[Dict[str, Any]] = []
@@ -2779,7 +2809,8 @@ async def generate_ai_image(user: Dict[str, Any], prompt: str, provider: str = "
 
 
 @api.post("/carousel/ai-image")
-async def carousel_ai_image(body: AiImageIn, user=Depends(current_user)):
+@limiter.limit("20/minute", key_func=_workspace_or_ip_key)
+async def carousel_ai_image(request: Request, body: AiImageIn, user=Depends(current_user)):
     """Generate an AI image, save to MongoDB as binary, return both a
     reference URL (for persistent use) and a base64 data URL (for immediate
     preview).  The reference URL includes a short-lived access_token so the
@@ -3422,6 +3453,23 @@ async def require_admin(user=Depends(current_user)):
     return user
 
 
+def require_role(*allowed: str):
+    """Gate a route to workspace roles in `allowed` (suite admins always pass).
+
+    Shared across every agent module — the workspace ROLES set
+    (org_admin/campaign_manager/sdr/viewer) is declared here but historically
+    wasn't enforced in most modules, so a `viewer` could delete/edit data the
+    same as an admin. Use this on destructive or schema/finance-shaping
+    routes (deletes, financial writes, compensation edits); reads and normal
+    create/edit stay open to every workspace role unless a route says
+    otherwise."""
+    async def _dep(user=Depends(current_user)):
+        if user.get("role") not in allowed and not _is_admin(user):
+            raise HTTPException(403, "Not permitted for your role")
+        return user
+    return _dep
+
+
 @api.get("/admin/summary")
 async def admin_summary(_: Any = Depends(require_admin)):
     return {
@@ -3436,6 +3484,15 @@ async def admin_summary(_: Any = Depends(require_admin)):
         "blocked_users": await db.users.count_documents({"blocked": True}),
         "blocked_workspaces": await db.workspaces.count_documents({"blocked": True}),
     }
+
+
+@api.get("/admin/tick-health")
+async def admin_tick_health(_: Any = Depends(require_admin)):
+    """Every scheduler tick's last run/success/error, so a silently-broken
+    tick (see _tracked_tick) is visible somewhere instead of only ever
+    showing up as a log.warning line nobody's watching."""
+    items = await db.tick_health.find({}, {"_id": 0}).sort("tick_id", 1).to_list(100)
+    return items
 
 
 @api.get("/admin/workspaces")
@@ -4194,6 +4251,33 @@ async def _create_indexes():
 scheduler = None
 
 
+async def _tracked_tick(tick_id: str, fn, *args) -> None:
+    """Every scheduled tick runs through this wrapper instead of being
+    registered directly, so a tick that starts silently failing shows up
+    somewhere a human can see it (GET /admin/tick-health) instead of only
+    ever producing a log.warning line nobody's watching. Exceptions are
+    swallowed here — same as every tick's own existing behavior of
+    degrading gracefully rather than taking the scheduler down — just
+    recorded first."""
+    now = now_iso()
+    try:
+        await fn(*args)
+        await db.tick_health.update_one(
+            {"tick_id": tick_id},
+            {"$set": {"tick_id": tick_id, "last_run_at": now, "last_success_at": now, "last_error": None},
+             "$inc": {"run_count": 1, "error_count": 0}},
+            upsert=True,
+        )
+    except Exception as ex:
+        logger.warning("tick %s failed: %s", tick_id, ex)
+        await db.tick_health.update_one(
+            {"tick_id": tick_id},
+            {"$set": {"tick_id": tick_id, "last_run_at": now, "last_error": str(ex), "last_error_at": now},
+             "$inc": {"run_count": 1, "error_count": 1}},
+            upsert=True,
+        )
+
+
 @app.on_event("startup")
 async def _start_scheduler():
     global scheduler
@@ -4211,67 +4295,71 @@ async def _start_scheduler():
         from crm import run_recycle_bin_purge_tick, run_dedup_scan_tick
 
         scheduler = AsyncIOScheduler(timezone="UTC")
+        # Every job below runs through _tracked_tick (records to db.tick_health,
+        # surfaced at GET /admin/tick-health) instead of being registered
+        # directly — a tick that starts silently failing used to be visible
+        # only in server logs; now it's visible to a human.
         # Every 15 min: any confirmed booking ~24h out gets one reminder. The job
         # claims each booking before sending, so overlapping ticks can't double-send.
-        scheduler.add_job(run_reminder_tick, "interval", minutes=15,
+        scheduler.add_job(_tracked_tick, "interval", minutes=15, args=["booking_reminders", run_reminder_tick],
                           id="booking_reminders", max_instances=1, coalesce=True)
         # Drain the outbound queue. Every 2 min, capped per tick — a trickle looks
         # human; a burst looks like spam and gets the mailbox flagged.
-        scheduler.add_job(run_send_tick, "interval", minutes=2, args=[PUBLIC_BASE_URL],
+        scheduler.add_job(_tracked_tick, "interval", minutes=2, args=["outbound_sends", run_send_tick, PUBLIC_BASE_URL],
                           id="outbound_sends", max_instances=1, coalesce=True)
         # Poll sent threads for real replies (this is what feeds the unified inbox).
-        scheduler.add_job(run_reply_tick, "interval", minutes=10,
+        scheduler.add_job(_tracked_tick, "interval", minutes=10, args=["reply_polling", run_reply_tick],
                           id="reply_polling", max_instances=1, coalesce=True)
         # Auto-publish approved social posts once their scheduled time arrives
         # (or shortly after approval if none was set) — the "automatic" half of
         # the bulk-import -> email-approval -> auto-publish pipeline.
-        scheduler.add_job(run_social_publish_tick, "interval", minutes=2,
+        scheduler.add_job(_tracked_tick, "interval", minutes=2, args=["social_publish", run_social_publish_tick],
                           id="social_publish", max_instances=1, coalesce=True)
         # Pulls real comments + refreshes real engagement from connected
         # (non-mocked) platforms only — never touches simulated posts.
-        scheduler.add_job(run_social_engagement_tick, "interval", minutes=10,
+        scheduler.add_job(_tracked_tick, "interval", minutes=10, args=["social_engagement", run_social_engagement_tick],
                           id="social_engagement", max_instances=1, coalesce=True)
         # Polls subscribed RSS feeds for new entries and drafts posts from
         # them through the same pipeline bulk-import uses.
-        scheduler.add_job(run_rss_poll_tick, "interval", minutes=30,
+        scheduler.add_job(_tracked_tick, "interval", minutes=30, args=["social_rss_poll", run_rss_poll_tick],
                           id="social_rss_poll", max_instances=1, coalesce=True)
         # Keeps each site's knowledge base from going stale without the user
         # having to remember to hit "re-crawl" — daily check, only re-crawls
         # sites whose last crawl is 7+ days old.
-        scheduler.add_job(run_site_recrawl_tick, "interval", hours=24,
+        scheduler.add_job(_tracked_tick, "interval", hours=24, args=["site_recrawl", run_site_recrawl_tick],
                           id="site_recrawl", max_instances=1, coalesce=True)
         # SMS broadcast send tick — drains queued SMS broadcasts at a human
         # trickle (2/min, capped).
-        scheduler.add_job(run_sms_send_tick, "interval", minutes=2,
+        scheduler.add_job(_tracked_tick, "interval", minutes=2, args=["sms_send", run_sms_send_tick],
                           id="sms_send", max_instances=1, coalesce=True)
         # WhatsApp broadcast send tick — same trickle for WhatsApp template
         # sends.
-        scheduler.add_job(run_whatsapp_send_tick, "interval", minutes=2,
+        scheduler.add_job(_tracked_tick, "interval", minutes=2, args=["whatsapp_send", run_whatsapp_send_tick],
                           id="whatsapp_send", max_instances=1, coalesce=True)
         # Recycle bin: hard-deletes anything soft-deleted (leads/companies/
         # lists) more than 30 days ago. Daily is plenty — this is cleanup,
         # not a user-facing latency path.
-        scheduler.add_job(run_recycle_bin_purge_tick, "interval", hours=24,
+        scheduler.add_job(_tracked_tick, "interval", hours=24, args=["recycle_bin_purge", run_recycle_bin_purge_tick],
                           id="recycle_bin_purge", max_instances=1, coalesce=True)
         # Finds candidate duplicate leads (same phone / same company+lastname /
         # near-identical email) and records them for human review — never
         # auto-merges. Hourly is plenty; this is a review queue, not a live path.
-        scheduler.add_job(run_dedup_scan_tick, "interval", hours=1,
+        scheduler.add_job(_tracked_tick, "interval", hours=1, args=["crm_dedup_scan", run_dedup_scan_tick],
                           id="crm_dedup_scan", max_instances=1, coalesce=True)
         # Feedback Master: summarizes each workspace's last 7 days of published-post
         # performance into a short "what worked / try next" note the daily content
         # tick below reads back — daily is enough, this isn't a live path.
-        scheduler.add_job(run_social_insights_tick, "interval", hours=24,
+        scheduler.add_job(_tracked_tick, "interval", hours=24, args=["social_insights", run_social_insights_tick],
                           id="social_insights", max_instances=1, coalesce=True)
         # The Social Branding Assistant loop's daily generation step: for every
         # workspace that's completed setup, draft + QC today's post(s) and send
         # the same approval digest bulk-import/RSS already use.
-        scheduler.add_job(run_daily_social_content_tick, "interval", hours=24,
+        scheduler.add_job(_tracked_tick, "interval", hours=24, args=["social_daily_content", run_daily_social_content_tick],
                           id="social_daily_content", max_instances=1, coalesce=True)
         # Drains Veo video generations still in flight — the same 2-min trickle
         # as the other short-interval ticks; generation itself takes minutes,
         # so this just checks in until each job completes.
-        scheduler.add_job(run_video_poll_tick, "interval", minutes=2,
+        scheduler.add_job(_tracked_tick, "interval", minutes=2, args=["video_poll", run_video_poll_tick],
                           id="video_poll", max_instances=1, coalesce=True)
         scheduler.start()
         logger.info("scheduler started (reminders 15m, sends 2m, reply polling 10m, "
@@ -4283,9 +4371,21 @@ async def _start_scheduler():
 
 
 # ── Lead Intelligence Provider Manager ──────────────────────────────
+# ENV defaults to "dev" (no prior convention for this var existed in the repo) so
+# a fresh checkout boots out of the box; real deployments must set ENV=production
+# explicitly, at which point CORS_ORIGINS='*' becomes a hard failure again.
+ENV = os.environ.get("ENV", "dev")
 cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
 if cors_origins == ["*"]:
-    raise RuntimeError("FATAL: CORS_ORIGINS='*' is not allowed (would expose credentials to any site). Set explicit origins.")
+    if ENV == "dev":
+        logging.warning(
+            "CORS_ORIGINS='*' in .env — ignoring it and falling back to http://localhost:3000 "
+            "since ENV=dev (default). Set CORS_ORIGINS to explicit origins and ENV=production "
+            "for a real deployment; '*' is never allowed there."
+        )
+        cors_origins = ["http://localhost:3000"]
+    else:
+        raise RuntimeError("FATAL: CORS_ORIGINS='*' is not allowed outside ENV=dev (would expose credentials to any site). Set explicit origins.")
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
