@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths: [backend/**]
 
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: true
+
 env:
   BACKEND_NAME: innoira-api
   AZURE_RG: rg-innoira
