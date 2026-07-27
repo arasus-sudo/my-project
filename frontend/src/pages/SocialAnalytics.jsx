@@ -40,13 +40,13 @@ export default function SocialAnalytics() {
           <div className="h-64">
             <ResponsiveContainer>
               <LineChart data={trend}>
-                <CartesianGrid vertical={false} strokeDasharray="0" stroke="#E5E5E7" />
+                <CartesianGrid vertical={false} strokeDasharray="0" stroke="#E2E2E5" />
                 <XAxis dataKey="day" tickLine={false} axisLine={false} />
                 <YAxis tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ border: "1px solid #E5E5E7", borderRadius: 12, fontFamily: "Roboto Mono", fontSize: 12 }} />
-                <Line type="monotone" dataKey="likes" stroke="#1D1D1F" strokeWidth={2} dot={{ r: 2 }} />
-                <Line type="monotone" dataKey="comments" stroke="#8E8E93" strokeWidth={1.5} strokeDasharray="6 3" dot={{ r: 2 }} />
-                <Line type="monotone" dataKey="shares" stroke="#D2D2D7" strokeWidth={1.5} strokeDasharray="2 3" dot={{ r: 2 }} />
+                <Tooltip contentStyle={{ border: "1px solid #E2E2E5", borderRadius: 12, fontFamily: "Roboto Mono", fontSize: 12 }} />
+                <Line type="monotone" dataKey="likes" stroke="#0A0A0B" strokeWidth={2} dot={{ r: 2 }} />
+                <Line type="monotone" dataKey="comments" stroke="#6E6E73" strokeWidth={1.5} strokeDasharray="6 3" dot={{ r: 2 }} />
+                <Line type="monotone" dataKey="shares" stroke="#B4B4B9" strokeWidth={1.5} strokeDasharray="2 3" dot={{ r: 2 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>

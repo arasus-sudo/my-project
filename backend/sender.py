@@ -636,6 +636,8 @@ async def run_reply_tick() -> int:
                 "campaign_id": row["campaign_id"], "lead_id": row["lead_id"],
                 "step": row["step"], "type": "replied", "at": now_iso(),
             })
+            from server import _sync_campaign_to_crm
+            await _sync_campaign_to_crm(row["workspace_id"], row["campaign_id"], row["lead_id"], "replied")
             await _log_activity(row["workspace_id"], row["lead_id"], "pitch", "email_replied",
                                  f"Replied ({classification}): \u201c{body[:80]}\u201d",
                                  {"conversation_id": convo_id})

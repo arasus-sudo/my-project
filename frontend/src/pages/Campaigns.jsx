@@ -452,7 +452,7 @@ export default function Campaigns() {
             ) : contactsData && (
               <>
                 <div className="flex items-center gap-4 flex-wrap">
-                  <span className="text-sm font-medium">{contactsData.total_contacts} contacts · {contactsData.steps} steps</span>
+                  <span className="text-body font-medium">{contactsData.total_contacts} contacts · {contactsData.steps} steps</span>
                   <div className="flex items-center gap-2 flex-wrap">
                     {Object.entries(contactsData.summary || {}).map(([state, count]) => (
                       <span key={state} className={`text-tiny font-mono px-2 py-0.5 rounded-full ${
@@ -479,7 +479,7 @@ export default function Campaigns() {
                     <tbody>
                       {contactsData.contacts?.map((ct) => (
                         <tr key={ct.lead_id} className="border-b border-line last:border-0 hover:bg-surfacehover transition-colors">
-                          <td className="p-2 text-sm font-medium">{ct.first_name} {ct.last_name}</td>
+                          <td className="p-2 text-body font-medium">{ct.first_name} {ct.last_name}</td>
                           <td className="p-2 text-tiny font-mono text-ink-muted">{ct.email}</td>
                           <td className="p-2">
                             <span className={`text-tiny font-mono px-1.5 py-0.5 rounded-sm ${

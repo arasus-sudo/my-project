@@ -28,11 +28,11 @@ export default function SiteAnalytics() {
           <div className="h-64">
             <ResponsiveContainer>
               <LineChart data={trend}>
-                <CartesianGrid vertical={false} strokeDasharray="0" stroke="#E5E5E7" />
+                <CartesianGrid vertical={false} strokeDasharray="0" stroke="#E2E2E5" />
                 <XAxis dataKey="day" tickLine={false} axisLine={false} />
                 <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
-                <Tooltip contentStyle={{ border: "1px solid #E5E5E7", borderRadius: 12, fontFamily: "Roboto Mono", fontSize: 12 }} />
-                <Line type="monotone" dataKey="count" stroke="#1D1D1F" strokeWidth={2} dot={{ r: 2 }} />
+                <Tooltip contentStyle={{ border: "1px solid #E2E2E5", borderRadius: 12, fontFamily: "Roboto Mono", fontSize: 12 }} />
+                <Line type="monotone" dataKey="count" stroke="#0A0A0B" strokeWidth={2} dot={{ r: 2 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>

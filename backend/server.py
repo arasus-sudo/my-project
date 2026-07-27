@@ -779,6 +779,122 @@ async def delete_campaign(cid: str, user=Depends(current_user)):
     return {"ok": True}
 
 
+# ---- CRM Sync: auto-create deals from campaign events -----
+async def _sync_campaign_to_crm(wid: str, cid: str, lid: str, event_type: str):
+    """Auto-create or update a CRM deal when a campaign event fires."""
+    if event_type not in ("replied", "meeting_booked"):
+        return
+    existing = await db.deals.find_one({
+        "workspace_id": wid, "campaign_id": cid, "lead_id": lid})
+    if existing:
+        if event_type == "meeting_booked" and existing.get("stage") == "new":
+            await db.deals.update_one({"id": existing["id"]}, {"$set": {"stage": "qualified"}})
+        return
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
+    lead = await db.leads.find_one({"id": lid, "workspace_id": wid}, {"_id": 0})
+    if not campaign or not lead:
+        return
+    title = f"{campaign.get('name', 'Campaign')} - {lead.get('first_name', '')} {lead.get('last_name', '')}".strip()
+    stage = "qualified" if event_type == "meeting_booked" else "new"
+    deal = {
+        "id": new_id(), "workspace_id": wid, "campaign_id": cid, "lead_id": lid,
+        "title": title, "value": 0, "stage": stage, "notes": f"Auto-created from campaign {event_type} event",
+        "created_at": now_iso(), "source": "campaign",
+    }
+    await db.deals.insert_one(deal)
+
+
+# ---- Autonomous campaign agent -----
+@api.post("/campaigns/auto-optimize")
+async def auto_optimize_campaigns(user=Depends(current_user)):
+    """Background agent: monitors active campaigns and auto-adjusts based on performance."""
+    campaigns = await db.campaigns.find({
+        "workspace_id": user["workspace_id"],
+        "status": {"$in": ["active", "paused"]},
+    }, {"_id": 0}).to_list(200)
+
+    actions = []
+    for c in campaigns:
+        events = await db.events.find({
+            "campaign_id": c["id"], "workspace_id": user["workspace_id"]},
+            {"_id": 0, "type": 1, "at": 1}).to_list(5000)
+        sent = sum(1 for e in events if e["type"] == "sent")
+        if sent < 10:
+            continue
+
+        bounced = sum(1 for e in events if e["type"] == "bounced")
+        replied = sum(1 for e in events if e["type"] == "replied")
+        opened = sum(1 for e in events if e["type"] == "opened")
+        bounce_rate = bounced / sent if sent else 0
+        reply_rate = replied / sent if sent else 0
+        open_rate = opened / sent if sent else 0
+
+        cid = c["id"]
+        cname = c.get("name", "Unnamed")
+        action = {"campaign_id": cid, "campaign_name": cname, "actions": []}
+
+        # Rule 1: High bounce rate > 5% → pause + alert
+        if bounce_rate > 0.05 and c.get("status") == "active":
+            await db.campaigns.update_one({"id": cid}, {"$set": {"status": "paused"}})
+            action["actions"].append(f"Paused: bounce rate {bounce_rate:.1%} exceeds 5% threshold")
+            await _audit(user, "auto_optimize.pause_high_bounce",
+                         {"campaign_id": cid, "bounce_rate": bounce_rate})
+
+        # Rule 2: Low open rate < 15% with > 50 sent → suggest subject refresh
+        if open_rate < 0.15 and sent > 50:
+            action["actions"].append(f"Alert: open rate {open_rate:.1%} below 15% threshold — consider subject line refresh")
+
+        # Rule 3: Good reply rate > 5% → ramp up batch size
+        if reply_rate > 0.05 and sent > 30 and c.get("status") == "active":
+            current = c.get("batch_size", 10)
+            new_batch = min(current + 5, 50)
+            if new_batch > current:
+                await db.campaigns.update_one({"id": cid}, {"$set": {"batch_size": new_batch}})
+                action["actions"].append(f"Increased batch size from {current} to {new_batch} (strong reply rate {reply_rate:.1%})")
+
+        # Rule 4: No engagement > 100 sent → suggest pausing
+        if replied == 0 and sent > 100 and c.get("status") == "active":
+            action["actions"].append(f"Warning: 0 replies from {sent} sends — consider pausing campaign")
+
+        if action["actions"]:
+            actions.append(action)
+
+    return {
+        "campaigns_checked": len(campaigns),
+        "campaigns_modified": len(actions),
+        "actions": actions,
+    }
+
+
+@api.get("/campaigns/auto-optimize/status")
+async def auto_optimize_status(user=Depends(current_user)):
+    """Return health summary for all active campaigns."""
+    campaigns = await db.campaigns.find({
+        "workspace_id": user["workspace_id"],
+        "status": "active",
+    }, {"_id": 0}).to_list(200)
+    statuses = []
+    for c in campaigns:
+        events = await db.events.find({
+            "campaign_id": c["id"], "workspace_id": user["workspace_id"]},
+            {"_id": 0, "type": 1}).to_list(5000)
+        sent = sum(1 for e in events if e["type"] == "sent")
+        statuses.append({
+            "id": c["id"],
+            "name": c.get("name", ""),
+            "sent": sent,
+            "open_rate": round(sum(1 for e in events if e["type"] == "opened") / sent * 100, 1) if sent else 0,
+            "reply_rate": round(sum(1 for e in events if e["type"] == "replied") / sent * 100, 1) if sent else 0,
+            "bounce_rate": round(sum(1 for e in events if e["type"] == "bounced") / sent * 100, 1) if sent else 0,
+            "batch_size": c.get("batch_size", 10),
+            "health": "good" if sent < 10 or (
+                sum(1 for e in events if e["type"] == "opened") / sent > 0.15 and
+                sum(1 for e in events if e["type"] == "bounced") / sent < 0.05
+            ) else "needs_attention",
+        })
+    return {"campaigns": statuses, "total": len(statuses)}
+
+
 # ---- Contact state machine -----
 CONTACT_STATES = ["queued", "sent", "opened", "clicked", "replied", "bounced", "meeting_booked", "exited", "completed"]
 
@@ -840,6 +956,100 @@ async def campaign_contact_states(cid: str, user=Depends(current_user)):
         "contacts": contacts,
         "summary": summary,
         "steps": len(c.get("steps", [])),
+    }
+
+
+# ---- AI Campaign Optimizer -----
+@api.post("/campaigns/{cid}/optimize")
+async def campaign_optimize(cid: str, user=Depends(current_user)):
+    """Analyze campaign performance and return LLM-powered optimization suggestions."""
+    c = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "not found")
+    steps = c.get("steps") or []
+    events = await db.events.find(
+        {"campaign_id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(5000)
+    sent_count = sum(1 for e in events if e["type"] == "sent")
+    if sent_count < 5:
+        raise HTTPException(400, "Need at least 5 sent emails to generate meaningful optimizations.")
+
+    # Build per-step stats
+    step_stats = []
+    for i, s in enumerate(steps):
+        se = [e for e in events if e.get("step") == i]
+        sent = sum(1 for e in se if e["type"] == "sent")
+        step_stats.append({
+            "step": i, "subject": s.get("subject", ""), "channel": s.get("channel", "email"),
+            "condition": s.get("condition", "always"), "sent": sent,
+            "opened": sum(1 for e in se if e["type"] == "opened"),
+            "replied": sum(1 for e in se if e["type"] == "replied"),
+            "bounced": sum(1 for e in se if e["type"] == "bounced"),
+        })
+
+    # A/B test results
+    ab = await campaign_ab_test_results(cid, user)
+
+    # Send-time distribution
+    queue_items = await db.send_queue.find(
+        {"campaign_id": cid, "workspace_id": user["workspace_id"], "status": "sent"},
+        {"_id": 0, "send_at": 1}).to_list(500)
+    hours = []
+    for q in queue_items:
+        try:
+            h = int(q["send_at"].split("T")[1].split(":")[0])
+            hours.append(h)
+        except (ValueError, IndexError, KeyError):
+            pass
+    hour_dist = {}
+    for h in hours:
+        hour_dist[f"{h:02d}:00"] = hour_dist.get(f"{h:02d}:00", 0) + 1
+
+    prompt = f"""You are a campaign optimization analyst. Analyze this campaign performance data and provide actionable recommendations.
+
+Campaign: {c.get('name', 'Unnamed')}
+Status: {c.get('status', 'unknown')}
+Total sent: {sent_count}
+Overall open rate: {sum(1 for e in events if e['type']=='opened')}/{sent_count} = {round(sum(1 for e in events if e['type']=='opened')/sent_count*100,1) if sent_count else 0}%
+Overall reply rate: {sum(1 for e in events if e['type']=='replied')}/{sent_count} = {round(sum(1 for e in events if e['type']=='replied')/sent_count*100,1) if sent_count else 0}%
+Bounce rate: {sum(1 for e in events if e['type']=='bounced')}/{sent_count} = {round(sum(1 for e in events if e['type']=='bounced')/sent_count*100,1) if sent_count else 0}%
+
+Per-step stats:
+{json.dumps(step_stats, indent=2)}
+
+A/B test results:
+{json.dumps(ab, indent=2)}
+
+Send-time distribution (hour -> count):
+{json.dumps(hour_dist, indent=2)}
+
+Return valid JSON with these exact keys:
+- subject_line_recommendations: array of strings (top 3 subject line patterns that work)
+- best_send_times: array of strings (best hours to send)
+- content_suggestions: array of strings (how to improve email content)
+- step_sequence_advice: array of strings (optimize step order/conditions)
+- overall_score: integer 0-100
+- key_insight: string (single most important finding)"""
+
+    from ai_utils import llm_chat
+    try:
+        result_text = await llm_chat(
+            system="You are a campaign optimization analyst. Return ONLY valid JSON. No markdown, no backticks.",
+            user_text=prompt,
+            session_id=f"optimize-{cid}",
+            user=user,
+            max_tokens=4096,
+        )
+        result_text = result_text.strip().removeprefix("```json").removesuffix("```").strip()
+        result = json.loads(result_text)
+    except Exception as ex:
+        raise HTTPException(502, f"Optimization analysis failed: {ex}")
+
+    await _audit(user, "campaign.optimize", {"campaign_id": cid})
+    return {
+        "campaign_id": cid,
+        "campaign_name": c.get("name", ""),
+        "total_sent": sent_count,
+        **result,
     }
 
 
@@ -3869,6 +4079,86 @@ async def analytics_campaigns(user=Depends(current_user)):
             })
         out.append({"id": c["id"], "name": c["name"], "status": c["status"], "by_step": by_step})
     return out
+
+
+# ---- Advanced analytics: funnel & attribution -----
+@api.get("/campaigns/{cid}/funnel")
+async def campaign_funnel(cid: str, user=Depends(current_user)):
+    """Funnel visualization — conversion rates at each step."""
+    c = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "not found")
+    steps = c.get("steps") or []
+    events = await db.events.find(
+        {"campaign_id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(5000)
+    total_leads = len(c.get("lead_ids") or [])
+
+    funnel = []
+    for i, s in enumerate(steps):
+        se = [e for e in events if e.get("step") == i]
+        sent = sum(1 for e in se if e["type"] == "sent")
+        opened = sum(1 for e in se if e["type"] == "opened")
+        clicked = sum(1 for e in se if e["type"] == "clicked")
+        replied = sum(1 for e in se if e["type"] == "replied")
+        bounced = sum(1 for e in se if e["type"] == "bounced")
+        funnel.append({
+            "step": i + 1, "subject": s.get("subject", "")[:40],
+            "condition": s.get("condition", "always"),
+            "sent": sent, "opened": opened, "clicked": clicked,
+            "replied": replied, "bounced": bounced,
+            "open_rate_pct": round(opened / sent * 100, 1) if sent else 0,
+            "click_rate_pct": round(clicked / sent * 100, 1) if sent else 0,
+            "reply_rate_pct": round(replied / sent * 100, 1) if sent else 0,
+            "bounce_rate_pct": round(bounced / sent * 100, 1) if sent else 0,
+        })
+
+    # Overall funnel
+    all_sent = sum(1 for e in events if e["type"] == "sent")
+    all_opened = sum(1 for e in events if e["type"] == "opened")
+    all_clicked = sum(1 for e in events if e["type"] == "clicked")
+    all_replied = sum(1 for e in events if e["type"] == "replied")
+    all_bounced = sum(1 for e in events if e["type"] == "bounced")
+    all_meetings = sum(1 for e in events if e["type"] == "meeting_booked")
+
+    return {
+        "campaign_id": cid, "campaign_name": c.get("name", ""),
+        "total_leads": total_leads,
+        "overall": {
+            "sent": all_sent, "opened": all_opened, "clicked": all_clicked,
+            "replied": all_replied, "bounced": all_bounced, "meetings": all_meetings,
+            "sent_to_open_pct": round(all_opened / all_sent * 100, 1) if all_sent else 0,
+            "open_to_reply_pct": round(all_replied / all_opened * 100, 1) if all_opened else 0,
+            "sent_to_meeting_pct": round(all_meetings / all_sent * 100, 1) if all_sent else 0,
+        },
+        "by_step": funnel,
+    }
+
+
+@api.get("/campaigns/{cid}/attribution")
+async def campaign_attribution(cid: str, user=Depends(current_user)):
+    """Pipeline attribution — which campaign events led to deals."""
+    deals = await db.deals.find({
+        "workspace_id": user["workspace_id"],
+        "campaign_id": cid,
+    }, {"_id": 0}).to_list(100)
+    if not deals:
+        return {"campaign_id": cid, "deals": [], "total_pipeline_value": 0, "won_value": 0}
+
+    total_value = sum(d.get("value", 0) for d in deals)
+    won_value = sum(d.get("value", 0) for d in deals if d.get("stage") == "closed_won")
+    return {
+        "campaign_id": cid,
+        "total_deals": len(deals),
+        "total_pipeline_value": total_value,
+        "won_value": won_value,
+        "deal_stages": {
+            stage: sum(1 for d in deals if d.get("stage") == stage)
+            for stage in set(d.get("stage", "new") for d in deals)
+        },
+        "deals": [{"id": d["id"], "title": d.get("title", ""), "value": d.get("value", 0),
+                    "stage": d.get("stage", "new"), "created_at": d.get("created_at", "")}
+                  for d in sorted(deals, key=lambda x: x.get("created_at", ""), reverse=True)],
+    }
 
 
 @api.get("/campaigns/{cid}/ab-test-results")

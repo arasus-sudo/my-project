@@ -61,11 +61,11 @@ export default function Dashboard() {
                   <CartesianGrid vertical={false} strokeDasharray="0" />
                   <XAxis dataKey="date" tickLine={false} axisLine={false} />
                   <YAxis tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ border: "1px solid #E5E5E7", borderRadius: 12, fontFamily: "Roboto Mono", fontSize: 12 }} />
+                  <Tooltip contentStyle={{ border: "1px solid #E2E2E5", borderRadius: 12, fontFamily: "Roboto Mono", fontSize: 12 }} />
                   {/* Monochrome ramp — series differ by weight/dash, not hue. */}
-                  <Line type="monotone" dataKey="sent" stroke="#1D1D1F" strokeWidth={2} dot={{ r: 2 }} />
-                  <Line type="monotone" dataKey="opened" stroke="#8E8E93" strokeWidth={1.5} strokeDasharray="6 3" dot={{ r: 2 }} />
-                  <Line type="monotone" dataKey="replied" stroke="#D2D2D7" strokeWidth={1.5} strokeDasharray="2 3" dot={{ r: 2 }} />
+                  <Line type="monotone" dataKey="sent" stroke="#0A0A0B" strokeWidth={2} dot={{ r: 2 }} />
+                  <Line type="monotone" dataKey="opened" stroke="#6E6E73" strokeWidth={1.5} strokeDasharray="6 3" dot={{ r: 2 }} />
+                  <Line type="monotone" dataKey="replied" stroke="#B4B4B9" strokeWidth={1.5} strokeDasharray="2 3" dot={{ r: 2 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
