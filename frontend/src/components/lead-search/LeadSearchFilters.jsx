@@ -100,7 +100,7 @@ function FilterControl({ item, value, onChange }) {
     return (
       <input value={value || ""} onChange={(e) => onChange(e.target.value)}
         placeholder={item.placeholder}
-        className="w-full border border-line rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
+        className="w-full border border-line rounded-lg px-2 py-1.5 text-caption bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
     );
   }
   if (item.type === "toggle") {
@@ -109,7 +109,7 @@ function FilterControl({ item, value, onChange }) {
         <div className={`relative w-7 h-4 rounded-full transition-colors ${value ? "bg-accent" : "bg-gray-200"}`}>
           <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow-sm transition-transform ${value ? "translate-x-3" : ""}`} />
         </div>
-        <span className="text-xs text-ink select-none">{item.label}</span>
+        <span className="text-caption text-ink select-none">{item.label}</span>
       </label>
     );
   }
@@ -133,7 +133,7 @@ function FilterControl({ item, value, onChange }) {
         {arr.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {arr.map((v) => (
-              <span key={v} className="inline-flex items-center gap-1 bg-accent/5 border border-accent/20 rounded-full px-2 py-0.5 text-xs text-accent">
+              <span key={v} className="inline-flex items-center gap-1 bg-accent/5 border border-accent/20 rounded-full px-2 py-0.5 text-caption text-accent">
                 {v}
                 <button onClick={() => onChange(arr.filter((s) => s !== v))}><X size={10} /></button>
               </span>
@@ -155,7 +155,7 @@ function FilterControl({ item, value, onChange }) {
           }
         }}
           placeholder={item.placeholder}
-          className="w-full border border-line rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
+          className="w-full border border-line rounded-lg px-2 py-1.5 text-caption bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
       </div>
     );
   }
@@ -184,7 +184,7 @@ function FilterControl({ item, value, onChange }) {
           }
         }}
           placeholder={item.placeholder}
-          className="w-full border border-line rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
+          className="w-full border border-line rounded-lg px-2 py-1.5 text-caption bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
       </div>
     );
   }
@@ -192,10 +192,10 @@ function FilterControl({ item, value, onChange }) {
     return (
       <div className="flex gap-2 items-center">
         <input type="number" value={value?.min ?? ""} onChange={(e) => onChange({ ...(value || {}), min: e.target.value ? Number(e.target.value) : null })}
-          placeholder="Min" className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
-        <span className="text-ink-muted shrink-0 text-xs">—</span>
+          placeholder="Min" className="w-full border border-line rounded-lg px-3 py-2 text-body bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+        <span className="text-ink-muted shrink-0 text-caption">—</span>
         <input type="number" value={value?.max ?? ""} onChange={(e) => onChange({ ...(value || {}), max: e.target.value ? Number(e.target.value) : null })}
-          placeholder="Max" className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+          placeholder="Max" className="w-full border border-line rounded-lg px-3 py-2 text-body bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
       </div>
     );
   }
@@ -211,10 +211,10 @@ function FilterControl({ item, value, onChange }) {
         </div>
         <div className="flex gap-2 items-center">
           <input type="number" value={v.min ?? ""} onChange={(e) => onChange({ ...v, min: e.target.value ? Number(e.target.value) : null })}
-            placeholder="Custom min" className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
-          <span className="text-ink-muted shrink-0 text-xs">—</span>
+            placeholder="Custom min" className="w-full border border-line rounded-lg px-3 py-2 text-body bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+          <span className="text-ink-muted shrink-0 text-caption">—</span>
           <input type="number" value={v.max ?? ""} onChange={(e) => onChange({ ...v, max: e.target.value ? Number(e.target.value) : null })}
-            placeholder="Custom max" className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+            placeholder="Custom max" className="w-full border border-line rounded-lg px-3 py-2 text-body bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
         </div>
       </div>
     );
@@ -284,19 +284,19 @@ export default function LeadSearchFilters({ filters, onChange, onClear, onSearch
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <SlidersHorizontal size={15} className="text-ink" />
-            <span className="font-display font-semibold text-sm">Filters</span>
+            <span className="font-display font-semibold text-body">Filters</span>
             {activeFilters.length > 0 && (
-              <span className="text-xs bg-accent/10 text-accent rounded-full px-2 py-0.5 font-mono">{activeFilters.length}</span>
+              <span className="text-caption bg-accent/10 text-accent rounded-full px-2 py-0.5 font-mono">{activeFilters.length}</span>
             )}
           </div>
           <div className="flex items-center gap-1">
             {activeFilters.length > 0 && (
-              <button onClick={() => setShowSaveInput(!showSaveInput)} className="text-xs text-ink-muted hover:text-accent flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-ash/50">
+              <button onClick={() => setShowSaveInput(!showSaveInput)} className="text-caption text-ink-muted hover:text-accent flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-ash/50">
                 <Save size={11} /> Save
               </button>
             )}
             {activeFilters.length > 0 && (
-              <button onClick={onClear} className="text-xs text-ink-muted hover:text-ink flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-ash/50">
+              <button onClick={onClear} className="text-caption text-ink-muted hover:text-ink flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-ash/50">
                 <X size={11} /> Clear
               </button>
             )}
@@ -306,7 +306,7 @@ export default function LeadSearchFilters({ filters, onChange, onClear, onSearch
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
           <input value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)}
             placeholder="Search filters…"
-            className="w-full pl-8 pr-3 py-2 border border-line rounded-lg text-sm bg-ash/50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
+            className="w-full pl-8 pr-3 py-2 border border-line rounded-lg text-body bg-ash/50 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
           {groupSearch && <button onClick={() => setGroupSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink"><X size={12} /></button>}
         </div>
         {showSaveInput && (
@@ -314,8 +314,8 @@ export default function LeadSearchFilters({ filters, onChange, onClear, onSearch
             <input value={saveName} onChange={(e) => setSaveName(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
               placeholder="Search name…"
-              className="flex-1 border border-line rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
-            <button onClick={handleSave} className="btn-primary text-xs py-1 px-2">Save</button>
+              className="flex-1 border border-line rounded-lg px-2.5 py-1.5 text-caption focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+            <button onClick={handleSave} className="btn-primary text-caption py-1 px-2">Save</button>
           </div>
         )}
       </div>
@@ -327,7 +327,7 @@ export default function LeadSearchFilters({ filters, onChange, onClear, onSearch
             const item = FILTER_GROUPS.flatMap((g) => g.items).find((i) => i.key === key);
             return item ? <ActiveFilterChip key={key} label={item.label} onRemove={() => handleClear(key)} /> : null;
           })}
-          {activeFilters.length > 8 && <span className="text-xs text-ink-muted py-0.5">+{activeFilters.length - 8} more</span>}
+          {activeFilters.length > 8 && <span className="text-caption text-ink-muted py-0.5">+{activeFilters.length - 8} more</span>}
         </div>
       )}
 
@@ -344,7 +344,7 @@ export default function LeadSearchFilters({ filters, onChange, onClear, onSearch
                   <Icon size={12} className="text-ink-muted" />
                   <span className="text-tiny font-semibold uppercase tracking-wider text-ink-muted">{group.label}</span>
                   {group.key === "saved" && savedSearches?.length > 0 && (
-                    <span className="text-xs bg-accent/10 text-accent rounded-full px-1.5 py-0.5 font-mono">{savedSearches.length}</span>
+                    <span className="text-caption bg-accent/10 text-accent rounded-full px-1.5 py-0.5 font-mono">{savedSearches.length}</span>
                   )}
                 </div>
                 <ChevronDown size={13} className={`text-ink-muted transition-transform ${isOpen ? "rotate-180" : ""}`} />
@@ -356,7 +356,7 @@ export default function LeadSearchFilters({ filters, onChange, onClear, onSearch
                       savedSearches.map((s) => (
                         <div key={s.id} className="flex items-center justify-between group hover:bg-ash/30 rounded-lg px-2 py-1 -mx-2">
                           <button onClick={() => onLoadSearch(s)}
-                            className="text-xs text-left flex-1 truncate hover:text-accent transition-colors">
+                            className="text-caption text-left flex-1 truncate hover:text-accent transition-colors">
                             <span className="font-medium">{s.name}</span>
                           </button>
                           <button onClick={() => onDeleteSearch(s.id)}
@@ -366,7 +366,7 @@ export default function LeadSearchFilters({ filters, onChange, onClear, onSearch
                         </div>
                       ))
                     ) : (
-                      <p className="text-xs text-ink-muted italic">No saved searches yet</p>
+                      <p className="text-caption text-ink-muted italic">No saved searches yet</p>
                     )
                   ) : group.items.map((item) => (
                     <div key={item.key}>
@@ -387,11 +387,11 @@ export default function LeadSearchFilters({ filters, onChange, onClear, onSearch
       {/* Footer with search button */}
       <div className="shrink-0 px-4 py-2.5 border-t border-line bg-ash/30 space-y-1.5">
         <button onClick={onSearch} disabled={searchBusy}
-          className="w-full btn-primary text-xs disabled:opacity-60 flex items-center justify-center gap-1.5">
+          className="w-full btn-primary text-caption disabled:opacity-60 flex items-center justify-center gap-1.5">
           {searchBusy ? <><Loader2 size={12} className="animate-spin" /> Searching</>
             : <><Search size={12} /> Search</>}
         </button>
-        <div className="flex items-center justify-between text-xs text-ink-muted">
+        <div className="flex items-center justify-between text-caption text-ink-muted">
           <span>{providers?.join(" + ") || "All providers"}</span>
           <span>{activeFilters.length} filter{activeFilters.length !== 1 ? "s" : ""} active</span>
         </div>

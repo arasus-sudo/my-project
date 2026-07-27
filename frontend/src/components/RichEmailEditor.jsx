@@ -79,7 +79,7 @@ export default function RichEmailEditor({ value, onChange, placeholder = "Write 
     content: sanitizeEmailHtml(value) || "",
     editorProps: {
       attributes: {
-        class: "prose-email focus:outline-none min-h-[260px] px-4 py-3 text-xs leading-relaxed",
+        class: "prose-email focus:outline-none min-h-[260px] px-4 py-3 text-caption leading-relaxed",
         "data-testid": "rich-editor-body",
       },
     },
@@ -204,7 +204,7 @@ export default function RichEmailEditor({ value, onChange, placeholder = "Write 
       <div className="relative">
         <EditorContent editor={editor} />
         {editor.isEmpty && (
-          <div className="absolute top-3 left-4 text-xs text-neutral-400 pointer-events-none">
+          <div className="absolute top-3 left-4 text-caption text-neutral-400 pointer-events-none">
             {placeholder}
           </div>
         )}

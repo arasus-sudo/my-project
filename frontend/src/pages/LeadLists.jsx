@@ -130,11 +130,11 @@ export default function LeadLists() {
         subtitle="Organize leads into lists that any agent can reference."
         right={
           <div className="flex items-center gap-2">
-            <Link to="/app/crm" className="btn-secondary text-xs"><ArrowLeft size={14} /> CRM</Link>
-            <button onClick={() => setImporter({ mode: "new-list" })} data-testid="upload-leads-btn" className="btn-secondary text-xs">
+            <Link to="/app/crm" className="btn-secondary text-caption"><ArrowLeft size={14} /> CRM</Link>
+            <button onClick={() => setImporter({ mode: "new-list" })} data-testid="upload-leads-btn" className="btn-secondary text-caption">
               <Upload size={14} /> Upload leads
             </button>
-            <button onClick={() => setCreating(true)} className="btn-primary text-xs">
+            <button onClick={() => setCreating(true)} className="btn-primary text-caption">
               <Plus size={14} /> New List
             </button>
           </div>
@@ -148,8 +148,8 @@ export default function LeadLists() {
             <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)}
               placeholder="Description (optional)" className="w-full border border-line px-3 py-2 rounded-lg text-input" />
             <div className="flex gap-2">
-              <button onClick={create} disabled={!newName.trim()} className="btn-primary text-xs"><Save size={12} /> Save</button>
-              <button onClick={() => setCreating(false)} className="btn-secondary text-xs">Cancel</button>
+              <button onClick={create} disabled={!newName.trim()} className="btn-primary text-caption"><Save size={12} /> Save</button>
+              <button onClick={() => setCreating(false)} className="btn-secondary text-caption">Cancel</button>
             </div>
           </div>
         )}
@@ -251,10 +251,10 @@ export default function LeadLists() {
                         <div className="flex items-center gap-1">
                           <button disabled={listPage <= 1}
                             onClick={() => changeListPage(l.id, listPage - 1)}
-                            className="btn-secondary text-xs px-2 py-0.5 disabled:opacity-30">Prev</button>
+                            className="btn-secondary text-caption px-2 py-0.5 disabled:opacity-30">Prev</button>
                           <button disabled={listPage >= totalPages}
                             onClick={() => changeListPage(l.id, listPage + 1)}
-                            className="btn-secondary text-xs px-2 py-0.5 disabled:opacity-30">Next</button>
+                            className="btn-secondary text-caption px-2 py-0.5 disabled:opacity-30">Next</button>
                         </div>
                       </div>
                     </div>

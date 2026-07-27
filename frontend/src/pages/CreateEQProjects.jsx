@@ -98,7 +98,7 @@ export default function CreateEQProjects() {
             <h2 className="font-display font-bold text-xl sm:text-2xl leading-[1.15] tracking-tight max-w-xl">
               Describe your idea. We&apos;ll design the deck.
             </h2>
-            <p className="text-xs sm:text-sm text-neutral-400 mt-2 max-w-md">
+            <p className="text-caption sm:text-body text-neutral-400 mt-2 max-w-md">
               One sentence is enough. Pick an audience and theme next — a finished, editable carousel in under a minute.
             </p>
 
@@ -110,9 +110,9 @@ export default function CreateEQProjects() {
                 data-testid="hero-topic-input"
                 rows={2}
                 placeholder='e.g. "Why cold outreach fails in 2026 — and the 3-step fix"'
-                className="flex-1 resize-none border border-line rounded-xl px-3.5 py-2.5 text-sm bg-white focus:outline-none focus:border-accent shadow-sm"
+                className="flex-1 resize-none border border-line rounded-xl px-3.5 py-2.5 text-body bg-white focus:outline-none focus:border-accent shadow-sm"
               />
-              <button onClick={launchWizard} data-testid="hero-generate" className="btn-primary shrink-0 self-stretch sm:self-start sm:h-[46px] px-4 text-sm">
+              <button onClick={launchWizard} data-testid="hero-generate" className="btn-primary shrink-0 self-stretch sm:self-start sm:h-[46px] px-4 text-body">
                 <Wand2 size={14} /> Generate
               </button>
             </div>
@@ -127,7 +127,7 @@ export default function CreateEQProjects() {
               ))}
             </div>
 
-            <div className="text-xs text-neutral-400 mt-3.5">
+            <div className="text-caption text-neutral-400 mt-3.5">
               or <button onClick={startBlank} disabled={busy} data-testid="start-blank-btn" className="underline underline-offset-2 hover:text-ink disabled:opacity-50">start from a blank canvas</button>
             </div>
           </div>
@@ -140,7 +140,7 @@ export default function CreateEQProjects() {
         <section>
           <div className="flex items-baseline justify-between mb-3">
             <div>
-              <div className="font-display font-semibold text-sm">Start from a template</div>
+              <div className="font-display font-semibold text-body">Start from a template</div>
               <div className="text-[11px] text-neutral-400 mt-0.5">Pre-designed layouts — add your topic, edit anything.</div>
             </div>
           </div>
@@ -153,7 +153,7 @@ export default function CreateEQProjects() {
                   <div className="aspect-[4/5] p-3 flex flex-col justify-between relative"
                     style={{ background: pal.bg, color: pal.text, fontFamily: "Inter" }}>
                     <div className="text-[8px] font-mono uppercase tracking-widest opacity-60">{t.tag}</div>
-                    <div className="font-semibold text-xs leading-tight" style={{ color: pal.accent }}>{t.name}</div>
+                    <div className="font-semibold text-caption leading-tight" style={{ color: pal.accent }}>{t.name}</div>
                     <div className="absolute inset-x-0 bottom-0 h-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] font-medium"
                       style={{ background: `linear-gradient(transparent, ${pal.bg})`, color: pal.text }}>
                       Use this →
@@ -224,7 +224,7 @@ function TemplateStartDialog({ template, onClose, onCreated }) {
           <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">{template.tag} · {template.name}</div>
         </div>
         <h2 className="font-display font-semibold text-2xl mt-2 mb-1">What&apos;s this deck about?</h2>
-        <p className="text-sm text-neutral-400 mb-4">We&apos;ll draft real content in this template&apos;s theme — one sentence is enough.</p>
+        <p className="text-body text-neutral-400 mb-4">We&apos;ll draft real content in this template&apos;s theme — one sentence is enough.</p>
         <textarea
           autoFocus
           value={topic}
@@ -235,10 +235,10 @@ function TemplateStartDialog({ template, onClose, onCreated }) {
           className="w-full border border-line rounded-lg px-4 py-3 text-base focus:outline-none focus:border-ink"
         />
         <div className="flex items-center gap-2 mt-3">
-          <span className="text-xs text-neutral-400">Slides:</span>
+          <span className="text-caption text-neutral-400">Slides:</span>
           {[3, 5, 6, 8].map((n) => (
             <button key={n} onClick={() => setSlideCount(n)} data-testid={`template-count-${n}`}
-              className={`px-3 py-1 rounded-xl text-xs font-mono ${slideCount === n ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
+              className={`px-3 py-1 rounded-xl text-caption font-mono ${slideCount === n ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
               {n}
             </button>
           ))}
@@ -265,12 +265,12 @@ function HistoryDrawer({ items, onClose, onDelete }) {
         <div className="sticky top-0 bg-white border-b border-line px-5 py-4 flex items-center gap-3 z-10">
           <History size={16} />
           <div className="font-display font-semibold">Your projects</div>
-          <button onClick={onClose} data-testid="history-close-btn" className="ml-auto btn-ghost text-xs"><X size={14} /></button>
+          <button onClick={onClose} data-testid="history-close-btn" className="ml-auto btn-ghost text-caption"><X size={14} /></button>
         </div>
 
         <div className="p-4 space-y-6">
           {items.length === 0 ? (
-            <div className="text-neutral-400 text-sm">No carousels yet. Pick a template or click Create with AI.</div>
+            <div className="text-neutral-400 text-body">No carousels yet. Pick a template or click Create with AI.</div>
           ) : (
             <>
               <div>
@@ -288,8 +288,8 @@ function HistoryDrawer({ items, onClose, onDelete }) {
                         <Link to={`/app/create-eq/${p.id}`} onClick={onClose} data-testid={`carousel-open-${p.id}`}
                           className="flex-1 flex items-center gap-2.5 min-w-0">
                           <span className="w-2 h-2 rounded-full shrink-0" style={{ background: pal.bg }} />
-                          <span className="text-sm font-medium truncate">{p.topic}</span>
-                          <span className="text-xs text-neutral-400 shrink-0 ml-auto pl-2">
+                          <span className="text-body font-medium truncate">{p.topic}</span>
+                          <span className="text-caption text-neutral-400 shrink-0 ml-auto pl-2">
                             {p.updated_at ? formatDistanceToNow(new Date(p.updated_at), { addSuffix: true }) : `${p.slides?.length || 0} slides`}
                           </span>
                         </Link>
@@ -318,8 +318,8 @@ function ContinueCard({ project: p, onNavigate }) {
       className="group flex items-center gap-2.5 rounded-2xl border border-line bg-white px-3 py-2.5 hover:shadow-card-hover hover:border-ink transition-colors">
       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: pal.bg }} />
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium truncate">{p.topic}</div>
-        {edited && <div className="text-xs text-neutral-400">{edited} · {p.slides?.length || 0} slides</div>}
+        <div className="text-body font-medium truncate">{p.topic}</div>
+        {edited && <div className="text-caption text-neutral-400">{edited} · {p.slides?.length || 0} slides</div>}
       </div>
       <ArrowRight size={14} className="shrink-0 text-neutral-400 group-hover:text-ink" />
     </Link>
@@ -382,7 +382,7 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
           <div className="flex items-center gap-2 mb-3">
             <Wand2 size={16} className="text-ink" />
             <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">Create with AI · Step {step} of 4</div>
-            <button onClick={onClose} className="ml-auto text-neutral-400 hover:text-ink text-sm">Cancel</button>
+            <button onClick={onClose} className="ml-auto text-neutral-400 hover:text-ink text-body">Cancel</button>
           </div>
           <div className="flex gap-1">
             {[1, 2, 3, 4].map((n) => (
@@ -395,7 +395,7 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
           {step === 1 && (
             <div className="space-y-4" data-testid="wizard-step-1">
               <h2 className="font-display font-bold text-2xl sm:text-3xl leading-tight">What&apos;s your carousel about?</h2>
-              <p className="text-sm text-neutral-400">One sentence is enough — we&apos;ll expand it into a full 6-slide deck.</p>
+              <p className="text-body text-neutral-400">One sentence is enough — we&apos;ll expand it into a full 6-slide deck.</p>
               <textarea
                 autoFocus
                 value={form.topic}
@@ -410,7 +410,7 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
                 <div className="flex flex-wrap gap-1.5">
                   {TOPIC_STARTERS.map((t, i) => (
                     <button key={i} onClick={() => setForm({ ...form, topic: t })} data-testid={`wizard-starter-${i}`}
-                      className="text-xs px-3 py-1.5 rounded-xl border border-line hover:border-ink hover:bg-ash text-neutral-700">
+                      className="text-caption px-3 py-1.5 rounded-xl border border-line hover:border-ink hover:bg-ash text-neutral-700">
                       {t}
                     </button>
                   ))}
@@ -422,13 +422,13 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
           {step === 2 && (
             <div className="space-y-4" data-testid="wizard-step-2">
               <h2 className="font-display font-bold text-2xl sm:text-3xl leading-tight">Who&apos;s this for?</h2>
-              <p className="text-sm text-neutral-400">We&apos;ll tune the tone and vocabulary to fit.</p>
+              <p className="text-body text-neutral-400">We&apos;ll tune the tone and vocabulary to fit.</p>
               <div className="grid grid-cols-2 gap-2">
                 {AUDIENCES.map((a) => (
                   <button key={a.id} onClick={() => setForm({ ...form, audience: a.id, tone: a.tone })}
                     data-testid={`wizard-audience-${a.id}`}
                     className={`text-left p-4 rounded-2xl border transition-colors ${form.audience === a.id ? "border-ink bg-ash" : "border-line hover:border-neutral-400"}`}>
-                    <div className="text-sm font-medium">{a.label}</div>
+                    <div className="text-body font-medium">{a.label}</div>
                     <div className="text-[11px] text-neutral-400 mt-0.5">Tone: {a.tone}</div>
                   </button>
                 ))}
@@ -440,7 +440,7 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
             <div className="space-y-6" data-testid="wizard-step-3">
               <div>
                 <h2 className="font-display font-bold text-2xl sm:text-3xl leading-tight">Pick a platform &amp; theme</h2>
-                <p className="text-sm text-neutral-400 mt-1">These are just starting points — everything is editable after.</p>
+                <p className="text-body text-neutral-400 mt-1">These are just starting points — everything is editable after.</p>
               </div>
 
               <div>
@@ -450,7 +450,7 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
                     <button key={p.id} onClick={() => setForm({ ...form, platform: p.id })}
                       data-testid={`wizard-platform-${p.id}`}
                       className={`text-left p-3 rounded-2xl border ${form.platform === p.id ? "border-ink bg-ash" : "border-line hover:border-neutral-400"}`}>
-                      <div className="text-xs font-medium">{p.label}</div>
+                      <div className="text-caption font-medium">{p.label}</div>
                       <div className="text-[10px] text-neutral-400 mt-0.5 font-mono">{p.ratio} · {p.w}×{p.h}</div>
                     </button>
                   ))}
@@ -479,7 +479,7 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
                   {[3, 5, 6, 7, 8, 10].map((n) => (
                     <button key={n} onClick={() => setForm({ ...form, slide_count: n })}
                       data-testid={`wizard-count-${n}`}
-                      className={`px-4 py-2 rounded-xl text-sm font-mono ${form.slide_count === n ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
+                      className={`px-4 py-2 rounded-xl text-body font-mono ${form.slide_count === n ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
                       {n}
                     </button>
                   ))}
@@ -491,7 +491,7 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
           {step === 4 && (
             <div className="space-y-5" data-testid="wizard-step-4">
               <h2 className="font-display font-bold text-2xl sm:text-3xl leading-tight">Ready to draft?</h2>
-              <p className="text-sm text-neutral-400">Review your choices — you can adjust anything after generation.</p>
+              <p className="text-body text-neutral-400">Review your choices — you can adjust anything after generation.</p>
 
               <div className="rounded-2xl border border-line overflow-hidden">
                 <div className="aspect-[4/5] p-6 flex flex-col justify-between max-h-72"
@@ -500,11 +500,11 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
                   <div className="font-semibold text-2xl leading-tight" style={{ color: palette.accent }}>
                     {form.topic || "Your topic here"}
                   </div>
-                  <div className="text-xs opacity-70">Theme: {palette.name} · {form.slide_count} slides</div>
+                  <div className="text-caption opacity-70">Theme: {palette.name} · {form.slide_count} slides</div>
                 </div>
               </div>
 
-              <ul className="space-y-2 text-sm">
+              <ul className="space-y-2 text-body">
                 <li className="flex items-start gap-2"><Check size={14} className="text-ink mt-0.5" /> <span><span className="font-medium">Topic:</span> {form.topic}</span></li>
                 <li className="flex items-start gap-2"><Check size={14} className="text-ink mt-0.5" /> <span><span className="font-medium">Audience:</span> {audience.label} · {audience.tone}</span></li>
                 <li className="flex items-start gap-2"><Check size={14} className="text-ink mt-0.5" /> <span><span className="font-medium">Platform:</span> {platform.label} ({platform.ratio})</span></li>

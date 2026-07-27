@@ -1613,13 +1613,13 @@ export default function CreateEQEditor() {
                 </div>
               </div>
             </div>
-            <div className="sticky bottom-0 left-0 right-0 bg-white/90 backdrop-blur border-t border-line px-4 py-2 flex items-center gap-2 text-xs">
+            <div className="sticky bottom-0 left-0 right-0 bg-white/90 backdrop-blur border-t border-line px-4 py-2 flex items-center gap-2 text-caption">
               <span className="ui-label">Zoom</span>
               <input type="range" min={0.1} max={1.5} step={0.02} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} data-testid="zoom-slider" className="w-32" />
               <span className="font-mono text-ink-muted w-10">{Math.round(zoom * 100)}%</span>
-              <button onClick={zoomToFit} data-testid="zoom-fit" className="btn-ghost text-xs py-1 px-2" title="Fit slide to view (also: Ctrl+scroll to zoom)">Fit</button>
-              <button onClick={() => setZoom(0.5)} data-testid="zoom-50" className="btn-ghost text-xs py-1 px-2">50%</button>
-              <button onClick={() => setZoom(1)} data-testid="zoom-100" className="btn-ghost text-xs py-1 px-2">100%</button>
+              <button onClick={zoomToFit} data-testid="zoom-fit" className="btn-ghost text-caption py-1 px-2" title="Fit slide to view (also: Ctrl+scroll to zoom)">Fit</button>
+              <button onClick={() => setZoom(0.5)} data-testid="zoom-50" className="btn-ghost text-caption py-1 px-2">50%</button>
+              <button onClick={() => setZoom(1)} data-testid="zoom-100" className="btn-ghost text-caption py-1 px-2">100%</button>
               <div className="ml-4 flex items-center gap-1 flex-wrap">
                 {proj.slides.map((s, i) => (
                   <button key={s._k}
@@ -1643,14 +1643,14 @@ export default function CreateEQEditor() {
                       setActiveSlide(toIdx);
                     }}
                     data-testid={`slide-thumb-${i}`}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-mono ${i === activeSlide ? "bg-accent text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
+                    className={`px-2.5 py-1 rounded-xl text-caption font-mono ${i === activeSlide ? "bg-accent text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
                     {i + 1}
                   </button>
                 ))}
-                <button onClick={() => addSlide()} data-testid="add-slide" className="btn-ghost text-xs py-1"><Plus size={12} /> Slide</button>
-                <button onClick={duplicateSlide} data-testid="dup-slide" className="btn-ghost text-xs py-1"><Copy size={12} /></button>
-                <button onClick={saveSlideAsTemplate} data-testid="save-template" className="btn-ghost text-xs py-1" title="Save slide as template">📋</button>
-                <button onClick={deleteSlide} data-testid="del-slide" className="btn-ghost text-xs py-1 text-danger"><Trash2 size={12} /></button>
+                <button onClick={() => addSlide()} data-testid="add-slide" className="btn-ghost text-caption py-1"><Plus size={12} /> Slide</button>
+                <button onClick={duplicateSlide} data-testid="dup-slide" className="btn-ghost text-caption py-1"><Copy size={12} /></button>
+                <button onClick={saveSlideAsTemplate} data-testid="save-template" className="btn-ghost text-caption py-1" title="Save slide as template">📋</button>
+                <button onClick={deleteSlide} data-testid="del-slide" className="btn-ghost text-caption py-1 text-danger"><Trash2 size={12} /></button>
               </div>
             </div>
           </section>
@@ -1831,7 +1831,7 @@ function GenerateContentDialog({ busy, onClose, onGenerate }) {
           <span className="text-caption text-ink-muted">Slides to add:</span>
           {[1, 3, 5, 6].map((n) => (
             <button key={n} onClick={() => setSlideCount(n)} data-testid={`generate-content-count-${n}`}
-              className={`px-3 py-1 rounded-xl text-xs font-mono ${slideCount === n ? "bg-accent text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
+              className={`px-3 py-1 rounded-xl text-caption font-mono ${slideCount === n ? "bg-accent text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
               {n}
             </button>
           ))}
@@ -1850,7 +1850,7 @@ function GenerateContentDialog({ busy, onClose, onGenerate }) {
 
 function CtxBtn({ children, onClick, className }) {
   return (
-    <button onClick={onClick} className={`w-full text-left px-3 py-2 hover:bg-neutral-50 text-sm ${className || ""}`} style={{ whiteSpace: "nowrap" }}>
+    <button onClick={onClick} className={`w-full text-left px-3 py-2 hover:bg-neutral-50 text-body ${className || ""}`} style={{ whiteSpace: "nowrap" }}>
       {children}
     </button>
   );

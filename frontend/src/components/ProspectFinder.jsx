@@ -207,20 +207,20 @@ export default function ProspectFinder({ open, onClose, onDone }) {
             <div className="flex items-center justify-between">
               <div className="font-display font-bold text-xl">New ICP</div>
               <button type="button" onClick={generateIcpFromDeals} disabled={icpGenBusy}
-                className="btn-secondary text-xs">
+                className="btn-secondary text-caption">
                 {icpGenBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                 Generate from won deals
               </button>
             </div>
             <input required placeholder="ICP name (e.g. 'SaaS founders')" value={icpDraft.name} onChange={(e) => setIcpDraft({ ...icpDraft, name: e.target.value })} data-testid="icp-name" className="w-full border border-line rounded-full px-3 py-2" />
-            <input placeholder="Titles (comma-separated)" value={icpDraft.titles} onChange={(e) => setIcpDraft({ ...icpDraft, titles: e.target.value })} data-testid="icp-titles" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
-            <input placeholder="Industries" value={icpDraft.industries} onChange={(e) => setIcpDraft({ ...icpDraft, industries: e.target.value })} data-testid="icp-industries" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+            <input placeholder="Titles (comma-separated)" value={icpDraft.titles} onChange={(e) => setIcpDraft({ ...icpDraft, titles: e.target.value })} data-testid="icp-titles" className="w-full border border-line rounded-full px-3 py-2 text-body" />
+            <input placeholder="Industries" value={icpDraft.industries} onChange={(e) => setIcpDraft({ ...icpDraft, industries: e.target.value })} data-testid="icp-industries" className="w-full border border-line rounded-full px-3 py-2 text-body" />
             <div className="grid grid-cols-2 gap-2">
-              <input placeholder="Locations (US, UK…)" value={icpDraft.locations} onChange={(e) => setIcpDraft({ ...icpDraft, locations: e.target.value })} className="w-full border border-line rounded-full px-3 py-2 text-sm" />
-              <input placeholder="Company sizes (11-50, 51-200…)" value={icpDraft.company_sizes} onChange={(e) => setIcpDraft({ ...icpDraft, company_sizes: e.target.value })} className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+              <input placeholder="Locations (US, UK…)" value={icpDraft.locations} onChange={(e) => setIcpDraft({ ...icpDraft, locations: e.target.value })} className="w-full border border-line rounded-full px-3 py-2 text-body" />
+              <input placeholder="Company sizes (11-50, 51-200…)" value={icpDraft.company_sizes} onChange={(e) => setIcpDraft({ ...icpDraft, company_sizes: e.target.value })} className="w-full border border-line rounded-full px-3 py-2 text-body" />
             </div>
-            <input placeholder="Seniority (Director, VP, Head…)" value={icpDraft.seniority} onChange={(e) => setIcpDraft({ ...icpDraft, seniority: e.target.value })} data-testid="icp-seniority" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
-            <input placeholder="Keywords / domains" value={icpDraft.keywords} onChange={(e) => setIcpDraft({ ...icpDraft, keywords: e.target.value })} data-testid="icp-keywords" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+            <input placeholder="Seniority (Director, VP, Head…)" value={icpDraft.seniority} onChange={(e) => setIcpDraft({ ...icpDraft, seniority: e.target.value })} data-testid="icp-seniority" className="w-full border border-line rounded-full px-3 py-2 text-body" />
+            <input placeholder="Keywords / domains" value={icpDraft.keywords} onChange={(e) => setIcpDraft({ ...icpDraft, keywords: e.target.value })} data-testid="icp-keywords" className="w-full border border-line rounded-full px-3 py-2 text-body" />
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setIcpModalOpen(false)} className="btn-secondary">Cancel</button>
               <button type="submit" data-testid="save-icp" className="btn-primary">Save ICP</button>

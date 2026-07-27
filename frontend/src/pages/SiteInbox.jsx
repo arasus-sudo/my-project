@@ -85,7 +85,7 @@ export default function SiteInbox() {
                   <div className="text-caption text-ink-muted font-mono">{active.visitor_id}</div>
                 </div>
                 {active.status !== "resolved" && (
-                  <button onClick={() => resolve(active.id)} data-testid="resolve-site-convo-btn" className="btn-secondary text-xs">
+                  <button onClick={() => resolve(active.id)} data-testid="resolve-site-convo-btn" className="btn-secondary text-caption">
                     <Check size={12} /> Mark resolved
                   </button>
                 )}

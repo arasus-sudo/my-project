@@ -46,7 +46,7 @@ export default function WhatsAppContacts() {
               {c.tags?.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">{c.tags.map((tg) => <span key={tg} className="pill">{tg}</span>)}</div>
               )}
-              <button onClick={() => toggleOptOut(c.id, c.opted_out)} className="mt-3 text-xs text-accent hover:underline">
+              <button onClick={() => toggleOptOut(c.id, c.opted_out)} className="mt-3 text-caption text-accent hover:underline">
                 {c.opted_out ? "Re-subscribe" : "Opt out"}
               </button>
             </div>

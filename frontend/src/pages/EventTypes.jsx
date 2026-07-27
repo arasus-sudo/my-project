@@ -48,7 +48,7 @@ export default function EventTypes() {
                 </Link>
                 <div className="text-tiny text-ink-muted font-mono">{et.duration_minutes} min · {et.location_type}</div>
                 <div className="flex gap-2 pt-2">
-                  <button onClick={() => copyLink(et.slug)} data-testid={`copy-link-${et.id}`} className="btn-ghost text-xs"><Copy size={12} /> Copy link</button>
+                  <button onClick={() => copyLink(et.slug)} data-testid={`copy-link-${et.id}`} className="btn-ghost text-caption"><Copy size={12} /> Copy link</button>
                   <button onClick={() => remove(et.id)} data-testid={`delete-event-type-${et.id}`} className="text-caption text-danger hover:underline inline-flex items-center gap-1"><Trash2 size={12} /> delete</button>
                 </div>
               </div>

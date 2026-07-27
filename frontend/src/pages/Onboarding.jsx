@@ -85,7 +85,7 @@ export default function Onboarding() {
     <div className="min-h-screen bg-bone p-6 sm:p-8 animate-fade-in">
       <div className="max-w-3xl mx-auto pt-12 pb-16">
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-8 h-8 bg-accent text-white flex items-center justify-center rounded-full font-display font-bold text-sm">i</div>
+          <div className="w-8 h-8 bg-accent text-white flex items-center justify-center rounded-full font-display font-bold text-body">i</div>
           <div className="font-display font-semibold">Innoira <span className="text-ink-muted">/</span> <span className="text-ink-muted">Setup</span></div>
           <button onClick={skip} data-testid="onboarding-skip" className="ml-auto text-caption text-ink-muted hover:text-ink">Skip for now</button>
         </div>
@@ -180,7 +180,7 @@ export default function Onboarding() {
                       <input value={c.goal || ""} onChange={(e) => updateCampaignField(ci, "goal", e.target.value)}
                         className="mt-1 text-caption text-ink-muted bg-transparent border-0 focus:outline-none w-full" />
                     </div>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer" data-testid={`onboarding-accept-${ci}`}>
+                    <label className="flex items-center gap-2 text-body cursor-pointer" data-testid={`onboarding-accept-${ci}`}>
                       <input type="checkbox" checked={!!accept[ci]} onChange={(e) => setAccept({ ...accept, [ci]: e.target.checked })} />
                       Include
                     </label>

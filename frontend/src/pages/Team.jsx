@@ -59,7 +59,7 @@ export default function Team() {
                   <td className="p-3 text-ink-muted">{m.created_at?.slice(0, 10)}</td>
                   <td className="p-3 text-right">
                     {m.id !== user?.id && (
-                      <button onClick={() => remove(m.id)} data-testid={`remove-member-${m.id}`} className="text-xs text-danger hover:underline">
+                      <button onClick={() => remove(m.id)} data-testid={`remove-member-${m.id}`} className="text-caption text-danger hover:underline">
                         <Trash2 size={12} className="inline" /> remove
                       </button>
                     )}
@@ -77,7 +77,7 @@ export default function Team() {
             <div className="text-section font-display font-semibold">Invite team member</div>
             <input required placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="invite-name" className="input-premium w-full" />
             <input required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="invite-email" className="input-premium w-full" />
-            <input required minLength={6} type="text" placeholder="Temporary password (share with them)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} data-testid="invite-password" className="input-premium w-full font-mono text-sm" />
+            <input required minLength={6} type="text" placeholder="Temporary password (share with them)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} data-testid="invite-password" className="input-premium w-full font-mono text-body" />
             <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} data-testid="invite-role" className="input-premium w-full bg-white">
               {ROLES.map((r) => <option key={r.k} value={r.k}>{r.t}</option>)}
             </select>

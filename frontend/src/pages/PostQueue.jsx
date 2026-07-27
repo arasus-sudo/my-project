@@ -220,32 +220,32 @@ export default function PostQueue() {
             <div className="flex justify-end gap-2 pt-2 flex-wrap">
               {editing ? (
                 <>
-                  <button onClick={() => setEditing(false)} className="btn-secondary text-xs">Cancel</button>
-                  <button onClick={saveEdit} data-testid="save-post-btn" className="btn-primary text-xs"><Save size={12} /> Save</button>
+                  <button onClick={() => setEditing(false)} className="btn-secondary text-caption">Cancel</button>
+                  <button onClick={saveEdit} data-testid="save-post-btn" className="btn-primary text-caption"><Save size={12} /> Save</button>
                 </>
               ) : (
                 <>
                   {detail.status !== "published" && (
-                    <button onClick={startEdit} data-testid="edit-post-btn" className="btn-secondary text-xs"><Pencil size={12} /> Edit</button>
+                    <button onClick={startEdit} data-testid="edit-post-btn" className="btn-secondary text-caption"><Pencil size={12} /> Edit</button>
                   )}
                   {(detail.status === "draft" || detail.status === "pending_approval" || detail.status === "scheduled") &&
                     !(detail.content_type === "video" && detail.video_status === "processing") && (
                     <>
-                      <button onClick={() => approve(detail.id)} data-testid="approve-post-btn" className="btn-secondary text-xs">
+                      <button onClick={() => approve(detail.id)} data-testid="approve-post-btn" className="btn-secondary text-caption">
                         <CheckCircle2 size={12} /> Approve
                       </button>
-                      <button onClick={() => reject(detail.id)} data-testid="reject-post-btn" className="btn-secondary text-xs text-danger">
+                      <button onClick={() => reject(detail.id)} data-testid="reject-post-btn" className="btn-secondary text-caption text-danger">
                         <XCircle size={12} /> Reject
                       </button>
                     </>
                   )}
                   {(detail.status === "approved" || detail.status === "publish_failed") && (
-                    <button onClick={() => publish(detail.id)} data-testid="publish-post-btn" className="btn-primary text-xs">
+                    <button onClick={() => publish(detail.id)} data-testid="publish-post-btn" className="btn-primary text-caption">
                       <Send size={12} /> Publish now
                     </button>
                   )}
                   {detail.status !== "published" && (
-                    <button onClick={() => remove(detail.id)} data-testid="delete-post-btn" className="btn-secondary text-xs text-danger">
+                    <button onClick={() => remove(detail.id)} data-testid="delete-post-btn" className="btn-secondary text-caption text-danger">
                       <Trash2 size={12} /> Delete
                     </button>
                   )}

@@ -54,6 +54,7 @@ const DEFAULT_STEP = () => ({
   _key: stepKey(),
   channel: "email",
   day: 0,
+  condition: "always",
   subject: "Quick idea for {{company}}",
   body_html: "<p>Hi {{first_name}},</p><p>Noticed {{company}} — worth 15 minutes to compare notes?</p>",
   body: "Hi {{first_name}},\n\nNoticed {{company}} — worth 15 minutes to compare notes?",
@@ -797,11 +798,11 @@ export default function CampaignBuilder() {
         <div className="ui-label shrink-0">Campaign type</div>
         <div className="flex items-center gap-1 bg-bone border border-line rounded-xl p-0.5">
           <button onClick={() => setCampaignType("ai")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${campaignType === "ai" ? "bg-ink text-white shadow-sm" : "text-ink-muted hover:text-ink"}`}>
+            className={`px-3 py-1.5 rounded-lg text-caption font-medium transition-colors ${campaignType === "ai" ? "bg-ink text-white shadow-sm" : "text-ink-muted hover:text-ink"}`}>
             AI Campaign <span className="text-tiny opacity-70">(personal openers)</span>
           </button>
           <button onClick={() => setCampaignType("template")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${campaignType === "template" ? "bg-ink text-white shadow-sm" : "text-ink-muted hover:text-ink"}`}>
+            className={`px-3 py-1.5 rounded-lg text-caption font-medium transition-colors ${campaignType === "template" ? "bg-ink text-white shadow-sm" : "text-ink-muted hover:text-ink"}`}>
             Template <span className="text-tiny opacity-70">(basic merge fields)</span>
           </button>
         </div>
@@ -821,10 +822,10 @@ export default function CampaignBuilder() {
           <ol className="space-y-2">
             {steps.map((s, i) => (
               <li key={s._key || i}>
-                <button
+                <div
                   onClick={() => setActiveStep(i)}
                   data-testid={`step-${i}`}
-                  className={`w-full text-left p-3 border transition-colors duration-150 ${i === activeStep ? "border-ink bg-surfacehover" : "border-line hover:bg-surfacehover"} rounded-xl`}
+                  className={`w-full text-left p-3 border transition-colors duration-150 ${i === activeStep ? "border-ink bg-surfacehover" : "border-line hover:bg-surfacehover"} rounded-xl cursor-pointer`}
                 >
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-1.5">
@@ -838,16 +839,56 @@ export default function CampaignBuilder() {
                     <div className="text-tiny font-mono text-ink-muted">day {s.day}</div>
                   </div>
                   <div className="text-body font-medium mt-1 truncate">{s.subject || CHANNELS.find(c => c.key === (s.channel || "email"))?.label || "Email"}</div>
+                  {i > 0 && s.condition && s.condition !== "always" && (
+                    <div className="flex items-center gap-1 mt-1 text-tiny font-mono">
+                      <span className={`px-1.5 py-0.5 rounded-sm ${
+                        s.condition === "if_no_reply" ? "bg-warning/10 text-warning" :
+                        s.condition === "if_replied" ? "bg-success/10 text-success" :
+                        s.condition === "if_opened_no_reply" ? "bg-accent-soft text-primary" :
+                        "bg-neutral-100 text-ink-muted"
+                      }`}>
+                        {s.condition === "if_no_reply" ? "if no reply" :
+                         s.condition === "if_replied" ? "if replied" :
+                         s.condition === "if_opened_no_reply" ? "if opened, no reply" :
+                         s.condition === "if_clicked" ? "if clicked" :
+                         s.condition === "if_not_opened" ? "if not opened" :
+                         s.condition === "if_bounced" ? "if bounced" : s.condition}
+                      </span>
+                    </div>
+                  )}
                   {steps.length > 1 && (
                     <button onClick={(e) => { e.stopPropagation(); removeStep(i); }} data-testid={`remove-step-${i}`} className="text-caption text-ink-muted hover:text-danger mt-2">
                       <Trash2 size={12} className="inline" /> remove
                     </button>
                   )}
-                </button>
+                </div>
               </li>
             ))}
           </ol>
-          <button onClick={addStep} data-testid="add-step" className="btn-ghost w-full justify-start mt-3 text-sm"><Plus size={14} /> Add step</button>
+          {/* DAG Flow Visual */}
+          {steps.length > 1 && (
+            <div className="mt-3 p-2 bg-bone border border-line rounded-xl">
+              <div className="text-tiny font-mono text-ink-muted mb-2">Flow</div>
+              <div className="space-y-1">
+                {steps.map((s, i) => (
+                  <div key={s._key || i}>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${i === activeStep ? "bg-ink" : "bg-ink-muted"}`} />
+                      <span className={`text-tiny font-mono truncate ${i === activeStep ? "text-ink font-medium" : "text-ink-muted"}`}>
+                        Step {i + 1}{i > 0 && s.condition && s.condition !== "always" && ` · ${s.condition.replace("if_", "").replace(/_/g, " ")}`}
+                      </span>
+                    </div>
+                    {i < steps.length - 1 && (
+                      <div className="ml-[3px] pl-[3px] border-l border-line py-0.5 ml-1">
+                        <span className="text-tiny text-ink-muted font-mono">├─ day {steps[i + 1]?.day || 0}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <button onClick={addStep} data-testid="add-step" className="btn-ghost w-full justify-start mt-3 text-body"><Plus size={14} /> Add step</button>
 
           <div className="mt-6 pt-4 border-t border-line">
             <div className="ui-label mb-2">Sending Window</div>
@@ -974,7 +1015,7 @@ export default function CampaignBuilder() {
             </label>
           </div>
           {selectedLeads.length > 0 && (
-            <button onClick={save} disabled={busy} className="btn-primary w-full mt-3 text-sm flex items-center justify-center gap-1">
+            <button onClick={save} disabled={busy} className="btn-primary w-full mt-3 text-body flex items-center justify-center gap-1">
               {busy ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
               Add & Generate ({selectedLeads.length} leads)
             </button>
@@ -1010,7 +1051,7 @@ export default function CampaignBuilder() {
                       </div>
                       {!batchStatus.all_batches_complete && batchApproved(batchStatus, batchStatus.current_batch) >= batchTotal(batchStatus, batchStatus.current_batch) && (
                         <button onClick={advanceBatch} disabled={advancingBatch}
-                          className="text-xs text-primary hover:underline flex items-center gap-1">
+                          className="text-caption text-primary hover:underline flex items-center gap-1">
                           {advancingBatch ? <Loader2 size={12} className="animate-spin" /> : <ChevronRight size={12} />}
                           Generate next batch ({batchStatus.current_batch + 1}/{batchStatus.total_batches})
                         </button>
@@ -1051,13 +1092,13 @@ export default function CampaignBuilder() {
                       <span className="font-medium text-ink">{leadStats.total - leadStats.reviewed}</span> awaiting review
                     </div>
                     <div className="flex items-center gap-2">
-                      <button onClick={regenerateAllEmails} disabled={regeneratingAll || leadStats.total === 0} className="btn-ghost text-xs" data-testid="regenerate-all-emails">
+                      <button onClick={regenerateAllEmails} disabled={regeneratingAll || leadStats.total === 0} className="btn-ghost text-caption" data-testid="regenerate-all-emails">
                         {regeneratingAll ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />} Regenerate all
                       </button>
-                      <button onClick={dismissAllEmails} disabled={leadStats.total === 0} className="btn-ghost text-xs text-danger" data-testid="dismiss-all-emails">
+                      <button onClick={dismissAllEmails} disabled={leadStats.total === 0} className="btn-ghost text-caption text-danger" data-testid="dismiss-all-emails">
                         <X size={12} /> Dismiss all
                       </button>
-                      <button onClick={approveAllEmails} disabled={leadStats.total === 0} className="btn-secondary text-xs" data-testid="approve-all-emails">
+                      <button onClick={approveAllEmails} disabled={leadStats.total === 0} className="btn-secondary text-caption" data-testid="approve-all-emails">
                         <Check size={12} /> Approve all
                       </button>
                     </div>
@@ -1065,13 +1106,13 @@ export default function CampaignBuilder() {
                   {selectedReview.length > 0 && (
                     <div className="flex items-center gap-2 px-4 py-2 border-t border-line bg-accent-soft/40">
                       <span className="text-caption font-medium">{selectedReview.length} selected</span>
-                      <button onClick={() => bulkSetReviewStatus("approved")} className="btn-primary text-xs ml-auto" data-testid="bulk-approve">
+                      <button onClick={() => bulkSetReviewStatus("approved")} className="btn-primary text-caption ml-auto" data-testid="bulk-approve">
                         <Check size={12} /> Approve selected
                       </button>
-                      <button onClick={() => bulkSetReviewStatus("rejected")} className="btn-ghost text-xs text-danger" data-testid="bulk-reject">
+                      <button onClick={() => bulkSetReviewStatus("rejected")} className="btn-ghost text-caption text-danger" data-testid="bulk-reject">
                         <Flag size={12} /> Reject selected
                       </button>
-                      <button onClick={() => setSelectedReview([])} className="btn-ghost text-xs text-ink-muted">Clear</button>
+                      <button onClick={() => setSelectedReview([])} className="btn-ghost text-caption text-ink-muted">Clear</button>
                     </div>
                   )}
                 </div>
@@ -1163,13 +1204,13 @@ export default function CampaignBuilder() {
                             {template.body_html ? (
                               <div className="prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: template.body_html.replace(/\{\{personalized_opener\}\}/g, '<mark class="bg-warning/20 text-warning px-0.5 rounded">{{personalized_opener}}</mark>') }} />
                             ) : (
-                              <div className="whitespace-pre-wrap font-mono text-sm text-ink-secondary leading-relaxed">{template.body}</div>
+                              <div className="whitespace-pre-wrap font-mono text-body text-ink-secondary leading-relaxed">{template.body}</div>
                             )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 pt-2 border-t border-line">
-                          <button onClick={prevReview} disabled={reviewIndex === 0} className="btn-ghost text-xs px-2 py-1"><ChevronLeft size={12} /> Prev</button>
-                          <button onClick={nextReview} disabled={reviewIndex >= reviewEmails.length - 1} className="btn-ghost text-xs px-2 py-1">Next <ChevronRight size={12} /></button>
+                          <button onClick={prevReview} disabled={reviewIndex === 0} className="btn-ghost text-caption px-2 py-1"><ChevronLeft size={12} /> Prev</button>
+                          <button onClick={nextReview} disabled={reviewIndex >= reviewEmails.length - 1} className="btn-ghost text-caption px-2 py-1">Next <ChevronRight size={12} /></button>
                         </div>
                       </div>
                     </div>
@@ -1184,19 +1225,19 @@ export default function CampaignBuilder() {
                           </span>
                         </div>
                         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                          <button onClick={() => sendTestEmail(current.id)} disabled={sendingTest} className="btn-ghost text-xs flex items-center gap-1" data-testid="send-test-email" title="Email this exact preview to yourself">
+                          <button onClick={() => sendTestEmail(current.id)} disabled={sendingTest} className="btn-ghost text-caption flex items-center gap-1" data-testid="send-test-email" title="Email this exact preview to yourself">
                             {sendingTest ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Send test
                           </button>
                           {!isTemplate && (
                             <>
                           {editingOpener?.leadId === current.id ? (
-                            <button onClick={() => setEditingOpener(null)} className="btn-ghost text-xs"><X size={12} /> Cancel</button>
+                            <button onClick={() => setEditingOpener(null)} className="btn-ghost text-caption"><X size={12} /> Cancel</button>
                           ) : (
-                            <button onClick={() => setEditingOpener({ leadId: current.id, opener: current.personalized_opener })} className="btn-ghost text-xs flex items-center gap-1">
+                            <button onClick={() => setEditingOpener({ leadId: current.id, opener: current.personalized_opener })} className="btn-ghost text-caption flex items-center gap-1">
                               <Edit2 size={12} /> {current.personalized_opener ? "Opener" : "Add opener"}
                             </button>
                           )}
-                          <button onClick={() => regenerateOpener(current.id)} disabled={generatingEmail === current.id} className="btn-ghost text-xs flex items-center gap-1">
+                          <button onClick={() => regenerateOpener(current.id)} disabled={generatingEmail === current.id} className="btn-ghost text-caption flex items-center gap-1">
                             <RotateCw size={12} className={generatingEmail === current.id ? "animate-spin" : ""} /> {current.personalized ? "Regenerate" : "Generate with AI"}
                           </button>
                             </>
@@ -1214,10 +1255,10 @@ export default function CampaignBuilder() {
                             </div>
                             <textarea value={editingOpener.opener} onChange={(e) => setEditingOpener({ ...editingOpener, opener: e.target.value })}
                               rows={3} placeholder="A one-line hook personal to this lead…"
-                              className="w-full border border-line px-2 py-1.5 rounded-lg text-sm font-sans" />
+                              className="w-full border border-line px-2 py-1.5 rounded-lg text-body font-sans" />
                             <div className="flex justify-end gap-2">
-                              <button onClick={() => setEditingOpener(null)} className="btn-secondary text-xs">Cancel</button>
-                              <button onClick={() => saveOpener(current.id, editingOpener.opener)} disabled={!editingOpener.opener?.trim()} className="btn-primary text-xs"><Check size={12} /> Save</button>
+                              <button onClick={() => setEditingOpener(null)} className="btn-secondary text-caption">Cancel</button>
+                              <button onClick={() => saveOpener(current.id, editingOpener.opener)} disabled={!editingOpener.opener?.trim()} className="btn-primary text-caption"><Check size={12} /> Save</button>
                             </div>
                           </div>
                         )}
@@ -1238,12 +1279,12 @@ export default function CampaignBuilder() {
                           <div className="text-tiny text-ink-muted mb-1 font-mono">BODY</div>
                           {mailboxView ? (
                             <div className="border border-line rounded-xl bg-white overflow-hidden">
-                              <div className="text-xs text-ink-muted px-4 py-2 border-b border-line space-y-0.5 font-mono">
+                              <div className="text-caption text-ink-muted px-4 py-2 border-b border-line space-y-0.5 font-mono">
                                 <div><span className="font-medium text-ink">From:</span> {name || "PitchEQ"}</div>
                                 <div><span className="font-medium text-ink">To:</span> {current.email || "lead@example.com"}</div>
                                 <div><span className="font-medium text-ink">Date:</span> {new Date().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</div>
                               </div>
-                              <div className="p-4 text-sm text-ink leading-relaxed prose-email">
+                              <div className="p-4 text-body text-ink leading-relaxed prose-email">
                                 {current.email_body_html ? (
                                   <div dangerouslySetInnerHTML={{ __html: fillMergeFields(current.email_body_html, current) }} />
                                 ) : (
@@ -1270,13 +1311,13 @@ export default function CampaignBuilder() {
                           {isTemplate ? (
                             current.email_status === "approved" ? (
                               <>
-                                <span className="flex items-center gap-1 text-xs text-success font-medium"><Check size={14} /> Approved</span>
-                                <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-xs text-danger flex items-center gap-1 ml-auto"><Flag size={12} /> Reject</button>
+                                <span className="flex items-center gap-1 text-caption text-success font-medium"><Check size={14} /> Approved</span>
+                                <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1 ml-auto"><Flag size={12} /> Reject</button>
                               </>
                             ) : (
                               <>
-                                <button onClick={() => approveEmail(current.id)} className="btn-primary text-xs flex items-center gap-1"><Check size={12} /> Approve</button>
-                                <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-xs text-danger flex items-center gap-1"><Flag size={12} /> Reject</button>
+                                <button onClick={() => approveEmail(current.id)} className="btn-primary text-caption flex items-center gap-1"><Check size={12} /> Approve</button>
+                                <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1"><Flag size={12} /> Reject</button>
                               </>
                             )
                           ) : (
@@ -1284,17 +1325,17 @@ export default function CampaignBuilder() {
                             <span className="text-caption text-ink-muted">Write an opener above (or generate with AI) to enable approval.</span>
                           ) : current.email_status === "approved" ? (
                             <>
-                              <span className="flex items-center gap-1 text-xs text-success font-medium"><Check size={14} /> Approved</span>
-                              <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-xs text-danger flex items-center gap-1 ml-auto"><Flag size={12} /> Reject</button>
+                              <span className="flex items-center gap-1 text-caption text-success font-medium"><Check size={14} /> Approved</span>
+                              <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1 ml-auto"><Flag size={12} /> Reject</button>
                             </>
                           ) : (
                             <>
-                              <button onClick={() => approveEmail(current.id)} className="btn-primary text-xs flex items-center gap-1"><Check size={12} /> Approve</button>
-                              <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-xs text-danger flex items-center gap-1"><Flag size={12} /> Reject</button>
+                              <button onClick={() => approveEmail(current.id)} className="btn-primary text-caption flex items-center gap-1"><Check size={12} /> Approve</button>
+                              <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1"><Flag size={12} /> Reject</button>
                             </>
                           ))}
                           {current.personalized && (
-                            <button onClick={() => deleteLeadEmail(current.id)} className="btn-ghost text-xs text-ink-muted hover:text-danger ml-auto flex items-center gap-1"><Trash2 size={12} /> Remove</button>
+                            <button onClick={() => deleteLeadEmail(current.id)} className="btn-ghost text-caption text-ink-muted hover:text-danger ml-auto flex items-center gap-1"><Trash2 size={12} /> Remove</button>
                           )}
                         </div>
                       </div>
@@ -1308,7 +1349,7 @@ export default function CampaignBuilder() {
             /* TEMPLATE EDITOR — multi-channel */
             <div className="shadow-card p-6 sm:p-8 rounded-2xl">
               {/* Channel selector */}
-              <div className="flex items-center gap-2 mb-5 pb-4 border-b border-line">
+              <div className="flex items-center gap-2 mb-5 pb-4 border-b border-line flex-wrap">
                 <div className="ui-label shrink-0">Channel</div>
                 <div className="flex flex-wrap gap-1">
                   {CHANNELS.map((ch) => {
@@ -1316,11 +1357,24 @@ export default function CampaignBuilder() {
                     const chIcons = { email: <Mail size={14} />, phone_call: <Phone size={14} />, sms: <MessageSquare size={14} />, whatsapp: <MessageCircle size={14} />, linkedin_connect: <Send size={14} />, linkedin_message: <Send size={14} />, linkedin_comment: <MessageCircle size={14} /> };
                     return (
                       <button key={ch.key} onClick={() => updateStep({ channel: ch.key })}
-                        className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${active ? "bg-ink text-white" : "bg-ash text-ink-muted hover:text-ink"}`}>
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-caption font-medium transition-colors ${active ? "bg-ink text-white" : "bg-ash text-ink-muted hover:text-ink"}`}>
                         {chIcons[ch.key]} {ch.label}
                       </button>
                     );
                   })}
+                </div>
+                <div className="flex items-center gap-2 ml-auto">
+                  <label className="form-label text-tiny">Condition</label>
+                  <select value={step.condition || "always"} onChange={(e) => updateStep({ condition: e.target.value })}
+                    className="border border-line px-2 py-1 rounded-lg text-tiny font-mono bg-white">
+                    <option value="always">Always send</option>
+                    <option value="if_no_reply">If no reply</option>
+                    <option value="if_opened_no_reply">If opened, no reply</option>
+                    <option value="if_replied">If replied</option>
+                    <option value="if_clicked">If clicked</option>
+                    <option value="if_not_opened">If not opened</option>
+                    <option value="if_bounced">If bounced</option>
+                  </select>
                 </div>
               </div>
 
@@ -1355,7 +1409,7 @@ export default function CampaignBuilder() {
                   <div className="ui-label mb-1">Call Script</div>
                   <p className="text-tiny text-ink-muted mb-2">{{first_name}}, {{company}}, and other merge fields will be filled automatically.</p>
                   <textarea value={step.script || ""} onChange={(e) => updateStep({ script: e.target.value })}
-                    rows={6} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-sm text-ink"
+                    rows={6} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-body text-ink"
                     placeholder="Hi {{first_name}}, this is [Your Name] from {{company}}... (write your call script with {{merge_fields}})" />
                   <div className="mt-3 flex items-center gap-3">
                     <label className="form-label">day</label>
@@ -1372,7 +1426,7 @@ export default function CampaignBuilder() {
                   <div className="ui-label mb-1">SMS Body</div>
                   <p className="text-tiny text-ink-muted mb-2">Short message. Merge fields supported: {'{{'}first_name{'}}'}, {'{{'}company{'}}'}, etc.</p>
                   <textarea value={step.body || ""} onChange={(e) => updateStep({ body: e.target.value })}
-                    rows={3} maxLength={160} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-sm text-ink"
+                    rows={3} maxLength={160} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-body text-ink"
                     placeholder="Hi {{first_name}}, quick reminder about {{company}}..." />
                   <div className="text-tiny text-ink-muted mt-1">{(step.body || "").length}/160 characters</div>
                   <div className="mt-3 flex items-center gap-3">
@@ -1390,7 +1444,7 @@ export default function CampaignBuilder() {
                   <div className="ui-label mb-1">WhatsApp Message</div>
                   <p className="text-tiny text-ink-muted mb-2">Merge fields supported. Keep it conversational.</p>
                   <textarea value={step.body || ""} onChange={(e) => updateStep({ body: e.target.value })}
-                    rows={4} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-sm text-ink"
+                    rows={4} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-body text-ink"
                     placeholder="Hi {{first_name}}, wanted to share something relevant for {{company}}..." />
                   <div className="mt-3 flex items-center gap-3">
                     <label className="form-label">day</label>
@@ -1407,7 +1461,7 @@ export default function CampaignBuilder() {
                   <div className="ui-label mb-1">LinkedIn Message</div>
                   <p className="text-tiny text-ink-muted mb-2">This will be marked as a manual task — LinkedIn Messages require sending via LinkedIn.com</p>
                   <textarea value={step.linkedin_message || step.body || ""} onChange={(e) => updateStep({ linkedin_message: e.target.value })}
-                    rows={5} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-sm text-ink"
+                    rows={5} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-body text-ink"
                     placeholder="Hi {{first_name}}, noticed {{company}}'s recent work on..." />
                   <div className="mt-3 flex items-center gap-3">
                     <label className="form-label">day</label>
@@ -1423,11 +1477,11 @@ export default function CampaignBuilder() {
                 <>
                   <div className="ui-label mb-1">Post URL to comment on</div>
                   <input value={step.linkedin_post_url || ""} onChange={(e) => updateStep({ linkedin_post_url: e.target.value })}
-                    className="w-full border border-line px-3 py-2 rounded-xl text-sm text-ink"
+                    className="w-full border border-line px-3 py-2 rounded-xl text-body text-ink"
                     placeholder="https://www.linkedin.com/posts/..." />
                   <div className="ui-label mb-1 mt-3">Comment text</div>
                   <textarea value={step.linkedin_comment_text || step.body || ""} onChange={(e) => updateStep({ linkedin_comment_text: e.target.value })}
-                    rows={4} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-sm text-ink"
+                    rows={4} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-body text-ink"
                     placeholder="Great insight, {{first_name}}! I'd add that..." />
                   <div className="mt-3 flex items-center gap-3">
                     <label className="form-label">day</label>
@@ -1448,7 +1502,7 @@ export default function CampaignBuilder() {
                   <p className="text-tiny text-ink-muted mb-3">LinkedIn doesn't allow automating connection requests. The lead's LinkedIn URL will be shown so you can connect manually.</p>
                   <div className="ui-label mb-1">Connection note (optional)</div>
                   <textarea value={step.linkedin_connection_note || step.body || ""} onChange={(e) => updateStep({ linkedin_connection_note: e.target.value })}
-                    rows={3} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-sm text-ink"
+                    rows={3} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-body text-ink"
                     placeholder="Hi {{first_name}}, I've been following {{company}}'s work..." />
                   <div className="mt-3 flex items-center gap-3">
                     <label className="form-label">day</label>
@@ -1467,7 +1521,7 @@ export default function CampaignBuilder() {
               <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-2xl mx-4" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-4">
                   <div className="text-section font-display font-semibold">Create Signature</div>
-                  <button onClick={() => setShowSignatureModal(false)} className="btn-ghost text-xs">Close</button>
+                  <button onClick={() => setShowSignatureModal(false)} className="btn-ghost text-caption">Close</button>
                 </div>
                 <div className="space-y-3">
                   <input value={signatureName} onChange={(e) => setSignatureName(e.target.value)}
@@ -1485,8 +1539,8 @@ export default function CampaignBuilder() {
                     </div>
                   )}
                   <div className="flex justify-end gap-2">
-                    <button onClick={() => setShowSignatureModal(false)} className="btn-secondary text-xs">Cancel</button>
-                    <button onClick={createSignature} disabled={savingSignature} className="btn-primary text-xs">
+                    <button onClick={() => setShowSignatureModal(false)} className="btn-secondary text-caption">Cancel</button>
+                    <button onClick={createSignature} disabled={savingSignature} className="btn-primary text-caption">
                       {savingSignature ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
                       Create
                     </button>
@@ -1541,7 +1595,7 @@ export default function CampaignBuilder() {
           {status !== "draft" && (
             <div className="mt-8 shadow-card p-3">
               <div className="ui-label mb-1">Status</div>
-              <div className="font-mono text-sm">{status}</div>
+              <div className="font-mono text-body">{status}</div>
             </div>
           )}
           </div>

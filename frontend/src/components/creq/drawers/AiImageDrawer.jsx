@@ -49,7 +49,7 @@ export default function AiImageDrawer({ onClose, onAddAsElement, onAddAsBackgrou
         <div className="sticky top-0 bg-white border-b border-line px-5 py-4 flex items-center gap-3 z-10">
           <Wand2 size={16} />
           <div className="font-display font-bold">AI Image</div>
-          <button onClick={onClose} className="ml-auto btn-ghost text-xs">Close</button>
+          <button onClick={onClose} className="ml-auto btn-ghost text-caption">Close</button>
         </div>
 
         <div className="p-4 space-y-4">
@@ -60,7 +60,7 @@ export default function AiImageDrawer({ onClose, onAddAsElement, onAddAsBackgrou
                 <button key={p.id} onClick={() => setProvider(p.id)}
                   data-testid={`ai-image-provider-${p.id}`}
                   className={`text-left p-3 rounded-lg border transition-colors ${provider === p.id ? "border-ink bg-neutral-50" : "border-line hover:border-ink"}`}>
-                  <div className="text-xs font-medium">{p.label}</div>
+                  <div className="text-caption font-medium">{p.label}</div>
                   <div className="text-[10px] text-neutral-500 mt-0.5 leading-tight">{p.hint}</div>
                 </button>
               ))}
@@ -84,7 +84,7 @@ export default function AiImageDrawer({ onClose, onAddAsElement, onAddAsBackgrou
             <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={4}
               placeholder="e.g. Soft cream paper texture with subtle grain and coral confetti"
               data-testid="ai-image-prompt"
-              className="w-full border border-line rounded-lg p-2 text-sm focus:outline-none focus:border-ink" />
+              className="w-full border border-line rounded-lg p-2 text-body focus:outline-none focus:border-ink" />
             <div className="mt-2 flex flex-wrap gap-1">
               {PROMPT_PRESETS.slice(0, 4).map((p, i) => (
                 <button key={i} onClick={() => setPrompt(p)}
@@ -107,8 +107,8 @@ export default function AiImageDrawer({ onClose, onAddAsElement, onAddAsBackgrou
                 <img src={preview.imageUrl} alt="preview" className="w-full h-full object-cover" data-testid="ai-image-preview" />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => onAddAsElement(preview.imageUrl)} data-testid="ai-image-add-element" className="btn-secondary text-xs justify-center">Add as element</button>
-                <button onClick={() => onAddAsBackground(preview.imageUrl)} data-testid="ai-image-add-background" className="btn-primary text-xs justify-center">Set as background</button>
+                <button onClick={() => onAddAsElement(preview.imageUrl)} data-testid="ai-image-add-element" className="btn-secondary text-caption justify-center">Add as element</button>
+                <button onClick={() => onAddAsBackground(preview.imageUrl)} data-testid="ai-image-add-background" className="btn-primary text-caption justify-center">Set as background</button>
               </div>
             </div>
           )}

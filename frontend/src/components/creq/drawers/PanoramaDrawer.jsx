@@ -50,11 +50,11 @@ export default function PanoramaDrawer({ onClose, panorama, slideCount, onApply 
         <div className="sticky top-0 bg-white border-b border-line px-5 py-4 flex items-center gap-3 z-10">
           <Mountain size={16} />
           <div className="font-display font-bold">Deck background</div>
-          <button onClick={onClose} className="ml-auto btn-ghost text-xs">Close</button>
+          <button onClick={onClose} className="ml-auto btn-ghost text-caption">Close</button>
         </div>
 
         <div className="p-4 space-y-4">
-          <div className="text-xs text-neutral-600 leading-relaxed bg-neutral-50 rounded-lg p-3 border border-line">
+          <div className="text-caption text-neutral-600 leading-relaxed bg-neutral-50 rounded-lg p-3 border border-line">
             One image applied to <strong>all {slideCount} slides</strong>. Pick a mode below to control how it appears.
           </div>
 
@@ -74,7 +74,7 @@ export default function PanoramaDrawer({ onClose, panorama, slideCount, onApply 
             <div className="ui-label mb-1.5">Upload image</div>
             <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" data-testid="pano-file-input" />
             <button onClick={() => fileRef.current?.click()} data-testid="pano-file-pick"
-              className="w-full py-4 border border-dashed border-line rounded-lg text-sm text-neutral-600 hover:border-ink hover:bg-neutral-50">
+              className="w-full py-4 border border-dashed border-line rounded-lg text-body text-neutral-600 hover:border-ink hover:bg-neutral-50">
               Click to upload · JPG, PNG, WebP
             </button>
           </div>
@@ -86,7 +86,7 @@ export default function PanoramaDrawer({ onClose, panorama, slideCount, onApply 
               disabled={src.startsWith("data:")}
               placeholder="https://…"
               data-testid="pano-src"
-              className="w-full border border-line rounded-full px-3 py-2 text-sm font-mono disabled:bg-neutral-50 disabled:text-neutral-500" />
+              className="w-full border border-line rounded-full px-3 py-2 text-body font-mono disabled:bg-neutral-50 disabled:text-neutral-500" />
           </div>
 
           <div className="border-t border-line pt-4">
@@ -94,7 +94,7 @@ export default function PanoramaDrawer({ onClose, panorama, slideCount, onApply 
             <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3}
               placeholder={mode === "auto" ? "e.g. Cinematic mountain range, ultra-wide seamless" : "e.g. Soft cream paper texture with subtle grain"}
               data-testid="pano-prompt"
-              className="w-full border border-line rounded-lg p-2 text-sm focus:outline-none focus:border-ink" />
+              className="w-full border border-line rounded-lg p-2 text-body focus:outline-none focus:border-ink" />
             <button onClick={generateWide} disabled={busy} data-testid="pano-generate"
               className="mt-2 w-full btn-secondary justify-center">
               {busy ? <><Loader2 size={14} className="animate-spin" /> Generating (~60s)…</> : <><Wand2 size={14} /> Generate image</>}
@@ -119,13 +119,13 @@ export default function PanoramaDrawer({ onClose, panorama, slideCount, onApply 
 
           <div className="border-t border-line pt-4 grid grid-cols-2 gap-2">
             <button onClick={() => onApply(null)} data-testid="pano-remove"
-              className="text-xs py-2 rounded-full border border-line hover:border-danger text-danger justify-center">
+              className="text-caption py-2 rounded-full border border-line hover:border-danger text-danger justify-center">
               Remove background
             </button>
             <button onClick={() => onApply({ src, mode, viewports: panorama?.viewports || [], baked_count: slideCount })}
               disabled={!src}
               data-testid="pano-apply"
-              className="btn-primary text-xs justify-center disabled:opacity-40">
+              className="btn-primary text-caption justify-center disabled:opacity-40">
               Apply to all {slideCount} slides
             </button>
           </div>

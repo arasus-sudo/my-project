@@ -34,7 +34,7 @@ export default function UseCaseFlow({ agents, iconMap }) {
               className={`pb-5 sm:pb-6 pt-2 transition-all duration-500 ease-out ${visible ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2"}`}
               style={{ transitionDelay: `${i * 140}ms` }}
             >
-              <div className="font-display font-semibold text-sm">{name}</div>
+              <div className="font-display font-semibold text-body">{name}</div>
               {isLast && (
                 <span className="inline-flex items-center gap-1.5 mt-1 text-tiny text-ink-muted">
                   <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse-soft" /> live handoff

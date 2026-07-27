@@ -545,8 +545,8 @@ export default function VoiceAgentBuilder() {
                 <p className="text-caption text-ink-muted">Structured data the agent extracts and saves to the CRM.</p>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => applyFramework("BANT")} className="btn-ghost text-xs">BANT</button>
-                <button onClick={() => applyFramework("MEDDIC")} className="btn-ghost text-xs">MEDDIC</button>
+                <button onClick={() => applyFramework("BANT")} className="btn-ghost text-caption">BANT</button>
+                <button onClick={() => applyFramework("MEDDIC")} className="btn-ghost text-caption">MEDDIC</button>
               </div>
             </div>
             <div className="space-y-2">
@@ -563,7 +563,7 @@ export default function VoiceAgentBuilder() {
                 </div>
               ))}
             </div>
-            <button onClick={addField} className="btn-ghost text-xs"><Plus size={12} /> Add field</button>
+            <button onClick={addField} className="btn-ghost text-caption"><Plus size={12} /> Add field</button>
           </div>
         )}
 

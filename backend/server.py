@@ -176,8 +176,12 @@ class LoginIn(BaseModel):
 
 
 class SequenceStep(BaseModel):
+    step_id: str = ""  # unique within campaign (auto-generated if empty)
     channel: str = "email"
     day: int = 0
+    # DAG / branching fields
+    condition: str = "always"  # always | if_no_reply | if_replied | if_opened_no_reply | if_clicked | if_not_opened | if_bounced
+    parent_step_id: Optional[str] = None  # None = entry/first step
     # Email fields
     subject: str = ""
     body: str = ""
@@ -590,13 +594,61 @@ async def dns_check(mid: str, user=Depends(current_user)):
     return {**m, "dns": dns}
 
 
+@api.get("/mailboxes/{mid}/warmup")
+async def get_warmup_status(mid: str, user=Depends(current_user)):
+    m = await db.mailboxes.find_one({"id": mid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not m:
+        raise HTTPException(404, "not found")
+    current_day = m.get("warmup_day", 1)
+    max_daily = _warmup_daily_cap(current_day)
+    today = datetime.utcnow().isoformat()[:10]
+    usage = await db.mailbox_usage.find_one(
+        {"workspace_id": user["workspace_id"], "date": today})
+    sent_today = (usage.get("by_mailbox") or {}).get(mid, 0) if usage else 0
+    schedule = [_warmup_daily_cap(d) for d in range(1, 31)]
+    return {
+        "enabled": m.get("warmup_enabled", True),
+        "current_day": current_day,
+        "max_daily": max_daily,
+        "sent_today": sent_today,
+        "daily_cap": m.get("daily_cap", 50),
+        "schedule": schedule,
+    }
+
+
+def _warmup_daily_cap(day: int) -> int:
+    """Gradual ramp: week 1=5/day, week2=10, wk3=20, wk4=30, then target."""
+    if day <= 7: return 5
+    if day <= 14: return 10
+    if day <= 21: return 20
+    if day <= 28: return 30
+    return 50
+
+
+@api.post("/mailboxes/{mid}/warmup/start")
+async def start_warmup(mid: str, user=Depends(current_user)):
+    m = await db.mailboxes.find_one({"id": mid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not m:
+        raise HTTPException(404, "not found")
+    cap = _warmup_daily_cap(1)
+    await db.mailboxes.update_one({"id": mid}, {"$set": {
+        "warmup_enabled": True, "warmup_day": 1, "daily_cap": cap,
+        "warmup_started_at": now_iso(),
+    }})
+    return {"warmup_enabled": True, "warmup_day": 1, "daily_cap": cap}
+
+
 @api.post("/mailboxes/{mid}/warmup")
 async def toggle_warmup(mid: str, user=Depends(current_user)):
     m = await db.mailboxes.find_one({"id": mid, "workspace_id": user["workspace_id"]}, {"_id": 0})
     if not m:
         raise HTTPException(404, "not found")
     enabled = not m.get("warmup_enabled", False)
-    await db.mailboxes.update_one({"id": mid}, {"$set": {"warmup_enabled": enabled}})
+    update = {"warmup_enabled": enabled}
+    if enabled:
+        day = m.get("warmup_day", 1)
+        update["daily_cap"] = _warmup_daily_cap(day)
+    await db.mailboxes.update_one({"id": mid}, {"$set": update})
     return {"warmup_enabled": enabled}
 
 
@@ -642,9 +694,27 @@ async def _campaign_stats(cid: str, wid: str) -> Dict[str, Any]:
     }
 
 
+def _normalize_steps(steps: List[dict]) -> List[dict]:
+    """Auto-generate step_id and assign default parent_step_id/conditions."""
+    out = []
+    for i, s in enumerate(steps):
+        s = dict(s)
+        if not s.get("step_id"):
+            s["step_id"] = new_id()
+        if i == 0 and not s.get("parent_step_id"):
+            s["parent_step_id"] = None
+        if not s.get("condition"):
+            s["condition"] = "always"
+        if i > 0 and s.get("condition") == "always":
+            s["condition"] = "if_no_reply"  # sensible default for follow-ups
+        out.append(s)
+    return out
+
+
 @api.post("/campaigns")
 async def create_campaign(body: CampaignIn, user=Depends(current_user)):
     c = body.model_dump()
+    c["steps"] = _normalize_steps(c.get("steps") or [])
     c.update({
         "id": new_id(),
         "workspace_id": user["workspace_id"],
@@ -676,9 +746,11 @@ async def update_campaign(cid: str, body: CampaignIn, user=Depends(current_user)
     old = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0, "lead_ids": 1})
     new_ids = body.lead_ids
     old_ids = (old or {}).get("lead_ids", [])
+    data = body.model_dump()
+    data["steps"] = _normalize_steps(data.get("steps") or [])
     await db.campaigns.update_one(
         {"id": cid, "workspace_id": user["workspace_id"]},
-        {"$set": body.model_dump()},
+        {"$set": data},
     )
     added = [lid for lid in new_ids if lid not in old_ids]
     removed = [lid for lid in old_ids if lid not in new_ids]
@@ -705,6 +777,70 @@ async def delete_campaign(cid: str, user=Depends(current_user)):
     await db.events.delete_many({"campaign_id": cid})
     await db.conversations.delete_many({"campaign_id": cid})
     return {"ok": True}
+
+
+# ---- Contact state machine -----
+CONTACT_STATES = ["queued", "sent", "opened", "clicked", "replied", "bounced", "meeting_booked", "exited", "completed"]
+
+
+@api.get("/campaigns/{cid}/contact-states")
+async def campaign_contact_states(cid: str, user=Depends(current_user)):
+    """Return per-contact state machine for a campaign."""
+    c = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "not found")
+    lead_ids = c.get("lead_ids") or []
+    if not lead_ids:
+        return {"campaign_id": cid, "contacts": [], "summary": {}}
+
+    leads = {l["id"]: l async for l in db.leads.find(
+        {"id": {"$in": lead_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "company": 1})}
+    events = {e["lead_id"]: e async for e in db.events.find(
+        {"campaign_id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0, "lead_id": 1, "type": 1})}
+    queue = {q["lead_id"]: q async for q in db.send_queue.find(
+        {"campaign_id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0, "lead_id": 1, "step": 1, "status": 1})}
+
+    contacts = []
+    for lid in lead_ids:
+        lead = leads.get(lid, {})
+        ev = events.get(lid, {})
+        q = queue.get(lid, {})
+
+        if ev.get("type") == "bounced": state = "bounced"
+        elif ev.get("type") == "replied": state = "replied"
+        elif ev.get("type") == "meeting_booked": state = "meeting_booked"
+        elif ev.get("type") == "clicked": state = "clicked"
+        elif ev.get("type") == "opened": state = "opened"
+        elif ev.get("type") == "sent": state = "sent"
+        elif q.get("status") == "pending": state = "queued"
+        elif q.get("status") == "cancelled": state = "exited"
+        else: state = "queued"
+
+        contacts.append({
+            "lead_id": lid,
+            "first_name": lead.get("first_name", ""),
+            "last_name": lead.get("last_name", ""),
+            "email": lead.get("email", ""),
+            "company": lead.get("company", ""),
+            "current_step": q.get("step", 0) if q else 0,
+            "state": state,
+            "queue_status": q.get("status", "none") if q else "none",
+            "last_event": ev.get("type", "none") if ev else "none",
+        })
+
+    summary = {}
+    for s in CONTACT_STATES:
+        count = sum(1 for c in contacts if c["state"] == s)
+        if count:
+            summary[s] = count
+
+    return {
+        "campaign_id": cid,
+        "total_contacts": len(contacts),
+        "contacts": contacts,
+        "summary": summary,
+        "steps": len(c.get("steps", [])),
+    }
 
 
 @api.post("/campaigns/{cid}/preflight")

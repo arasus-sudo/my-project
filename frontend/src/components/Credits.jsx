@@ -41,7 +41,7 @@ export function CreditPill({ compact = false }) {
       }`}
     >
       <Coins size={14} className={`shrink-0 ${low ? "text-warning" : "text-neutral-500"}`} />
-      <span className={`text-xs font-semibold tabular-nums leading-none ${low ? "text-warning" : "text-ink"}`} data-testid="credit-balance">
+      <span className={`text-caption font-semibold tabular-nums leading-none ${low ? "text-warning" : "text-ink"}`} data-testid="credit-balance">
         {fmt(balance)}
       </span>
       {!compact && (

@@ -261,7 +261,7 @@ export default function LeadListImportDrawer({ mode = "general", listId = null, 
               Only <code className="font-mono">email</code> is required — existing leads with a matching email are
               linked into the list instead of duplicated. You can also use your own column names and map them below.
             </p>
-            <button onClick={downloadTemplate} className="btn-secondary text-xs">
+            <button onClick={downloadTemplate} className="btn-secondary text-caption">
               <Download size={14} /> Download CSV template
             </button>
           </div>

@@ -31,14 +31,14 @@ export default function PdfExportDialog({ proj, palette, onClose, busy, progress
         <div className="px-6 py-4 border-b border-line flex items-center gap-3">
           <FileText size={16} />
           <div className="font-display font-bold">Export PDF</div>
-          <div className="text-xs text-neutral-500 ml-2">Choose which slides to include in a single PDF file.</div>
-          <button onClick={onClose} className="ml-auto btn-ghost text-xs">Close</button>
+          <div className="text-caption text-neutral-500 ml-2">Choose which slides to include in a single PDF file.</div>
+          <button onClick={onClose} className="ml-auto btn-ghost text-caption">Close</button>
         </div>
 
         <div className="px-6 py-3 flex items-center gap-2 border-b border-line bg-neutral-50">
-          <button onClick={selectAll} data-testid="pdf-pick-all" className="btn-ghost text-xs">Select all ({total})</button>
-          <button onClick={selectNone} data-testid="pdf-pick-none" className="btn-ghost text-xs">Clear</button>
-          <div className="ml-auto text-xs font-mono text-neutral-500">
+          <button onClick={selectAll} data-testid="pdf-pick-all" className="btn-ghost text-caption">Select all ({total})</button>
+          <button onClick={selectNone} data-testid="pdf-pick-none" className="btn-ghost text-caption">Clear</button>
+          <div className="ml-auto text-caption font-mono text-neutral-500">
             {picked.length} of {total} selected
           </div>
         </div>
@@ -58,7 +58,7 @@ export default function PdfExportDialog({ proj, palette, onClose, busy, progress
                         <ElementRender key={el.id} el={el} palette={palette} selected={false} onPointerDown={() => {}} />
                       ))}
                     </div>
-                    <div className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold ${on ? "bg-ink text-white border-ink" : "bg-white border-neutral-300 text-transparent"}`}>
+                    <div className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center text-caption font-bold ${on ? "bg-ink text-white border-ink" : "bg-white border-neutral-300 text-transparent"}`}>
                       ✓
                     </div>
                   </div>
@@ -77,7 +77,7 @@ export default function PdfExportDialog({ proj, palette, onClose, busy, progress
             {EXPORT_QUALITIES.map((q) => (
               <button key={q.id} type="button" onClick={() => setQuality(q.id)}
                 disabled={busy} title={q.detail} data-testid={`pdf-quality-${q.id}`}
-                className={`text-xs px-3 py-1.5 rounded-full border transition-colors disabled:opacity-50 ${
+                className={`text-caption px-3 py-1.5 rounded-full border transition-colors disabled:opacity-50 ${
                   quality === q.id ? "bg-ink text-white border-ink" : "border-line text-neutral-600 hover:border-ink"
                 }`}>
                 {q.label}
@@ -87,11 +87,11 @@ export default function PdfExportDialog({ proj, palette, onClose, busy, progress
 
           <div className="flex items-center gap-3">
             {busy && progress && (
-              <span className="text-xs font-mono text-neutral-500" data-testid="pdf-export-progress">
+              <span className="text-caption font-mono text-neutral-500" data-testid="pdf-export-progress">
                 Rendering slide {progress.done} of {progress.total}…
               </span>
             )}
-            <button onClick={onClose} className="btn-secondary text-sm">Cancel</button>
+            <button onClick={onClose} className="btn-secondary text-body">Cancel</button>
             <button onClick={() => onExport(picked, quality)} disabled={busy || !picked.length}
               data-testid="pdf-export-btn"
               className="btn-primary disabled:opacity-40">

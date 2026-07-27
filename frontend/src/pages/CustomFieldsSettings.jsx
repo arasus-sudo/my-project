@@ -53,7 +53,7 @@ export default function CustomFieldsSettings() {
         title="Custom fields"
         subtitle="Add workspace-specific fields to leads — renewal date, product interest, referral source, whatever your process needs."
         right={
-          <button onClick={() => setCreating((c) => !c)} className="btn-primary text-xs">
+          <button onClick={() => setCreating((c) => !c)} className="btn-primary text-caption">
             <Plus size={14} /> New field
           </button>
         }
@@ -75,8 +75,8 @@ export default function CustomFieldsSettings() {
             )}
             <div className="flex gap-2">
               <button onClick={create} disabled={!form.name.trim()} data-testid="create-field-btn"
-                className="btn-primary text-xs disabled:opacity-50">Create</button>
-              <button onClick={() => setCreating(false)} className="btn-secondary text-xs">Cancel</button>
+                className="btn-primary text-caption disabled:opacity-50">Create</button>
+              <button onClick={() => setCreating(false)} className="btn-secondary text-caption">Cancel</button>
             </div>
           </div>
         )}

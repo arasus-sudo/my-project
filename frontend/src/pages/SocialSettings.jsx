@@ -168,7 +168,7 @@ function RssFeeds() {
               <div className="text-caption text-ink-muted">{f.platforms.join(", ")} · {f.active ? "active" : "paused"}</div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <button onClick={() => toggleActive(f)} data-testid={`toggle-rss-${f.id}`} className="btn-secondary text-xs">{f.active ? "Pause" : "Resume"}</button>
+              <button onClick={() => toggleActive(f)} data-testid={`toggle-rss-${f.id}`} className="btn-secondary text-caption">{f.active ? "Pause" : "Resume"}</button>
               <button onClick={() => remove(f.id)} data-testid={`delete-rss-${f.id}`} className="text-ink-muted hover:text-danger"><Trash2 size={14} /></button>
             </div>
           </div>

@@ -103,8 +103,8 @@ export default function Bookings() {
             )}
             {detail.status === "confirmed" && (
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => markNoShow(detail.id)} data-testid="mark-no-show-btn" className="btn-secondary text-xs"><UserX size={12} /> Mark no-show</button>
-                <button onClick={() => cancel(detail.id)} data-testid="cancel-booking-btn" className="btn-secondary text-xs text-danger">Cancel</button>
+                <button onClick={() => markNoShow(detail.id)} data-testid="mark-no-show-btn" className="btn-secondary text-caption"><UserX size={12} /> Mark no-show</button>
+                <button onClick={() => cancel(detail.id)} data-testid="cancel-booking-btn" className="btn-secondary text-caption text-danger">Cancel</button>
               </div>
             )}
           </div>

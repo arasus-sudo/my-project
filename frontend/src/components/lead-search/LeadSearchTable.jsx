@@ -49,40 +49,40 @@ function ColumnResizer({ onResize }) {
 
 function LeadRow({ lead, columns, visibleCols, selected, onToggle, onReveal, onSelect, revealing }) {
   const cell = (k) => {
-    if (k === "full_name") return <span className="font-medium text-sm">{lead.full_name || "—"}</span>;
-    if (k === "location") { const l = lead.location || {}; return <span className="text-sm text-ink-muted">{[l.city, l.state, l.country].filter(Boolean).join(", ") || "—"}</span>; }
+    if (k === "full_name") return <span className="font-medium text-body">{lead.full_name || "—"}</span>;
+    if (k === "location") { const l = lead.location || {}; return <span className="text-body text-ink-muted">{[l.city, l.state, l.country].filter(Boolean).join(", ") || "—"}</span>; }
     if (k === "verified") {
       const s = lead.email_status || lead.verification_status;
-      if (s === "valid" || s === "verified" || s === "revealed") return <span className="text-xs bg-success/10 text-success px-2 py-0.5 rounded-full font-medium">Verified</span>;
-      return <span className="text-xs bg-warning/10 text-warning px-2 py-0.5 rounded-full">Unverified</span>;
+      if (s === "valid" || s === "verified" || s === "revealed") return <span className="text-caption bg-success/10 text-success px-2 py-0.5 rounded-full font-medium">Verified</span>;
+      return <span className="text-caption bg-warning/10 text-warning px-2 py-0.5 rounded-full">Unverified</span>;
     }
     if (k === "linkedin_url") {
-      if (!lead.linkedin_url) return <span className="text-ink-muted text-xs">—</span>;
-      return <a href={lead.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline text-xs"><Linkedin size={13} /></a>;
+      if (!lead.linkedin_url) return <span className="text-ink-muted text-caption">—</span>;
+      return <a href={lead.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline text-caption"><Linkedin size={13} /></a>;
     }
     if (k === "technologies") {
       const t = lead.company_technologies || lead.technologies || [];
-      return Array.isArray(t) && t.length ? <span className="text-xs text-ink-muted">{t.slice(0, 2).join(", ")}{t.length > 2 ? ` +${t.length - 2}` : ""}</span> : <span className="text-ink-muted text-xs">—</span>;
+      return Array.isArray(t) && t.length ? <span className="text-caption text-ink-muted">{t.slice(0, 2).join(", ")}{t.length > 2 ? ` +${t.length - 2}` : ""}</span> : <span className="text-ink-muted text-caption">—</span>;
     }
     if (k === "skills") {
       const s = lead.skills || [];
-      return Array.isArray(s) && s.length ? <span className="text-xs text-ink-muted">{s.slice(0, 2).join(", ")}{s.length > 2 ? ` +${s.length - 2}` : ""}</span> : <span className="text-ink-muted text-xs">—</span>;
+      return Array.isArray(s) && s.length ? <span className="text-caption text-ink-muted">{s.slice(0, 2).join(", ")}{s.length > 2 ? ` +${s.length - 2}` : ""}</span> : <span className="text-ink-muted text-caption">—</span>;
     }
     if (k === "email") {
-      if (lead.email && lead.email !== "—" && !lead.email.includes("masked")) return <span className="text-xs font-mono">{lead.email}</span>;
-      return <span className="text-xs text-ink-muted italic">Reveal</span>;
+      if (lead.email && lead.email !== "—" && !lead.email.includes("masked")) return <span className="text-caption font-mono">{lead.email}</span>;
+      return <span className="text-caption text-ink-muted italic">Reveal</span>;
     }
     if (k === "phone") {
-      if (lead.phone) return <span className="text-xs font-mono">{lead.phone}</span>;
-      return <span className="text-xs text-ink-muted italic">Reveal</span>;
+      if (lead.phone) return <span className="text-caption font-mono">{lead.phone}</span>;
+      return <span className="text-caption text-ink-muted italic">Reveal</span>;
     }
     if (k === "company_size") {
       const s = lead.company_size;
-      return s ? <span className="text-xs text-ink-muted">{s}</span> : <span className="text-ink-muted text-xs">—</span>;
+      return s ? <span className="text-caption text-ink-muted">{s}</span> : <span className="text-ink-muted text-caption">—</span>;
     }
-    if (k === "source_provider") return <span className="text-xs text-ink-muted uppercase">{lead.source_provider || "—"}</span>;
+    if (k === "source_provider") return <span className="text-caption text-ink-muted uppercase">{lead.source_provider || "—"}</span>;
     const v = lead[k];
-    return v != null && v !== "" ? <span className="text-sm">{String(v)}</span> : <span className="text-ink-muted text-xs">—</span>;
+    return v != null && v !== "" ? <span className="text-body">{String(v)}</span> : <span className="text-ink-muted text-caption">—</span>;
   };
 
   const lid = lead.id || lead.email || `${lead.first_name}_${lead.last_name}`;
@@ -103,18 +103,18 @@ function LeadRow({ lead, columns, visibleCols, selected, onToggle, onReveal, onS
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           {(!lead.email || lead.email === "—" || lead.email?.includes("masked")) && (
             <button onClick={() => onReveal(lead, "email")} disabled={revealing[lid + "_email"]}
-              className="btn-ghost text-xs py-1 px-2" title="Reveal email">
+              className="btn-ghost text-caption py-1 px-2" title="Reveal email">
               {revealing[lid + "_email"] ? <Loader2 size={11} className="animate-spin" /> : <Mail size={11} />}
             </button>
           )}
           {(!lead.phone || lead.phone === "—") && (
             <button onClick={() => onReveal(lead, "phone")} disabled={revealing[lid + "_phone"]}
-              className="btn-ghost text-xs py-1 px-2" title="Reveal phone">
+              className="btn-ghost text-caption py-1 px-2" title="Reveal phone">
               {revealing[lid + "_phone"] ? <Loader2 size={11} className="animate-spin" /> : <Phone size={11} />}
             </button>
           )}
           <button onClick={() => window.open(lead.linkedin_url || `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(lead.first_name + " " + lead.last_name)}`, "_blank")}
-            className="btn-ghost text-xs py-1 px-2" title="LinkedIn"><Linkedin size={11} /></button>
+            className="btn-ghost text-caption py-1 px-2" title="LinkedIn"><Linkedin size={11} /></button>
         </div>
       </td>
     </tr>
@@ -170,9 +170,9 @@ export default function LeadSearchTable({
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Filter in results…"
-            className="w-full pl-8 pr-3 py-1.5 border border-line rounded-lg text-sm bg-ash/30 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+            className="w-full pl-8 pr-3 py-1.5 border border-line rounded-lg text-body bg-ash/30 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
         </div>
-        <span className="text-sm text-ink-muted font-mono">{totalCount || results.length} results</span>
+        <span className="text-body text-ink-muted font-mono">{totalCount || results.length} results</span>
         <button onClick={() => {
           const cols = columns.length ? columns : DEFAULT_COLUMNS.filter(c => c.default || c.always);
           const headers = cols.map(c => c.label);
@@ -185,21 +185,21 @@ export default function LeadSearchTable({
           const csv = [headers.join(","), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(","))].join("\n");
           const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
           const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "leads.csv"; a.click(); URL.revokeObjectURL(a.href);
-        }} className="btn-secondary text-xs py-1.5">
+        }} className="btn-secondary text-caption py-1.5">
           <Download size={12} /> Export
         </button>
         <div className="relative ml-auto">
-          <button onClick={() => setColPicker(!colPicker)} className="btn-secondary text-xs py-1.5">
+          <button onClick={() => setColPicker(!colPicker)} className="btn-secondary text-caption py-1.5">
             <Eye size={12} /> Columns
           </button>
           {colPicker && (
             <div className="absolute right-0 top-full mt-2 bg-white border border-line rounded-xl shadow-card-lg z-30 p-3 w-56 max-h-72 overflow-y-auto">
               <div className="text-tiny font-mono uppercase tracking-wider text-ink-muted mb-2">Toggle Columns</div>
               {DEFAULT_COLUMNS.map((c) => (
-                <label key={c.key} className="flex items-center gap-2 py-1.5 text-sm cursor-pointer hover:bg-ash rounded px-1">
+                <label key={c.key} className="flex items-center gap-2 py-1.5 text-body cursor-pointer hover:bg-ash rounded px-1">
                   <input type="checkbox" checked={columns.includes(c) || c.always} disabled={c.always}
                     onChange={() => toggleCol(c)} className="rounded border-line accent-accent" />
-                  <span className="text-xs">{c.label}</span>
+                  <span className="text-caption">{c.label}</span>
                 </label>
               ))}
             </div>
@@ -209,7 +209,7 @@ export default function LeadSearchTable({
 
       {/* Table */}
       <div className="flex-1 overflow-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-body">
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-line bg-ash/80 backdrop-blur-sm">
               <th className="p-3 w-10">
@@ -242,7 +242,7 @@ export default function LeadSearchTable({
             ) : results.length === 0 ? (
               <tr>
                 <td colSpan={visibleCols.length + 2} className="p-12 text-center">
-                  <div className="text-ink-muted text-sm">No results found</div>
+                  <div className="text-ink-muted text-body">No results found</div>
                 </td>
               </tr>
             ) : (
@@ -260,27 +260,27 @@ export default function LeadSearchTable({
       {/* Pagination */}
       <div className="shrink-0 px-4 py-2.5 border-t border-line flex items-center justify-between bg-white">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-ink-muted">Rows:</span>
+          <span className="text-caption text-ink-muted">Rows:</span>
           <select value={pageSize} onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="border border-line rounded-lg px-2 py-1 text-xs bg-white">
+            className="border border-line rounded-lg px-2 py-1 text-caption bg-white">
             <option value={10}>10</option><option value={25}>25</option>
             <option value={50}>50</option><option value={100}>100</option>
           </select>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-ink-muted">
+          <span className="text-caption text-ink-muted">
             Page {page} of {totalPages}
           </span>
           <div className="flex items-center gap-1">
             <button onClick={() => onPageChange(1)} disabled={page <= 1}
-              className="btn-ghost text-xs py-1 px-2 disabled:opacity-30 border border-line rounded-lg">{"<<"}</button>
+              className="btn-ghost text-caption py-1 px-2 disabled:opacity-30 border border-line rounded-lg">{"<<"}</button>
             <button onClick={() => onPageChange(page - 1)} disabled={page <= 1}
-              className="btn-ghost text-xs py-1 px-2 disabled:opacity-30 border border-line rounded-lg"><ChevronDown size={12} className="rotate-90" /></button>
-            <span className="text-xs font-mono px-2">{page}</span>
+              className="btn-ghost text-caption py-1 px-2 disabled:opacity-30 border border-line rounded-lg"><ChevronDown size={12} className="rotate-90" /></button>
+            <span className="text-caption font-mono px-2">{page}</span>
             <button onClick={() => onPageChange(page + 1)} disabled={page >= totalPages}
-              className="btn-ghost text-xs py-1 px-2 disabled:opacity-30 border border-line rounded-lg"><ChevronDown size={12} className="-rotate-90" /></button>
+              className="btn-ghost text-caption py-1 px-2 disabled:opacity-30 border border-line rounded-lg"><ChevronDown size={12} className="-rotate-90" /></button>
             <button onClick={() => onPageChange(totalPages)} disabled={page >= totalPages}
-              className="btn-ghost text-xs py-1 px-2 disabled:opacity-30 border border-line rounded-lg">{">>"}</button>
+              className="btn-ghost text-caption py-1 px-2 disabled:opacity-30 border border-line rounded-lg">{">>"}</button>
           </div>
         </div>
       </div>

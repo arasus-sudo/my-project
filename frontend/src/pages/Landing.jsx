@@ -109,7 +109,7 @@ export default function Landing() {
           <Link to="/" className="flex items-center shrink-0">
             <InnoiraLogo size="sm" />
           </Link>
-          <nav className="hidden md:flex items-center justify-center gap-8 text-sm text-ink-muted">
+          <nav className="hidden md:flex items-center justify-center gap-8 text-body text-ink-muted">
             <a href="#use-cases" className="hover:text-ink">Use cases</a>
             <a href="#agents" className="hover:text-ink">The agents</a>
             <a href="#relay" className="hover:text-ink">How it works</a>
@@ -118,7 +118,7 @@ export default function Landing() {
           </nav>
           <div className="flex items-center justify-end gap-1">
             <Link to="/login" data-testid="nav-login" className="btn-ghost hidden sm:inline-flex">Sign in</Link>
-            <Link to="/signup" data-testid="nav-signup" className="btn-primary py-2 px-4 sm:px-5 text-sm">Start free <ArrowUpRight size={14} /></Link>
+            <Link to="/signup" data-testid="nav-signup" className="btn-primary py-2 px-4 sm:px-5 text-body">Start free <ArrowUpRight size={14} /></Link>
             <button onClick={() => setMobileNav(!mobileNav)} className="md:hidden p-2 text-ink-muted hover:text-ink rounded-xl">
               {mobileNav ? <X size={16} /> : <Menu size={16} />}
             </button>
@@ -126,12 +126,12 @@ export default function Landing() {
         </div>
         {mobileNav && (
           <div className="md:hidden max-w-7xl mx-auto mt-2 bg-surface border border-line rounded-2xl p-4 space-y-3 shadow-card">
-            <a href="#use-cases" onClick={() => setMobileNav(false)} className="block text-sm text-ink-muted hover:text-ink py-2 rounded-xl">Use cases</a>
-            <a href="#agents" onClick={() => setMobileNav(false)} className="block text-sm text-ink-muted hover:text-ink py-2 rounded-xl">The agents</a>
-            <a href="#relay" onClick={() => setMobileNav(false)} className="block text-sm text-ink-muted hover:text-ink py-2 rounded-xl">How it works</a>
-            <a href="#suite-pricing" onClick={() => setMobileNav(false)} className="block text-sm text-ink-muted hover:text-ink py-2 rounded-xl">Pricing</a>
-            <a href="#faq" onClick={() => setMobileNav(false)} className="block text-sm text-ink-muted hover:text-ink py-2 rounded-xl">FAQ</a>
-            <Link to="/login" onClick={() => setMobileNav(false)} className="block text-sm text-ink-muted hover:text-ink py-2 rounded-xl">Sign in</Link>
+            <a href="#use-cases" onClick={() => setMobileNav(false)} className="block text-body text-ink-muted hover:text-ink py-2 rounded-xl">Use cases</a>
+            <a href="#agents" onClick={() => setMobileNav(false)} className="block text-body text-ink-muted hover:text-ink py-2 rounded-xl">The agents</a>
+            <a href="#relay" onClick={() => setMobileNav(false)} className="block text-body text-ink-muted hover:text-ink py-2 rounded-xl">How it works</a>
+            <a href="#suite-pricing" onClick={() => setMobileNav(false)} className="block text-body text-ink-muted hover:text-ink py-2 rounded-xl">Pricing</a>
+            <a href="#faq" onClick={() => setMobileNav(false)} className="block text-body text-ink-muted hover:text-ink py-2 rounded-xl">FAQ</a>
+            <Link to="/login" onClick={() => setMobileNav(false)} className="block text-body text-ink-muted hover:text-ink py-2 rounded-xl">Sign in</Link>
           </div>
         )}
       </header>
@@ -172,7 +172,7 @@ export default function Landing() {
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold tracking-tight">
               Five things teams stop doing by hand.
             </h2>
-            <p className="mt-4 text-ink-muted text-sm sm:text-base">
+            <p className="mt-4 text-ink-muted text-body sm:text-base">
               Each of these is several agents handing off to each other automatically —
               not one model trying to do everything at once.
             </p>
@@ -191,7 +191,7 @@ export default function Landing() {
                       {u.agents.map((a) => <span key={a} className="pill">{a}</span>)}
                     </div>
                     <h3 className="text-xl sm:text-2xl font-display font-semibold tracking-tight">{u.title}</h3>
-                    <p className="mt-3 text-sm sm:text-base text-ink-tertiary leading-relaxed">{u.body}</p>
+                    <p className="mt-3 text-body sm:text-base text-ink-tertiary leading-relaxed">{u.body}</p>
                   </div>
                 </div>
               </div>
@@ -216,12 +216,12 @@ export default function Landing() {
                 <div className="w-9 h-9 mx-auto bg-ash rounded-full flex items-center justify-center">
                   <a.icon size={15} strokeWidth={1.75} />
                 </div>
-                <div className="mt-3 font-display font-semibold text-sm">{a.name}</div>
+                <div className="mt-3 font-display font-semibold text-body">{a.name}</div>
                 <div className="text-tiny text-ink-muted mt-0.5">{a.tag}</div>
               </div>
             ))}
           </div>
-          <p className="text-center text-xs sm:text-sm text-ink-muted mt-8">
+          <p className="text-center text-caption sm:text-body text-ink-muted mt-8">
             10+ more agents on the roadmap — every new one plugs into the same workspace, CRM and credits.
           </p>
         </div>
@@ -252,15 +252,15 @@ export default function Landing() {
                     </div>
                     <div className={i < RELAY.length - 1 ? "pb-5 sm:pb-6" : ""}>
                       <div className="flex items-baseline gap-2 flex-wrap">
-                        <span className="font-display font-semibold text-sm sm:text-base text-white">{s.agent}</span>
-                        <span className="text-xs sm:text-sm text-white/70">{s.event}</span>
+                        <span className="font-display font-semibold text-body sm:text-base text-white">{s.agent}</span>
+                        <span className="text-caption sm:text-body text-white/70">{s.event}</span>
                       </div>
-                      <div className="text-tiny sm:text-xs font-mono text-white/70 mt-1">{s.detail}</div>
+                      <div className="text-tiny sm:text-caption font-mono text-white/70 mt-1">{s.detail}</div>
                     </div>
                   </div>
                 ))}
               </div>
-              <p className="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-white/10 text-xs sm:text-sm text-white/80">
+              <p className="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-white/10 text-caption sm:text-body text-white/80">
                 Agents hand off to each other automatically — a "yes" on the phone becomes a drafted
                 proposal, a booking link, and a confirmation SMS before your rep has hung up.
               </p>
@@ -277,8 +277,8 @@ export default function Landing() {
                   <div className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center">
                     <f.icon size={15} strokeWidth={1.75} />
                   </div>
-                  <div className="mt-3.5 font-display font-semibold text-sm sm:text-base text-white">{f.t}</div>
-                  <div className="mt-1.5 text-xs sm:text-sm text-white/80 leading-relaxed">{f.d}</div>
+                  <div className="mt-3.5 font-display font-semibold text-body sm:text-base text-white">{f.t}</div>
+                  <div className="mt-1.5 text-caption sm:text-body text-white/80 leading-relaxed">{f.d}</div>
                 </div>
               ))}
             </div>
@@ -296,7 +296,7 @@ export default function Landing() {
                 <h2 className="text-2xl sm:text-3xl font-display font-bold tracking-tight">
                   Your data, <span className="hl-ink">isolated and encrypted.</span>
                 </h2>
-                <p className="mt-3 text-sm text-ink-muted leading-relaxed">
+                <p className="mt-3 text-body text-ink-muted leading-relaxed">
                   Not a promise — this is how the workspace is actually built.
                 </p>
               </div>
@@ -310,8 +310,8 @@ export default function Landing() {
                     <div className="w-9 h-9 bg-ash rounded-full flex items-center justify-center">
                       <f.icon size={15} strokeWidth={1.75} />
                     </div>
-                    <div className="mt-3 font-display font-semibold text-sm">{f.t}</div>
-                    <div className="mt-1.5 text-xs text-ink-muted leading-relaxed">{f.d}</div>
+                    <div className="mt-3 font-display font-semibold text-body">{f.t}</div>
+                    <div className="mt-1.5 text-caption text-ink-muted leading-relaxed">{f.d}</div>
                   </div>
                 ))}
               </div>
@@ -326,7 +326,7 @@ export default function Landing() {
           <div className="text-center">
             <div className="ui-label mb-4 text-white/70">One plan, every agent</div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold tracking-tight text-white">Pay for <span className="hl-white">what the agents do.</span></h2>
-            <p className="mt-4 text-white/70 max-w-2xl mx-auto text-sm sm:text-base">
+            <p className="mt-4 text-white/70 max-w-2xl mx-auto text-body sm:text-base">
               No per-agent fees and no per-seat surprises. Every plan unlocks all ten agents and a pool of
               credits they draw from — a call costs more than an SMS because it costs us more to run.
             </p>
@@ -355,17 +355,17 @@ export default function Landing() {
                   {p.price ? (
                     <>
                       <span className="font-mono text-3xl sm:text-4xl font-bold text-white">${p.price}</span>
-                      <span className="text-sm text-white/70">/mo</span>
+                      <span className="text-body text-white/70">/mo</span>
                     </>
                   ) : (
                     <span className="font-mono text-3xl sm:text-4xl font-bold text-white">Let's talk</span>
                   )}
                 </div>
                 {p.annual && (
-                  <div className="text-xs text-white/80 mt-1">${p.annual}/mo billed annually</div>
+                  <div className="text-caption text-white/80 mt-1">${p.annual}/mo billed annually</div>
                 )}
-                <p className="text-xs sm:text-sm text-white/80 mt-3 sm:mt-4 min-h-[36px] sm:min-h-[40px]">{p.blurb}</p>
-                <ul className="mt-4 sm:mt-5 space-y-2 text-xs sm:text-sm text-white/70 flex-1">
+                <p className="text-caption sm:text-body text-white/80 mt-3 sm:mt-4 min-h-[36px] sm:min-h-[40px]">{p.blurb}</p>
+                <ul className="mt-4 sm:mt-5 space-y-2 text-caption sm:text-body text-white/70 flex-1">
                   {[`${p.credits} credits / month`, p.seats, "All ten agents included", "Shared CRM & activity timeline"].map((x) => (
                     <li key={x} className="flex gap-2.5 items-start">
                       <span className="w-4 h-4 mt-0.5 bg-white text-ink rounded-full flex items-center justify-center shrink-0"><Check size={10} strokeWidth={3} /></span>
@@ -375,10 +375,10 @@ export default function Landing() {
                 </ul>
                 {p.id === "enterprise" ? (
                   <a href="mailto:hello@innoira.com" data-testid="pricing-cta-enterprise"
-                    className="mt-5 sm:mt-6 flex items-center justify-center gap-2 border border-white/20 rounded-xl py-2 text-sm font-medium text-white hover:bg-white/10 transition-colors duration-150">Contact sales</a>
+                    className="mt-5 sm:mt-6 flex items-center justify-center gap-2 border border-white/20 rounded-xl py-2 text-body font-medium text-white hover:bg-white/10 transition-colors duration-150">Contact sales</a>
                 ) : (
                   <Link to="/signup" data-testid={`pricing-cta-${p.id}`}
-                    className={`mt-5 sm:mt-6 justify-center rounded-xl py-2 text-sm font-medium flex items-center gap-1.5 ${p.popular ? "bg-white text-ink hover:bg-white/90" : "border border-white/20 bg-transparent hover:bg-white/10 text-white"}`}>
+                    className={`mt-5 sm:mt-6 justify-center rounded-xl py-2 text-body font-medium flex items-center gap-1.5 ${p.popular ? "bg-white text-ink hover:bg-white/90" : "border border-white/20 bg-transparent hover:bg-white/10 text-white"}`}>
                     Start free trial <ArrowRight size={14} />
                   </Link>
                 )}
@@ -388,7 +388,7 @@ export default function Landing() {
 
           <div className="mt-8 sm:mt-10 border border-white/10 rounded-2xl p-6 sm:p-8 shadow-card bg-white/5">
             <div className="ui-label text-white/70">What a credit buys</div>
-            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 text-sm">
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 text-body">
               {[
                 { n: "20", l: "per minute of an AI phone call" },
                 { n: "60", l: "per researched proposal deck" },
@@ -399,11 +399,11 @@ export default function Landing() {
               ].map((c) => (
                 <div key={c.l}>
                   <div className="text-section font-display font-bold text-white">{c.n}</div>
-                  <div className="text-tiny sm:text-xs text-white/70 mt-1 leading-snug">{c.l}</div>
+                  <div className="text-tiny sm:text-caption text-white/70 mt-1 leading-snug">{c.l}</div>
                 </div>
               ))}
             </div>
-            <p className="text-tiny sm:text-xs text-white/80 mt-5 sm:mt-6">
+            <p className="text-tiny sm:text-caption text-white/80 mt-5 sm:mt-6">
               Exports, CRM writes, HR records, journal entries, and bookings are free — you're never charged to read your own data.
               Every plan starts with a 14-day trial and 500 credits, no card required.
             </p>
@@ -424,7 +424,7 @@ export default function Landing() {
             {FAQS.map((f, i) => (
               <AccordionItem key={f.q} value={`item-${i}`} className={i === FAQS.length - 1 ? "border-b-0" : "border-line"}>
                 <AccordionTrigger className="text-body sm:text-base font-display font-semibold py-5 sm:py-6">{f.q}</AccordionTrigger>
-                <AccordionContent className="text-sm text-ink-tertiary leading-relaxed pb-5 sm:pb-6">{f.a}</AccordionContent>
+                <AccordionContent className="text-body text-ink-tertiary leading-relaxed pb-5 sm:pb-6">{f.a}</AccordionContent>
               </AccordionItem>
             ))}
           </Accordion>
@@ -435,7 +435,7 @@ export default function Landing() {
       <section className="px-6 sm:px-8 py-20 sm:py-28 bg-ink animate-fade-up">
         <div className="max-w-3xl mx-auto text-center">
           <InnoiraLogo size="lg" variant="light" className="mx-auto" />
-          <p className="mt-6 text-white/70 text-sm sm:text-base">
+          <p className="mt-6 text-white/70 text-body sm:text-base">
             Put ten agents on your pipeline this afternoon. Free for 14 days, no card.
           </p>
           <Link to="/signup" data-testid="footer-cta-start" className="btn-primary mt-8 inline-flex">
@@ -446,7 +446,7 @@ export default function Landing() {
 
       {/* Footer */}
       <footer className="border-t border-white/10 py-8 sm:py-10 px-6 sm:px-8 animate-fade-up bg-ink">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-tiny sm:text-xs text-white/80 font-mono uppercase tracking-widest">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-tiny sm:text-caption text-white/80 font-mono uppercase tracking-widest">
           <div>© INNOIRA Consulting Services 2026 · CONFIDENTIAL</div>
           <div className="flex gap-6 text-white/80">
             <a href="#" className="hover:text-white transition-colors">Privacy</a>

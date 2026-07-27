@@ -12,20 +12,20 @@ function InfoRow({ label, value, icon: Icon, href, masked }) {
     <div className="flex items-start gap-3 py-2 group">
       {Icon && <Icon size={14} className="text-ink-muted mt-0.5 shrink-0" />}
       <div className="flex-1 min-w-0">
-        <div className="text-xs text-ink-muted font-medium">{label}</div>
+        <div className="text-caption text-ink-muted font-medium">{label}</div>
         {masked ? (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-ink-muted italic">••••••••</span>
-            <span className="text-xs text-accent font-medium">Reveal to view</span>
+            <span className="text-body text-ink-muted italic">••••••••</span>
+            <span className="text-caption text-accent font-medium">Reveal to view</span>
           </div>
         ) : href ? (
           <a href={href} target="_blank" rel="noopener noreferrer"
-            className="text-sm text-accent hover:underline inline-flex items-center gap-1">
+            className="text-body text-accent hover:underline inline-flex items-center gap-1">
             {value || "—"} <ExternalLink size={10} />
           </a>
         ) : (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-ink truncate">{value || "—"}</span>
+            <span className="text-body text-ink truncate">{value || "—"}</span>
             {value && value !== "—" && (
               <button onClick={handleCopy} className="opacity-0 group-hover:opacity-100 text-ink-muted hover:text-ink transition-all">
                 {copied ? <Check size={12} className="text-success" /> : <Copy size={12} />}
@@ -44,7 +44,7 @@ function Section({ title, children, defaultOpen = true }) {
     <div className="border-b border-line last:border-0">
       <button onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-ash/30 transition-colors">
-        <span className="text-xs font-semibold uppercase tracking-wider text-ink-muted">{title}</span>
+        <span className="text-caption font-semibold uppercase tracking-wider text-ink-muted">{title}</span>
         <ChevronDownIcon size={13} className={`text-ink-muted transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && <div className="px-4 pb-4 space-y-1">{children}</div>}
@@ -64,7 +64,7 @@ function ChevronDownIcon({ size, className }) {
 function ActionButton({ icon: Icon, label, onClick, primary, danger }) {
   return (
     <button onClick={onClick}
-      className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm transition-colors ${
+      className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-body transition-colors ${
         primary ? "bg-accent text-white hover:bg-accent/90" :
         danger ? "text-red-600 hover:bg-red-50" :
         "text-ink hover:bg-ash/70"
@@ -98,8 +98,8 @@ export default function LeadPreviewPanel({ lead, onClose, onReveal, revealing, o
     <div className="h-full flex flex-col bg-white border-l border-line">
       {/* Header */}
       <div className="shrink-0 px-4 py-3 border-b border-line flex items-center justify-between">
-        <span className="text-sm font-semibold">Lead Preview</span>
-        <button onClick={onClose} className="btn-ghost text-xs py-1 px-2"><X size={14} /></button>
+        <span className="text-body font-semibold">Lead Preview</span>
+        <button onClick={onClose} className="btn-ghost text-caption py-1 px-2"><X size={14} /></button>
       </div>
 
       {/* Content */}
@@ -107,13 +107,13 @@ export default function LeadPreviewPanel({ lead, onClose, onReveal, revealing, o
         {/* Identity */}
         <div className="px-4 py-4 border-b border-line">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-body shrink-0">
               {(lead.first_name?.[0] || "") + (lead.last_name?.[0] || "") || "?"}
             </div>
             <div className="min-w-0">
-              <div className="font-semibold text-sm truncate">{lead.full_name || `${lead.first_name || ""} ${lead.last_name || ""}`.trim() || "Unknown"}</div>
-              <div className="text-xs text-ink-muted truncate">{lead.title || "—"}</div>
-              <div className="text-xs text-ink-muted">{lead.company || "—"}</div>
+              <div className="font-semibold text-body truncate">{lead.full_name || `${lead.first_name || ""} ${lead.last_name || ""}`.trim() || "Unknown"}</div>
+              <div className="text-caption text-ink-muted truncate">{lead.title || "—"}</div>
+              <div className="text-caption text-ink-muted">{lead.company || "—"}</div>
             </div>
           </div>
         </div>
@@ -122,7 +122,7 @@ export default function LeadPreviewPanel({ lead, onClose, onReveal, revealing, o
         <div className="px-4 py-3 border-b border-line grid grid-cols-2 gap-2">
           {actions.slice(0, 4).map((a) => (
             <button key={a.label} onClick={a.onClick}
-              className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+              className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-caption font-medium transition-colors ${
                 a.primary ? "bg-accent text-white hover:bg-accent/90" : "bg-ash/50 text-ink hover:bg-ash border border-line"
               }`}>
               <a.icon size={13} />
@@ -177,7 +177,7 @@ export default function LeadPreviewPanel({ lead, onClose, onReveal, revealing, o
       <div className="shrink-0 px-4 py-3 border-t border-line grid grid-cols-4 gap-2">
         {actions.slice(4).map((a) => (
           <button key={a.label} onClick={a.onClick}
-            className="flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-ink-muted hover:text-ink hover:bg-ash/50 transition-colors text-xs">
+            className="flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-ink-muted hover:text-ink hover:bg-ash/50 transition-colors text-caption">
             <a.icon size={14} />
             <span className="text-[10px] leading-tight text-center">{a.label}</span>
           </button>

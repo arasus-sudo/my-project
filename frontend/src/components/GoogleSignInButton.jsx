@@ -59,8 +59,8 @@ export default function GoogleSignInButton({ text = "continue_with" }) {
   return (
     <div className="space-y-3" data-testid="google-signin">
       <div ref={slot} className="flex justify-center" />
-      {failed && <p className="text-xs text-neutral-400 text-center">Google sign-in couldn't load — use email below.</p>}
-      <div className="flex items-center gap-3 text-xs text-neutral-400">
+      {failed && <p className="text-caption text-neutral-400 text-center">Google sign-in couldn't load — use email below.</p>}
+      <div className="flex items-center gap-3 text-caption text-neutral-400">
         <span className="flex-1 border-t border-line" /> or <span className="flex-1 border-t border-line" />
       </div>
     </div>

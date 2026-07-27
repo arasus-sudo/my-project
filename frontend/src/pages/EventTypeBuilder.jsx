@@ -169,7 +169,7 @@ export default function EventTypeBuilder() {
                 ))}
               </div>
               <button onClick={() => patch("duration_options", [...(et.duration_options || []), { label: "", minutes: 30 }])}
-                className="btn-ghost text-xs"><Plus size={12} /> Add duration</button>
+                className="btn-ghost text-caption"><Plus size={12} /> Add duration</button>
             </div>
 
             {/* Guest permissions */}
@@ -284,7 +284,7 @@ export default function EventTypeBuilder() {
                 ))}
               </div>
               <button onClick={() => patch("form_fields", [...(et.form_fields || []), { key: "", label: "", type: "string", required: true, options: [] }])}
-                className="btn-ghost text-xs"><Plus size={12} /> Add field</button>
+                className="btn-ghost text-caption"><Plus size={12} /> Add field</button>
             </div>
 
             {/* Qualifying questions */}
@@ -304,7 +304,7 @@ export default function EventTypeBuilder() {
                 ))}
               </div>
               <button onClick={() => patch("qualifying_questions", [...et.qualifying_questions, { key: "", prompt: "", type: "string" }])}
-                data-testid="et-qfield-add" className="btn-ghost text-xs"><Plus size={12} /> Add question</button>
+                data-testid="et-qfield-add" className="btn-ghost text-caption"><Plus size={12} /> Add question</button>
 
               {et.qualifying_questions.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-line">
@@ -375,7 +375,7 @@ export default function EventTypeBuilder() {
                   ))}
                 </div>
                 <button onClick={() => patchReminder("minutes_before", [...(et.reminder_config?.minutes_before || [1440]), 60])}
-                  className="btn-ghost text-xs mt-1"><Plus size={12} /> Add another reminder</button>
+                  className="btn-ghost text-caption mt-1"><Plus size={12} /> Add another reminder</button>
               </div>
             </div>
 

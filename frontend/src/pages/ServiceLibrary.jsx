@@ -155,11 +155,11 @@ export default function ServiceLibrary() {
         subtitle="Define every service your company offers. Each service becomes a reusable campaign template with automatically generated positioning, messaging, and competitor insights."
         right={
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowAiGen(true)} className="btn-secondary text-sm">
+            <button onClick={() => setShowAiGen(true)} className="btn-secondary text-body">
               <Zap size={14} /> Generate
             </button>
             <button onClick={() => { setEditing(null); setForm({ ...EMPTY_FORM }); setShowForm(true); }}
-              className="btn-primary text-sm">
+              className="btn-primary text-body">
               <Plus size={14} /> Add Service
             </button>
           </div>
@@ -231,11 +231,11 @@ export default function ServiceLibrary() {
                       className="input-premium text-caption py-1.5 h-16" />
                     <div className="flex gap-2">
                       <button onClick={() => aiImprove(item.id)} disabled={busy}
-                        className="btn-primary text-xs py-1 disabled:opacity-50">
+                        className="btn-primary text-caption py-1 disabled:opacity-50">
                         {busy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
                         Improve
                       </button>
-                      <button onClick={() => setShowImprove(null)} className="btn-ghost text-xs py-1">Cancel</button>
+                      <button onClick={() => setShowImprove(null)} className="btn-ghost text-caption py-1">Cancel</button>
                     </div>
                   </div>
                 )}
@@ -254,7 +254,7 @@ export default function ServiceLibrary() {
                     <div className="text-body font-medium">{item.name}</div>
                     <div className="text-caption text-ink-muted">{item.industry || "No industry"}</div>
                   </div>
-                  <button onClick={() => toggleArchive(item.id)} className="btn-ghost text-xs">Restore</button>
+                  <button onClick={() => toggleArchive(item.id)} className="btn-ghost text-caption">Restore</button>
                 </div>
               ))}
             </div>
@@ -336,7 +336,7 @@ export default function ServiceLibrary() {
             <div className="flex gap-2 pb-2">
               {["description", "website"].map((m) => (
                 <button key={m} onClick={() => setAiMethod(m)}
-                  className={`px-3 py-1.5 text-xs rounded-xl border transition-all ${
+                  className={`px-3 py-1.5 text-caption rounded-xl border transition-all ${
                     aiMethod === m ? "border-transparent bg-accent text-white" : "border-line hover:border-ink/20"
                   }`}>
                   {m === "description" ? "Text Description" : "Website URL"}

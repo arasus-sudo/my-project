@@ -68,11 +68,11 @@ export default function VoiceCampaigns() {
                     <td className="p-4 text-right font-mono">{c.stats?.total_minutes || 0}</td>
                     <td className="p-4 text-right flex items-center justify-end gap-1">
                       {c.status === "active" ? (
-                        <button onClick={() => pause(c.id)} className="btn-ghost text-xs"><Pause size={12} />Pause</button>
+                        <button onClick={() => pause(c.id)} className="btn-ghost text-caption"><Pause size={12} />Pause</button>
                       ) : (
-                        <button onClick={() => launch(c.id)} className="btn-ghost text-xs text-sanguine"><Play size={12} />Launch</button>
+                        <button onClick={() => launch(c.id)} className="btn-ghost text-caption text-sanguine"><Play size={12} />Launch</button>
                       )}
-                      <button onClick={() => remove(c.id)} className="btn-ghost text-xs text-ink-muted hover:text-danger"><Trash2 size={12} /></button>
+                      <button onClick={() => remove(c.id)} className="btn-ghost text-caption text-ink-muted hover:text-danger"><Trash2 size={12} /></button>
                     </td>
                   </tr>
                 ))}

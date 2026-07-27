@@ -91,7 +91,7 @@ export default function JournalEntries() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="ui-label">Lines (must balance)</span>
-                  <button type="button" onClick={addLine} className="text-xs text-accent hover:underline">+ Add line</button>
+                  <button type="button" onClick={addLine} className="text-caption text-accent hover:underline">+ Add line</button>
                 </div>
                 {form.lines.map((l, i) => (
                   <div key={i} className="flex gap-2 items-start">
@@ -102,7 +102,7 @@ export default function JournalEntries() {
                     <input className="inp w-24" type="number" step="0.01" placeholder="Debit" value={l.debit} onChange={(e) => updLine(i, "debit", e.target.value)} />
                     <input className="inp w-24" type="number" step="0.01" placeholder="Credit" value={l.credit} onChange={(e) => updLine(i, "credit", e.target.value)} />
                     <input className="inp w-32" placeholder="Memo" value={l.memo} onChange={(e) => updLine(i, "memo", e.target.value)} />
-                    {form.lines.length > 1 && <button type="button" onClick={() => remLine(i)} className="text-danger text-xs mt-2">X</button>}
+                    {form.lines.length > 1 && <button type="button" onClick={() => remLine(i)} className="text-danger text-caption mt-2">X</button>}
                   </div>
                 ))}
               </div>

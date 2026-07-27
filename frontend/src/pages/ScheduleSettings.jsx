@@ -140,7 +140,7 @@ export default function ScheduleSettings() {
         <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div className="text-card-title font-display font-semibold">Working hours</div>
-            <button onClick={saveAvailability} disabled={busy} data-testid="save-availability-btn" className="btn-primary text-xs self-start"><Save size={12} /> Save</button>
+            <button onClick={saveAvailability} disabled={busy} data-testid="save-availability-btn" className="btn-primary text-caption self-start"><Save size={12} /> Save</button>
           </div>
           <div>
             <label className="form-label block mb-1">Timezone</label>

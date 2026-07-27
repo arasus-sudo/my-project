@@ -43,9 +43,9 @@ export default function LeadListsPanel({ onLoadList, activeListId }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-ink uppercase tracking-wider">Lead Lists</span>
+        <span className="text-caption font-semibold text-ink uppercase tracking-wider">Lead Lists</span>
         <button onClick={() => setCreating(!creating)}
-          className="btn-ghost text-xs py-1 px-1.5 text-ink-muted hover:text-accent">
+          className="btn-ghost text-caption py-1 px-1.5 text-ink-muted hover:text-accent">
           <Plus size={13} />
         </button>
       </div>
@@ -55,11 +55,11 @@ export default function LeadListsPanel({ onLoadList, activeListId }) {
           <input value={newName} onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") createList(); }}
             placeholder="List name…"
-            className="flex-1 border border-line rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" autoFocus />
+            className="flex-1 border border-line rounded-lg px-2.5 py-1.5 text-caption bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" autoFocus />
           <button onClick={createList} disabled={!newName.trim()}
-            className="btn-primary text-xs py-1.5 px-2 disabled:opacity-50">Save</button>
+            className="btn-primary text-caption py-1.5 px-2 disabled:opacity-50">Save</button>
           <button onClick={() => { setCreating(false); setNewName(""); }}
-            className="btn-ghost text-xs py-1.5 px-1.5 text-ink-muted"><X size={13} /></button>
+            className="btn-ghost text-caption py-1.5 px-1.5 text-ink-muted"><X size={13} /></button>
         </div>
       )}
 
@@ -67,11 +67,11 @@ export default function LeadListsPanel({ onLoadList, activeListId }) {
         {loading ? (
           <div className="flex items-center justify-center py-4"><Loader2 size={14} className="animate-spin text-ink-muted" /></div>
         ) : lists.length === 0 ? (
-          <p className="text-xs text-ink-muted py-2 text-center">No lists yet</p>
+          <p className="text-caption text-ink-muted py-2 text-center">No lists yet</p>
         ) : (
           lists.map((lst) => (
             <div key={lst.id}
-              className={`group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-colors text-xs ${
+              className={`group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-colors text-caption ${
                 activeListId === lst.id
                   ? "bg-accent/10 text-accent font-medium"
                   : "hover:bg-ash text-ink"

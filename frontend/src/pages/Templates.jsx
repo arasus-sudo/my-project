@@ -43,7 +43,7 @@ export default function Templates() {
             {t.tags?.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1">{t.tags.map((tg) => <span key={tg} className="pill">{tg}</span>)}</div>
             )}
-            <button onClick={() => del(t.id)} data-testid={`delete-template-${t.id}`} className="mt-4 text-xs text-danger hover:underline"><Trash2 size={12} className="inline" /> delete</button>
+            <button onClick={() => del(t.id)} data-testid={`delete-template-${t.id}`} className="mt-4 text-caption text-danger hover:underline"><Trash2 size={12} className="inline" /> delete</button>
           </div>
         ))}
       </div>
@@ -53,7 +53,7 @@ export default function Templates() {
             <div className="text-section font-display font-semibold">New template</div>
             <input required placeholder="Template name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="template-name" className="w-full border border-line px-3 py-2 rounded-xl" />
             <input required placeholder="Subject" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} data-testid="template-subject" className="w-full border border-line px-3 py-2 rounded-xl" />
-            <textarea required rows={8} placeholder="Body… use {{first_name}}, {{company}}" value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} data-testid="template-body" className="w-full border border-line px-3 py-2 rounded-2xl font-mono text-sm" />
+            <textarea required rows={8} placeholder="Body… use {{first_name}}, {{company}}" value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} data-testid="template-body" className="w-full border border-line px-3 py-2 rounded-2xl font-mono text-body" />
             <input placeholder="Tags (comma-separated)" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} className="w-full border border-line px-3 py-2 rounded-xl" />
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>

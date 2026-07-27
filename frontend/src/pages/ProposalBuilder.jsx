@@ -358,7 +358,7 @@ function PricingEditor({ pricing, catalog, onAdd, onRemove, onQty, onDiscount })
             {unused.map((c) => <option key={c.id} value={c.id}>{c.name} — {money(c.unit_price, c.currency)}{c.unit ? `/${c.unit}` : ""}</option>)}
           </select>
           <button onClick={() => { if (pick) { onAdd(pick); setPick(""); } }} disabled={!pick}
-            data-testid="add-line-btn" className="btn-secondary text-xs disabled:opacity-40"><Plus size={14} /> Add</button>
+            data-testid="add-line-btn" className="btn-secondary text-caption disabled:opacity-40"><Plus size={14} /> Add</button>
         </div>
       )}
 

@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { Link, useNavigate } from "react-router-dom";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Play, Pause, Plus, Workflow, Trash2, Copy, FileJson, LayoutTemplate, ChevronDown, X, Archive, CheckCircle, Folder, BarChart3, AlertTriangle, Check, Loader2 } from "lucide-react";
+import { Play, Pause, Plus, Workflow, Trash2, Copy, FileJson, LayoutTemplate, ChevronDown, X, Archive, CheckCircle, Folder, BarChart3, AlertTriangle, Check, Loader2, Users } from "lucide-react";
 import { SkeletonTableRows } from "../components/ui/loading-states";
 
 export default function Campaigns() {
@@ -22,6 +22,9 @@ export default function Campaigns() {
   const [preflightData, setPreflightData] = useState(null);
   const [preflightLoading, setPreflightLoading] = useState(false);
   const [preflightCampaignId, setPreflightCampaignId] = useState(null);
+  const [contactsModal, setContactsModal] = useState(false);
+  const [contactsData, setContactsData] = useState(null);
+  const [contactsLoading, setContactsLoading] = useState(false);
 
   const load = () => api.get("/campaigns").then((r) => { setItems(r.data); setLoading(false); });
   useEffect(() => { load(); api.get("/campaign-folders").then((r) => setFolders(r.data)).catch(() => {}); }, []);
@@ -99,6 +102,18 @@ export default function Campaigns() {
   };
   const openTemplatePicker = () => { loadTemplates(); setTemplatePicker(true); };
 
+  const openContacts = async (id) => {
+    setContactsLoading(true);
+    setContactsModal(true);
+    try {
+      const r = await api.get(`/campaigns/${id}/contact-states`);
+      setContactsData(r.data);
+    } catch (err) {
+      setContactsData({ error: err?.response?.data?.detail || "Failed to load contacts" });
+    }
+    setContactsLoading(false);
+  };
+
   const createFolder = async () => {
     if (!folderName.trim()) return;
     try { await api.post("/campaign-folders", { name: folderName.trim() }); toast.success("Folder created"); setFolderName(""); setFolderModal(false); const r = await api.get("/campaign-folders"); setFolders(r.data); } catch (err) { toast.error("Failed"); }
@@ -117,9 +132,9 @@ export default function Campaigns() {
         subtitle="Multi-step sequences with AI personalization and hard-stop on reply."
         right={
           <div className="flex items-center gap-2">
-            <button onClick={() => nav("/app/campaigns/wizard")} data-testid="btn-ai-campaign" className="btn-secondary text-xs"><Workflow size={14} /> Wizard</button>
+            <button onClick={() => nav("/app/campaigns/wizard")} data-testid="btn-ai-campaign" className="btn-secondary text-caption"><Workflow size={14} /> Wizard</button>
             <div className="relative">
-              <button onClick={() => setCreateOpen((o) => !o)} data-testid="btn-new-campaign" className="btn-primary text-xs">
+              <button onClick={() => setCreateOpen((o) => !o)} data-testid="btn-new-campaign" className="btn-primary text-caption">
                 <Plus size={14} /> Create
                 <ChevronDown size={12} className="ml-1" />
               </button>
@@ -233,17 +248,17 @@ export default function Campaigns() {
                             </div>
                           </td>
                           <td className="p-3"><StatusBadge status={c.status} /></td>
-                          <td className="p-3 text-right font-mono text-sm">{c.lead_count || 0}</td>
-                          <td className="p-3 text-right font-mono text-sm">{c.stats?.sent || 0}</td>
-                          <td className="p-3 text-right font-mono text-sm">
+                          <td className="p-3 text-right font-mono text-body">{c.lead_count || 0}</td>
+                          <td className="p-3 text-right font-mono text-body">{c.stats?.sent || 0}</td>
+                          <td className="p-3 text-right font-mono text-body">
                             {c.stats?.opened || 0}
                             {c.stats?.sent > 0 && <span className="text-ink-muted text-tiny ml-1">({c.stats?.open_rate || 0}%)</span>}
                           </td>
-                          <td className="p-3 text-right font-mono text-sm">
+                          <td className="p-3 text-right font-mono text-body">
                             {c.stats?.replied || 0}
                             {c.stats?.sent > 0 && <span className="text-ink-muted text-tiny ml-1">({c.stats?.reply_rate || 0}%)</span>}
                           </td>
-                          <td className="p-3 text-right font-mono text-sm">{c.stats?.meetings || 0}</td>
+                          <td className="p-3 text-right font-mono text-body">{c.stats?.meetings || 0}</td>
                           <td className="p-3 text-right">
                             <div className="flex items-center justify-end gap-1">
                               {c.status === "draft" && (
@@ -283,6 +298,10 @@ export default function Campaigns() {
                               <button onClick={() => saveTemplate(c)}
                                 className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Save as template">
                                 <LayoutTemplate size={14} />
+                              </button>
+                              <button onClick={() => openContacts(c.id)}
+                                className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Contact states">
+                                <Users size={14} />
                               </button>
                               <button onClick={() => nav(`/app/campaigns/${c.id}/ab-test`)}
                                 className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="A/B test results">
@@ -342,13 +361,13 @@ export default function Campaigns() {
                         nav(`/app/campaigns/${r.data.id}`);
                       } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
                     }}
-                      className="btn-primary text-xs">Use</button>
+                      className="btn-primary text-caption">Use</button>
                   </div>
                 ))}
               </div>
             )}
             <div className="flex justify-end pt-2">
-              <button onClick={() => setTemplatePicker(false)} className="btn-secondary text-xs">Cancel</button>
+              <button onClick={() => setTemplatePicker(false)} className="btn-secondary text-caption">Cancel</button>
             </div>
           </div>
         </div>
@@ -385,7 +404,7 @@ export default function Campaigns() {
                       <X size={16} className="text-danger mt-0.5 shrink-0" />
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="text-body font-medium text-sm">{check.label}</div>
+                      <div className="text-body font-medium text-body">{check.label}</div>
                       <div className="text-tiny text-ink-muted">{check.detail}</div>
                     </div>
                     <span className={`text-tiny font-mono px-1.5 py-0.5 rounded-sm ${
@@ -400,14 +419,85 @@ export default function Campaigns() {
                     {preflightData.all_passed ? "All checks passed" : `${preflightData.checks.filter(c => !c.passed).length} check(s) failed — review before launch`}
                   </span>
                   <div className="flex gap-2">
-                    <button onClick={() => { setPreflightOpen(false); setPreflightData(null); }} className="btn-secondary text-xs">Cancel</button>
+                    <button onClick={() => { setPreflightOpen(false); setPreflightData(null); }} className="btn-secondary text-caption">Cancel</button>
                     <button onClick={() => launchAfterPreflight(preflightCampaignId)}
-                      className="btn-primary text-xs">
+                      className="btn-primary text-caption">
                       <Play size={12} /> Launch
                     </button>
                   </div>
                 </div>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {contactsModal && (
+        <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50">
+          <div className="bg-white border border-line p-6 rounded-2xl w-full max-w-2xl space-y-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div className="text-section font-display font-semibold">Contact States</div>
+              <button onClick={() => { setContactsModal(false); setContactsData(null); }} className="text-ink-muted hover:text-ink"><X size={16} /></button>
+            </div>
+            {contactsLoading ? (
+              <div className="flex items-center gap-3 py-8 justify-center">
+                <Loader2 size={20} className="animate-spin text-ink-muted" />
+                <span className="text-body text-ink-muted">Loading contact states...</span>
+              </div>
+            ) : contactsData?.error ? (
+              <div className="text-center py-6">
+                <AlertTriangle size={32} className="mx-auto text-danger mb-2" />
+                <div className="text-body text-danger">{contactsData.error}</div>
+              </div>
+            ) : contactsData && (
+              <>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className="text-sm font-medium">{contactsData.total_contacts} contacts · {contactsData.steps} steps</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {Object.entries(contactsData.summary || {}).map(([state, count]) => (
+                      <span key={state} className={`text-tiny font-mono px-2 py-0.5 rounded-full ${
+                        state === "replied" || state === "meeting_booked" ? "bg-success/10 text-success" :
+                        state === "bounced" || state === "exited" ? "bg-danger/10 text-danger" :
+                        state === "opened" || state === "clicked" ? "bg-primary/10 text-primary" :
+                        state === "sent" ? "bg-warning/10 text-warning" :
+                        "bg-neutral-100 text-ink-muted"
+                      }`}>{state} {count}</span>
+                    ))}
+                  </div>
+                </div>
+                <div className="border border-line rounded-xl overflow-hidden">
+                  <table className="w-full text-table">
+                    <thead>
+                      <tr className="border-b border-line bg-ash/50">
+                        <th className="table-header text-left p-2 text-tiny">Name</th>
+                        <th className="table-header text-left p-2 text-tiny">Email</th>
+                        <th className="table-header text-left p-2 text-tiny">State</th>
+                        <th className="table-header text-right p-2 text-tiny">Step</th>
+                        <th className="table-header text-right p-2 text-tiny">Queue</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {contactsData.contacts?.map((ct) => (
+                        <tr key={ct.lead_id} className="border-b border-line last:border-0 hover:bg-surfacehover transition-colors">
+                          <td className="p-2 text-sm font-medium">{ct.first_name} {ct.last_name}</td>
+                          <td className="p-2 text-tiny font-mono text-ink-muted">{ct.email}</td>
+                          <td className="p-2">
+                            <span className={`text-tiny font-mono px-1.5 py-0.5 rounded-sm ${
+                              ct.state === "replied" || ct.state === "meeting_booked" ? "bg-success/10 text-success" :
+                              ct.state === "bounced" || ct.state === "exited" ? "bg-danger/10 text-danger" :
+                              ct.state === "opened" || ct.state === "clicked" ? "bg-primary/10 text-primary" :
+                              ct.state === "sent" ? "bg-warning/10 text-warning" :
+                              "bg-neutral-100 text-ink-muted"
+                            }`}>{ct.state}</span>
+                          </td>
+                          <td className="p-2 text-right text-tiny font-mono">{ct.current_step}</td>
+                          <td className="p-2 text-right text-tiny font-mono text-ink-muted">{ct.queue_status}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         </div>

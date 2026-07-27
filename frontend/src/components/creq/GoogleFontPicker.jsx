@@ -56,7 +56,7 @@ export default function GoogleFontPicker({ value, onChange, testid }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         data-testid={testid || "font-picker-trigger"}
-        className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm flex items-center justify-between"
+        className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-body flex items-center justify-between"
       >
         <span style={{ fontFamily: `"${value}", sans-serif` }} className="truncate">{value || "Choose a font"}</span>
         <ChevronDown size={14} className="text-neutral-400 shrink-0" />
@@ -74,7 +74,7 @@ export default function GoogleFontPicker({ value, onChange, testid }) {
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Search fonts…"
                 data-testid="font-picker-search"
-                className="w-full border border-line rounded-full pl-7 pr-3 py-1.5 text-sm focus:outline-none focus:border-ink"
+                className="w-full border border-line rounded-full pl-7 pr-3 py-1.5 text-body focus:outline-none focus:border-ink"
               />
             </div>
             <div className="flex gap-1 mt-2 flex-wrap">
@@ -87,9 +87,9 @@ export default function GoogleFontPicker({ value, onChange, testid }) {
 
           <div className="max-h-64 overflow-y-auto" data-testid="font-picker-results">
             {loading ? (
-              <div className="p-4 text-xs text-neutral-400 text-center">Searching…</div>
+              <div className="p-4 text-caption text-neutral-400 text-center">Searching…</div>
             ) : results.length === 0 ? (
-              <div className="p-4 text-xs text-neutral-400 text-center">No fonts match “{q}”.</div>
+              <div className="p-4 text-caption text-neutral-400 text-center">No fonts match “{q}”.</div>
             ) : results.map((f) => (
               <button
                 key={f.family}

@@ -122,7 +122,7 @@ export default function SlidePreview({ proj, palette, startIndex = 0, onClose })
             ))}
           </div>
           <button onClick={() => setPlaying((p) => (idx >= total - 1 ? (goTo(0), true) : !p))} data-testid="preview-play-toggle"
-            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition-colors">
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-caption font-medium transition-colors">
             {playing ? <Pause size={14} /> : <Play size={14} />}
             {playing ? "Pause" : idx >= total - 1 ? "Replay" : "Play"}
           </button>

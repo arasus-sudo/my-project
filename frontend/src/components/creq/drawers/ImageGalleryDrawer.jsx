@@ -36,7 +36,7 @@ export default function ImageGalleryDrawer({ onClose, onAddAsElement, onAddAsBac
         <div className="sticky top-0 bg-white border-b border-line px-5 py-4 flex items-center gap-3 z-10">
           <Image size={16} />
           <div className="font-display font-semibold text-subheading">Generated images</div>
-          <button onClick={onClose} className="ml-auto btn-ghost text-xs">Close</button>
+          <button onClick={onClose} className="ml-auto btn-ghost text-caption">Close</button>
         </div>
 
         <div className="p-4">

@@ -17,7 +17,7 @@ export default function SlotPicker({ slots, onPick, emptyMessage = "No open slot
   }, [slots]);
 
   const days = Object.entries(byDay);
-  if (!days.length) return <p className="text-sm text-neutral-500">{emptyMessage}</p>;
+  if (!days.length) return <p className="text-body text-neutral-500">{emptyMessage}</p>;
 
   return (
     <div className="space-y-4">
@@ -35,7 +35,7 @@ export default function SlotPicker({ slots, onPick, emptyMessage = "No open slot
                 type="button"
                 onClick={() => onPick(s)}
                 data-testid={`slot-${s}`}
-                className="border border-line px-3 py-1.5 rounded-sm text-sm hover:border-ink hover:bg-surfacehover transition-colors duration-150"
+                className="border border-line px-3 py-1.5 rounded-sm text-body hover:border-ink hover:bg-surfacehover transition-colors duration-150"
               >
                 {new Date(s).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
               </button>

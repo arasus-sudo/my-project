@@ -77,8 +77,8 @@ export default function PricingCatalog() {
                       className="border border-line px-2 py-1.5 rounded-full text-input" placeholder="Description" />
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={saveEdit} data-testid="save-edit" className="btn-primary text-xs"><Check size={12} /> Save</button>
-                    <button onClick={() => setEditId(null)} className="btn-ghost text-xs"><X size={12} /> Cancel</button>
+                    <button onClick={saveEdit} data-testid="save-edit" className="btn-primary text-caption"><Check size={12} /> Save</button>
+                    <button onClick={() => setEditId(null)} className="btn-ghost text-caption"><X size={12} /> Cancel</button>
                   </div>
                 </div>
               ) : (

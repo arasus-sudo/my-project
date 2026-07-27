@@ -372,7 +372,7 @@ function AgentCard({ agent, status: s, onClick }) {
       <div className="relative flex items-center gap-4 mt-3 pt-3 border-t border-line">
         {s?.metrics?.map((m) => (
           <div key={m.label}>
-            <div className="font-display text-sm font-bold">{m.value}</div>
+            <div className="font-display text-body font-bold">{m.value}</div>
             <div className="text-tiny text-ink-muted font-mono uppercase">{m.label}</div>
           </div>
         ))}

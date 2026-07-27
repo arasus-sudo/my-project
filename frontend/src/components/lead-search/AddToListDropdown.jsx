@@ -48,7 +48,7 @@ export default function AddToListDropdown({ leadIds, onDone }) {
   return (
     <div ref={ref} className="relative">
       <button onClick={() => setOpen(!open)}
-        className="btn-secondary text-xs py-1.5 flex items-center gap-1">
+        className="btn-secondary text-caption py-1.5 flex items-center gap-1">
         <List size={11} /> Add to List
       </button>
       {open && (
@@ -59,7 +59,7 @@ export default function AddToListDropdown({ leadIds, onDone }) {
             <>
               {lists.map((lst) => (
                 <button key={lst.id} onClick={() => addToList(lst.id)} disabled={adding[lst.id]}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs hover:bg-ash transition-colors text-left disabled:opacity-50">
+                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-caption hover:bg-ash transition-colors text-left disabled:opacity-50">
                   <List size={13} className="shrink-0 text-ink-muted" />
                   <span className="flex-1 truncate">{lst.name}</span>
                   <span className="text-ink-muted font-mono">{lst.lead_count || 0}</span>
@@ -70,9 +70,9 @@ export default function AddToListDropdown({ leadIds, onDone }) {
                 <input value={newName} onChange={(e) => setNewName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") createAndAdd(); }}
                   placeholder="New list name…"
-                  className="flex-1 border border-line rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                  className="flex-1 border border-line rounded-lg px-2 py-1.5 text-caption focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
                 <button onClick={createAndAdd} disabled={!newName.trim()}
-                  className="btn-primary text-xs py-1.5 px-2 disabled:opacity-50"><Plus size={12} /></button>
+                  className="btn-primary text-caption py-1.5 px-2 disabled:opacity-50"><Plus size={12} /></button>
               </div>
             </>
           )}

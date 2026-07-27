@@ -178,7 +178,7 @@ export default function VoiceCampaignBuilder() {
               <div className="text-card-title font-display font-semibold">Leads to call</div>
               <p className="text-caption text-ink-muted">{campaign.lead_ids.length} selected · only leads with a phone number can be called.</p>
             </div>
-            <button onClick={selectAllCallable} className="btn-ghost text-xs">Select all callable</button>
+            <button onClick={selectAllCallable} className="btn-ghost text-caption">Select all callable</button>
           </div>
           <div className="border border-line max-h-80 overflow-y-auto">
             {callableLeads.length === 0 ? (

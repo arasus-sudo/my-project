@@ -82,14 +82,14 @@ export default function AccountingBills() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="ui-label">Line items</span>
-                  <button type="button" onClick={addLine} className="text-xs text-accent hover:underline">+ Add line</button>
+                  <button type="button" onClick={addLine} className="text-caption text-accent hover:underline">+ Add line</button>
                 </div>
                 {form.lines.map((l, i) => (
                   <div key={i} className="flex gap-2 items-start">
                     <input className="inp flex-[2]" placeholder="Description" value={l.description} onChange={(e) => updLine(i, "description", e.target.value)} required />
                     <input className="inp w-20" type="number" step="1" placeholder="Qty" value={l.quantity} onChange={(e) => updLine(i, "quantity", e.target.value)} />
                     <input className="inp w-28" type="number" step="0.01" placeholder="Unit price" value={l.unit_price} onChange={(e) => updLine(i, "unit_price", e.target.value)} required />
-                    {form.lines.length > 1 && <button type="button" onClick={() => remLine(i)} className="text-danger text-xs mt-2">X</button>}
+                    {form.lines.length > 1 && <button type="button" onClick={() => remLine(i)} className="text-danger text-caption mt-2">X</button>}
                   </div>
                 ))}
               </div>

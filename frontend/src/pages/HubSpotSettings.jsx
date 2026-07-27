@@ -98,7 +98,7 @@ export default function HubSpotSettings() {
                   </div>
                   {status.portal_id && <div className="text-caption text-ink-muted font-mono">Portal: {status.portal_id}</div>}
                 </div>
-                <button onClick={doDisconnect} disabled={busy} data-testid="hubspot-disconnect-btn" className="btn-ghost text-xs text-ink ml-auto shrink-0">
+                <button onClick={doDisconnect} disabled={busy} data-testid="hubspot-disconnect-btn" className="btn-ghost text-caption text-ink ml-auto shrink-0">
                   <PowerOff size={12} /> Disconnect
                 </button>
               </div>

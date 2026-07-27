@@ -116,9 +116,9 @@ export function CompaniesList() {
               </span>
               <div className="flex items-center gap-2">
                 <button disabled={page <= 1} onClick={() => load(page - 1)}
-                  className="btn-secondary text-xs px-2 py-1 disabled:opacity-30"><ChevronLeft size={14} /></button>
+                  className="btn-secondary text-caption px-2 py-1 disabled:opacity-30"><ChevronLeft size={14} /></button>
                 <button disabled={page >= Math.ceil(total / pageSize)} onClick={() => load(page + 1)}
-                  className="btn-secondary text-xs px-2 py-1 disabled:opacity-30"><ChevronRight size={14} /></button>
+                  className="btn-secondary text-caption px-2 py-1 disabled:opacity-30"><ChevronRight size={14} /></button>
               </div>
             </div>
           </div>
@@ -196,7 +196,7 @@ export function CompanyDetail() {
                 hq_location: company.hq_location || "",
               });
               setEditing(true);
-            }} className="btn-secondary text-xs"><Edit2 size={14} /> Edit</button>
+            }} className="btn-secondary text-caption"><Edit2 size={14} /> Edit</button>
             <Link to="/app/crm/companies" className="btn-secondary"><ChevronLeft size={14} /> Companies</Link>
           </div>
         }
@@ -222,8 +222,8 @@ export function CompanyDetail() {
                 <textarea value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                   className="w-full border border-line px-2 py-1 rounded text-input" placeholder="Description" rows={3} />
                 <div className="flex gap-2 pt-1">
-                  <button onClick={saveEdit} className="btn-primary text-xs flex items-center gap-1"><Save size={12} /> Save</button>
-                  <button onClick={() => setEditing(false)} className="btn-secondary text-xs flex items-center gap-1"><X size={12} /> Cancel</button>
+                  <button onClick={saveEdit} className="btn-primary text-caption flex items-center gap-1"><Save size={12} /> Save</button>
+                  <button onClick={() => setEditing(false)} className="btn-secondary text-caption flex items-center gap-1"><X size={12} /> Cancel</button>
                 </div>
               </div>
             ) : (

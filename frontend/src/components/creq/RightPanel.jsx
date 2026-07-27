@@ -77,9 +77,9 @@ function RightPanel({
         <div className="flex items-center justify-between">
           <div className="ui-label">{selectedCount} selected</div>
           <div className="flex gap-1">
-            <button onClick={onGroup} title="Group elements" className="btn-ghost text-xs py-1"><Layers size={12} /></button>
-            <button onClick={onUngroup} title="Ungroup" className="btn-ghost text-xs py-1"><Layers size={12} /></button>
-            <button onClick={onDeleteMulti} title="Delete all" className="btn-ghost text-xs py-1 text-danger"><Trash2 size={12} /></button>
+            <button onClick={onGroup} title="Group elements" className="btn-ghost text-caption py-1"><Layers size={12} /></button>
+            <button onClick={onUngroup} title="Ungroup" className="btn-ghost text-caption py-1"><Layers size={12} /></button>
+            <button onClick={onDeleteMulti} title="Delete all" className="btn-ghost text-caption py-1 text-danger"><Trash2 size={12} /></button>
           </div>
         </div>
         <div>
@@ -116,7 +116,7 @@ function RightPanel({
           <div className="flex items-center gap-2 mb-2">
             <span className="ui-label">Palette</span>
             <button onClick={createCustomPalette} title="Create custom palette"
-              className="ml-auto btn-ghost text-xs py-0.5 px-1.5"><Plus size={12} /> New</button>
+              className="ml-auto btn-ghost text-caption py-0.5 px-1.5"><Plus size={12} /> New</button>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {allPalettes.map((p) => (
@@ -303,11 +303,11 @@ function RightPanel({
         <div className="ui-label">Element · {el.type}</div>
         <div className="flex gap-1">
           <button onClick={() => onEditElement({ locked: !el.locked })} title={el.locked ? "Unlock element" : "Lock element"}
-            className={`btn-ghost text-xs py-1 ${el.locked ? "text-amber-600" : ""}`}>
+            className={`btn-ghost text-caption py-1 ${el.locked ? "text-amber-600" : ""}`}>
             {el.locked ? "🔒" : "🔓"}
           </button>
-          <button onClick={onDuplicate} title="Duplicate" className="btn-ghost text-xs py-1"><Copy size={12} /></button>
-          <button onClick={onDelete} title="Delete" className="btn-ghost text-xs py-1 text-danger"><Trash2 size={12} /></button>
+          <button onClick={onDuplicate} title="Duplicate" className="btn-ghost text-caption py-1"><Copy size={12} /></button>
+          <button onClick={onDelete} title="Delete" className="btn-ghost text-caption py-1 text-danger"><Trash2 size={12} /></button>
         </div>
       </div>
 
@@ -332,16 +332,16 @@ function RightPanel({
         <>
           <textarea value={el.text} onChange={(e) => onEditElement({ text: e.target.value })}
             rows={4} data-testid="el-text"
-            className="w-full border border-line rounded-lg p-2 text-sm focus:outline-none focus:border-ink" />
+            className="w-full border border-line rounded-lg p-2 text-body focus:outline-none focus:border-ink" />
           <label className="block">
             <span className="ui-label">Font</span>
             <GoogleFontPicker value={el.font} onChange={(font) => onEditElement({ font })} testid="el-font" />
           </label>
           <div className="grid grid-cols-2 gap-2">
             <label className="block"><span className="ui-label">Size</span>
-              <input type="number" min={10} max={400} value={el.size} onChange={(e) => { const n = parseNumInput(e.target.value); if (n !== undefined) onEditElement({ size: n }); }} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm font-mono" /></label>
+              <input type="number" min={10} max={400} value={el.size} onChange={(e) => { const n = parseNumInput(e.target.value); if (n !== undefined) onEditElement({ size: n }); }} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-body font-mono" /></label>
             <label className="block"><span className="ui-label">Weight</span>
-              <select value={el.weight} onChange={(e) => onEditElement({ weight: Number(e.target.value) })} className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+              <select value={el.weight} onChange={(e) => onEditElement({ weight: Number(e.target.value) })} className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-body">
                 {[300,400,500,600,700,800,900].map((w) => <option key={w} value={w}>{w}</option>)}
               </select></label>
           </div>
@@ -378,16 +378,16 @@ function RightPanel({
               </label>
               {el.shadow && (
                 <>
-                  <label className="block text-xs"><span className="ui-label">Shadow X</span>
+                  <label className="block text-caption"><span className="ui-label">Shadow X</span>
                     <input type="range" min={-20} max={20} value={el.shadow_x || 0} onChange={(e) => onEditElement({ shadow_x: Number(e.target.value) })} className="w-full" /></label>
-                  <label className="block text-xs"><span className="ui-label">Shadow Y</span>
+                  <label className="block text-caption"><span className="ui-label">Shadow Y</span>
                     <input type="range" min={-20} max={40} value={el.shadow_y ?? 4} onChange={(e) => onEditElement({ shadow_y: Number(e.target.value) })} className="w-full" /></label>
-                  <label className="block text-xs"><span className="ui-label">Shadow blur</span>
+                  <label className="block text-caption"><span className="ui-label">Shadow blur</span>
                     <input type="range" min={0} max={40} value={el.shadow_blur ?? 12} onChange={(e) => onEditElement({ shadow_blur: Number(e.target.value) })} className="w-full" /></label>
                   <ColorPicker label="Shadow color" palette={palette} value={el.shadow_color || "text"} onChange={(c) => onEditElement({ shadow_color: c })} />
                 </>
               )}
-              <label className="block text-xs"><span className="ui-label">Stroke width</span>
+              <label className="block text-caption"><span className="ui-label">Stroke width</span>
                 <input type="range" min={0} max={8} value={el.stroke_w || 0} onChange={(e) => onEditElement({ stroke_w: Number(e.target.value) })} className="w-full" /></label>
               {el.stroke_w > 0 && <ColorPicker label="Stroke color" palette={palette} value={el.stroke_color || "bg"} onChange={(c) => onEditElement({ stroke_color: c })} />}
             </div>
@@ -416,14 +416,14 @@ function RightPanel({
           <div className="grid grid-cols-2 gap-2">
             <label className="block"><span className="ui-label">Start cap</span>
               <select value={el.cap_start || "none"} onChange={(e) => onEditElement({ cap_start: e.target.value })}
-                data-testid="el-cap-start" className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+                data-testid="el-cap-start" className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-body">
                 <option value="none">None</option>
                 <option value="arrow">Arrow</option>
                 <option value="dot">Dot</option>
               </select></label>
             <label className="block"><span className="ui-label">End cap</span>
               <select value={el.cap_end || "none"} onChange={(e) => onEditElement({ cap_end: e.target.value })}
-                data-testid="el-cap-end" className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+                data-testid="el-cap-end" className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-body">
                 <option value="none">None</option>
                 <option value="arrow">Arrow</option>
                 <option value="dot">Dot</option>
@@ -436,7 +436,7 @@ function RightPanel({
         <>
           {isBadge && (
             <input value={el.text || ""} onChange={(e) => onEditElement({ text: e.target.value })} placeholder="Badge text"
-              className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+              className="w-full border border-line rounded-full px-3 py-2 text-body" />
           )}
           {isShape && (
             <div className="flex gap-2">
@@ -489,7 +489,7 @@ function RightPanel({
         <>
           <ColorPicker label="Color" palette={palette} value={el.color} onChange={(c) => onEditElement({ color: c })} />
           <label className="block"><span className="ui-label">Size</span>
-            <input type="number" min={20} max={400} value={el.w} onChange={(e) => { const n = parseNumInput(e.target.value); if (n !== undefined) onEditElement({ w: n }); }} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm font-mono" /></label>
+            <input type="number" min={20} max={400} value={el.w} onChange={(e) => { const n = parseNumInput(e.target.value); if (n !== undefined) onEditElement({ w: n }); }} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-body font-mono" /></label>
           <label className="block"><span className="ui-label">Stroke width</span>
             <input type="range" min={1} max={4} step={0.5} value={el.stroke || 2} onChange={(e) => onEditElement({ stroke: Number(e.target.value) })} className="w-full" />
           </label>
@@ -515,7 +515,7 @@ function RightPanel({
           <div className="flex gap-2">
             <input value={el.src || ""} onChange={(e) => onEditElement({ src: e.target.value })} data-testid="el-image-src"
               placeholder="Paste image URL"
-              className="flex-1 border border-line rounded-full px-3 py-2 text-sm font-mono" />
+              className="flex-1 border border-line rounded-full px-3 py-2 text-body font-mono" />
             <button onClick={() => imageInputRef.current?.click()}
               className="shrink-0 px-3 py-2 rounded-full bg-accent text-white text-caption font-medium">
               Upload
@@ -535,7 +535,7 @@ function RightPanel({
           <label className="block"><span className="ui-label">Image frame</span>
               <select value={el.frame || ""} onChange={(e) => onEditElement({ frame: e.target.value || null })}
                 data-testid="el-image-frame"
-                className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+                className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-body">
                 <option value="">Rectangle (no frame)</option>
                 {FRAME_CATEGORIES.map((cat) => {
                   const frames = IMAGE_FRAMES.filter((f) => f.category === cat.key);
@@ -553,7 +553,7 @@ function RightPanel({
           <label className="block"><span className="ui-label">Image effect</span>
             <select value={el.effect || ""} onChange={(e) => onEditElement({ effect: e.target.value || null })}
               data-testid="el-image-effect"
-              className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+              className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-body">
               <option value="">No effect</option>
               {IMAGE_EFFECTS.filter((e) => e.id !== "none").map((eff) => (
                 <option key={eff.id} value={eff.id}>{eff.label}</option>
@@ -573,7 +573,7 @@ function RightPanel({
           <div className="border-t border-line my-1.5" />
           <label className="block"><span className="ui-label">Fit</span>
             <select value={el.fit || "cover"} onChange={(e) => onEditElement({ fit: e.target.value })} data-testid="el-image-fit"
-              className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+              className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-body">
               <option value="cover">Cover</option>
               <option value="contain">Contain</option>
               <option value="fill">Fill / stretch</option>
@@ -598,7 +598,7 @@ function RightPanel({
         <>
           <label className="block"><span className="ui-label">Chart type</span>
             <select value={el.chart_type || "bar"} onChange={(e) => onEditElement({ chart_type: e.target.value })}
-              className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+              className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-body">
               <option value="bar">Bar chart</option>
               <option value="pie">Pie chart</option>
               <option value="donut">Donut chart</option>
@@ -612,13 +612,13 @@ function RightPanel({
             <input value={(el.chart_data || []).join(", ")} onChange={(e) => {
               const nums = e.target.value.split(",").map((s) => Number(s.trim())).filter((n) => !isNaN(n));
               onEditElement({ chart_data: nums.length ? nums : [1] });
-            }} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm font-mono" />
+            }} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-body font-mono" />
           </label>
           <label className="block"><span className="ui-label">Labels (comma-separated)</span>
             <input value={(el.chart_labels || []).join(", ")} onChange={(e) => {
               const labels = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
               onEditElement({ chart_labels: labels });
-            }} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm font-mono" />
+            }} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-body font-mono" />
           </label>
         </>
       )}
@@ -627,7 +627,7 @@ function RightPanel({
         <>
           <label className="block"><span className="ui-label">Card style</span>
             <select value={el.card_style || "flat"} onChange={(e) => onEditElement({ card_style: e.target.value })}
-              className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+              className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-body">
               <option value="flat">Flat</option>
               <option value="elevated">Elevated</option>
               <option value="outlined">Outlined</option>
@@ -639,26 +639,26 @@ function RightPanel({
             </select>
           </label>
           <input value={el.title || ""} onChange={(e) => onEditElement({ title: e.target.value })}
-            placeholder="Card title" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+            placeholder="Card title" className="w-full border border-line rounded-full px-3 py-2 text-body" />
           <textarea value={el.body || ""} onChange={(e) => onEditElement({ body: e.target.value })}
             placeholder="Card body text" rows={3}
-            className="w-full border border-line rounded-lg px-3 py-2 text-sm" />
+            className="w-full border border-line rounded-lg px-3 py-2 text-body" />
           {el.card_style === "dashboard" && (
             <>
               <input value={el.metric || ""} onChange={(e) => onEditElement({ metric: e.target.value })}
-                placeholder="Metric value (e.g. 99.7%)" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+                placeholder="Metric value (e.g. 99.7%)" className="w-full border border-line rounded-full px-3 py-2 text-body" />
               <input value={el.metric_label || ""} onChange={(e) => onEditElement({ metric_label: e.target.value })}
-                placeholder="Metric label" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+                placeholder="Metric label" className="w-full border border-line rounded-full px-3 py-2 text-body" />
             </>
           )}
           {el.card_style === "timeline" && (
             <input value={el.badge || ""} onChange={(e) => onEditElement({ badge: e.target.value })}
-              placeholder="Badge / date" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+              placeholder="Badge / date" className="w-full border border-line rounded-full px-3 py-2 text-body" />
           )}
           {el.card_style === "bento" && (
             <label className="block"><span className="ui-label">Icon</span>
               <select value={el.icon_name || "Zap"} onChange={(e) => onEditElement({ icon_name: e.target.value })}
-                className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+                className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-body">
                 {Object.keys(ICONS).map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
             </label>
@@ -669,11 +669,11 @@ function RightPanel({
       {el.type === "kpi" && (
         <>
           <input value={el.kpi_value || ""} onChange={(e) => onEditElement({ kpi_value: e.target.value })}
-            placeholder="Value (e.g. 86%)" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+            placeholder="Value (e.g. 86%)" className="w-full border border-line rounded-full px-3 py-2 text-body" />
           <input value={el.kpi_label || ""} onChange={(e) => onEditElement({ kpi_label: e.target.value })}
-            placeholder="Label (e.g. Conversion Rate)" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+            placeholder="Label (e.g. Conversion Rate)" className="w-full border border-line rounded-full px-3 py-2 text-body" />
           <input value={el.kpi_change || ""} onChange={(e) => onEditElement({ kpi_change: e.target.value })}
-            placeholder="Change (e.g. +12%)" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+            placeholder="Change (e.g. +12%)" className="w-full border border-line rounded-full px-3 py-2 text-body" />
           <label className="flex items-center gap-2 form-label">
             <input type="checkbox" checked={!!el.kpi_negative} onChange={(e) => onEditElement({ kpi_negative: e.target.checked })} />
             Negative trend (red)
@@ -687,13 +687,13 @@ function RightPanel({
             <input value={(el.chart_data || []).join(", ")} onChange={(e) => {
               const nums = e.target.value.split(",").map((s) => Number(s.trim())).filter((n) => !isNaN(n));
               onEditElement({ chart_data: nums.length ? nums : [1] });
-            }} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm font-mono" />
+            }} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-body font-mono" />
           </label>
           <label className="block"><span className="ui-label">Stage labels</span>
             <input value={(el.chart_labels || []).join(", ")} onChange={(e) => {
               const labels = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
               onEditElement({ chart_labels: labels });
-            }} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm font-mono" />
+            }} className="mt-1 w-full border border-line rounded-full px-3 py-2 text-body font-mono" />
           </label>
         </>
       )}
@@ -706,7 +706,7 @@ function RightPanel({
               try { const parsed = JSON.parse(e.target.value); if (Array.isArray(parsed)) onEditElement({ timeline_items: parsed }); }
               catch { /* invalid JSON — ignore during typing */ }
             }}
-            rows={6} className="w-full border border-line rounded-lg px-3 py-2 text-sm font-mono" />
+            rows={6} className="w-full border border-line rounded-lg px-3 py-2 text-body font-mono" />
           <div className="text-tiny text-ink-muted">Edit as JSON array of {`{date, title, desc}`} objects</div>
         </>
       )}
@@ -714,7 +714,7 @@ function RightPanel({
       {el.type === "progress" && (
         <>
           <input value={el.label || ""} onChange={(e) => onEditElement({ label: e.target.value })}
-            placeholder="Label" className="w-full border border-line rounded-full px-3 py-2 text-sm" />
+            placeholder="Label" className="w-full border border-line rounded-full px-3 py-2 text-body" />
           <label className="block"><span className="ui-label">Progress</span>
             <input type="range" min={0} max={100} step={1} value={el.progress ?? 65}
               onChange={(e) => onEditElement({ progress: Number(e.target.value) })} className="w-full" />
@@ -728,7 +728,7 @@ function RightPanel({
           <label className="block"><span className="ui-label">Shape category</span>
             <select value={el.shape_category || "star"} onChange={(e) => onEditElement({ shape_category: e.target.value })}
               data-testid="el-cs-category"
-              className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+              className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-body">
               {DECORATIVE_CATEGORIES.map((cat) => (
                 <option key={cat.type} value={cat.type}>{cat.label}</option>
               ))}
@@ -765,11 +765,11 @@ function RightPanel({
             </label>
             {el.shadow && (
               <>
-                <label className="block text-xs"><span className="ui-label">Shadow X</span>
+                <label className="block text-caption"><span className="ui-label">Shadow X</span>
                   <input type="range" min={-20} max={20} value={el.shadow_x || 0} onChange={(e) => onEditElement({ shadow_x: Number(e.target.value) })} className="w-full" /></label>
-                <label className="block text-xs"><span className="ui-label">Shadow Y</span>
+                <label className="block text-caption"><span className="ui-label">Shadow Y</span>
                   <input type="range" min={-20} max={40} value={el.shadow_y ?? 4} onChange={(e) => onEditElement({ shadow_y: Number(e.target.value) })} className="w-full" /></label>
-                <label className="block text-xs"><span className="ui-label">Shadow blur</span>
+                <label className="block text-caption"><span className="ui-label">Shadow blur</span>
                   <input type="range" min={0} max={40} value={el.shadow_blur ?? 12} onChange={(e) => onEditElement({ shadow_blur: Number(e.target.value) })} className="w-full" /></label>
               </>
             )}

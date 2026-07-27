@@ -49,7 +49,7 @@ export default function Inbox() {
         {/* Filters */}
         <aside className="hidden md:block col-span-2 border-r border-line bg-white p-4">
           <div className="ui-label mb-3">Filter</div>
-          <ul className="space-y-1 text-sm">
+          <ul className="space-y-1 text-body">
             {[["all", "All"], ["interested", "Interested"], ["referral", "Referral"], ["ooo", "OOO"], ["not_interested", "Not interested"], ["unsubscribe", "Unsubscribe"]].map(([k, t]) => (
               <li key={k}>
                 <button onClick={() => setFilter(k)} data-testid={`filter-${k}`}

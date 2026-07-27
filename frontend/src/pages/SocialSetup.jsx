@@ -87,7 +87,7 @@ export default function SocialSetup() {
     <div className="min-h-screen bg-bone p-6 sm:p-8 animate-fade-in">
       <div className="max-w-3xl mx-auto pt-12 pb-16">
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-8 h-8 bg-accent text-white flex items-center justify-center rounded-full font-display font-bold text-sm">S</div>
+          <div className="w-8 h-8 bg-accent text-white flex items-center justify-center rounded-full font-display font-bold text-body">S</div>
           <div className="font-display font-semibold">Social EQ <span className="text-ink-muted">/</span> <span className="text-ink-muted">Set up your brand</span></div>
           <button onClick={skip} data-testid="social-setup-skip" className="ml-auto text-caption text-ink-muted hover:text-ink">Skip for now</button>
         </div>

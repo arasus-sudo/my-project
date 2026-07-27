@@ -248,8 +248,8 @@ export default function Leads() {
         {selected.size > 0 && (
           <div className="flex flex-wrap items-center gap-2 mb-3 p-3 rounded-xl bg-ash border border-line" data-testid="bulk-action-bar">
             <span className="text-caption font-mono text-ink-tertiary mr-2">{selected.size} selected</span>
-            <button onClick={() => setListPicker(true)} className="btn-secondary text-xs">Add to list</button>
-            <button onClick={() => setTagPrompt(true)} className="btn-secondary text-xs"><Tag size={12} /> Add tag</button>
+            <button onClick={() => setListPicker(true)} className="btn-secondary text-caption">Add to list</button>
+            <button onClick={() => setTagPrompt(true)} className="btn-secondary text-caption"><Tag size={12} /> Add tag</button>
             <select onChange={(e) => e.target.value && bulkSetStatus(e.target.value)} defaultValue="" className="border border-line px-2 py-1.5 rounded-lg text-caption">
               <option value="" disabled>Set status…</option>
               {["new", "contacted", "qualified", "unqualified", "unresponsive"].map((s) => <option key={s} value={s}>{s}</option>)}
@@ -414,20 +414,20 @@ export default function Leads() {
                 <button
                   disabled={page <= 1}
                   onClick={() => load(page - 1)}
-                  className="btn-secondary text-xs px-2 py-1 disabled:opacity-30"
+                  className="btn-secondary text-caption px-2 py-1 disabled:opacity-30"
                 ><ChevronLeft size={14} /></button>
                 {Array.from({ length: Math.min(Math.ceil(total / pageSize), 5) }, (_, i) => {
                   const start = Math.max(1, Math.min(page - 2, Math.ceil(total / pageSize) - 4));
                   const n = start + i;
                   return (
                     <button key={n} onClick={() => load(n)}
-                      className={`text-xs px-2 py-1 rounded-sm ${n === page ? 'bg-ink text-white' : 'hover:bg-ash'}`}>{n}</button>
+                      className={`text-caption px-2 py-1 rounded-sm ${n === page ? 'bg-ink text-white' : 'hover:bg-ash'}`}>{n}</button>
                   );
                 })}
                 <button
                   disabled={page >= Math.ceil(total / pageSize)}
                   onClick={() => load(page + 1)}
-                  className="btn-secondary text-xs px-2 py-1 disabled:opacity-30"
+                  className="btn-secondary text-caption px-2 py-1 disabled:opacity-30"
                 ><ChevronRight size={14} /></button>
               </div>
             </div>

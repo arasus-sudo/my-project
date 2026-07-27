@@ -498,7 +498,7 @@ export default function CampaignWizard() {
                   <div className="text-card-title font-display font-semibold mb-4 flex items-center justify-between gap-2">
                     <span className="flex items-center gap-2"><Phone size={16} /> WhatsApp Sequence</span>
                     <button onClick={() => sendSequence("whatsapp")} disabled={sendingChannel !== null || !campaign.whatsapp_sequence.length}
-                      className="btn-secondary text-xs" data-testid="send-whatsapp-sequence">
+                      className="btn-secondary text-caption" data-testid="send-whatsapp-sequence">
                       {sendingChannel === "whatsapp" ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
                       Send via WhatsApp EQ
                     </button>
@@ -517,7 +517,7 @@ export default function CampaignWizard() {
                   <div className="text-card-title font-display font-semibold mb-4 flex items-center justify-between gap-2">
                     <span className="flex items-center gap-2"><Smartphone size={16} /> SMS Sequence</span>
                     <button onClick={() => sendSequence("sms")} disabled={sendingChannel !== null || !campaign.sms_sequence.length}
-                      className="btn-secondary text-xs" data-testid="send-sms-sequence">
+                      className="btn-secondary text-caption" data-testid="send-sms-sequence">
                       {sendingChannel === "sms" ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
                       Send via SMS EQ
                     </button>

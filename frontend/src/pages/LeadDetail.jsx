@@ -263,7 +263,7 @@ export default function LeadDetail() {
         subtitle={lead.company || lead.raw_company_name || lead.company_name || lead.email}
         right={
           <div className="flex items-center gap-2">
-            <button onClick={startEdit} className="btn-secondary text-xs"><Edit2 size={14} /> Edit</button>
+            <button onClick={startEdit} className="btn-secondary text-caption"><Edit2 size={14} /> Edit</button>
             <Link to="/app/crm/leads" data-testid="back-to-leads" className="btn-secondary">
               <ArrowLeft size={14} /> Leads
             </Link>
@@ -305,8 +305,8 @@ export default function LeadDetail() {
                   {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
                 <div className="flex gap-2 pt-1">
-                  <button onClick={saveEdit} className="btn-primary text-xs flex items-center gap-1"><Save size={12} /> Save</button>
-                  <button onClick={() => setEditing(false)} className="btn-secondary text-xs flex items-center gap-1"><X size={12} /> Cancel</button>
+                  <button onClick={saveEdit} className="btn-primary text-caption flex items-center gap-1"><Save size={12} /> Save</button>
+                  <button onClick={() => setEditing(false)} className="btn-secondary text-caption flex items-center gap-1"><X size={12} /> Cancel</button>
                 </div>
               </div>
             ) : (
@@ -366,12 +366,12 @@ export default function LeadDetail() {
                 </div>
                 <div className="pt-2">
                   {lead.deal ? (
-                    <Link to="/app/crm/pipeline" data-testid="view-existing-deal" className="btn-secondary text-xs w-full justify-center">
+                    <Link to="/app/crm/pipeline" data-testid="view-existing-deal" className="btn-secondary text-caption w-full justify-center">
                       View deal — {lead.deal.title}
                     </Link>
                   ) : (
                     <button onClick={convertLead} disabled={converting} data-testid="convert-to-deal"
-                      className="btn-primary text-xs w-full justify-center disabled:opacity-50">
+                      className="btn-primary text-caption w-full justify-center disabled:opacity-50">
                       {converting ? <Loader2 size={12} className="animate-spin" /> : null}
                       Convert to Deal
                     </button>
@@ -440,7 +440,7 @@ export default function LeadDetail() {
                 onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())}
                 placeholder="Add a tag…" data-testid="add-tag-input"
                 className="flex-1 border border-line px-2 py-1.5 rounded text-caption" />
-              <button onClick={addTag} data-testid="add-tag-btn" className="btn-secondary text-xs"><Plus size={12} /></button>
+              <button onClick={addTag} data-testid="add-tag-btn" className="btn-secondary text-caption"><Plus size={12} /></button>
             </div>
           </div>
 
@@ -533,7 +533,7 @@ export default function LeadDetail() {
                   </span>
                 )}
                 <button onClick={() => enrich(!!pack)} disabled={enriching}
-                  data-testid="enrich-btn" className="btn-secondary text-xs disabled:opacity-50">
+                  data-testid="enrich-btn" className="btn-secondary text-caption disabled:opacity-50">
                   {enriching ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
                   {enriching ? "Researching…" : pack ? "Re-research" : "Research this lead"}
                 </button>
@@ -640,7 +640,7 @@ export default function LeadDetail() {
                 <div className="ui-label flex items-center gap-1.5"><Building2 size={14} /> Company</div>
                 {companyIntelStatus !== "loading" && (
                   <button onClick={crawlCompany} disabled={companyIntelStatus === "crawling"}
-                    data-testid="company-research-btn" className="btn-secondary text-xs disabled:opacity-50">
+                    data-testid="company-research-btn" className="btn-secondary text-caption disabled:opacity-50">
                     {companyIntelStatus === "crawling" ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
                     {companyIntelStatus === "crawling" ? "Researching…" : companyIntel ? "Refresh" : "Research company"}
                   </button>
@@ -723,7 +723,7 @@ export default function LeadDetail() {
                 <option value="">Unassigned</option>
                 {team.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
-              <button onClick={addTask} disabled={!taskForm.title.trim()} data-testid="add-task-btn" className="btn-secondary text-xs disabled:opacity-50">
+              <button onClick={addTask} disabled={!taskForm.title.trim()} data-testid="add-task-btn" className="btn-secondary text-caption disabled:opacity-50">
                 <Plus size={12} /> Add
               </button>
             </div>
@@ -737,7 +737,7 @@ export default function LeadDetail() {
                 placeholder="Add a note…" data-testid="new-note-text"
                 className="flex-1 border border-line px-2 py-1.5 rounded text-input" />
               <button onClick={addNote} disabled={!noteText.trim()} data-testid="add-note-btn"
-                className="btn-secondary text-xs self-start disabled:opacity-50">Add</button>
+                className="btn-secondary text-caption self-start disabled:opacity-50">Add</button>
             </div>
             <div className="space-y-3">
               {notes.length === 0 && <p className="text-caption text-ink-muted">No notes yet.</p>}

@@ -133,7 +133,7 @@ export default function Mailboxes() {
 
               {!connected && (
                 <button onClick={() => connect(m.id)} data-testid={`connect-${m.id}`}
-                  className="btn-primary text-xs w-full justify-center mt-4">
+                  className="btn-primary text-caption w-full justify-center mt-4">
                   <Link2 size={14} /> Authorise sending
                 </button>
               )}
@@ -172,7 +172,7 @@ export default function Mailboxes() {
                 </div>
               )}
               <button onClick={() => dnsCheck(m.id)} data-testid={`dns-check-${m.id}`}
-                className="btn-ghost text-xs mt-2">
+                className="btn-ghost text-caption mt-2">
                 <RefreshCw size={12} /> {m.dns?.checked ? "Re-check DNS" : "Check DNS"}
               </button>
 

@@ -83,7 +83,7 @@ export default function Signatures() {
         subtitle="Manage email signatures — each campaign picks which one to use"
         right={
           !editing && (
-            <button onClick={openNew} className="btn-primary text-sm"><Plus size={14} /> New Signature</button>
+            <button onClick={openNew} className="btn-primary text-body"><Plus size={14} /> New Signature</button>
           )
         }
       />
@@ -115,8 +115,8 @@ export default function Signatures() {
               Set as default signature (auto-selected for new campaigns)
             </label>
             <div className="flex gap-2 pt-2">
-              <button onClick={cancel} className="btn-secondary text-sm"><X size={14} /> Cancel</button>
-              <button onClick={save} disabled={saving} className="btn-primary text-sm">
+              <button onClick={cancel} className="btn-secondary text-body"><X size={14} /> Cancel</button>
+              <button onClick={save} disabled={saving} className="btn-primary text-body">
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                 {editing === "new" ? "Create" : "Save"}
               </button>
@@ -136,14 +136,14 @@ export default function Signatures() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-body">{sig.name}</span>
-                    {sig.is_default && <span className="pill text-xs">Default</span>}
+                    {sig.is_default && <span className="pill text-caption">Default</span>}
                   </div>
                   <div className="mt-2 p-2 bg-white border border-line rounded-lg text-caption signature-preview" dangerouslySetInnerHTML={{ __html: withLineBreaks(sig.content_html) }} />
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={() => openEdit(sig)} className="btn-ghost text-xs p-1.5" title="Edit"><PenSquare size={14} /></button>
-                  {!sig.is_default && <button onClick={() => setDefault(sig)} className="btn-ghost text-xs p-1.5" title="Set as default"><Check size={14} /></button>}
-                  <button onClick={() => remove(sig.id)} className="btn-ghost text-xs p-1.5 text-danger" title="Delete"><Trash2 size={14} /></button>
+                  <button onClick={() => openEdit(sig)} className="btn-ghost text-caption p-1.5" title="Edit"><PenSquare size={14} /></button>
+                  {!sig.is_default && <button onClick={() => setDefault(sig)} className="btn-ghost text-caption p-1.5" title="Set as default"><Check size={14} /></button>}
+                  <button onClick={() => remove(sig.id)} className="btn-ghost text-caption p-1.5 text-danger" title="Delete"><Trash2 size={14} /></button>
                 </div>
               </div>
             ))}

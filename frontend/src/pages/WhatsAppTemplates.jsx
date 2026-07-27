@@ -43,7 +43,7 @@ export default function WhatsAppTemplates() {
             )}
             <div className="mt-2 flex items-center gap-2">
               <span className={`text-tiny px-1.5 py-0.5 rounded-full border ${t.status === "approved" ? "text-success border-success/30 bg-success/10" : t.status === "rejected" ? "text-danger border-danger/30" : "text-ink-muted border-line"}`}>{t.status}</span>
-              <button onClick={() => del(t.id)} className="text-xs text-danger hover:underline"><Trash2 size={12} className="inline" /> delete</button>
+              <button onClick={() => del(t.id)} className="text-caption text-danger hover:underline"><Trash2 size={12} className="inline" /> delete</button>
             </div>
           </div>
         ))}

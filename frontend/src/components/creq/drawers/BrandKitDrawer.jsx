@@ -113,10 +113,10 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
           <div className="font-display font-bold">Brand kits</div>
           {!editing && (
             <button onClick={startCreate} data-testid="brandkit-new"
-              className="ml-auto btn-ghost text-xs"><Plus size={12} /> New</button>
+              className="ml-auto btn-ghost text-caption"><Plus size={12} /> New</button>
           )}
           {editing && (
-            <button onClick={cancel} className="ml-auto btn-ghost text-xs">Back</button>
+            <button onClick={cancel} className="ml-auto btn-ghost text-caption">Back</button>
           )}
         </div>
 
@@ -135,7 +135,7 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
                 value={editing.name}
                 onChange={(e) => setEditing({ ...editing, name: e.target.value })}
                 data-testid="brandkit-name"
-                className="mt-1 w-full border border-line rounded-full px-3 py-2 text-sm" />
+                className="mt-1 w-full border border-line rounded-full px-3 py-2 text-body" />
             </label>
 
             <div>
@@ -153,7 +153,7 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
                   <button type="button"
                     onClick={() => logoFileRef.current?.click()}
                     data-testid="brandkit-logo-upload"
-                    className="w-full py-2 border border-dashed border-line rounded-lg text-xs text-neutral-700 hover:border-ink hover:bg-neutral-50">
+                    className="w-full py-2 border border-dashed border-line rounded-lg text-caption text-neutral-700 hover:border-ink hover:bg-neutral-50">
                     Upload logo (PNG, SVG, JPG)
                   </button>
                   <input placeholder="or paste logo URL"
@@ -161,7 +161,7 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
                     onChange={(e) => setEditing({ ...editing, logo_url: e.target.value })}
                     disabled={editing.logo_url.startsWith("data:")}
                     data-testid="brandkit-logo-url"
-                    className="w-full border border-line rounded-full px-3 py-1.5 text-xs font-mono disabled:bg-neutral-50 disabled:text-neutral-500" />
+                    className="w-full border border-line rounded-full px-3 py-1.5 text-caption font-mono disabled:bg-neutral-50 disabled:text-neutral-500" />
                   {editing.logo_url && (
                     <button type="button" onClick={() => setEditing({ ...editing, logo_url: "" })}
                       className="text-[10px] text-neutral-500 hover:text-danger">
@@ -204,7 +204,7 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
               <span className="ui-label">Default palette</span>
               <select value={editing.palette_id}
                 onChange={(e) => setEditing({ ...editing, palette_id: e.target.value })}
-                className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-sm">
+                className="mt-1 w-full border border-line rounded-full px-3 py-2 bg-white text-body">
                 {PALETTES.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </label>
@@ -224,7 +224,7 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
                 {LOGO_SIZES.map((sz) => (
                   <button key={sz.id} type="button"
                     onClick={() => setEditing({ ...editing, logo_size: sz.id })}
-                    className={`flex-1 py-1.5 rounded text-xs font-mono border transition-colors ${
+                    className={`flex-1 py-1.5 rounded text-caption font-mono border transition-colors ${
                       editing.logo_size === sz.id
                         ? "border-ink bg-ink text-white"
                         : "border-line hover:border-ink"
@@ -253,8 +253,8 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-line">
-              <button type="button" onClick={cancel} className="btn-secondary text-sm">Cancel</button>
-              <button type="submit" data-testid="brandkit-save" className="btn-primary text-sm">
+              <button type="button" onClick={cancel} className="btn-secondary text-body">Cancel</button>
+              <button type="submit" data-testid="brandkit-save" className="btn-primary text-body">
                 {editing.id ? "Save changes" : "Create kit"}
               </button>
             </div>
@@ -262,7 +262,7 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
         ) : (
           <div className="p-4 space-y-3">
             {kits.length === 0 && (
-              <div className="text-sm text-neutral-500 py-6 text-center">
+              <div className="text-body text-neutral-500 py-6 text-center">
                 No brand kits yet. Create one, then apply it to auto-brand every slide.
               </div>
             )}
@@ -273,7 +273,7 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
                     <img src={k.logo_url} alt="" className="w-14 h-14 object-contain border border-line rounded-md bg-white"
                       onError={(e) => { e.currentTarget.style.opacity = 0.3; }} />
                   ) : (
-                    <div className="w-14 h-14 border border-line rounded-md bg-neutral-100 flex items-center justify-center text-neutral-400 text-xs">no logo</div>
+                    <div className="w-14 h-14 border border-line rounded-md bg-neutral-100 flex items-center justify-center text-neutral-400 text-caption">no logo</div>
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="font-medium">{k.name}</div>
@@ -294,13 +294,13 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
                 </div>
                 <div className="mt-3 flex gap-1.5">
                   <button onClick={() => onApply(k)} data-testid={`brandkit-apply-${k.id}`}
-                    className="btn-primary text-xs py-1.5 flex-1 justify-center">Apply to deck</button>
+                    className="btn-primary text-caption py-1.5 flex-1 justify-center">Apply to deck</button>
                   <button onClick={() => { onApply({ ...k, _reapply_logo: true }); }} data-testid={`brandkit-reapply-${k.id}`}
-                    className="btn-ghost text-xs py-1.5">Re-apply logo</button>
+                    className="btn-ghost text-caption py-1.5">Re-apply logo</button>
                   <button onClick={() => startEdit(k)} data-testid={`brandkit-edit-${k.id}`}
-                    className="btn-ghost text-xs py-1.5"><Pencil size={11} /> Edit</button>
+                    className="btn-ghost text-caption py-1.5"><Pencil size={11} /> Edit</button>
                   <button onClick={() => del(k.id)} data-testid={`brandkit-delete-${k.id}`}
-                    className="btn-ghost text-xs py-1.5 text-danger"><Trash2 size={11} /></button>
+                    className="btn-ghost text-caption py-1.5 text-danger"><Trash2 size={11} /></button>
                 </div>
               </div>
             ))}

@@ -151,13 +151,13 @@ export default function CRM() {
         subtitle="Shared lead repository, lists, and activity timeline — accessible by every agent."
         right={
           <div className="flex items-center gap-2">
-            <Link to="/app/crm/leads" className="btn-secondary text-xs">
+            <Link to="/app/crm/leads" className="btn-secondary text-caption">
               <Users size={14} /> Leads
             </Link>
-            <Link to="/app/crm/lists" className="btn-secondary text-xs">
+            <Link to="/app/crm/lists" className="btn-secondary text-caption">
               <ListChecks size={14} /> Lists
             </Link>
-            <Link to="/app/crm/pipeline" className="btn-secondary text-xs">
+            <Link to="/app/crm/pipeline" className="btn-secondary text-caption">
               <Kanban size={14} /> Pipeline
             </Link>
           </div>
@@ -295,7 +295,7 @@ export default function CRM() {
                           {l.phone && <div className="text-caption text-ink-muted font-mono">{l.phone}</div>}
                           {l.company && <div className="text-caption text-ink-muted truncate">{l.company}</div>}
                           <button onClick={() => mergeDuplicate(c, l.id)}
-                            className="btn-secondary text-xs w-full justify-center mt-2">
+                            className="btn-secondary text-caption w-full justify-center mt-2">
                             Keep this one
                           </button>
                         </div>
@@ -325,10 +325,10 @@ export default function CRM() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {q.reason === "on_suppression_list" && (
-                        <button onClick={() => unsuppress(q.email, q.id)} className="btn-secondary text-xs">Un-suppress</button>
+                        <button onClick={() => unsuppress(q.email, q.id)} className="btn-secondary text-caption">Un-suppress</button>
                       )}
                       {(q.reason === "invalid_syntax" || q.reason === "do_not_contact") && q.lead_id && (
-                        <Link to={`/app/crm/leads/${q.lead_id}`} className="btn-secondary text-xs">Fix on lead</Link>
+                        <Link to={`/app/crm/leads/${q.lead_id}`} className="btn-secondary text-caption">Fix on lead</Link>
                       )}
                       <button onClick={() => dismissQuarantine(q.id)} className="text-caption text-ink-muted hover:text-ink">Dismiss</button>
                     </div>
@@ -358,7 +358,7 @@ export default function CRM() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <button onClick={() => restoreRecycled(item)} className="btn-secondary text-xs">
+                      <button onClick={() => restoreRecycled(item)} className="btn-secondary text-caption">
                         <RotateCcw size={12} /> Restore
                       </button>
                       <button onClick={() => purgeRecycled(item)} className="text-caption text-ink-muted hover:text-danger">

@@ -319,7 +319,7 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
                 {i === 0 && <div className="w-5 h-0.5 rounded bg-white" />}
                 {i === 1 && <div className="w-3 h-3 bg-white" style={{ clipPath: "polygon(0 0,100% 0,0 100%)", opacity: 0.6 }} />}
                 {i === 2 && <div className="w-3 h-3 bg-white" style={{ clipPath: "polygon(100% 100%,100% 0,0 100%)", opacity: 0.6 }} />}
-                {(i === 3) && <span className="text-xs font-bold text-white" style={{ fontSize: 10 }}>01</span>}
+                {(i === 3) && <span className="text-caption font-bold text-white" style={{ fontSize: 10 }}>01</span>}
                 {(i === 4) && <><div className="w-1.5 h-1.5 rounded-full bg-white mx-0.5" /><div className="w-1.5 h-1.5 rounded-full bg-white mx-0.5" opacity={0.7} /><div className="w-1.5 h-1.5 rounded-full bg-white mx-0.5" opacity={0.4} /></>}
                 {(i === 5) && <div className="w-4 h-4 rounded border border-white" />}
               </div>

@@ -50,7 +50,7 @@ export default function ChartOfAccounts() {
                   <td className={`p-3 ${TYPE_COLORS[a.account_type] || ""}`}>{a.account_type}</td>
                   <td className="p-3 text-ink-muted">{a.category}</td>
                   <td className="p-3 font-mono">${a.balance?.toFixed(2)}</td>
-                  <td className="p-3"><button onClick={() => del(a.id)} className="text-xs text-danger hover:underline"><Trash2 size={12} className="inline" /></button></td>
+                  <td className="p-3"><button onClick={() => del(a.id)} className="text-caption text-danger hover:underline"><Trash2 size={12} className="inline" /></button></td>
                 </tr>
               ))}
             </tbody>

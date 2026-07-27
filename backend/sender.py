@@ -214,12 +214,10 @@ async def run_send_tick(base_url: str = "") -> int:
             log.info("run_send_tick: cancelled queue %s — campaign not active", row["id"])
             continue
 
-        replied = await db.events.count_documents({
-            "workspace_id": row["workspace_id"], "lead_id": row["lead_id"], "type": "replied"})
-        if replied:
+        if not await _eval_step_condition(row, campaign):
             await db.send_queue.update_one({"id": row["id"]},
-                                           {"$set": {"status": "cancelled", "error": "lead replied"}})
-            log.info("run_send_tick: cancelled queue %s — lead replied", row["id"])
+                                           {"$set": {"status": "cancelled", "error": "condition not met"}})
+            log.info("run_send_tick: cancelled queue %s — condition not met", row["id"])
             continue
 
         channel = row.get("channel", "email")
@@ -457,6 +455,53 @@ async def _send_linkedin_comment(row: Dict[str, Any], lead: Dict[str, Any]):
     }})
 
 
+# ----------------------------- Warmup progression -------------------------------
+def _warmup_daily_cap(day: int) -> int:
+    if day <= 7: return 5
+    if day <= 14: return 10
+    if day <= 21: return 20
+    if day <= 28: return 30
+    return 50
+
+
+# ----------------------------- Condition evaluation -----------------------------
+CONDITION_MAP = {
+    "always": lambda ws, lead, ev: True,
+    "if_no_reply": lambda ws, lead, ev: not ev.get("replied"),
+    "if_replied": lambda ws, lead, ev: ev.get("replied", False),
+    "if_opened_no_reply": lambda ws, lead, ev: ev.get("opened", False) and not ev.get("replied"),
+    "if_clicked": lambda ws, lead, ev: ev.get("clicked", False),
+    "if_not_opened": lambda ws, lead, ev: not ev.get("opened"),
+    "if_bounced": lambda ws, lead, ev: ev.get("bounced", False),
+}
+
+
+async def _get_lead_events(wid: str, lid: str) -> Dict[str, bool]:
+    """Return a dict of event types that occurred for this lead+workspace."""
+    cur = db.events.find({"workspace_id": wid, "lead_id": lid}, {"_id": 0, "type": 1})
+    types = set()
+    async for e in cur:
+        types.add(e.get("type"))
+    return {t: True for t in types}
+
+
+async def _eval_step_condition(row: Dict[str, Any], campaign: Dict[str, Any]) -> bool:
+    """Evaluate whether a queued step should be sent based on its condition."""
+    step_idx = row.get("step", 0)
+    steps = campaign.get("steps") or []
+    if step_idx >= len(steps):
+        return True  # fallback: send
+    step = steps[step_idx]
+    condition = step.get("condition", "always")
+
+    cond_fn = CONDITION_MAP.get(condition)
+    if cond_fn is None:
+        return True  # unknown condition -> send
+
+    events = await _get_lead_events(row["workspace_id"], row["lead_id"])
+    return cond_fn(row["workspace_id"], None, events)
+
+
 # ----------------------------- Helpers ------------------------------------------
 async def _pick_mailbox(workspace_id: str) -> Optional[Dict[str, Any]]:
     """Round-robin across connected mailboxes for a workspace."""
@@ -487,6 +532,24 @@ async def _mark_sent(mailbox: Dict[str, Any]):
          "$setOnInsert": {"workspace_id": mailbox["workspace_id"], "date": today}},
         upsert=True,
     )
+    # Advance warmup day
+    warmup_enabled = mailbox.get("warmup_enabled", True)
+    if warmup_enabled:
+        warmup_day = mailbox.get("warmup_day", 1)
+        last_sent_date = mailbox.get("last_sent_date", "")
+        if last_sent_date and last_sent_date != today:
+            new_day = min(warmup_day + 1, 30)
+            new_cap = _warmup_daily_cap(new_day)
+            await db.mailboxes.update_one(
+                {"id": mailbox["id"]},
+                {"$set": {"warmup_day": new_day, "daily_cap": new_cap,
+                          "last_sent_date": today}},
+            )
+        else:
+            await db.mailboxes.update_one(
+                {"id": mailbox["id"]},
+                {"$set": {"last_sent_date": today}},
+            )
 
 
 def _render(row: Dict[str, Any], lead: Dict[str, Any]) -> tuple:

@@ -204,7 +204,7 @@ export default function AppLayout() {
               <InnoiraLogo size="xs" />
             </div>
             <div className="flex-1 min-w-0">
-              <span className="font-display font-semibold text-sm text-ink truncate block">{currentAgent.label}</span>
+              <span className="font-display font-semibold text-body text-ink truncate block">{currentAgent.label}</span>
             </div>
             <ChevronDown size={14} className={`text-ink-muted transition-transform duration-200 shrink-0 ${open ? "rotate-180" : ""}`} />
           </button>
@@ -217,7 +217,7 @@ export default function AppLayout() {
                     {AGENT_BADGE[a.k]}
                   </div>
                   <div className="flex-1">
-                    <div className="text-sm font-display font-medium">{a.label}</div>
+                    <div className="text-body font-display font-medium">{a.label}</div>
                     <div className="text-tiny text-ink-muted font-mono uppercase">{a.tag}</div>
                   </div>
                   {a.k === currentAgent.k && <span className="w-1.5 h-1.5 bg-accent rounded-full" />}
@@ -226,7 +226,7 @@ export default function AppLayout() {
               <button onClick={() => { setOpen(false); nav("/suite"); }} data-testid="suite-home-link"
                 className="w-full text-left p-3 hover:bg-ash flex items-center gap-3 border-t border-line text-ink-muted transition-colors">
                 <div className="w-7 h-7 rounded-xl bg-ash flex items-center justify-center"><LayoutGrid size={14} /></div>
-                <div className="text-sm font-display font-medium">Command center</div>
+                <div className="text-body font-display font-medium">Command center</div>
               </button>
             </div>
           )}
@@ -254,7 +254,7 @@ export default function AppLayout() {
               end={n.end}
               data-testid={n.tid}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 text-sm font-display font-medium rounded-xl transition-all duration-200 ${
+                `flex items-center gap-3 px-3 py-2.5 text-body font-display font-medium rounded-xl transition-all duration-200 ${
                   isActive ? "bg-accent-soft text-accent" : "text-ink-muted hover:text-ink hover:bg-ash"
                 }`
               }
@@ -278,7 +278,7 @@ export default function AppLayout() {
               )}
             </button>
             <button onClick={() => nav("/settings")} className="flex-1 min-w-0 text-left">
-              <div className="text-sm font-display font-medium truncate">{user?.name}</div>
+              <div className="text-body font-display font-medium truncate">{user?.name}</div>
               <div className="text-tiny text-ink-muted truncate">{user?.email}</div>
             </button>
             {user?.is_admin && (

@@ -61,7 +61,7 @@ export default function BulkActions({ leadIds, onDone }) {
       {/* Tags */}
       <div className="relative">
         <button onClick={() => handleOpen("tags")}
-          className="btn-secondary text-xs py-1.5 flex items-center gap-1">
+          className="btn-secondary text-caption py-1.5 flex items-center gap-1">
           <Tags size={11} /> Tags <ChevronDown size={10} />
         </button>
         {activeDropdown === "tags" && (
@@ -70,14 +70,14 @@ export default function BulkActions({ leadIds, onDone }) {
               <input value={tagInput} onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") addTag(); }}
                 placeholder="Add tag…"
-                className="flex-1 border border-line rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                className="flex-1 border border-line rounded-lg px-2.5 py-1.5 text-caption focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
               <button onClick={addTag} disabled={!tagInput.trim()}
-                className="btn-primary text-xs py-1.5 px-2 disabled:opacity-50"><PlusIcon size={12} /></button>
+                className="btn-primary text-caption py-1.5 px-2 disabled:opacity-50"><PlusIcon size={12} /></button>
             </div>
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-2">
                 {tags.map((t) => (
-                  <span key={t} className="inline-flex items-center gap-1 bg-accent/5 border border-accent/20 rounded-full px-2 py-0.5 text-xs text-accent">
+                  <span key={t} className="inline-flex items-center gap-1 bg-accent/5 border border-accent/20 rounded-full px-2 py-0.5 text-caption text-accent">
                     {t}
                     <button onClick={() => setTags((p) => p.filter((x) => x !== t))}><X size={10} /></button>
                   </span>
@@ -87,12 +87,12 @@ export default function BulkActions({ leadIds, onDone }) {
             <div className="flex gap-1.5">
               <button onClick={() => doAction("/lead-intelligence/bulk/tags", { tags, action: "add" }, "Add tags")}
                 disabled={!tags.length || busy["add_tags"]}
-                className="btn-primary text-xs py-1.5 flex-1 disabled:opacity-50">
+                className="btn-primary text-caption py-1.5 flex-1 disabled:opacity-50">
                 {busy["add_tags"] ? <Loader2 size={12} className="animate-spin" /> : <PlusIcon size={12} />} Add
               </button>
               <button onClick={() => doAction("/lead-intelligence/bulk/tags", { tags, action: "remove" }, "Remove tags")}
                 disabled={!tags.length}
-                className="btn-secondary text-xs py-1.5 flex-1">Remove</button>
+                className="btn-secondary text-caption py-1.5 flex-1">Remove</button>
             </div>
           </div>
         )}
@@ -101,14 +101,14 @@ export default function BulkActions({ leadIds, onDone }) {
       {/* Status */}
       <div className="relative">
         <button onClick={() => handleOpen("status")}
-          className="btn-secondary text-xs py-1.5 flex items-center gap-1">
+          className="btn-secondary text-caption py-1.5 flex items-center gap-1">
           <Flag size={11} /> Status <ChevronDown size={10} />
         </button>
         {activeDropdown === "status" && (
           <div className="absolute top-full left-0 mt-1 w-44 bg-white border border-line rounded-xl shadow-lg z-50 p-1.5">
             {STATUS_OPTIONS.map((s) => (
               <button key={s} onClick={() => doAction("/lead-intelligence/bulk/status", { status: s }, `Set ${s}`)}
-                className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs hover:bg-ash transition-colors text-left capitalize">
+                className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-caption hover:bg-ash transition-colors text-left capitalize">
                 {s}
               </button>
             ))}
@@ -119,7 +119,7 @@ export default function BulkActions({ leadIds, onDone }) {
       {/* Campaign */}
       <div className="relative">
         <button onClick={() => handleOpen("campaign")}
-          className="btn-secondary text-xs py-1.5 flex items-center gap-1">
+          className="btn-secondary text-caption py-1.5 flex items-center gap-1">
           <Megaphone size={11} /> Campaign <ChevronDown size={10} />
         </button>
         {activeDropdown === "campaign" && (
@@ -127,11 +127,11 @@ export default function BulkActions({ leadIds, onDone }) {
             {loading ? (
               <div className="flex justify-center py-4"><Loader2 size={14} className="animate-spin text-ink-muted" /></div>
             ) : campaigns.length === 0 ? (
-              <p className="text-xs text-ink-muted text-center py-3">No campaigns yet</p>
+              <p className="text-caption text-ink-muted text-center py-3">No campaigns yet</p>
             ) : (
               campaigns.map((c) => (
                 <button key={c.id} onClick={() => doAction("/lead-intelligence/bulk/assign-campaign", { campaign_id: c.id }, `Assign to ${c.name}`)}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs hover:bg-ash transition-colors text-left">
+                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-caption hover:bg-ash transition-colors text-left">
                   <Megaphone size={13} className="shrink-0 text-ink-muted" />
                   <span className="flex-1 truncate">{c.name}</span>
                   <span className="text-ink-muted text-[11px] capitalize">{c.status}</span>

@@ -78,8 +78,8 @@ export default function Pipeline() {
         subtitle="Deals auto-created by Voice EQ, Schedule EQ, and Proposal EQ — or add your own."
         right={
           <div className="flex items-center gap-2">
-            <button onClick={exportCsv} className="btn-secondary text-xs">Export CSV</button>
-            <button onClick={() => setCreating(true)} data-testid="add-deal-btn" className="btn-primary text-xs">
+            <button onClick={exportCsv} className="btn-secondary text-caption">Export CSV</button>
+            <button onClick={() => setCreating(true)} data-testid="add-deal-btn" className="btn-primary text-caption">
               <Plus size={14} /> Add deal
             </button>
           </div>
