@@ -681,15 +681,18 @@ async def _campaign_stats(cid: str, wid: str) -> Dict[str, Any]:
     replied = sum(1 for e in events if e["type"] == "replied")
     clicked = sum(1 for e in events if e["type"] == "clicked")
     meetings = sum(1 for e in events if e["type"] == "meeting_booked")
+    bounced = sum(1 for e in events if e["type"] == "bounced")
     return {
         "sent": sent,
         "opened": opened,
         "clicked": clicked,
         "replied": replied,
         "meetings": meetings,
+        "bounced": bounced,
         "open_rate": round(opened / sent * 100, 1) if sent else 0,
         "reply_rate": round(replied / sent * 100, 1) if sent else 0,
         "click_rate": round(clicked / sent * 100, 1) if sent else 0,
+        "bounce_rate": round(bounced / sent * 100, 1) if sent else 0,
         "meeting_rate": round(meetings / sent * 100, 1) if sent else 0,
     }
 

@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { Link, useNavigate } from "react-router-dom";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Play, Pause, Plus, Workflow, Trash2, Copy, FileJson, LayoutTemplate, ChevronDown, X, Archive, CheckCircle, Folder, BarChart3, AlertTriangle, Check, Loader2, Users } from "lucide-react";
+import { Play, Pause, Plus, Workflow, Trash2, Copy, FileJson, LayoutTemplate, ChevronDown, X, Archive, CheckCircle, Folder, BarChart3, AlertTriangle, Check, Loader2, Users, TrendingUp, Sparkles, Activity } from "lucide-react";
 import { SkeletonTableRows } from "../components/ui/loading-states";
 
 export default function Campaigns() {
@@ -25,6 +25,12 @@ export default function Campaigns() {
   const [contactsModal, setContactsModal] = useState(false);
   const [contactsData, setContactsData] = useState(null);
   const [contactsLoading, setContactsLoading] = useState(false);
+  const [funnelModal, setFunnelModal] = useState(false);
+  const [funnelData, setFunnelData] = useState(null);
+  const [funnelLoading, setFunnelLoading] = useState(false);
+  const [optimizeModal, setOptimizeModal] = useState(false);
+  const [optimizeData, setOptimizeData] = useState(null);
+  const [optimizeLoading, setOptimizeLoading] = useState(false);
 
   const load = () => api.get("/campaigns").then((r) => { setItems(r.data); setLoading(false); });
   useEffect(() => { load(); api.get("/campaign-folders").then((r) => setFolders(r.data)).catch(() => {}); }, []);
@@ -112,6 +118,30 @@ export default function Campaigns() {
       setContactsData({ error: err?.response?.data?.detail || "Failed to load contacts" });
     }
     setContactsLoading(false);
+  };
+
+  const openFunnel = async (id) => {
+    setFunnelLoading(true);
+    setFunnelModal(true);
+    try {
+      const r = await api.get(`/campaigns/${id}/funnel`);
+      setFunnelData(r.data);
+    } catch (err) {
+      setFunnelData({ error: err?.response?.data?.detail || "Failed to load funnel" });
+    }
+    setFunnelLoading(false);
+  };
+
+  const openOptimize = async (id) => {
+    setOptimizeLoading(true);
+    setOptimizeModal(true);
+    try {
+      const r = await api.post(`/campaigns/${id}/optimize`);
+      setOptimizeData(r.data);
+    } catch (err) {
+      setOptimizeData({ error: err?.response?.data?.detail || "Need at least 5 sent emails" });
+    }
+    setOptimizeLoading(false);
   };
 
   const createFolder = async () => {
@@ -247,7 +277,20 @@ export default function Campaigns() {
                               {c.tags?.length > 0 && c.tags.map((t) => <span key={t} className="ml-2 px-1.5 py-0.5 rounded-sm bg-ash text-ink-muted text-tiny">{t}</span>)}
                             </div>
                           </td>
-                          <td className="p-3"><StatusBadge status={c.status} /></td>
+                          <td className="p-3">
+                            <span className="flex items-center gap-1.5">
+                              <StatusBadge status={c.status} />
+                              {c.stats?.sent > 0 && (
+                                <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                                  (c.stats?.bounced || 0) > 0 && ((c.stats?.bounced || 0) / c.stats.sent) > 0.05 ? "bg-danger" :
+                                  (c.stats?.open_rate || 0) < 15 ? "bg-warning" : "bg-success"
+                                }`} title={
+                                  (c.stats?.bounced || 0) > 0 && ((c.stats?.bounced || 0) / c.stats.sent) > 0.05 ? "High bounce rate" :
+                                  (c.stats?.open_rate || 0) < 15 ? "Low open rate" : "Healthy"
+                                } />
+                              )}
+                            </span>
+                          </td>
                           <td className="p-3 text-right font-mono text-body">{c.lead_count || 0}</td>
                           <td className="p-3 text-right font-mono text-body">{c.stats?.sent || 0}</td>
                           <td className="p-3 text-right font-mono text-body">
@@ -298,6 +341,14 @@ export default function Campaigns() {
                               <button onClick={() => saveTemplate(c)}
                                 className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Save as template">
                                 <LayoutTemplate size={14} />
+                              </button>
+                              <button onClick={() => openFunnel(c.id)}
+                                className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Funnel analytics">
+                                <TrendingUp size={14} />
+                              </button>
+                              <button onClick={() => openOptimize(c.id)}
+                                className="p-1.5 text-ink-muted hover:text-primary rounded hover:bg-ash" title="AI Optimize">
+                                <Sparkles size={14} />
                               </button>
                               <button onClick={() => openContacts(c.id)}
                                 className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Contact states">
@@ -427,6 +478,138 @@ export default function Campaigns() {
                   </div>
                 </div>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {funnelModal && (
+        <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50">
+          <div className="bg-white border border-line p-6 rounded-2xl w-full max-w-3xl space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div className="text-section font-display font-semibold">Funnel Analytics</div>
+              <button onClick={() => { setFunnelModal(false); setFunnelData(null); }} className="text-ink-muted hover:text-ink"><X size={16} /></button>
+            </div>
+            {funnelLoading ? (
+              <div className="flex items-center gap-3 py-8 justify-center">
+                <Loader2 size={20} className="animate-spin text-ink-muted" />
+                <span className="text-body text-ink-muted">Loading funnel...</span>
+              </div>
+            ) : funnelData?.error ? (
+              <div className="text-center py-6">
+                <AlertTriangle size={32} className="mx-auto text-danger mb-2" />
+                <div className="text-body text-danger">{funnelData.error}</div>
+              </div>
+            ) : funnelData && (
+              <>
+                <div className="grid grid-cols-5 gap-3 text-center">
+                  <div className="p-3 bg-bone rounded-xl border border-line"><div className="text-body font-bold text-2xl">{funnelData.overall?.sent || 0}</div><div className="text-tiny text-ink-muted">Sent</div></div>
+                  <div className="p-3 bg-bone rounded-xl border border-line"><div className="text-body font-bold text-2xl">{funnelData.overall?.sent_to_open_pct || 0}%</div><div className="text-tiny text-ink-muted">→ Open</div></div>
+                  <div className="p-3 bg-bone rounded-xl border border-line"><div className="text-body font-bold text-2xl">{funnelData.overall?.open_to_reply_pct || 0}%</div><div className="text-tiny text-ink-muted">Open→Reply</div></div>
+                  <div className="p-3 bg-bone rounded-xl border border-line"><div className="text-body font-bold text-2xl">{funnelData.overall?.sent_to_meeting_pct || 0}%</div><div className="text-tiny text-ink-muted">→ Meeting</div></div>
+                  <div className="p-3 bg-bone rounded-xl border border-line"><div className="text-body font-bold text-2xl">{funnelData.overall?.meetings || 0}</div><div className="text-tiny text-ink-muted">Meetings</div></div>
+                </div>
+                {funnelData.by_step?.length > 0 && (
+                  <div>
+                    <div className="ui-label mb-2">Per-Step Breakdown</div>
+                    <div className="border border-line rounded-xl overflow-hidden">
+                      <table className="w-full text-table">
+                        <thead><tr className="border-b border-line bg-ash/50">
+                          <th className="table-header text-left p-2 text-tiny">Step</th>
+                          <th className="table-header text-left p-2 text-tiny">Subject</th>
+                          <th className="table-header text-center p-2 text-tiny">Sent</th>
+                          <th className="table-header text-center p-2 text-tiny">Opened</th>
+                          <th className="table-header text-center p-2 text-tiny">Clicked</th>
+                          <th className="table-header text-center p-2 text-tiny">Replied</th>
+                          <th className="table-header text-center p-2 text-tiny">Bounced</th>
+                          <th className="table-header text-center p-2 text-tiny">Open%</th>
+                          <th className="table-header text-center p-2 text-tiny">Reply%</th>
+                        </tr></thead>
+                        <tbody>
+                          {funnelData.by_step.map((s) => (
+                            <tr key={s.step} className="border-b border-line last:border-0 hover:bg-surfacehover">
+                              <td className="p-2 text-tiny font-mono">#{s.step}{s.condition !== "always" && <span className="text-ink-muted ml-1">({s.condition})</span>}</td>
+                              <td className="p-2 text-tiny text-ink-muted max-w-[140px] truncate">{s.subject}</td>
+                              <td className="p-2 text-center text-tiny font-mono">{s.sent}</td>
+                              <td className="p-2 text-center text-tiny font-mono">{s.opened}</td>
+                              <td className="p-2 text-center text-tiny font-mono">{s.clicked}</td>
+                              <td className="p-2 text-center text-tiny font-mono">{s.replied}</td>
+                              <td className="p-2 text-center text-tiny font-mono">{s.bounced}</td>
+                              <td className="p-2 text-center text-tiny font-mono">{s.open_rate_pct}%</td>
+                              <td className="p-2 text-center text-tiny font-mono">{s.reply_rate_pct}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {optimizeModal && (
+        <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50">
+          <div className="bg-white border border-line p-6 rounded-2xl w-full max-w-xl space-y-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div className="text-section font-display font-semibold">AI Campaign Optimizer</div>
+              <button onClick={() => { setOptimizeModal(false); setOptimizeData(null); }} className="text-ink-muted hover:text-ink"><X size={16} /></button>
+            </div>
+            {optimizeLoading ? (
+              <div className="flex items-center gap-3 py-8 justify-center">
+                <Loader2 size={20} className="animate-spin text-primary" />
+                <span className="text-body text-ink-muted">Analyzing campaign performance...</span>
+              </div>
+            ) : optimizeData?.error ? (
+              <div className="text-center py-6">
+                <AlertTriangle size={32} className="mx-auto text-warning mb-2" />
+                <div className="text-body text-ink-muted">{optimizeData.error}</div>
+              </div>
+            ) : optimizeData && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-ink-muted">{optimizeData.campaign_name} · {optimizeData.total_sent} sent</span>
+                  <span className={`text-lg font-bold font-mono ${
+                    optimizeData.overall_score >= 70 ? "text-success" : optimizeData.overall_score >= 40 ? "text-warning" : "text-danger"
+                  }`}>{optimizeData.overall_score}/100</span>
+                </div>
+                <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl">
+                  <div className="flex items-start gap-2">
+                    <Activity size={16} className="text-primary mt-0.5 shrink-0" />
+                    <div><div className="text-caption font-medium text-primary">Key Insight</div><div className="text-tiny text-ink">{optimizeData.key_insight}</div></div>
+                  </div>
+                </div>
+                {optimizeData.subject_line_recommendations?.length > 0 && (
+                  <div><div className="ui-label text-xs">Subject Line Recommendations</div>
+                    <ul className="list-disc list-inside text-tiny text-ink space-y-0.5">
+                      {optimizeData.subject_line_recommendations.map((r, i) => <li key={i}>{r}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {optimizeData.best_send_times?.length > 0 && (
+                  <div><div className="ui-label text-xs">Best Send Times</div>
+                    <div className="flex flex-wrap gap-1">
+                      {optimizeData.best_send_times.map((t, i) => <span key={i} className="px-2 py-0.5 bg-bone border border-line rounded-full text-tiny font-mono">{t}</span>)}
+                    </div>
+                  </div>
+                )}
+                {optimizeData.content_suggestions?.length > 0 && (
+                  <div><div className="ui-label text-xs">Content Suggestions</div>
+                    <ul className="list-disc list-inside text-tiny text-ink space-y-0.5">
+                      {optimizeData.content_suggestions.map((s, i) => <li key={i}>{s}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {optimizeData.step_sequence_advice?.length > 0 && (
+                  <div><div className="ui-label text-xs">Step Sequence Advice</div>
+                    <ul className="list-disc list-inside text-tiny text-ink space-y-0.5">
+                      {optimizeData.step_sequence_advice.map((a, i) => <li key={i}>{a}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
