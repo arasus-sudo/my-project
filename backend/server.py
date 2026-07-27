@@ -808,6 +808,40 @@ async def _sync_campaign_to_crm(wid: str, cid: str, lid: str, event_type: str):
 
 
 # ---- Autonomous campaign agent -----
+@api.post("/system/auto-optimize-all")
+async def auto_optimize_all(user=Depends(current_user)):
+    """Run auto-optimize across ALL workspaces (admin)."""
+    if user.get("role") not in ("admin", "superadmin"):
+        raise HTTPException(403, "Admin only")
+    workspaces = await db.workspaces.find({}, {"_id": 0, "id": 1}).to_list(500)
+    results = []
+    for ws in workspaces:
+        campaigns = await db.campaigns.find({
+            "workspace_id": ws["id"], "status": "active",
+        }, {"_id": 0}).to_list(100)
+        for c in campaigns:
+            events = await db.events.find({
+                "campaign_id": c["id"], "workspace_id": ws["id"]},
+                {"_id": 0, "type": 1}).to_list(5000)
+            sent = sum(1 for e in events if e["type"] == "sent")
+            if sent < 10:
+                continue
+            bounced = sum(1 for e in events if e["type"] == "bounced")
+            replied = sum(1 for e in events if e["type"] == "replied")
+            if bounced / sent > 0.05 and c.get("status") == "active":
+                await db.campaigns.update_one({"id": c["id"]}, {"$set": {"status": "paused"}})
+                results.append(f"Paused {c.get('name','?')} (ws:{ws['id'][:8]}): bounce {bounced}/{sent}")
+            if replied / sent > 0.05 and sent > 30:
+                cur = c.get("batch_size", 10)
+                new_b = min(cur + 5, 50)
+                if new_b > cur:
+                    await db.campaigns.update_one({"id": c["id"]}, {"$set": {"batch_size": new_b}})
+                    results.append(f"Ramped {c.get('name','?')} batch {cur}→{new_b}")
+    await _audit(user, "system.auto_optimize_all",
+                 {"workspaces_checked": len(workspaces), "actions": len(results)})
+    return {"workspaces_checked": len(workspaces), "actions_taken": len(results), "detail": results}
+
+
 @api.post("/campaigns/auto-optimize")
 async def auto_optimize_campaigns(user=Depends(current_user)):
     """Background agent: monitors active campaigns and auto-adjusts based on performance."""
@@ -4199,6 +4233,60 @@ async def campaign_ab_test_results(cid: str, user=Depends(current_user)):
 @api.get("/analytics/mailboxes")
 async def analytics_mailboxes(user=Depends(current_user)):
     return await db.mailboxes.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(500)
+
+
+@api.get("/analytics/dashboard")
+async def analytics_dashboard(user=Depends(current_user)):
+    """Combined dashboard data: campaign funnel + attribution + health."""
+    wid = user["workspace_id"]
+    campaigns = await db.campaigns.find({"workspace_id": wid}, {"_id": 0}).to_list(500)
+    out = []
+    for c in campaigns:
+        steps = c.get("steps", [])
+        events = await db.events.find({"workspace_id": wid, "campaign_id": c["id"]}, {"_id": 0}).to_list(20000)
+        by_step = []
+        for i in range(len(steps)):
+            e = [x for x in events if x.get("step") == i]
+            sent = sum(1 for x in e if x["type"] == "sent")
+            by_step.append({
+                "step": i, "subject": steps[i].get("subject", "")[:40],
+                "sent": sent,
+                "opened": sum(1 for x in e if x["type"] == "opened"),
+                "clicked": sum(1 for x in e if x["type"] == "clicked"),
+                "replied": sum(1 for x in e if x["type"] == "replied"),
+                "bounced": sum(1 for x in e if x["type"] == "bounced"),
+                "open_rate": round(sum(1 for x in e if x["type"] == "opened") / sent * 100, 1) if sent else 0,
+                "reply_rate": round(sum(1 for x in e if x["type"] == "replied") / sent * 100, 1) if sent else 0,
+            })
+        total_sent = sum(1 for e in events if e["type"] == "sent")
+        deals = await db.deals.find({"workspace_id": wid, "campaign_id": c["id"]}, {"_id": 0}).to_list(50)
+        out.append({
+            "id": c["id"], "name": c["name"], "status": c["status"],
+            "by_step": by_step,
+            "total_sent": total_sent,
+            "total_leads": len(c.get("lead_ids") or []),
+            "deal_count": len(deals),
+            "pipeline_value": sum(d.get("value", 0) for d in deals),
+            "won_deals": sum(1 for d in deals if d.get("stage") == "closed_won"),
+            "won_value": sum(d.get("value", 0) for d in deals if d.get("stage") == "closed_won"),
+            "health": "good" if total_sent < 10 or (
+                sum(1 for e in events if e["type"] == "bounced") / total_sent < 0.05 and
+                sum(1 for e in events if e["type"] == "opened") / total_sent > 0.15
+            ) else "needs_attention",
+        })
+    # Totals
+    all_events = await db.events.find({"workspace_id": wid}, {"_id": 0}).to_list(50000)
+    return {
+        "campaigns": out,
+        "totals": {
+            "total_sent": sum(1 for e in all_events if e["type"] == "sent"),
+            "total_opened": sum(1 for e in all_events if e["type"] == "opened"),
+            "total_replied": sum(1 for e in all_events if e["type"] == "replied"),
+            "total_bounced": sum(1 for e in all_events if e["type"] == "bounced"),
+            "total_meetings": sum(1 for e in all_events if e["type"] == "meeting_booked"),
+            "campaign_count": len(campaigns),
+        },
+    }
 
 
 # ----------------------------- Audit log -------------------------------------

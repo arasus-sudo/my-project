@@ -289,6 +289,32 @@ async def run_send_tick(base_url: str = "") -> int:
                     await db.campaigns.update_one({"id": cid}, {"$set": {"status": "completed", "completed_at": now_iso()}})
                     log.info("auto-completed campaign %s", cid)
 
+    if sent:
+        # Lightweight auto-optimize: check every active campaign for issues
+        try:
+            wid_set = set(row["workspace_id"] for row in due[:sent])
+            for wid in wid_set:
+                campaigns = await db.campaigns.find(
+                    {"workspace_id": wid, "status": "active"}, {"_id": 0}).to_list(50)
+                for c in campaigns:
+                    evs = await db.events.find(
+                        {"campaign_id": c["id"], "workspace_id": wid},
+                        {"_id": 0, "type": 1}).to_list(2000)
+                    s = sum(1 for e in evs if e["type"] == "sent")
+                    b = sum(1 for e in evs if e["type"] == "bounced")
+                    r = sum(1 for e in evs if e["type"] == "replied")
+                    if s > 10 and b / s > 0.05:
+                        await db.campaigns.update_one({"id": c["id"]}, {"$set": {"status": "paused"}})
+                        log.warning("auto-optimize: paused %s (ws:%s) bounce %.0f%%", c["id"], wid, b/s*100)
+                    if s > 30 and r / s > 0.05:
+                        cur = c.get("batch_size", 10)
+                        new_b = min(cur + 5, 50)
+                        if new_b > cur:
+                            await db.campaigns.update_one({"id": c["id"]}, {"$set": {"batch_size": new_b}})
+                            log.info("auto-optimize: ramped %s batch %s→%s", c["id"], cur, new_b)
+        except Exception as ex:
+            log.warning("auto-optimize tick error: %s", ex)
+
     log.info("run_send_tick: sent %s item(s)", sent)
     return sent
 
