@@ -2357,7 +2357,8 @@ def _extract_json(text: str) -> Optional[Dict[str, Any]]:
     return _fix_json(m.group(0))
 
 
-async def _llm_chat(system: str, user_text: str, session_id: str, user: Optional[Dict[str, Any]] = None, max_tokens: int = 2048) -> str:
+async def _llm_chat(system: str, user_text: str, session_id: str, user: Optional[Dict[str, Any]] = None, max_tokens: int = 2048,
+                     agent: Optional[str] = None, action: Optional[str] = None) -> str:
     if not PERPLEXITY_API_KEY:
         raise RuntimeError("PERPLEXITY_API_KEY not configured")
     if user and not await _rate_ok(user):
@@ -2375,6 +2376,13 @@ async def _llm_chat(system: str, user_text: str, session_id: str, user: Optional
                     {"role": "user", "content": user_text},
                 ],
             )
+            if user and resp.usage:
+                from token_usage import record_llm_usage
+                await record_llm_usage(
+                    user.get("workspace_id"), PERPLEXITY_MODEL,
+                    resp.usage.prompt_tokens, resp.usage.completion_tokens,
+                    agent=agent, action=action,
+                )
             return resp.choices[0].message.content or ""
         except openai.RateLimitError as ex:
             last_err = ex
@@ -4495,6 +4503,15 @@ async def admin_summary(_: Any = Depends(require_admin)):
         "blocked_users": await db.users.count_documents({"blocked": True}),
         "blocked_workspaces": await db.workspaces.count_documents({"blocked": True}),
     }
+
+
+@api.get("/admin/token-usage")
+async def admin_token_usage(_: Any = Depends(require_admin)):
+    """Real $ cost of LLM token usage across the whole platform — actual COGS,
+    independent of the flat credits a workspace's plan charges it. Suite-admin
+    only: this is our own margin visibility, never shown to a customer."""
+    from token_usage import get_platform_token_usage_summary
+    return await get_platform_token_usage_summary()
 
 
 @api.get("/admin/tick-health")

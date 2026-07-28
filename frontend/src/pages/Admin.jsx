@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Shield, LogOut, ChevronLeft, Ban, Trash2, RefreshCw, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Shield, LogOut, ChevronLeft, Ban, Trash2, RefreshCw, AlertTriangle, CheckCircle2, DollarSign } from "lucide-react";
 
 export default function Admin() {
   const { user, logout } = useAuth();
@@ -12,19 +12,21 @@ export default function Admin() {
   const [workspaces, setWorkspaces] = useState([]);
   const [users, setUsers] = useState([]);
   const [ticks, setTicks] = useState([]);
+  const [tokenUsage, setTokenUsage] = useState(null);
   const [tab, setTab] = useState("workspaces");
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
     setBusy(true);
     try {
-      const [s, w, u, t] = await Promise.all([
+      const [s, w, u, t, tu] = await Promise.all([
         api.get("/admin/summary"),
         api.get("/admin/workspaces"),
         api.get("/admin/users"),
         api.get("/admin/tick-health"),
+        api.get("/admin/token-usage"),
       ]);
-      setSummary(s.data); setWorkspaces(w.data); setUsers(u.data); setTicks(t.data);
+      setSummary(s.data); setWorkspaces(w.data); setUsers(u.data); setTicks(t.data); setTokenUsage(tu.data);
     } catch (err) {
       if (err?.response?.status === 403) toast.error("Admin access only");
     } finally { setBusy(false); }
@@ -83,7 +85,7 @@ export default function Admin() {
 
         {/* Tabs */}
         <div className="flex items-center gap-1 mb-4">
-          {["workspaces", "users", "system"].map((t) => (
+          {["workspaces", "users", "system", "cost"].map((t) => (
             <button key={t} onClick={() => setTab(t)} data-testid={`admin-tab-${t}`}
               className={`px-4 py-2 rounded-xl text-body ${tab === t ? "bg-ink text-white" : "hover:bg-white text-ink-muted"}`}>
               {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -225,6 +227,83 @@ export default function Admin() {
                   })}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {tab === "cost" && (
+          <div className="space-y-4">
+            <p className="text-caption text-ink-muted">
+              Real LLM token cost — what agent actions actually cost us to run, independent of the
+              flat credit prices workspaces are charged. Internal COGS visibility only.
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="bg-white border border-line rounded-2xl shadow-card p-5">
+                <div className="ui-label flex items-center gap-1.5"><DollarSign size={12} /> Total LLM cost</div>
+                <div className="text-app-title font-display font-bold mt-1 tracking-tighter">
+                  ${(tokenUsage?.total_cost_usd ?? 0).toFixed(4)}
+                </div>
+              </div>
+              <div className="bg-white border border-line rounded-2xl shadow-card p-5">
+                <div className="ui-label">LLM calls logged</div>
+                <div className="text-app-title font-display font-bold mt-1 tracking-tighter">
+                  {tokenUsage?.total_calls ?? 0}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white border border-line rounded-2xl card-floating overflow-hidden">
+              <div className="p-3 border-b border-line text-caption font-medium">Cost by workspace</div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-table min-w-[480px]">
+                  <thead>
+                    <tr className="border-b border-line">
+                      {["Workspace", "Calls", "Cost"].map((h) => (
+                        <th key={h} className="table-header text-left p-3">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(!tokenUsage?.by_workspace || tokenUsage.by_workspace.length === 0) && (
+                      <tr><td colSpan={3} className="p-6 text-center text-ink-muted">No LLM usage logged yet.</td></tr>
+                    )}
+                    {tokenUsage?.by_workspace?.map((w) => (
+                      <tr key={w.workspace_id} className="border-b border-line hover:bg-ash">
+                        <td className="p-3 font-medium">{w.workspace_name}</td>
+                        <td className="p-3 font-mono">{w.calls}</td>
+                        <td className="p-3 font-mono">${w.cost_usd.toFixed(4)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-white border border-line rounded-2xl card-floating overflow-hidden">
+              <div className="p-3 border-b border-line text-caption font-medium">Cost by model</div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-table min-w-[480px]">
+                  <thead>
+                    <tr className="border-b border-line">
+                      {["Model", "Calls", "Cost"].map((h) => (
+                        <th key={h} className="table-header text-left p-3">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(!tokenUsage?.by_model || tokenUsage.by_model.length === 0) && (
+                      <tr><td colSpan={3} className="p-6 text-center text-ink-muted">No LLM usage logged yet.</td></tr>
+                    )}
+                    {tokenUsage?.by_model?.map((m) => (
+                      <tr key={m.model} className="border-b border-line hover:bg-ash">
+                        <td className="p-3 font-mono">{m.model}</td>
+                        <td className="p-3 font-mono">{m.calls}</td>
+                        <td className="p-3 font-mono">${m.cost_usd.toFixed(4)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
