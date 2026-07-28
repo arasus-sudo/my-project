@@ -138,7 +138,7 @@ export default function CampaignBuilder() {
   const [advancingBatch, setAdvancingBatch] = useState(false);
   const [showEqPanel, setShowEqPanel] = useState(true);
   const [railSection, setRailSection] = useState("sequence"); // sequence|audience|sending|signature|basics
-  const [reviewCollapsed, setReviewCollapsed] = useState({ leadRail: false, template: false, preview: false });
+  const [reviewCollapsed, setReviewCollapsed] = useState({ leadRail: false, template: false });
 
   // Track actual campaign ID — may differ from useParams id when creating new
   const [activeCampaignId, setActiveCampaignId] = useState(id);
@@ -1381,35 +1381,35 @@ function ReviewAndSendView({
       <button onClick={() => setReviewCollapsed((prev) => ({ ...prev, leadRail: false }))}
         className="shadow-card rounded-lg bg-white overflow-hidden flex items-center justify-center py-6 cursor-pointer hover:bg-surfacehover transition-colors"
         title="Expand leads panel">
-        <ChevronRight size={14} className="text-ink-muted" />
+        <ChevronRight size={13} className="text-ink-muted" />
       </button>
     ) : (
     <div className="shadow-card rounded-lg bg-white overflow-hidden flex flex-col max-h-[calc(100vh-280px)]">
-      <div className="px-3 py-2 border-b border-line flex items-center justify-between cursor-pointer" onClick={() => setReviewCollapsed((prev) => ({ ...prev, leadRail: !prev.leadRail }))}>
-        <div className="flex items-center gap-1.5">
-          <ChevronLeft size={12} className="text-ink-muted" />
-          <span className="text-tiny font-mono text-ink-muted">Leads</span>
+      <div className="px-2.5 py-1.5 border-b border-line flex items-center justify-between cursor-pointer" onClick={() => setReviewCollapsed((prev) => ({ ...prev, leadRail: !prev.leadRail }))}>
+        <div className="flex items-center gap-1">
+          <ChevronLeft size={11} className="text-ink-muted" />
+          <span className="text-[11px] font-mono text-ink-muted">Leads</span>
         </div>
         <input type="checkbox" onClick={(e) => e.stopPropagation()}
           checked={selectedReview.length === reviewEmails.length}
           onChange={(e) => setSelectedReview(e.target.checked ? reviewEmails.map((l) => l.id) : [])}
           title="Select all" />
       </div>
-      <div className="px-3 py-1.5 border-b border-line flex items-center gap-2">
+      <div className="px-2.5 py-1 border-b border-line flex items-center gap-2">
         <input type="range" min={0} max={Math.max(0, reviewEmails.length - 1)} value={reviewIndex}
           onChange={(e) => setReviewIndex(Number(e.target.value))}
-          className="flex-1 h-1 accent-ink cursor-pointer" />
-        <span className="text-tiny text-ink-muted font-mono shrink-0">{reviewIndex + 1}/{reviewEmails.length}</span>
+          className="flex-1 h-0.5 accent-ink cursor-pointer" />
+        <span className="text-[10.5px] text-ink-muted font-mono shrink-0">{reviewIndex + 1}/{reviewEmails.length}</span>
       </div>
       <div className="overflow-y-auto flex-1">
         {reviewEmails.map((l, i) => (
           <div key={l.id}
-            className={`flex items-center gap-2 px-3 py-2 border-b border-line cursor-pointer hover:bg-surfacehover transition-colors ${i === reviewIndex ? "bg-accent-soft" : ""}`}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 border-b border-line cursor-pointer hover:bg-surfacehover transition-colors ${i === reviewIndex ? "bg-accent-soft" : ""}`}
             onClick={() => setReviewIndex(i)}>
             <input type="checkbox" onClick={(e) => e.stopPropagation()}
               checked={selectedReview.includes(l.id)} onChange={() => toggleReviewSelected(l.id)} />
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${l.email_status === "approved" ? "bg-success" : l.email_status === "rejected" ? "bg-danger" : l.personalized ? "bg-warning" : "bg-ink-disabled"}`} />
-            <span className="text-caption truncate flex-1">{l.first_name} {l.last_name}</span>
+            <span className={`w-1 h-1 rounded-full shrink-0 ${l.email_status === "approved" ? "bg-success" : l.email_status === "rejected" ? "bg-danger" : l.personalized ? "bg-warning" : "bg-ink-disabled"}`} />
+            <span className="text-[11px] truncate flex-1">{l.first_name} {l.last_name}</span>
           </div>
         ))}
       </div>
@@ -1418,73 +1418,70 @@ function ReviewAndSendView({
   );
 
   return (
-    <div className="px-3 sm:px-4 py-3 space-y-3">
+    <div className="px-2.5 sm:px-3 py-2 space-y-2">
       {campaignLeads.length > 0 && (
         <div className="shadow-card rounded-lg bg-white">
-          <div className="flex items-center justify-between gap-2 px-3 py-2 flex-wrap">
-            <div className="text-caption text-ink-muted">
+          <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 flex-wrap">
+            <div className="text-[11px] text-ink-muted">
               <span className="font-medium text-ink">{leadStats.approved}</span> approved · {" "}
               <span className="font-medium text-ink">{leadStats.rejected}</span> rejected · {" "}
               <span className="font-medium text-ink">{leadStats.total - leadStats.reviewed}</span> awaiting review
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={regenerateAllEmails} disabled={regeneratingAll || leadStats.total === 0} className="btn-ghost text-caption" data-testid="regenerate-all-emails">
-                {regeneratingAll ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />} Regenerate all
+            <div className="flex items-center gap-1.5">
+              <button onClick={regenerateAllEmails} disabled={regeneratingAll || leadStats.total === 0} className="btn-ghost text-[11px]" data-testid="regenerate-all-emails">
+                {regeneratingAll ? <Loader2 size={10} className="animate-spin" /> : <RotateCw size={10} />} Regenerate all
               </button>
-              <button onClick={dismissAllEmails} disabled={leadStats.total === 0} className="btn-ghost text-caption text-danger" data-testid="dismiss-all-emails">
-                <X size={12} /> Dismiss all
+              <button onClick={dismissAllEmails} disabled={leadStats.total === 0} className="btn-ghost text-[11px] text-danger" data-testid="dismiss-all-emails">
+                <X size={10} /> Dismiss all
               </button>
-              <button onClick={approveAllEmails} disabled={leadStats.total === 0} className="btn-secondary text-caption" data-testid="approve-all-emails">
-                <Check size={12} /> Approve all
+              <button onClick={approveAllEmails} disabled={leadStats.total === 0} className="btn-secondary text-[11px]" data-testid="approve-all-emails">
+                <Check size={10} /> Approve all
               </button>
             </div>
           </div>
           {selectedReview.length > 0 && (
-            <div className="flex items-center gap-2 px-4 py-2 border-t border-line bg-accent-soft/40">
-              <span className="text-caption font-medium">{selectedReview.length} selected</span>
-              <button onClick={() => bulkSetReviewStatus("approved")} className="btn-primary text-caption ml-auto" data-testid="bulk-approve">
-                <Check size={12} /> Approve selected
+            <div className="flex items-center gap-2 px-3 py-1.5 border-t border-line bg-accent-soft/40">
+              <span className="text-[11px] font-medium">{selectedReview.length} selected</span>
+              <button onClick={() => bulkSetReviewStatus("approved")} className="btn-primary text-[11px] ml-auto" data-testid="bulk-approve">
+                <Check size={10} /> Approve selected
               </button>
-              <button onClick={() => bulkSetReviewStatus("rejected")} className="btn-ghost text-caption text-danger" data-testid="bulk-reject">
-                <Flag size={12} /> Reject selected
+              <button onClick={() => bulkSetReviewStatus("rejected")} className="btn-ghost text-[11px] text-danger" data-testid="bulk-reject">
+                <Flag size={10} /> Reject selected
               </button>
-              <button onClick={() => setSelectedReview([])} className="btn-ghost text-caption text-ink-muted">Clear</button>
+              <button onClick={() => setSelectedReview([])} className="btn-ghost text-[11px] text-ink-muted">Clear</button>
             </div>
           )}
         </div>
       )}
       <div className={`grid grid-cols-1 gap-3 h-full ${
-        // Tailwind's JIT scans for literal class strings, so every combination
-        // is spelled out here rather than built from a template literal —
-        // an interpolated arbitrary-value class wouldn't be picked up at build time.
         reviewCollapsed.leadRail
-          ? (reviewCollapsed.preview ? "lg:grid-cols-[48px_1fr_48px]" : "lg:grid-cols-[48px_1fr_1fr]")
-          : (reviewCollapsed.preview ? "lg:grid-cols-[220px_1fr_48px]" : "lg:grid-cols-[220px_1fr_1fr]")
+          ? "lg:grid-cols-[48px_1fr]"
+          : "lg:grid-cols-[220px_1fr]"
       }`}>
         {!current ? (
           <>
             {rail}
-            <div className="lg:col-span-2 shadow-card rounded-lg bg-white p-8 text-center">
+            <div className="shadow-card rounded-lg bg-white p-8 text-center">
               {genProgress ? (
                 <>
-                  <Loader2 size={16} className="animate-spin mx-auto text-ink-muted mb-2" />
-                  <div className="text-caption font-medium">
+                  <Loader2 size={14} className="animate-spin mx-auto text-ink-muted mb-2" />
+                  <div className="text-tiny font-medium">
                     Generating personalized emails… {genProgress.done}/{genProgress.total || "?"}
                   </div>
-                  <div className="text-caption text-ink-muted mt-1">This updates live — no need to refresh.</div>
+                  <div className="text-tiny text-ink-muted mt-1">This updates live — no need to refresh.</div>
                   {genProgress.total > 0 && (
-                    <div className="h-1.5 max-w-xs mx-auto mt-3 bg-line rounded-full overflow-hidden">
+                    <div className="h-1 max-w-xs mx-auto mt-3 bg-line rounded-full overflow-hidden">
                       <div className="h-full bg-accent transition-all duration-500" style={{ width: `${Math.min(100, (genProgress.done / genProgress.total) * 100)}%` }} />
                     </div>
                   )}
                 </>
               ) : (
                 <>
-                  <Mail size={16} className="mx-auto text-ink-disabled mb-2" />
-                  <div className="text-caption font-medium text-ink-muted">
+                  <Mail size={14} className="mx-auto text-ink-disabled mb-2" />
+                  <div className="text-tiny font-medium text-ink-muted">
                     {leadStats.total === 0 ? "No leads assigned yet" : "Select a lead to preview"}
                   </div>
-                  <p className="text-caption text-ink-muted mt-1 max-w-sm mx-auto">
+                  <p className="text-tiny text-ink-muted mt-1 max-w-sm mx-auto">
                     {leadStats.total === 0
                       ? "Assign leads from the Audience section — every lead previews with your template's merge fields filled in, even before you generate."
                       : "Pick a lead from the list on the left to see its preview."}
@@ -1495,127 +1492,121 @@ function ReviewAndSendView({
           </>
         ) : (
           <>
-            {rail}
-            {/* LEFT: Template with placeholders */}
-            <div className="shadow-card rounded-lg bg-white">
-              <div className="p-3 border-b border-line flex items-center justify-between cursor-pointer" onClick={() => setReviewCollapsed((prev) => ({ ...prev, template: !prev.template }))}>
-                <div className="flex items-center gap-1.5">
-                  {reviewCollapsed.template ? <ChevronRight size={12} className="text-ink-muted" /> : <ChevronDown size={12} className="text-ink-muted" />}
-                  <span className="text-tiny font-mono text-ink-muted">Template</span>
-                </div>
-                {!reviewCollapsed.template && <span className="text-tiny text-ink-muted font-mono">{reviewIndex + 1} / {reviewEmails.length}</span>}
-              </div>
-              {!reviewCollapsed.template && (
-                <div className="p-3 space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto">
-                  <div>
-                    <div className="text-tiny text-ink-muted mb-0.5 font-mono">SUBJECT</div>
-                    <div className="text-tiny font-semibold font-mono text-ink-secondary">{template.subject || "(no subject)"}</div>
+            {/* LEFT: Lead rail + Template stacked */}
+            <div className="flex flex-col gap-3">
+              {rail}
+              <div className="shadow-card rounded-lg bg-white">
+                <div className="px-2.5 py-1.5 border-b border-line flex items-center justify-between cursor-pointer" onClick={() => setReviewCollapsed((prev) => ({ ...prev, template: !prev.template }))}>
+                  <div className="flex items-center gap-1">
+                    {reviewCollapsed.template ? <ChevronRight size={11} className="text-ink-muted" /> : <ChevronDown size={11} className="text-ink-muted" />}
+                    <span className="text-[11px] font-mono text-ink-muted">Template</span>
                   </div>
-                  <div>
-                    <div className="text-tiny text-ink-muted mb-0.5 font-mono">BODY</div>
-                    <div className="text-tiny text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded p-2 bg-bone">
-                      {template.body_html ? (
-                        <div className="prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: template.body_html.replace(/\{\{personalized_opener\}\}/g, '<mark class="bg-warning/20 text-warning px-0.5 rounded">{{personalized_opener}}</mark>') }} />
-                      ) : (
-                        <div className="whitespace-pre-wrap font-mono text-tiny text-ink-secondary leading-relaxed">{template.body}</div>
-                      )}
+                  {!reviewCollapsed.template && <span className="text-[11px] text-ink-muted font-mono">{reviewIndex + 1} / {reviewEmails.length}</span>}
+                </div>
+                {!reviewCollapsed.template && (
+                  <div className="p-2.5 space-y-1.5 max-h-[calc(100vh-320px)] overflow-y-auto">
+                    <div>
+                      <div className="text-[10.5px] text-ink-muted mb-0.5 font-mono">SUBJECT</div>
+                      <div className="text-tiny font-semibold font-mono text-ink-secondary">{template.subject || "(no subject)"}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10.5px] text-ink-muted mb-0.5 font-mono">BODY</div>
+                      <div className="text-tiny text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded p-1.5 bg-bone">
+                        {template.body_html ? (
+                          <div className="prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: template.body_html.replace(/\{\{personalized_opener\}\}/g, '<mark class="bg-warning/20 text-warning px-0.5 rounded">{{personalized_opener}}</mark>') }} />
+                        ) : (
+                          <div className="whitespace-pre-wrap font-mono text-tiny text-ink-secondary leading-relaxed">{template.body}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1 border-t border-line">
+                      <button onClick={prevReview} disabled={reviewIndex === 0} className="btn-ghost text-[11px] px-1 py-0.5"><ChevronLeft size={9} /> Prev</button>
+                      <button onClick={nextReview} disabled={reviewIndex >= reviewEmails.length - 1} className="btn-ghost text-[11px] px-1 py-0.5">Next <ChevronRight size={9} /></button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 pt-1.5 border-t border-line">
-                    <button onClick={prevReview} disabled={reviewIndex === 0} className="btn-ghost text-tiny px-1.5 py-0.5"><ChevronLeft size={10} /> Prev</button>
-                    <button onClick={nextReview} disabled={reviewIndex >= reviewEmails.length - 1} className="btn-ghost text-tiny px-1.5 py-0.5">Next <ChevronRight size={10} /></button>
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
-            {/* RIGHT: Generated email preview + controls */}
-            {reviewCollapsed.preview ? (
-              <button onClick={() => setReviewCollapsed((prev) => ({ ...prev, preview: false }))}
-                className="shadow-card rounded-lg bg-white overflow-hidden flex items-center justify-center py-6 cursor-pointer hover:bg-surfacehover transition-colors"
-                title="Expand preview panel">
-                <ChevronLeft size={14} className="text-ink-muted" />
-              </button>
-            ) : (
+            {/* RIGHT: Generated email preview + controls (always expanded) */}
             <div className="shadow-card rounded-lg bg-white">
-              <div className="p-3 border-b border-line flex items-center justify-between gap-2 cursor-pointer" onClick={() => setReviewCollapsed((prev) => ({ ...prev, preview: !prev.preview }))}>
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <ChevronRight size={12} className="text-ink-muted shrink-0" />
-                  <span className="text-tiny truncate max-w-[120px] font-medium">{current.first_name} {current.last_name}</span>
-                  <span className={`text-tiny font-mono px-1.5 py-0.5 rounded-full shrink-0 ${current.email_status === "approved" ? "bg-success/10 text-success" : current.email_status === "rejected" ? "bg-danger/10 text-danger" : "bg-warning/10 text-warning"}`}>
+              <div className="px-2.5 py-1.5 border-b border-line flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1 min-w-0">
+                  <span className="text-[11px] truncate max-w-[120px] font-medium">{current.first_name} {current.last_name}</span>
+                  <span className={`text-[10px] font-mono px-1 py-0.5 rounded-full shrink-0 ${current.email_status === "approved" ? "bg-success/10 text-success" : current.email_status === "rejected" ? "bg-danger/10 text-danger" : "bg-warning/10 text-warning"}`}>
                     {current.email_status === "approved" ? "✓" : current.email_status === "rejected" ? "✗" : "~"}
                   </span>
                 </div>
                 <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => sendTestEmail(current.id)} disabled={sendingTest} className="btn-ghost text-tiny flex items-center gap-1" data-testid="send-test-email" title="Email this exact preview to yourself">
-                    {sendingTest ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />} Send
+                  <button onClick={() => sendTestEmail(current.id)} disabled={sendingTest} className="btn-ghost text-[11px] flex items-center gap-1" data-testid="send-test-email" title="Email this exact preview to yourself">
+                    {sendingTest ? <Loader2 size={9} className="animate-spin" /> : <Send size={9} />} Send
                   </button>
                   {!isTemplate && (
                     <>
                       {editingOpener?.leadId === current.id ? (
-                        <button onClick={() => setEditingOpener(null)} className="btn-ghost text-caption"><X size={12} /> Cancel</button>
+                        <button onClick={() => setEditingOpener(null)} className="btn-ghost text-[11px]"><X size={11} /> Cancel</button>
                       ) : (
-                        <button onClick={() => setEditingOpener({ leadId: current.id, opener: current.personalized_opener })} className="btn-ghost text-caption flex items-center gap-1">
-                          <Edit2 size={12} /> {current.personalized_opener ? "Opener" : "Add opener"}
+                        <button onClick={() => setEditingOpener({ leadId: current.id, opener: current.personalized_opener })} className="btn-ghost text-[11px] flex items-center gap-1">
+                          <Edit2 size={11} /> {current.personalized_opener ? "Opener" : "Add opener"}
                         </button>
                       )}
-                      <button onClick={() => regenerateOpener(current.id)} disabled={generatingEmail === current.id} className="btn-ghost text-caption flex items-center gap-1">
-                        <RotateCw size={12} className={generatingEmail === current.id ? "animate-spin" : ""} /> {current.personalized ? "Regenerate" : "Generate with AI"}
+                      <button onClick={() => regenerateOpener(current.id)} disabled={generatingEmail === current.id} className="btn-ghost text-[11px] flex items-center gap-1">
+                        <RotateCw size={11} className={generatingEmail === current.id ? "animate-spin" : ""} /> {current.personalized ? "Regenerate" : "Generate with AI"}
                       </button>
                     </>
                   )}
                 </div>
               </div>
-              <div className="p-3 space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto">
+              <div className="p-2.5 space-y-1.5 max-h-[calc(100vh-280px)] overflow-y-auto">
                   {!isTemplate && editingOpener?.leadId === current.id && (
-                    <div className="bg-bone border border-line rounded-xl p-3 space-y-2">
-                      <div className="text-tiny font-mono text-ink-muted">
+                    <div className="bg-bone border border-line rounded-xl p-2.5 space-y-1.5">
+                      <div className="text-[11px] font-mono text-ink-muted">
                         {current.personalized_opener ? "Edit personalized opener" : "Write an opener"}
                       </div>
                       <textarea value={editingOpener.opener} onChange={(e) => setEditingOpener({ ...editingOpener, opener: e.target.value })}
-                        rows={3} placeholder="A one-line hook personal to this lead…"
-                        className="w-full border border-line px-2 py-1.5 rounded-lg text-caption font-sans" />
+                        rows={2} placeholder="A one-line hook personal to this lead…"
+                        className="w-full border border-line px-2 py-1 rounded-lg text-tiny font-sans" />
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => setEditingOpener(null)} className="btn-secondary text-caption">Cancel</button>
-                        <button onClick={() => saveOpener(current.id, editingOpener.opener)} disabled={!editingOpener.opener?.trim()} className="btn-primary text-caption"><Check size={12} /> Save</button>
+                        <button onClick={() => setEditingOpener(null)} className="btn-secondary text-[11px]">Cancel</button>
+                        <button onClick={() => saveOpener(current.id, editingOpener.opener)} disabled={!editingOpener.opener?.trim()} className="btn-primary text-[11px]"><Check size={11} /> Save</button>
                       </div>
                     </div>
                   )}
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="text-tiny text-ink-muted font-mono">SUBJECT</div>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <div className="text-[10.5px] text-ink-muted font-mono">SUBJECT</div>
                       <button onClick={() => setMailboxView(!mailboxView)}
-                        className="text-tiny text-ink-muted hover:text-ink flex items-center gap-1 transition-colors">
-                        {mailboxView ? <Edit2 size={11} /> : <Eye size={11} />}
+                        className="text-[10.5px] text-ink-muted hover:text-ink flex items-center gap-1 transition-colors">
+                        {mailboxView ? <Edit2 size={10} /> : <Eye size={10} />}
                         {mailboxView ? "Edit view" : "Mailbox view"}
                       </button>
                     </div>
-                    <div className="text-caption font-semibold font-mono text-ink-secondary border border-line rounded-xl px-3 py-2">
+                    <div className="text-tiny font-semibold font-mono text-ink-secondary border border-line rounded-xl px-2.5 py-1.5">
                       {fillMergeFields(current.email_subject || "(no subject)", current)}
                     </div>
                   </div>
                   <div>
-                    <div className="text-tiny text-ink-muted mb-1 font-mono">BODY</div>
+                    <div className="text-[10.5px] text-ink-muted mb-0.5 font-mono">BODY</div>
                     {mailboxView ? (
                       <div className="border border-line rounded-xl bg-white overflow-hidden">
-                        <div className="text-caption text-ink-muted px-4 py-2 border-b border-line space-y-0.5 font-mono">
+                        <div className="text-tiny text-ink-muted px-3 py-1.5 border-b border-line space-y-0.5 font-mono">
                           <div><span className="font-medium text-ink">From:</span> {name || "PitchEQ"}</div>
                           <div><span className="font-medium text-ink">To:</span> {current.email || "lead@example.com"}</div>
                           <div><span className="font-medium text-ink">Date:</span> {new Date().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</div>
                         </div>
-                        <div className="p-3 text-caption text-ink leading-relaxed prose-email">
+                        <div className="p-2.5 text-tiny text-ink leading-relaxed prose-email">
                           {current.email_body_html ? (
                             <div dangerouslySetInnerHTML={{ __html: fillMergeFields(current.email_body_html, current) + (activeSignatureHtml ? "<br><br>" + activeSignatureHtml : "") }} />
                           ) : (
                             <div className="whitespace-pre-wrap font-sans">
                               {fillMergeFields(current.email_body, current)}
-                              {activeSignatureHtml && <div className="mt-3" dangerouslySetInnerHTML={{ __html: activeSignatureHtml }} />}
+                              {activeSignatureHtml && <div className="mt-2" dangerouslySetInnerHTML={{ __html: activeSignatureHtml }} />}
                             </div>
                           )}
                         </div>
                       </div>
                     ) : (
-                      <div className="max-h-96 overflow-y-auto text-caption text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded-xl p-3 bg-white prose-email">
+                      <div className="max-h-96 overflow-y-auto text-tiny text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded-xl p-2.5 bg-white prose-email">
                         {current.email_body || current.email_body_html ? (
                           <div dangerouslySetInnerHTML={{ __html: fillMergeFields(current.email_body_html || current.email_body?.replace(/\n/g, "<br>") || "", current) + (activeSignatureHtml ? "<br><br>" + activeSignatureHtml : "") }} />
                         ) : (
@@ -1624,51 +1615,50 @@ function ReviewAndSendView({
                       </div>
                     )}
                     {activeSignatureHtml && (
-                      <div className="flex items-center gap-1 text-tiny text-ink-muted mt-1.5">
-                        <Signature size={11} /> Signature included in preview
+                      <div className="flex items-center gap-1 text-[10.5px] text-ink-muted mt-1">
+                        <Signature size={10} /> Signature included in preview
                       </div>
                     )}
                     {/\{\{\s*\w+\s*\}\}/.test(current.email_body || "") && (
-                      <div className="flex items-center gap-1.5 text-tiny text-warning mt-1.5">
-                        <AlertTriangle size={11} /> Contains an unresolved merge field — this lead may be missing that field.
+                      <div className="flex items-center gap-1 text-[10.5px] text-warning mt-1">
+                        <AlertTriangle size={10} /> Contains an unresolved merge field — this lead may be missing that field.
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 pt-3 border-t border-line">
+                  <div className="flex items-center gap-2 pt-2 border-t border-line">
                     {isTemplate ? (
                       current.email_status === "approved" ? (
                         <>
-                          <span className="flex items-center gap-1 text-caption text-success font-medium"><Check size={12} /> Approved</span>
-                          <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1 ml-auto"><Flag size={12} /> Reject</button>
+                          <span className="flex items-center gap-1 text-tiny text-success font-medium"><Check size={11} /> Approved</span>
+                          <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-tiny text-danger flex items-center gap-1 ml-auto"><Flag size={11} /> Reject</button>
                         </>
                       ) : (
                         <>
-                          <button onClick={() => approveEmail(current.id)} className="btn-primary text-caption flex items-center gap-1"><Check size={12} /> Approve</button>
-                          <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1"><Flag size={12} /> Reject</button>
+                          <button onClick={() => approveEmail(current.id)} className="btn-primary text-tiny flex items-center gap-1"><Check size={11} /> Approve</button>
+                          <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-tiny text-danger flex items-center gap-1"><Flag size={11} /> Reject</button>
                         </>
                       )
                     ) : (
                       !current.personalized ? (
-                        <span className="text-caption text-ink-muted">Write an opener above (or generate with AI) to enable approval.</span>
+                        <span className="text-tiny text-ink-muted">Write an opener above (or generate with AI) to enable approval.</span>
                       ) : current.email_status === "approved" ? (
                         <>
-                          <span className="flex items-center gap-1 text-caption text-success font-medium"><Check size={12} /> Approved</span>
-                          <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1 ml-auto"><Flag size={12} /> Reject</button>
+                          <span className="flex items-center gap-1 text-tiny text-success font-medium"><Check size={11} /> Approved</span>
+                          <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-tiny text-danger flex items-center gap-1 ml-auto"><Flag size={11} /> Reject</button>
                         </>
                       ) : (
                         <>
-                          <button onClick={() => approveEmail(current.id)} className="btn-primary text-caption flex items-center gap-1"><Check size={12} /> Approve</button>
-                          <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1"><Flag size={12} /> Reject</button>
+                          <button onClick={() => approveEmail(current.id)} className="btn-primary text-tiny flex items-center gap-1"><Check size={11} /> Approve</button>
+                          <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-tiny text-danger flex items-center gap-1"><Flag size={11} /> Reject</button>
                         </>
                       )
                     )}
                     {current.personalized && (
-                      <button onClick={() => deleteLeadEmail(current.id)} className="btn-ghost text-caption text-ink-muted hover:text-danger ml-auto flex items-center gap-1"><Trash2 size={12} /> Remove</button>
+                      <button onClick={() => deleteLeadEmail(current.id)} className="btn-ghost text-tiny text-ink-muted hover:text-danger ml-auto flex items-center gap-1"><Trash2 size={11} /> Remove</button>
                     )}
                   </div>
               </div>
             </div>
-            )}
           </>
         )}
       </div>
