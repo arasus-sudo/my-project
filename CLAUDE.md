@@ -91,6 +91,7 @@ superseded by the flat enterprise system above.
 - Keep commits scoped and reviewable — this is a large migration, prefer many small PRs over one giant rewrite commit
 - Never commit secrets, API keys, or `.env` files
 - Follow the Brand System section above (flat enterprise design system, light UI) for any new UI
+- **When editing CampaignBuilder.jsx**, use a systematic approach: apply one edit at a time, test build after each edit batch. The file is structurally complex (1716+ lines, deeply nested JSX with multiple conditional fragments and ternary operators). Prefer small, targeted edits over bulk replacements. Always count div/fragment balance when the build fails.
 
 ## Common Commands
 

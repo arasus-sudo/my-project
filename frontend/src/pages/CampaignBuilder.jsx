@@ -155,6 +155,8 @@ export default function CampaignBuilder() {
   const [advancingBatch, setAdvancingBatch] = useState(false);
   const [showEqPanel, setShowEqPanel] = useState(true);
   const [showStepsPanel, setShowStepsPanel] = useState(true);
+  const [editorHidden, setEditorHidden] = useState(false);
+  const [reviewCollapsed, setReviewCollapsed] = useState({ leadRail: false, template: false, preview: false });
 
   // Track actual campaign ID — may differ from useParams id when creating new
   const [activeCampaignId, setActiveCampaignId] = useState(id);
@@ -772,20 +774,20 @@ export default function CampaignBuilder() {
       <PageHeader
         title={
           <input value={name} onChange={(e) => setName(e.target.value)} data-testid="campaign-name-input"
-            className="bg-transparent border-0 border-b border-transparent hover:border-line focus:border-ink focus:outline-none font-display font-semibold text-page-title w-full" />
+            className="bg-transparent border-0 border-b border-transparent hover:border-line focus:border-ink focus:outline-none font-display font-semibold text-card-title w-full" />
         }
         subtitle={`Goal: ${goal}`}
         badge="EQ Editor"
         right={
           <div className="flex gap-2">
-            <button data-testid="save-campaign" onClick={save} disabled={busy} className="btn-secondary"><Save size={14} /> Save</button>
+            <button data-testid="save-campaign" onClick={save} disabled={busy} className="btn-secondary"><Save size={12} /> Save</button>
             {id && (
               <button onClick={async () => {
                 try {
                   await api.post(`/campaigns/${id}/save-template`);
                   toast.success("Campaign saved as template");
                 } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
-              }} className="btn-secondary"><LayoutTemplate size={14} /> Template</button>
+              }} className="btn-secondary"><LayoutTemplate size={12} /> Template</button>
             )}
             <button
               data-testid="toggle-preview"
@@ -794,7 +796,7 @@ export default function CampaignBuilder() {
               title={leadStats.total === 0 ? "Add at least one lead to preview generated emails" : ""}
               className="btn-secondary"
             >
-              {reviewMode ? <><PenSquare size={14} /> Edit template</> : <><Eye size={14} /> Preview</>}
+              {reviewMode ? <><PenSquare size={12} /> Edit template</> : <><Eye size={12} /> Preview</>}
             </button>
             {status === "active" ? (
               <button
@@ -803,7 +805,7 @@ export default function CampaignBuilder() {
                 disabled={busy || !id}
                 className="btn-secondary"
               >
-                <Pause size={14} /> Pause
+                <Pause size={12} /> Pause
               </button>
             ) : (
               <button
@@ -813,34 +815,28 @@ export default function CampaignBuilder() {
                 title={leadStats.approved === 0 ? "Approve at least one lead before launching" : ""}
                 className="btn-primary"
               >
-                <Play size={14} /> {status === "paused" ? "Resume" : "Launch"}
+                <Play size={12} /> {status === "paused" ? "Resume" : "Launch"}
               </button>
             )}
           </div>
         }
       />
       {id && leadStats.total > 0 && (
-        <div className="px-4 sm:px-6 pt-4 flex items-center gap-4 flex-wrap" data-testid="assigned-leads-stat">
-          <div className="flex items-baseline gap-2">
-            <span className="ui-label">Assigned Leads</span>
-            <span className="text-section font-display font-bold">{leadStats.total}</span>
+        <div className="px-3 sm:px-4 pt-2 flex items-center gap-3 flex-wrap" data-testid="assigned-leads-stat">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-tiny font-mono text-ink-muted">Leads</span>
+            <span className="text-caption font-semibold">{leadStats.total}</span>
           </div>
-          <div className="flex items-center gap-2 text-caption font-mono">
-            {leadStats.approved > 0 && <span className="text-success">{leadStats.approved} approved</span>}
-            {leadStats.rejected > 0 && <span className="text-danger">{leadStats.rejected} rejected</span>}
-            {leadStats.draft > 0 && <span className="text-warning">{leadStats.draft} draft</span>}
-            {leadStats.ungenerated > 0 && <span className="text-ink-muted">{leadStats.ungenerated} not generated</span>}
+          <div className="flex items-center gap-1.5 text-tiny font-mono">
+            {leadStats.approved > 0 && <span className="text-success">{leadStats.approved}✓</span>}
+            {leadStats.rejected > 0 && <span className="text-danger">{leadStats.rejected}✗</span>}
+            {leadStats.draft > 0 && <span className="text-warning">{leadStats.draft}~</span>}
+            {leadStats.ungenerated > 0 && <span className="text-ink-muted">{leadStats.ungenerated} pending</span>}
           </div>
-          {leadStats.approved > 0 && !leadStats.canLaunch && (
-            <span className="text-caption text-ink-muted ml-auto">Launch will send to {leadStats.approved} approved leads (skipping {leadStats.total - leadStats.approved} unapproved)</span>
-          )}
-          {leadStats.approved === 0 && !leadStats.canLaunch && (
-            <span className="text-caption text-ink-muted ml-auto">{leadStats.reviewed}/{leadStats.total} reviewed — approve at least one lead to launch</span>
-          )}
         </div>
       )}
       {/* Campaign Type Toggle */}
-      <div className="px-4 sm:px-6 pt-3 pb-2 flex items-center gap-4">
+      <div className="px-3 sm:px-4 pt-2 pb-1.5 flex items-center gap-3">
         <div className="ui-label shrink-0">Campaign type</div>
         <div className="flex items-center gap-1 bg-bone border border-line rounded-xl p-0.5">
           <button onClick={() => setCampaignType("ai")}
@@ -857,54 +853,53 @@ export default function CampaignBuilder() {
       <div className="flex min-h-[calc(100vh-90px)]">
         {/* Steps sidebar */}
         <aside className={`${showStepsPanel ? "w-72" : "w-0 overflow-hidden"} shrink-0 border-r border-line bg-white transition-all duration-200`}>
-          <div className={`p-4 ${showStepsPanel ? "" : "invisible"}`}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="ui-label">Sequence</div>
+          <div className={`p-3 ${showStepsPanel ? "" : "invisible"}`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-tiny font-mono text-ink-muted">Sequence</div>
               <button onClick={() => setShowStepsPanel(false)} className="text-ink-muted hover:text-ink transition-colors" title="Hide steps">
-                <ChevronLeft size={14} />
+                <ChevronLeft size={12} />
               </button>
             </div>
-          <div className="ui-label mb-3">Sequence</div>
-          <ol className="space-y-2">
+          <ol className="space-y-1">
             {steps.map((s, i) => (
               <li key={s._key || i}>
                 <div
                   onClick={() => setActiveStep(i)}
                   data-testid={`step-${i}`}
-                  className={`w-full text-left p-3 border transition-colors duration-150 ${i === activeStep ? "border-ink bg-surfacehover" : "border-line hover:bg-surfacehover"} rounded-xl cursor-pointer`}
+                  className={`w-full text-left p-2 border transition-colors duration-150 ${i === activeStep ? "border-ink bg-surfacehover" : "border-line hover:bg-surfacehover"} rounded-lg cursor-pointer`}
                 >
                   <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1">
                       {(() => {
                         const ch = s.channel || "email";
-                        const icons = { email: <Mail size={12} />, phone_call: <Phone size={12} />, sms: <MessageSquare size={12} />, whatsapp: <MessageCircle size={12} />, linkedin_connect: <Send size={12} />, linkedin_message: <Send size={12} />, linkedin_comment: <MessageCircle size={12} /> };
-                        return <span className="text-ink-muted">{icons[ch] || <Mail size={12} />}</span>;
+                        const icons = { email: <Mail size={10} />, phone_call: <Phone size={10} />, sms: <MessageSquare size={10} />, whatsapp: <MessageCircle size={10} />, linkedin_connect: <Send size={10} />, linkedin_message: <Send size={10} />, linkedin_comment: <MessageCircle size={10} /> };
+                        return <span className="text-ink-muted">{icons[ch] || <Mail size={10} />}</span>;
                       })()}
-                      <div className="ui-label">Step {i + 1}</div>
+                      <div className="text-tiny font-mono text-ink-muted">Step {i + 1}</div>
                     </div>
-                    <div className="text-tiny font-mono text-ink-muted">day {s.day}</div>
+                    <div className="text-tiny font-mono text-ink-muted">d{s.day}</div>
                   </div>
-                  <div className="text-body font-medium mt-1 truncate">{s.subject || CHANNELS.find(c => c.key === (s.channel || "email"))?.label || "Email"}</div>
+                  {s.subject && <div className="text-tiny font-medium mt-0.5 truncate">{s.subject}</div>}
                   {i > 0 && s.condition && s.condition !== "always" && (
-                    <div className="flex items-center gap-1 mt-1 text-tiny font-mono">
-                      <span className={`px-1.5 py-0.5 rounded-sm ${
+                    <div className="flex items-center gap-1 mt-0.5 text-tiny font-mono">
+                      <span className={`px-1 py-0.5 rounded-sm text-tiny ${
                         s.condition === "if_no_reply" ? "bg-warning/10 text-warning" :
                         s.condition === "if_replied" ? "bg-success/10 text-success" :
                         s.condition === "if_opened_no_reply" ? "bg-accent-soft text-primary" :
                         "bg-neutral-100 text-ink-muted"
                       }`}>
-                        {s.condition === "if_no_reply" ? "if no reply" :
-                         s.condition === "if_replied" ? "if replied" :
-                         s.condition === "if_opened_no_reply" ? "if opened, no reply" :
-                         s.condition === "if_clicked" ? "if clicked" :
-                         s.condition === "if_not_opened" ? "if not opened" :
-                         s.condition === "if_bounced" ? "if bounced" : s.condition}
+                        {s.condition === "if_no_reply" ? "no reply" :
+                         s.condition === "if_replied" ? "replied" :
+                         s.condition === "if_opened_no_reply" ? "opened" :
+                         s.condition === "if_clicked" ? "clicked" :
+                         s.condition === "if_not_opened" ? "not opened" :
+                         s.condition === "if_bounced" ? "bounced" : s.condition}
                       </span>
                     </div>
                   )}
                   {steps.length > 1 && (
-                    <button onClick={(e) => { e.stopPropagation(); removeStep(i); }} data-testid={`remove-step-${i}`} className="text-caption text-ink-muted hover:text-danger mt-2">
-                      <Trash2 size={12} className="inline" /> remove
+                    <button onClick={(e) => { e.stopPropagation(); removeStep(i); }} data-testid={`remove-step-${i}`} className="text-tiny text-ink-muted hover:text-danger mt-0.5">
+                      <Trash2 size={10} className="inline" /> remove
                     </button>
                   )}
                 </div>
@@ -934,70 +929,66 @@ export default function CampaignBuilder() {
               </div>
             </div>
           )}
-          <button onClick={addStep} data-testid="add-step" className="btn-ghost w-full justify-start mt-3 text-body"><Plus size={14} /> Add step</button>
+          <button onClick={addStep} data-testid="add-step" className="btn-ghost w-full justify-start mt-2 text-tiny"><Plus size={12} /> Add step</button>
 
-          <div className="mt-6 pt-4 border-t border-line">
-            <div className="ui-label mb-2">Sending Window</div>
-            <div className="grid grid-cols-2 gap-2">
+          <div className="mt-3 pt-3 border-t border-line">
+            <div className="text-tiny font-mono text-ink-muted mb-1.5">Sending Window</div>
+            <div className="grid grid-cols-2 gap-1.5">
               <div>
-                <label className="form-label">Start</label>
+                <label className="text-tiny text-ink-muted">Start</label>
                 <input type="time" value={sendWindowStart}
                   onChange={(e) => setSendWindowStart(e.target.value)}
-                  className="w-full border border-line px-2 py-1.5 rounded-lg text-caption" />
+                  className="w-full border border-line px-1.5 py-1 rounded text-tiny" />
               </div>
               <div>
-                <label className="form-label">End</label>
+                <label className="text-tiny text-ink-muted">End</label>
                 <input type="time" value={sendWindowEnd}
                   onChange={(e) => setSendWindowEnd(e.target.value)}
-                  className="w-full border border-line px-2 py-1.5 rounded-lg text-caption" />
+                  className="w-full border border-line px-1.5 py-1 rounded text-tiny" />
               </div>
             </div>
-      <div className="mt-2">
-        <label className="form-label">Timezone</label>
+      <div className="mt-1.5">
+        <label className="text-tiny text-ink-muted">Timezone</label>
         <div className="relative">
           <select value={timezone} onChange={(e) => setTimezone(e.target.value)}
-            className="w-full border border-line px-2 py-1.5 rounded-lg text-caption font-mono appearance-none pr-8">
+            className="w-full border border-line px-1.5 py-1 rounded text-tiny font-mono appearance-none pr-6">
             {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
           </select>
-          <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-ink-muted pointer-events-none" size={14} />
+          <ChevronDown className="absolute right-1.5 top-1/2 transform -translate-y-1/2 text-ink-muted pointer-events-none" size={10} />
         </div>
       </div>
           </div>
 
-          <div className="mt-4 pt-4 border-t border-line">
-            <label className="form-label">Folder</label>
+          <div className="mt-3 pt-3 border-t border-line">
+            <label className="text-tiny text-ink-muted">Folder</label>
             <select value={folderId} onChange={(e) => setFolderId(e.target.value)}
-              className="w-full border border-line px-2 py-1.5 rounded-lg text-caption mt-1">
+              className="w-full border border-line px-1.5 py-1 rounded text-tiny mt-0.5">
               <option value="">No folder</option>
               {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
           </div>
-          <div className="mt-2">
-            <label className="form-label">Tags (comma-separated)</label>
+          <div className="mt-1.5">
+            <label className="text-tiny text-ink-muted">Tags</label>
             <input value={campaignTags} onChange={(e) => setCampaignTags(e.target.value)}
               placeholder="e.g. outbound, q4, ae-target"
-              className="w-full border border-line px-2 py-1.5 rounded-lg text-caption mt-1" />
+              className="w-full border border-line px-1.5 py-1 rounded text-tiny mt-0.5" />
           </div>
 
-          {/* Signature — one toggle + picker shared by both AI and template
-              campaigns (the real send + test-send paths both key off a single
-              campaign.signature_id, so "one active signature, chosen from a
-              saved list" is the whole model — not multiple stacked signatures). */}
-          <div className="mt-4 pt-4 border-t border-line">
+          <div className="mt-3 pt-3 border-t border-line">
             <label className="flex items-center justify-between cursor-pointer">
-              <span className="flex items-center gap-1.5 form-label">
-                <Signature size={12} /> Signature
+              <span className="flex items-center gap-1 text-tiny text-ink-muted">
+                <Signature size={10} /> Signature
               </span>
               <input type="checkbox" checked={includeSignature}
                 onChange={(e) => setIncludeSignature(e.target.checked)}
-                data-testid="include-signature-toggle" className="w-3.5 h-3.5" />
+                data-testid="include-signature-toggle" className="w-3 h-3" />
             </label>
             {includeSignature && (
-              <div className="mt-2 flex items-center gap-1.5">
+              <div className="mt-1.5 flex items-center gap-1">
                 {signatures.length > 0 ? (
                   <select value={signatureId} onChange={(e) => setSignatureId(e.target.value)}
                     data-testid="signature-select"
-                    className="flex-1 min-w-0 border border-line rounded-lg px-2 py-1.5 text-caption bg-white">
+                    className="flex-1 min-w-0 border border-line rounded px-1.5 py-1 text-tiny bg-white">
                     <option value="">Choose a signature…</option>
                     {signatures.map((s) => (
                       <option key={s.id} value={s.id}>{s.name}</option>
@@ -1008,14 +999,14 @@ export default function CampaignBuilder() {
                 )}
                 <button onClick={() => setShowSignatureModal(true)} title="New signature"
                   data-testid="new-signature-btn"
-                  className="shrink-0 p-1.5 border border-line rounded-lg text-ink-muted hover:text-ink hover:bg-ash transition-colors">
-                  <Plus size={13} />
+                  className="shrink-0 p-1 border border-line rounded text-ink-muted hover:text-ink hover:bg-ash transition-colors">
+                  <Plus size={11} />
                 </button>
               </div>
             )}
           </div>
 
-          <div className="ui-label mt-6 mb-2">Leads ({selectedLeads.length}/{leads.length})</div>
+          <div className="text-tiny font-mono text-ink-muted mt-3 mb-1.5">Leads ({selectedLeads.length}/{leads.length})</div>
           {leadLists.length > 0 && (
             <div className="mb-2">
               <select value={selectedListId} onChange={(e) => setSelectedListId(e.target.value)}
@@ -1048,9 +1039,9 @@ export default function CampaignBuilder() {
               placeholder="Search leads..."
               className="w-full border border-line rounded-xl pl-7 pr-3 py-1.5 text-tiny font-mono" />
           </div>
-          <div className="border border-line rounded-xl overflow-hidden">
+          <div className="border border-line rounded-xl max-h-[132px] overflow-y-auto">
             {paginatedLeads.map((l) => (
-              <label key={l.id} className="flex items-start gap-1.5 px-2 py-1.5 border-b border-line last:border-b-0 text-tiny cursor-pointer hover:bg-surfacehover transition-colors duration-150">
+              <label key={l.id} className="flex items-start gap-1.5 px-1.5 py-0.5 border-b border-line last:border-b-0 text-tiny cursor-pointer hover:bg-surfacehover transition-colors duration-150">
                 <input type="checkbox" className="mt-0.5 w-3 h-3"
                   checked={selectedLeads.includes(l.id)}
                   onChange={(e) => setSelectedLeads(e.target.checked ? [...selectedLeads, l.id] : selectedLeads.filter((x) => x !== l.id))}
@@ -1096,61 +1087,61 @@ export default function CampaignBuilder() {
               </div>
             )}
           </div>
-          <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <button onClick={() => setSelectedLeads(filteredLeads.map((l) => l.id))} className="text-tiny text-ink hover:underline" data-testid="select-all-leads">Select all matching ({filteredLeads.length})</button>
-            <button onClick={() => setSelectedLeads([])} className="text-tiny text-ink-muted hover:underline" data-testid="deselect-all-leads">Deselect all</button>
+          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            <button onClick={() => setSelectedLeads(filteredLeads.map((l) => l.id))} className="text-tiny text-ink hover:underline" data-testid="select-all-leads">All ({filteredLeads.length})</button>
+            <button onClick={() => setSelectedLeads([])} className="text-tiny text-ink-muted hover:underline" data-testid="deselect-all-leads">None</button>
             <span className="text-tiny text-ink-muted">|</span>
             <input type="number" min={1} placeholder="N"
               data-testid="select-n-input"
-              className="w-12 border border-line rounded px-1.5 py-0.5 text-tiny text-center"
+              className="w-10 border border-line rounded px-1 py-0.5 text-tiny text-center"
               onKeyDown={(e) => { if (e.key === "Enter") selectFirstN(e.target); }} />
             <button onClick={() => selectFirstN(document.querySelector('[data-testid="select-n-input"]'))}
               className="text-tiny text-ink-muted hover:text-ink hover:underline">Select</button>
-            <label className="flex items-center gap-1 text-tiny text-ink-muted cursor-pointer ml-1">
-              <input type="checkbox" checked={selectFromAll} onChange={(e) => setSelectFromAll(e.target.checked)} className="w-3 h-3" />
-              All matching (not just this page)
+            <label className="flex items-center gap-1 text-tiny text-ink-muted cursor-pointer ml-0.5">
+              <input type="checkbox" checked={selectFromAll} onChange={(e) => setSelectFromAll(e.target.checked)} className="w-2.5 h-2.5" />
+              All matching
             </label>
           </div>
           {selectedLeads.length > 0 && (
-            <button onClick={save} disabled={busy} className="btn-primary w-full mt-3 text-body flex items-center justify-center gap-1">
-              {busy ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+            <button onClick={save} disabled={busy} className="btn-primary w-full mt-2 text-tiny flex items-center justify-center gap-1">
+              {busy ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
               Add & Generate ({selectedLeads.length} leads)
             </button>
           )}
 
           {/* Phased generation config */}
           {leadStats.total > 0 && (
-            <div className="mt-4 p-3 bg-bone rounded-2xl border border-line space-y-2">
-              <label className="flex items-center gap-2 text-caption font-medium cursor-pointer">
+            <div className="mt-2 p-2 bg-bone rounded-xl border border-line space-y-1">
+              <label className="flex items-center gap-1.5 text-tiny font-medium cursor-pointer">
                 <input type="checkbox" checked={phasedGeneration}
-                  onChange={(e) => setPhasedGeneration(e.target.checked)} className="w-3.5 h-3.5" />
+                  onChange={(e) => setPhasedGeneration(e.target.checked)} className="w-3 h-3" />
                 Phased generation
               </label>
               {phasedGeneration && (
-                <div className="space-y-2 ml-5">
-                  <label className="flex items-center gap-2 text-tiny text-ink-muted">
-                    <span>Batch size:</span>
+                <div className="space-y-1.5 ml-4">
+                  <label className="flex items-center gap-1.5 text-tiny text-ink-muted">
+                    <span>Batch:</span>
                     <input type="number" min={1} max={500} value={batchSize}
                       onChange={(e) => setBatchSize(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                      className="w-16 border border-line rounded px-1.5 py-0.5 text-tiny text-center" />
+                      className="w-14 border border-line rounded px-1 py-0.5 text-tiny text-center" />
                   </label>
                   {batchStatus && batchStatus.phased && (
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <div className="flex items-center justify-between text-tiny">
                         <span className="text-ink-muted">Batch {batchStatus.current_batch}/{batchStatus.total_batches}</span>
                         <span className="text-ink-muted">
-                          {Object.values(batchStatus.batches || {}).reduce((s, b) => s + b.approved, 0)}/{batchStatus.total_leads} approved
+                          {Object.values(batchStatus.batches || {}).reduce((s, b) => s + b.approved, 0)}/{batchStatus.total_leads}
                         </span>
                       </div>
-                      <div className="w-full bg-line rounded-full h-1.5 overflow-hidden">
+                      <div className="w-full bg-line rounded-full h-1 overflow-hidden">
                         <div className="bg-primary h-full rounded-full transition-all duration-300"
                           style={{ width: `${batchStatus.total_leads > 0 ? (Object.values(batchStatus.batches || {}).reduce((s, b) => s + b.approved, 0) / batchStatus.total_leads) * 100 : 0}%` }} />
                       </div>
                       {!batchStatus.all_batches_complete && batchApproved(batchStatus, batchStatus.current_batch) >= batchTotal(batchStatus, batchStatus.current_batch) && (
                         <button onClick={advanceBatch} disabled={advancingBatch}
-                          className="text-caption text-primary hover:underline flex items-center gap-1">
-                          {advancingBatch ? <Loader2 size={12} className="animate-spin" /> : <ChevronRight size={12} />}
-                          Generate next batch ({batchStatus.current_batch + 1}/{batchStatus.total_batches})
+                          className="text-tiny text-primary hover:underline flex items-center gap-0.5">
+                          {advancingBatch ? <Loader2 size={10} className="animate-spin" /> : <ChevronRight size={10} />}
+                          Next batch ({batchStatus.current_batch + 1}/{batchStatus.total_batches})
                         </button>
                       )}
                     </div>
@@ -1162,27 +1153,27 @@ export default function CampaignBuilder() {
           </div>
         </aside>
 
-        <section className={`flex-1 min-w-0 p-4 sm:p-6 bg-bone space-y-4 relative`}>
+        <section className={`flex-1 min-w-0 p-3 sm:p-4 bg-bone space-y-2 relative`}>
           {!showStepsPanel && (
             <button onClick={() => setShowStepsPanel(true)}
-              className="absolute top-4 left-4 w-5 h-5 flex items-center justify-center rounded hover:bg-white/50 text-ink-muted hover:text-ink transition-colors z-10"
+              className="absolute top-3 left-3 w-4 h-4 flex items-center justify-center rounded hover:bg-white/50 text-ink-muted hover:text-ink transition-colors z-10"
               title="Show steps">
-              <ChevronRight size={14} />
+              <ChevronRight size={12} />
             </button>
           )}
           {!showEqPanel && (
             <button onClick={() => setShowEqPanel(true)}
-              className="absolute top-4 right-4 w-5 h-5 flex items-center justify-center rounded hover:bg-white/50 text-ink-muted hover:text-ink transition-colors z-10"
+              className="absolute top-3 right-3 w-4 h-4 flex items-center justify-center rounded hover:bg-white/50 text-ink-muted hover:text-ink transition-colors z-10"
               title="Show EQ panel">
-              <ChevronLeft size={14} />
+              <ChevronLeft size={12} />
             </button>
           )}
           {reviewMode ? (
             /* REVIEW MODE — split pane: template left, generated email right */
             <div className="space-y-3">
               {campaignLeads.length > 0 && (
-                <div className="shadow-card rounded-2xl bg-white">
-                  <div className="flex items-center justify-between gap-2 px-4 py-2.5 flex-wrap">
+                <div className="shadow-card rounded-lg bg-white">
+                  <div className="flex items-center justify-between gap-2 px-3 py-2 flex-wrap">
                     <div className="text-caption text-ink-muted">
                       <span className="font-medium text-ink">{leadStats.approved}</span> approved · {" "}
                       <span className="font-medium text-ink">{leadStats.rejected}</span> rejected · {" "}
@@ -1214,7 +1205,7 @@ export default function CampaignBuilder() {
                   )}
                 </div>
               )}
-              <div className={`grid grid-cols-1 gap-4 h-full ${showEqPanel ? "lg:grid-cols-[200px_1fr_1fr]" : "lg:grid-cols-[180px_1fr_2fr]"}`}>
+              <div className={`grid grid-cols-1 gap-3 h-full ${showEqPanel ? "lg:grid-cols-[180px_1fr_1fr]" : "lg:grid-cols-[160px_1fr_2fr]"}`}>
               {(() => {
                 const reviewEmails = getReviewEmails();
                 const current = reviewEmails[reviewIndex];
@@ -1225,15 +1216,19 @@ export default function CampaignBuilder() {
                   ? signatures.find((s) => s.id === signatureId)?.content_html || ""
                   : "";
                 const rail = reviewEmails.length > 0 && (
-                  <div className="shadow-card rounded-2xl bg-white overflow-hidden flex flex-col max-h-[calc(100vh-280px)]">
-                    <div className="p-3 border-b border-line flex items-center justify-between">
-                      <span className="ui-label">Leads</span>
-                      <input type="checkbox"
+                  <div className={`shadow-card rounded-lg bg-white overflow-hidden flex flex-col transition-all duration-200 ${reviewCollapsed.leadRail ? 'max-h-[44px]' : 'max-h-[calc(100vh-280px)]'}`}>
+                    <div className="px-3 py-2 border-b border-line flex items-center justify-between cursor-pointer" onClick={() => setReviewCollapsed(prev => ({ ...prev, leadRail: !prev.leadRail }))}>
+                      <div className="flex items-center gap-1.5">
+                        {reviewCollapsed.leadRail ? <ChevronRight size={12} className="text-ink-muted" /> : <ChevronDown size={12} className="text-ink-muted" />}
+                        <span className="text-tiny font-mono text-ink-muted">Leads</span>
+                      </div>
+                      <input type="checkbox" onClick={(e) => e.stopPropagation()}
                         checked={selectedReview.length === reviewEmails.length}
                         onChange={(e) => setSelectedReview(e.target.checked ? reviewEmails.map((l) => l.id) : [])}
                         title="Select all" />
                     </div>
-                    <div className="px-3 py-2 border-b border-line flex items-center gap-2">
+                    {!reviewCollapsed.leadRail && (<>
+                    <div className="px-3 py-1.5 border-b border-line flex items-center gap-2">
                       <input type="range" min={0} max={Math.max(0, reviewEmails.length - 1)} value={reviewIndex}
                         onChange={(e) => setReviewIndex(Number(e.target.value))}
                         className="flex-1 h-1 accent-ink cursor-pointer" />
@@ -1251,29 +1246,30 @@ export default function CampaignBuilder() {
                         </div>
                       ))}
                     </div>
+                  </>)}
                   </div>
                 );
                 if (!current) return (
                   <>
                     {rail}
-                    <div className="lg:col-span-2 shadow-card rounded-2xl bg-white p-12 text-center">
+                    <div className="lg:col-span-2 shadow-card rounded-lg bg-white p-8 text-center">
                     {genProgress ? (
                       <>
-                        <Loader2 size={22} className="animate-spin mx-auto text-ink-muted mb-3" />
-                        <div className="text-body font-medium">
+                        <Loader2 size={16} className="animate-spin mx-auto text-ink-muted mb-2" />
+                        <div className="text-caption font-medium">
                           Generating personalized emails… {genProgress.done}/{genProgress.total || "?"}
                         </div>
                         <div className="text-caption text-ink-muted mt-1">This updates live — no need to refresh.</div>
                         {genProgress.total > 0 && (
-                          <div className="h-1.5 max-w-xs mx-auto mt-4 bg-line rounded-full overflow-hidden">
+                          <div className="h-1.5 max-w-xs mx-auto mt-3 bg-line rounded-full overflow-hidden">
                             <div className="h-full bg-accent transition-all duration-500" style={{ width: `${Math.min(100, (genProgress.done / genProgress.total) * 100)}%` }} />
                           </div>
                         )}
                       </>
                     ) : (
                       <>
-                        <Mail size={22} className="mx-auto text-ink-disabled mb-3" />
-                        <div className="text-body font-medium text-ink-muted">
+                        <Mail size={16} className="mx-auto text-ink-disabled mb-2" />
+                        <div className="text-caption font-medium text-ink-muted">
                           {leadStats.total === 0 ? "No leads assigned yet" : "Select a lead to preview"}
                         </div>
                         <p className="text-caption text-ink-muted mt-1 max-w-sm mx-auto">
@@ -1290,45 +1286,52 @@ export default function CampaignBuilder() {
                   <>
                     {rail}
                     {/* LEFT: Template with placeholders */}
-                    <div className="shadow-card rounded-2xl bg-white">
-                      <div className="p-4 border-b border-line flex items-center justify-between">
-                        <div className="ui-label">Template</div>
-                        <span className="text-tiny text-ink-muted font-mono">{reviewIndex + 1} / {reviewEmails.length}</span>
+                    <div className="shadow-card rounded-lg bg-white">
+                      <div className="p-3 border-b border-line flex items-center justify-between cursor-pointer" onClick={() => setReviewCollapsed(prev => ({ ...prev, template: !prev.template }))}>
+                        <div className="flex items-center gap-1.5">
+                          {reviewCollapsed.template ? <ChevronRight size={12} className="text-ink-muted" /> : <ChevronDown size={12} className="text-ink-muted" />}
+                          <span className="text-tiny font-mono text-ink-muted">Template</span>
+                        </div>
+                        {!reviewCollapsed.template && <span className="text-tiny text-ink-muted font-mono">{reviewIndex + 1} / {reviewEmails.length}</span>}
                       </div>
-                      <div className="p-4 space-y-3 max-h-[calc(100vh-280px)] overflow-y-auto">
+                      {!reviewCollapsed.template && (
+                      <div className="p-3 space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto">
                         <div>
-                          <div className="text-tiny text-ink-muted mb-1 font-mono">SUBJECT</div>
-                          <div className="text-caption font-semibold font-mono text-ink-secondary">{template.subject || "(no subject)"}</div>
+                          <div className="text-tiny text-ink-muted mb-0.5 font-mono">SUBJECT</div>
+                          <div className="text-tiny font-semibold font-mono text-ink-secondary">{template.subject || "(no subject)"}</div>
                         </div>
                         <div>
-                          <div className="text-tiny text-ink-muted mb-1 font-mono">BODY</div>
-                          <div className="text-caption text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded-xl p-3 bg-bone">
+                          <div className="text-tiny text-ink-muted mb-0.5 font-mono">BODY</div>
+                          <div className="text-tiny text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded p-2 bg-bone">
                             {template.body_html ? (
                               <div className="prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: template.body_html.replace(/\{\{personalized_opener\}\}/g, '<mark class="bg-warning/20 text-warning px-0.5 rounded">{{personalized_opener}}</mark>') }} />
                             ) : (
-                              <div className="whitespace-pre-wrap font-mono text-body text-ink-secondary leading-relaxed">{template.body}</div>
+                              <div className="whitespace-pre-wrap font-mono text-tiny text-ink-secondary leading-relaxed">{template.body}</div>
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 pt-2 border-t border-line">
-                          <button onClick={prevReview} disabled={reviewIndex === 0} className="btn-ghost text-caption px-2 py-1"><ChevronLeft size={12} /> Prev</button>
-                          <button onClick={nextReview} disabled={reviewIndex >= reviewEmails.length - 1} className="btn-ghost text-caption px-2 py-1">Next <ChevronRight size={12} /></button>
+                        <div className="flex items-center gap-2 pt-1.5 border-t border-line">
+                          <button onClick={prevReview} disabled={reviewIndex === 0} className="btn-ghost text-tiny px-1.5 py-0.5"><ChevronLeft size={10} /> Prev</button>
+                          <button onClick={nextReview} disabled={reviewIndex >= reviewEmails.length - 1} className="btn-ghost text-tiny px-1.5 py-0.5">Next <ChevronRight size={10} /></button>
                         </div>
                       </div>
+                      )}
                     </div>
 
                     {/* RIGHT: Generated email preview + controls */}
-                    <div className="shadow-card rounded-2xl bg-white">
-                      <div className="p-4 border-b border-line flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-medium truncate max-w-[140px]">{current.first_name} {current.last_name}</span>
+                    <div className="shadow-card rounded-lg bg-white">
+                      <div className="p-3 border-b border-line flex items-center justify-between gap-2 cursor-pointer" onClick={() => setReviewCollapsed(prev => ({ ...prev, preview: !prev.preview }))}>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {reviewCollapsed.preview ? <ChevronRight size={12} className="text-ink-muted shrink-0" /> : <ChevronDown size={12} className="text-ink-muted shrink-0" />}
+                          <span className="text-tiny truncate max-w-[120px] font-medium">{current.first_name} {current.last_name}</span>
                           <span className={`text-tiny font-mono px-1.5 py-0.5 rounded-full shrink-0 ${current.email_status === "approved" ? "bg-success/10 text-success" : current.email_status === "rejected" ? "bg-danger/10 text-danger" : "bg-warning/10 text-warning"}`}>
-                            {current.email_status === "approved" ? "Approved" : current.email_status === "rejected" ? "Rejected" : "Draft"}
+                            {current.email_status === "approved" ? "✓" : current.email_status === "rejected" ? "✗" : "~"}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                          <button onClick={() => sendTestEmail(current.id)} disabled={sendingTest} className="btn-ghost text-caption flex items-center gap-1" data-testid="send-test-email" title="Email this exact preview to yourself">
-                            {sendingTest ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Send test
+                        {!reviewCollapsed.preview && (
+                        <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end" onClick={(e) => e.stopPropagation()}>
+                          <button onClick={() => sendTestEmail(current.id)} disabled={sendingTest} className="btn-ghost text-tiny flex items-center gap-1" data-testid="send-test-email" title="Email this exact preview to yourself">
+                            {sendingTest ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />} Send
                           </button>
                           {!isTemplate && (
                             <>
@@ -1345,8 +1348,10 @@ export default function CampaignBuilder() {
                             </>
                           )}
                         </div>
-                      </div>
-                      <div className="p-4 space-y-3 max-h-[calc(100vh-280px)] overflow-y-auto">
+                      )}
+                    </div>
+                    {!reviewCollapsed.preview && (
+                      <div className="p-3 space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto">
                         {/* Opener editing — available even before any AI generation has
                             run, so a user can write/edit it by hand and immediately see
                             an approvable draft without spending a generation credit. */
@@ -1357,7 +1362,7 @@ export default function CampaignBuilder() {
                             </div>
                             <textarea value={editingOpener.opener} onChange={(e) => setEditingOpener({ ...editingOpener, opener: e.target.value })}
                               rows={3} placeholder="A one-line hook personal to this lead…"
-                              className="w-full border border-line px-2 py-1.5 rounded-lg text-body font-sans" />
+                              className="w-full border border-line px-2 py-1.5 rounded-lg text-caption font-sans" />
                             <div className="flex justify-end gap-2">
                               <button onClick={() => setEditingOpener(null)} className="btn-secondary text-caption">Cancel</button>
                               <button onClick={() => saveOpener(current.id, editingOpener.opener)} disabled={!editingOpener.opener?.trim()} className="btn-primary text-caption"><Check size={12} /> Save</button>
@@ -1386,7 +1391,7 @@ export default function CampaignBuilder() {
                                 <div><span className="font-medium text-ink">To:</span> {current.email || "lead@example.com"}</div>
                                 <div><span className="font-medium text-ink">Date:</span> {new Date().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</div>
                               </div>
-                              <div className="p-4 text-body text-ink leading-relaxed prose-email">
+                              <div className="p-3 text-caption text-ink leading-relaxed prose-email">
                                 {current.email_body_html ? (
                                   <div dangerouslySetInnerHTML={{ __html: fillMergeFields(current.email_body_html, current) + (activeSignatureHtml ? "<br><br>" + activeSignatureHtml : "") }} />
                                 ) : (
@@ -1421,7 +1426,7 @@ export default function CampaignBuilder() {
                           {isTemplate ? (
                             current.email_status === "approved" ? (
                               <>
-                                <span className="flex items-center gap-1 text-caption text-success font-medium"><Check size={14} /> Approved</span>
+                                <span className="flex items-center gap-1 text-caption text-success font-medium"><Check size={12} /> Approved</span>
                                 <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1 ml-auto"><Flag size={12} /> Reject</button>
                               </>
                             ) : (
@@ -1435,7 +1440,7 @@ export default function CampaignBuilder() {
                             <span className="text-caption text-ink-muted">Write an opener above (or generate with AI) to enable approval.</span>
                           ) : current.email_status === "approved" ? (
                             <>
-                              <span className="flex items-center gap-1 text-caption text-success font-medium"><Check size={14} /> Approved</span>
+                              <span className="flex items-center gap-1 text-caption text-success font-medium"><Check size={12} /> Approved</span>
                               <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1 ml-auto"><Flag size={12} /> Reject</button>
                             </>
                           ) : (
@@ -1449,6 +1454,7 @@ export default function CampaignBuilder() {
                           )}
                         </div>
                       </div>
+                      )}
                     </div>
                   </>
                 );
@@ -1457,26 +1463,33 @@ export default function CampaignBuilder() {
             </div>
           ) : (
             /* TEMPLATE EDITOR — multi-channel */
-            <div className="shadow-card p-6 sm:p-8 rounded-2xl">
+            <div className="shadow-card p-2 sm:p-3 rounded-lg">
+              <div className="flex items-center justify-between mb-1 cursor-pointer select-none" onClick={() => setEditorHidden(v => !v)}>
+                <span className="text-tiny font-mono text-ink-muted">Draft editor</span>
+                <button className="text-ink-muted hover:text-ink transition-colors" title="Toggle editor">
+                  {editorHidden ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                </button>
+              </div>
+              {!editorHidden && (<>
               {/* Channel selector */}
-              <div className="flex items-center gap-2 mb-5 pb-4 border-b border-line flex-wrap">
-                <div className="ui-label shrink-0">Channel</div>
-                <div className="flex flex-wrap gap-1">
+              <div className="flex items-center gap-1 mb-2 pb-2 border-b border-line flex-wrap">
+                <div className="text-tiny font-mono text-ink-muted shrink-0">Channel</div>
+                <div className="flex flex-wrap gap-0.5">
                   {CHANNELS.map((ch) => {
                     const active = (step.channel || "email") === ch.key;
-                    const chIcons = { email: <Mail size={14} />, phone_call: <Phone size={14} />, sms: <MessageSquare size={14} />, whatsapp: <MessageCircle size={14} />, linkedin_connect: <Send size={14} />, linkedin_message: <Send size={14} />, linkedin_comment: <MessageCircle size={14} /> };
+                    const chIcons = { email: <Mail size={12} />, phone_call: <Phone size={12} />, sms: <MessageSquare size={12} />, whatsapp: <MessageCircle size={12} />, linkedin_connect: <Send size={12} />, linkedin_message: <Send size={12} />, linkedin_comment: <MessageCircle size={12} /> };
                     return (
                       <button key={ch.key} onClick={() => updateStep({ channel: ch.key })}
-                        className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-caption font-medium transition-colors ${active ? "bg-ink text-white" : "bg-ash text-ink-muted hover:text-ink"}`}>
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-tiny font-medium transition-colors ${active ? "bg-ink text-white" : "bg-ash text-ink-muted hover:text-ink"}`}>
                         {chIcons[ch.key]} {ch.label}
                       </button>
                     );
                   })}
                 </div>
-                <div className="flex items-center gap-2 ml-auto">
-                  <label className="form-label text-tiny">Condition</label>
+                <div className="flex items-center gap-1 ml-auto">
+                  <label className="text-tiny text-ink-muted font-mono">Condition</label>
                   <select value={step.condition || "always"} onChange={(e) => updateStep({ condition: e.target.value })}
-                    className="border border-line px-2 py-1 rounded-lg text-tiny font-mono bg-white">
+                    className="border border-line px-1.5 py-0.5 rounded text-tiny font-mono bg-white">
                     <option value="always">Always send</option>
                     <option value="if_no_reply">If no reply</option>
                     <option value="if_opened_no_reply">If opened, no reply</option>
@@ -1491,22 +1504,22 @@ export default function CampaignBuilder() {
               {/* Email fields */}
               {(step.channel || "email") === "email" && (
                 <>
-                  <div className="ui-label mb-2">Subject</div>
+                  <div className="text-tiny font-mono text-ink-muted mb-1">Subject</div>
                   <input value={step.subject} onChange={(e) => updateStep({ subject: e.target.value })}
                     data-testid="editor-subject"
-                    className="w-full text-body font-display font-semibold border-0 border-b border-line py-2 focus:outline-none focus:border-ink bg-transparent"
+                    className="w-full text-caption font-medium border-0 border-b border-line py-1.5 focus:outline-none focus:border-ink bg-transparent"
                     placeholder="Quick idea for {{company}}" />
-                  <div className="mt-5 flex items-center justify-between">
-                    <div className="ui-label">Body</div>
-                    <div className="flex items-center gap-3">
-                      <label className="form-label">day</label>
+                  <div className="mt-2 flex items-center justify-between">
+                    <div className="text-tiny font-mono text-ink-muted">Body</div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-tiny text-ink-muted font-mono">day</label>
                       <input type="number" min={0} value={step.day}
                         onChange={(e) => updateStep({ day: Number(e.target.value) })}
                         data-testid="editor-day"
-                        className="w-16 border border-line px-2 py-1 rounded-xl font-mono text-ink" />
+                        className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
                     </div>
                   </div>
-                  <div className="mt-2">
+                  <div className="mt-1.5">
                     <RichEmailEditor value={step.body_html || ""} onChange={(html) => updateStep({ body_html: html })}
                       placeholder="Write your email, or research this lead and draft it for you." />
                   </div>
@@ -1516,16 +1529,16 @@ export default function CampaignBuilder() {
               {/* Phone Call fields */}
               {(step.channel || "") === "phone_call" && (
                 <>
-                  <div className="ui-label mb-1">Call Script</div>
-                  <p className="text-tiny text-ink-muted mb-2">{{first_name}}, {{company}}, and other merge fields will be filled automatically.</p>
+                  <div className="text-tiny font-mono text-ink-muted mb-0.5">Call Script</div>
+                  <p className="text-tiny text-ink-muted mb-1">{{first_name}}, {{company}}, and other merge fields will be filled automatically.</p>
                   <textarea value={step.script || ""} onChange={(e) => updateStep({ script: e.target.value })}
-                    rows={6} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-body text-ink"
+                    rows={4} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
                     placeholder="Hi {{first_name}}, this is [Your Name] from {{company}}... (write your call script with {{merge_fields}})" />
-                  <div className="mt-3 flex items-center gap-3">
-                    <label className="form-label">day</label>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <label className="text-tiny text-ink-muted font-mono">day</label>
                     <input type="number" min={0} value={step.day}
                       onChange={(e) => updateStep({ day: Number(e.target.value) })}
-                      className="w-16 border border-line px-2 py-1 rounded-xl font-mono text-ink" />
+                      className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
                   </div>
                 </>
               )}
@@ -1533,17 +1546,17 @@ export default function CampaignBuilder() {
               {/* SMS fields */}
               {(step.channel || "") === "sms" && (
                 <>
-                  <div className="ui-label mb-1">SMS Body</div>
-                  <p className="text-tiny text-ink-muted mb-2">Short message. Merge fields supported: {'{{'}first_name{'}}'}, {'{{'}company{'}}'}, etc.</p>
+                  <div className="text-tiny font-mono text-ink-muted mb-0.5">SMS Body</div>
+                  <p className="text-tiny text-ink-muted mb-1">Short message. Merge fields supported: {'{{'}first_name{'}}'}, {'{{'}company{'}}'}, etc.</p>
                   <textarea value={step.body || ""} onChange={(e) => updateStep({ body: e.target.value })}
-                    rows={3} maxLength={160} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-body text-ink"
+                    rows={2} maxLength={160} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
                     placeholder="Hi {{first_name}}, quick reminder about {{company}}..." />
-                  <div className="text-tiny text-ink-muted mt-1">{(step.body || "").length}/160 characters</div>
-                  <div className="mt-3 flex items-center gap-3">
-                    <label className="form-label">day</label>
+                  <div className="text-tiny text-ink-muted mt-0.5">{(step.body || "").length}/160 characters</div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <label className="text-tiny text-ink-muted font-mono">day</label>
                     <input type="number" min={0} value={step.day}
                       onChange={(e) => updateStep({ day: Number(e.target.value) })}
-                      className="w-16 border border-line px-2 py-1 rounded-xl font-mono text-ink" />
+                      className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
                   </div>
                 </>
               )}
@@ -1551,16 +1564,16 @@ export default function CampaignBuilder() {
               {/* WhatsApp fields */}
               {(step.channel || "") === "whatsapp" && (
                 <>
-                  <div className="ui-label mb-1">WhatsApp Message</div>
-                  <p className="text-tiny text-ink-muted mb-2">Merge fields supported. Keep it conversational.</p>
+                  <div className="text-tiny font-mono text-ink-muted mb-0.5">WhatsApp Message</div>
+                  <p className="text-tiny text-ink-muted mb-1">Merge fields supported. Keep it conversational.</p>
                   <textarea value={step.body || ""} onChange={(e) => updateStep({ body: e.target.value })}
-                    rows={4} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-body text-ink"
+                    rows={3} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
                     placeholder="Hi {{first_name}}, wanted to share something relevant for {{company}}..." />
-                  <div className="mt-3 flex items-center gap-3">
-                    <label className="form-label">day</label>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <label className="text-tiny text-ink-muted font-mono">day</label>
                     <input type="number" min={0} value={step.day}
                       onChange={(e) => updateStep({ day: Number(e.target.value) })}
-                      className="w-16 border border-line px-2 py-1 rounded-xl font-mono text-ink" />
+                      className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
                   </div>
                 </>
               )}
@@ -1568,16 +1581,16 @@ export default function CampaignBuilder() {
               {/* LinkedIn Message fields */}
               {(step.channel || "") === "linkedin_message" && (
                 <>
-                  <div className="ui-label mb-1">LinkedIn Message</div>
-                  <p className="text-tiny text-ink-muted mb-2">This will be marked as a manual task — LinkedIn Messages require sending via LinkedIn.com</p>
+                  <div className="text-tiny font-mono text-ink-muted mb-0.5">LinkedIn Message</div>
+                  <p className="text-tiny text-ink-muted mb-1">This will be marked as a manual task — LinkedIn Messages require sending via LinkedIn.com</p>
                   <textarea value={step.linkedin_message || step.body || ""} onChange={(e) => updateStep({ linkedin_message: e.target.value })}
-                    rows={5} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-body text-ink"
+                    rows={3} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
                     placeholder="Hi {{first_name}}, noticed {{company}}'s recent work on..." />
-                  <div className="mt-3 flex items-center gap-3">
-                    <label className="form-label">day</label>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <label className="text-tiny text-ink-muted font-mono">day</label>
                     <input type="number" min={0} value={step.day}
                       onChange={(e) => updateStep({ day: Number(e.target.value) })}
-                      className="w-16 border border-line px-2 py-1 rounded-xl font-mono text-ink" />
+                      className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
                   </div>
                 </>
               )}
@@ -1585,19 +1598,19 @@ export default function CampaignBuilder() {
               {/* LinkedIn Comment fields */}
               {(step.channel || "") === "linkedin_comment" && (
                 <>
-                  <div className="ui-label mb-1">Post URL to comment on</div>
+                  <div className="text-tiny font-mono text-ink-muted mb-0.5">Post URL to comment on</div>
                   <input value={step.linkedin_post_url || ""} onChange={(e) => updateStep({ linkedin_post_url: e.target.value })}
-                    className="w-full border border-line px-3 py-2 rounded-xl text-body text-ink"
+                    className="w-full border border-line px-2 py-1.5 rounded text-tiny text-ink"
                     placeholder="https://www.linkedin.com/posts/..." />
-                  <div className="ui-label mb-1 mt-3">Comment text</div>
+                  <div className="text-tiny font-mono text-ink-muted mt-1.5 mb-0.5">Comment text</div>
                   <textarea value={step.linkedin_comment_text || step.body || ""} onChange={(e) => updateStep({ linkedin_comment_text: e.target.value })}
-                    rows={4} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-body text-ink"
+                    rows={3} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
                     placeholder="Great insight, {{first_name}}! I'd add that..." />
-                  <div className="mt-3 flex items-center gap-3">
-                    <label className="form-label">day</label>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <label className="text-tiny text-ink-muted font-mono">day</label>
                     <input type="number" min={0} value={step.day}
                       onChange={(e) => updateStep({ day: Number(e.target.value) })}
-                      className="w-16 border border-line px-2 py-1 rounded-xl font-mono text-ink" />
+                      className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
                   </div>
                 </>
               )}
@@ -1605,37 +1618,38 @@ export default function CampaignBuilder() {
               {/* LinkedIn Connect fields */}
               {(step.channel || "") === "linkedin_connect" && (
                 <>
-                  <div className="flex items-center gap-2 text-warning mb-2">
-                    <AlertTriangle size={14} />
-                    <span className="text-caption font-medium">Manual action required</span>
+                  <div className="flex items-center gap-1 text-warning mb-1">
+                    <AlertTriangle size={12} />
+                    <span className="text-tiny font-medium">Manual action required</span>
                   </div>
-                  <p className="text-tiny text-ink-muted mb-3">LinkedIn doesn't allow automating connection requests. The lead's LinkedIn URL will be shown so you can connect manually.</p>
-                  <div className="ui-label mb-1">Connection note (optional)</div>
+                  <p className="text-tiny text-ink-muted mb-1.5">LinkedIn doesn't allow automating connection requests. The lead's LinkedIn URL will be shown so you can connect manually.</p>
+                  <div className="text-tiny font-mono text-ink-muted mb-0.5">Connection note (optional)</div>
                   <textarea value={step.linkedin_connection_note || step.body || ""} onChange={(e) => updateStep({ linkedin_connection_note: e.target.value })}
-                    rows={3} className="w-full border border-line px-3 py-2 rounded-xl font-mono text-body text-ink"
+                    rows={2} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
                     placeholder="Hi {{first_name}}, I've been following {{company}}'s work..." />
-                  <div className="mt-3 flex items-center gap-3">
-                    <label className="form-label">day</label>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <label className="text-tiny text-ink-muted font-mono">day</label>
                     <input type="number" min={0} value={step.day}
                       onChange={(e) => updateStep({ day: Number(e.target.value) })}
-                      className="w-16 border border-line px-2 py-1 rounded-xl font-mono text-ink" />
+                      className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
                   </div>
                 </>
               )}
+            </>)}
             </div>
           )}
 
           {/* Signature modal */}
           {showSignatureModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowSignatureModal(false)}>
-              <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-2xl mx-4" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="text-section font-display font-semibold">Create Signature</div>
+              <div className="bg-white rounded-lg shadow-card p-5 w-full max-w-xl mx-4" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-subheading font-display font-semibold">Create Signature</div>
                   <button onClick={() => setShowSignatureModal(false)} className="btn-ghost text-caption">Close</button>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <input value={signatureName} onChange={(e) => setSignatureName(e.target.value)}
-                    className="w-full border border-line rounded-xl px-3 py-2 text-input"
+                    className="w-full border border-line rounded-lg px-3 py-1.5 text-caption"
                     placeholder="Signature name (e.g. My Standard Signature)" />
                   <RichEmailEditor
                     value={signatureHtml}
@@ -1643,7 +1657,7 @@ export default function CampaignBuilder() {
                     placeholder="Paste or compose your signature here — add images, links, and formatting..."
                   />
                   {signatureHtml && (
-                    <div className="bg-bone border border-line rounded-xl p-3 text-body">
+                    <div className="bg-bone border border-line rounded-lg p-3 text-caption">
                       <div className="text-tiny font-mono uppercase text-ink-muted mb-1">Preview</div>
                       <div className="border-t border-line pt-2 mt-1 signature-preview" dangerouslySetInnerHTML={{ __html: signatureHtml }} />
                     </div>
@@ -1662,21 +1676,21 @@ export default function CampaignBuilder() {
         </section>
 
         {/* EQ Panel */}
-        <aside className={`${showEqPanel ? "w-80" : "w-0 overflow-hidden"} shrink-0 border-l border-line bg-white transition-all duration-200 relative`}>
-          <div className={`p-6 sm:p-8 ${showEqPanel ? "" : "invisible"}`}>
+        <aside className={`${showEqPanel ? "w-72" : "w-0 overflow-hidden"} shrink-0 border-l border-line bg-white transition-all duration-200 relative`}>
+          <div className={`p-4 sm:p-5 ${showEqPanel ? "" : "invisible"}`}>
           {showEqPanel && (
             <button onClick={() => setShowEqPanel(false)}
-              className="absolute top-3 right-3 w-5 h-5 flex items-center justify-center rounded hover:bg-bone text-ink-muted hover:text-ink transition-colors"
+              className="absolute top-2 right-2 w-4 h-4 flex items-center justify-center rounded hover:bg-bone text-ink-muted hover:text-ink transition-colors"
               title="Hide EQ panel">
-              <ChevronRight size={14} />
+              <ChevronRight size={12} />
             </button>
           )}
           <div className="ui-label text-ink">EQ Score</div>
-          <div className="font-mono text-3xl sm:text-5xl font-bold tracking-tighter mt-1"
+          <div className="font-mono text-2xl sm:text-3xl font-bold tracking-tight mt-1"
             style={{ color: eq ? (eq.overall > 70 ? "#212025" : eq.overall > 40 ? "#5A5A63" : "#B33636") : "#8A8B86" }}>
             {eq?.overall ?? "—"}
           </div>
-          <div className="mt-6 space-y-4">
+          <div className="mt-4 space-y-3">
             {eq && [
               ["Relevance", eq.relevance],
               ["Empathy", eq.empathy],
@@ -1695,7 +1709,7 @@ export default function CampaignBuilder() {
               </div>
             ))}
           </div>
-          <div className="mt-8 ui-label mb-2">Hints</div>
+          <div className="mt-6 ui-label mb-1.5">Hints</div>
           <ul className="space-y-2 text-caption text-ink-secondary">
             {eq?.hints?.length ? eq.hints.map((h) => (
               <li key={h} className="border-l-2 border-sanguine pl-2">{h}</li>
@@ -1703,9 +1717,9 @@ export default function CampaignBuilder() {
           </ul>
 
           {status !== "draft" && (
-            <div className="mt-8 shadow-card p-3">
-              <div className="ui-label mb-1">Status</div>
-              <div className="font-mono text-body">{status}</div>
+            <div className="mt-6 shadow-card p-3">
+              <div className="ui-label mb-0.5">Status</div>
+              <div className="font-mono text-caption">{status}</div>
             </div>
           )}
           </div>
