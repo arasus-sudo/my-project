@@ -121,13 +121,14 @@ async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[
                 campaign.get("send_window_end", "17:00"),
                 tz,
             )
+            send_at_utc = send_at.astimezone(dt_timezone.utc)
 
             queue_item = {
                 "id": new_id(), "workspace_id": workspace_id,
                 "campaign_id": campaign["id"], "lead_id": lid, "step": step_idx,
                 "channel": channel,
                 "status": "pending",
-                "send_at": send_at.isoformat(),
+                "send_at": send_at_utc.isoformat(),
                 "attempts": 0, "error": None,
                 "created_at": now_iso(),
             }

@@ -5308,6 +5308,23 @@ async def _tracked_tick(tick_id: str, fn, *args) -> None:
 async def _start_scheduler():
     global scheduler
     try:
+        # Fix existing send_queue items with timezone-aware send_at strings
+        # (bug: pre-2026-07-28 versions stored local-time ISO strings instead of UTC,
+        # causing run_send_tick's string-based $lte comparison to never match)
+        from datetime import timezone as _tz, datetime as _dt
+        from zoneinfo import ZoneInfo as _ZI
+        _fixed = 0
+        async for _q in db.send_queue.find({"send_at": {"$regex": r"[+-]\d{2}:\d{2}$"}}, {"_id": 0, "id": 1, "send_at": 1}):
+            try:
+                _old = _dt.fromisoformat(_q["send_at"])
+                _utc = _old.astimezone(_tz.utc).isoformat()
+                await db.send_queue.update_one({"id": _q["id"]}, {"$set": {"send_at": _utc}})
+                _fixed += 1
+            except Exception:
+                pass
+        if _fixed:
+            logger.info("migrated %s send_queue item(s) to UTC send_at", _fixed)
+
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         from schedule_eq import run_reminder_tick
         from sender import run_send_tick, run_reply_tick
