@@ -1929,6 +1929,14 @@ async def send_test_campaign_email(cid: str, lead_id: str, user=Depends(current_
         raw_body = (step_template.get("body", "") or "").replace("{{personalized_opener}}", "")
         body_html = _resolve(step_template.get("body_html", "") or raw_body.replace("\n", "<br>"))
 
+    # Mirrors enqueue_campaign's signature append (sender.py) — the test-send
+    # preview must match what a real send actually includes.
+    sig_id = campaign.get("signature_id")
+    if sig_id:
+        sig = await db.signatures.find_one({"id": sig_id, "workspace_id": wid}, {"_id": 0})
+        if sig and sig.get("content_html") and body_html:
+            body_html = body_html + "<br><br>" + sig["content_html"]
+
     import email_client
     banner = (
         f"<p style='color:#8E8E93;font-size:12px;margin:0 0 16px'>"

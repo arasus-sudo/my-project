@@ -5,7 +5,7 @@ import { PageHeader } from "../components/AppLayout";
 import RichEmailEditor, { sanitizeEmailHtml } from "../components/RichEmailEditor";
 import { toast } from "sonner";
 import {
-  FileSearch, Save, Play, Plus, Trash2, Loader2, Check, AlertTriangle, Flame, LayoutTemplate,
+  FileSearch, Save, Play, Pause, Plus, Trash2, Loader2, Check, AlertTriangle, Flame, LayoutTemplate,
   Mail, Eye, ThumbsUp, Signature, Search, Megaphone,
   Zap, ChevronLeft, ChevronRight, ChevronDown,
   Edit2, RotateCw, Flag, List, Tag, X, PenSquare,
@@ -104,8 +104,11 @@ export default function CampaignBuilder() {
   const [selectedPanelLeads, setSelectedPanelLeads] = useState([]);
   const [selectAllPanel, setSelectAllPanel] = useState(false);
   const [leadSearch, setLeadSearch] = useState("");
+  const [leadPickerPage, setLeadPickerPage] = useState(1);
+  const LEADS_PAGE_SIZE = 25;
   const [signatures, setSignatures] = useState([]);
   const [signatureId, setSignatureId] = useState("");
+  const [includeSignature, setIncludeSignature] = useState(true);
   const [campaignType, setCampaignType] = useState("ai"); // "ai" or "template"
   const isTemplate = campaignType === "template";
   const [mailboxView, setMailboxView] = useState(false);
@@ -201,7 +204,8 @@ export default function CampaignBuilder() {
         })) : [DEFAULT_STEP()]);
         setSelectedLeads(c.lead_ids || []);
         setStatus(c.status || "draft");
-        if (c.signature_id) setSignatureId(c.signature_id);
+        if (c.signature_id) { setSignatureId(c.signature_id); setIncludeSignature(true); }
+        else setIncludeSignature(false);
         if (c.send_window_start) setSendWindowStart(c.send_window_start);
         if (c.send_window_end) setSendWindowEnd(c.send_window_end);
         if (c.timezone) setTimezone(c.timezone);
@@ -544,6 +548,17 @@ export default function CampaignBuilder() {
     });
   }, [leads, leadSearch, listLeadIds, selectedTags]);
 
+  // Rendering all matching leads at once (sometimes 1000+) is what made this
+  // panel feel congested and slow — page the DOM, not the underlying fetch.
+  // Selection/"select all matching" still operate on the full filteredLeads
+  // set, only the visible rows are windowed.
+  useEffect(() => { setLeadPickerPage(1); }, [leadSearch, selectedListId, selectedTags]);
+  const leadPickerTotalPages = Math.max(1, Math.ceil(filteredLeads.length / LEADS_PAGE_SIZE));
+  const paginatedLeads = useMemo(
+    () => filteredLeads.slice((leadPickerPage - 1) * LEADS_PAGE_SIZE, leadPickerPage * LEADS_PAGE_SIZE),
+    [filteredLeads, leadPickerPage],
+  );
+
   const leadStats = useMemo(() => {
     const total = campaignLeads.length;
     const approved = campaignLeads.filter((l) => l.email_status === "approved").length;
@@ -644,7 +659,7 @@ export default function CampaignBuilder() {
         body_html: sanitizeEmailHtml(rest.body_html || rest.body || ""),
         body_text: htmlToText(rest.body_html || "") || rest.body || "",
       }));
-      const payload = { name, goal, campaign_type: campaignType, steps: cleanSteps, lead_ids: selectedLeads, signature_id: signatureId || null, send_window_start: sendWindowStart, send_window_end: sendWindowEnd, timezone, batch_size: batchSize, phased_generation: phasedGeneration, folder_id: folderId || null, tags: campaignTags ? campaignTags.split(",").map((t) => t.trim()).filter(Boolean) : [] };
+      const payload = { name, goal, campaign_type: campaignType, steps: cleanSteps, lead_ids: selectedLeads, signature_id: (includeSignature && signatureId) ? signatureId : null, send_window_start: sendWindowStart, send_window_end: sendWindowEnd, timezone, batch_size: batchSize, phased_generation: phasedGeneration, folder_id: folderId || null, tags: campaignTags ? campaignTags.split(",").map((t) => t.trim()).filter(Boolean) : [] };
       let cid = activeCampaignId || id;
       if (!cid) {
         const { data } = await api.post("/campaigns", payload);
@@ -680,6 +695,11 @@ export default function CampaignBuilder() {
   const launch = async (skipPending) => {
     const cid = activeCampaignId || id;
     if (!cid) { toast.error("Save first"); return; }
+    // Re-launching an already-active campaign would re-run enqueue_campaign
+    // and duplicate-queue every lead — Pause it first (button below already
+    // won't offer "Launch" once status is active, this is the belt-and-braces
+    // guard for stale state).
+    if (status === "active") { toast.info("Already running — pause it first to relaunch."); return; }
     if (skipPending === undefined && !leadStats.canLaunch && leadStats.approved > 0) {
       toast.info(`Send to ${leadStats.approved} approved leads only?`, {
         description: `${leadStats.total - leadStats.approved} leads need review and will be skipped`,
@@ -691,15 +711,30 @@ export default function CampaignBuilder() {
     setBusy(true);
     try {
       const { data } = await api.post(`/campaigns/${cid}/launch${skipPending ? "?skip_pending=true" : ""}`);
+      setStatus("active");
       toast.success(`Launched — ${data.queued} email${data.queued === 1 ? "" : "s"} queued`, {
         description: "They go out inside your sending window, spread across your mailboxes.",
+        action: { label: "View in Campaigns", onClick: () => nav("/app/campaigns") },
+        duration: 8000,
       });
-      nav("/app/campaigns");
     } catch (err) {
       console.error("Launch error:", err);
       toast.error(err?.response?.data?.detail || err?.message || "Launch failed", {
         action: { label: "Mailboxes", onClick: () => nav("/app/mailboxes") },
       });
+    } finally { setBusy(false); }
+  };
+
+  const pauseCampaign = async () => {
+    const cid = activeCampaignId || id;
+    if (!cid) return;
+    setBusy(true);
+    try {
+      await api.post(`/campaigns/${cid}/pause`);
+      setStatus("paused");
+      toast.success("Paused — sending stops until you resume.");
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Pause failed");
     } finally { setBusy(false); }
   };
 
@@ -761,15 +796,26 @@ export default function CampaignBuilder() {
             >
               {reviewMode ? <><PenSquare size={14} /> Edit template</> : <><Eye size={14} /> Preview</>}
             </button>
-            <button
-              data-testid="launch-campaign"
-              onClick={launch}
-              disabled={busy || !id || leadStats.approved === 0}
-              title={leadStats.approved === 0 ? "Approve at least one lead before launching" : ""}
-              className="btn-primary"
-            >
-              <Play size={14} /> Launch
-            </button>
+            {status === "active" ? (
+              <button
+                data-testid="pause-campaign"
+                onClick={pauseCampaign}
+                disabled={busy || !id}
+                className="btn-secondary"
+              >
+                <Pause size={14} /> Pause
+              </button>
+            ) : (
+              <button
+                data-testid="launch-campaign"
+                onClick={() => launch()}
+                disabled={busy || !id || leadStats.approved === 0}
+                title={leadStats.approved === 0 ? "Approve at least one lead before launching" : ""}
+                className="btn-primary"
+              >
+                <Play size={14} /> {status === "paused" ? "Resume" : "Launch"}
+              </button>
+            )}
           </div>
         }
       />
@@ -933,6 +979,42 @@ export default function CampaignBuilder() {
               className="w-full border border-line px-2 py-1.5 rounded-lg text-caption mt-1" />
           </div>
 
+          {/* Signature — one toggle + picker shared by both AI and template
+              campaigns (the real send + test-send paths both key off a single
+              campaign.signature_id, so "one active signature, chosen from a
+              saved list" is the whole model — not multiple stacked signatures). */}
+          <div className="mt-4 pt-4 border-t border-line">
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="flex items-center gap-1.5 form-label">
+                <Signature size={12} /> Signature
+              </span>
+              <input type="checkbox" checked={includeSignature}
+                onChange={(e) => setIncludeSignature(e.target.checked)}
+                data-testid="include-signature-toggle" className="w-3.5 h-3.5" />
+            </label>
+            {includeSignature && (
+              <div className="mt-2 flex items-center gap-1.5">
+                {signatures.length > 0 ? (
+                  <select value={signatureId} onChange={(e) => setSignatureId(e.target.value)}
+                    data-testid="signature-select"
+                    className="flex-1 min-w-0 border border-line rounded-lg px-2 py-1.5 text-caption bg-white">
+                    <option value="">Choose a signature…</option>
+                    {signatures.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex-1 text-tiny text-ink-muted">No signatures yet.</div>
+                )}
+                <button onClick={() => setShowSignatureModal(true)} title="New signature"
+                  data-testid="new-signature-btn"
+                  className="shrink-0 p-1.5 border border-line rounded-lg text-ink-muted hover:text-ink hover:bg-ash transition-colors">
+                  <Plus size={13} />
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="ui-label mt-6 mb-2">Leads ({selectedLeads.length}/{leads.length})</div>
           {leadLists.length > 0 && (
             <div className="mb-2">
@@ -961,34 +1043,30 @@ export default function CampaignBuilder() {
             </div>
           )}
           <div className="relative mb-2">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
             <input value={leadSearch} onChange={(e) => setLeadSearch(e.target.value)}
               placeholder="Search leads..."
-              className="w-full border border-line rounded-xl pl-7 pr-3 py-1.5 text-caption font-mono" />
+              className="w-full border border-line rounded-xl pl-7 pr-3 py-1.5 text-tiny font-mono" />
           </div>
-          <div className="border border-line rounded-xl max-h-64 overflow-y-auto">
-            {filteredLeads.map((l) => (
-              <label key={l.id} className="flex items-start gap-2 p-2 border-b border-line last:border-b-0 text-caption cursor-pointer hover:bg-surfacehover transition-colors duration-150">
-                <input type="checkbox" className="mt-0.5"
+          <div className="border border-line rounded-xl overflow-hidden">
+            {paginatedLeads.map((l) => (
+              <label key={l.id} className="flex items-start gap-1.5 px-2 py-1.5 border-b border-line last:border-b-0 text-tiny cursor-pointer hover:bg-surfacehover transition-colors duration-150">
+                <input type="checkbox" className="mt-0.5 w-3 h-3"
                   checked={selectedLeads.includes(l.id)}
                   onChange={(e) => setSelectedLeads(e.target.checked ? [...selectedLeads, l.id] : selectedLeads.filter((x) => x !== l.id))}
                   data-testid={`lead-check-${l.id}`}
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{l.first_name} {l.last_name}</div>
+                  <div className="font-medium text-caption truncate">{l.first_name} {l.last_name}</div>
                   <div className="text-ink-muted truncate">{l.company}{l.title ? ` · ${l.title}` : ""}</div>
-                  <div className="text-tiny text-ink-disabled font-mono truncate">{l.email}</div>
-                  {l.tags?.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {l.tags.map((t) => (
-                        <span key={t} className="text-tiny font-mono bg-ink/5 text-ink-muted px-1.5 py-0.5 rounded-full">{t}</span>
+                  <div className="text-ink-disabled font-mono truncate">{l.email}</div>
+                  {(l.tags?.length > 0 || l.campaign_names?.length > 0) && (
+                    <div className="flex flex-wrap gap-1 mt-0.5">
+                      {l.tags?.map((t) => (
+                        <span key={t} className="font-mono bg-ink/5 text-ink-muted px-1.5 py-0.5 rounded-full">{t}</span>
                       ))}
-                    </div>
-                  )}
-                  {l.campaign_names?.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {l.campaign_names.map((cn) => (
-                        <span key={cn} className="text-tiny font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{cn}</span>
+                      {l.campaign_names?.map((cn) => (
+                        <span key={cn} className="font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{cn}</span>
                       ))}
                     </div>
                   )}
@@ -998,20 +1076,39 @@ export default function CampaignBuilder() {
             {filteredLeads.length === 0 && (
               <div className="text-caption text-ink-muted text-center py-6">No leads match the selected filters</div>
             )}
+            {filteredLeads.length > 0 && (
+              <div className="flex items-center justify-between px-2 py-1.5 border-t border-line bg-bone text-tiny text-ink-muted">
+                <span>
+                  {(leadPickerPage - 1) * LEADS_PAGE_SIZE + 1}–{Math.min(leadPickerPage * LEADS_PAGE_SIZE, filteredLeads.length)} of {filteredLeads.length}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setLeadPickerPage((p) => Math.max(1, p - 1))} disabled={leadPickerPage <= 1}
+                    data-testid="lead-picker-prev"
+                    className="p-1 rounded hover:bg-ash disabled:opacity-30 disabled:hover:bg-transparent text-ink-muted hover:text-ink transition-colors">
+                    <ChevronLeft size={13} />
+                  </button>
+                  <button onClick={() => setLeadPickerPage((p) => Math.min(leadPickerTotalPages, p + 1))} disabled={leadPickerPage >= leadPickerTotalPages}
+                    data-testid="lead-picker-next"
+                    className="p-1 rounded hover:bg-ash disabled:opacity-30 disabled:hover:bg-transparent text-ink-muted hover:text-ink transition-colors">
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <button onClick={() => setSelectedLeads(filteredLeads.map((l) => l.id))} className="text-caption text-ink hover:underline" data-testid="select-all-leads">Select all</button>
-            <button onClick={() => setSelectedLeads([])} className="text-caption text-ink-muted hover:underline" data-testid="deselect-all-leads">Deselect all</button>
+            <button onClick={() => setSelectedLeads(filteredLeads.map((l) => l.id))} className="text-tiny text-ink hover:underline" data-testid="select-all-leads">Select all matching ({filteredLeads.length})</button>
+            <button onClick={() => setSelectedLeads([])} className="text-tiny text-ink-muted hover:underline" data-testid="deselect-all-leads">Deselect all</button>
             <span className="text-tiny text-ink-muted">|</span>
             <input type="number" min={1} placeholder="N"
               data-testid="select-n-input"
-              className="w-14 border border-line rounded px-1.5 py-0.5 text-tiny text-center"
+              className="w-12 border border-line rounded px-1.5 py-0.5 text-tiny text-center"
               onKeyDown={(e) => { if (e.key === "Enter") selectFirstN(e.target); }} />
             <button onClick={() => selectFirstN(document.querySelector('[data-testid="select-n-input"]'))}
               className="text-tiny text-ink-muted hover:text-ink hover:underline">Select</button>
             <label className="flex items-center gap-1 text-tiny text-ink-muted cursor-pointer ml-1">
               <input type="checkbox" checked={selectFromAll} onChange={(e) => setSelectFromAll(e.target.checked)} className="w-3 h-3" />
-              All matching
+              All matching (not just this page)
             </label>
           </div>
           {selectedLeads.length > 0 && (
@@ -1122,6 +1219,11 @@ export default function CampaignBuilder() {
                 const reviewEmails = getReviewEmails();
                 const current = reviewEmails[reviewIndex];
                 const template = steps[activeStep] || steps[0] || {};
+                // Mirrors the real send + test-send append (sender.py / server.py) —
+                // the preview must show exactly what would actually go out.
+                const activeSignatureHtml = includeSignature
+                  ? signatures.find((s) => s.id === signatureId)?.content_html || ""
+                  : "";
                 const rail = reviewEmails.length > 0 && (
                   <div className="shadow-card rounded-2xl bg-white overflow-hidden flex flex-col max-h-[calc(100vh-280px)]">
                     <div className="p-3 border-b border-line flex items-center justify-between">
@@ -1286,20 +1388,28 @@ export default function CampaignBuilder() {
                               </div>
                               <div className="p-4 text-body text-ink leading-relaxed prose-email">
                                 {current.email_body_html ? (
-                                  <div dangerouslySetInnerHTML={{ __html: fillMergeFields(current.email_body_html, current) }} />
+                                  <div dangerouslySetInnerHTML={{ __html: fillMergeFields(current.email_body_html, current) + (activeSignatureHtml ? "<br><br>" + activeSignatureHtml : "") }} />
                                 ) : (
-                                  <div className="whitespace-pre-wrap font-sans">{fillMergeFields(current.email_body, current)}</div>
+                                  <div className="whitespace-pre-wrap font-sans">
+                                    {fillMergeFields(current.email_body, current)}
+                                    {activeSignatureHtml && <div className="mt-3" dangerouslySetInnerHTML={{ __html: activeSignatureHtml }} />}
+                                  </div>
                                 )}
                               </div>
                             </div>
                           ) : (
                           <div className="max-h-96 overflow-y-auto text-caption text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded-xl p-3 bg-white prose-email">
                             {current.email_body || current.email_body_html ? (
-                              <div dangerouslySetInnerHTML={{ __html: fillMergeFields(current.email_body_html || current.email_body?.replace(/\n/g, "<br>") || "", current) }} />
+                              <div dangerouslySetInnerHTML={{ __html: fillMergeFields(current.email_body_html || current.email_body?.replace(/\n/g, "<br>") || "", current) + (activeSignatureHtml ? "<br><br>" + activeSignatureHtml : "") }} />
                             ) : (
                               <div className="text-ink-muted italic">No content</div>
                             )}
                           </div>
+                          )}
+                          {activeSignatureHtml && (
+                            <div className="flex items-center gap-1 text-tiny text-ink-muted mt-1.5">
+                              <Signature size={11} /> Signature included in preview
+                            </div>
                           )}
                           {/\{\{\s*\w+\s*\}\}/.test(current.email_body || "") && (
                             <div className="flex items-center gap-1.5 text-tiny text-warning mt-1.5">

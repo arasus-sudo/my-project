@@ -570,8 +570,8 @@ export default function Campaigns() {
             ) : optimizeData && (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-ink-muted">{optimizeData.campaign_name} · {optimizeData.total_sent} sent</span>
-                  <span className={`text-lg font-bold font-mono ${
+                  <span className="text-body text-ink-muted">{optimizeData.campaign_name} · {optimizeData.total_sent} sent</span>
+                  <span className={`text-card-title font-bold font-mono ${
                     optimizeData.overall_score >= 70 ? "text-success" : optimizeData.overall_score >= 40 ? "text-warning" : "text-danger"
                   }`}>{optimizeData.overall_score}/100</span>
                 </div>
@@ -582,28 +582,28 @@ export default function Campaigns() {
                   </div>
                 </div>
                 {optimizeData.subject_line_recommendations?.length > 0 && (
-                  <div><div className="ui-label text-xs">Subject Line Recommendations</div>
+                  <div><div className="ui-label">Subject Line Recommendations</div>
                     <ul className="list-disc list-inside text-tiny text-ink space-y-0.5">
                       {optimizeData.subject_line_recommendations.map((r, i) => <li key={i}>{r}</li>)}
                     </ul>
                   </div>
                 )}
                 {optimizeData.best_send_times?.length > 0 && (
-                  <div><div className="ui-label text-xs">Best Send Times</div>
+                  <div><div className="ui-label">Best Send Times</div>
                     <div className="flex flex-wrap gap-1">
                       {optimizeData.best_send_times.map((t, i) => <span key={i} className="px-2 py-0.5 bg-bone border border-line rounded-full text-tiny font-mono">{t}</span>)}
                     </div>
                   </div>
                 )}
                 {optimizeData.content_suggestions?.length > 0 && (
-                  <div><div className="ui-label text-xs">Content Suggestions</div>
+                  <div><div className="ui-label">Content Suggestions</div>
                     <ul className="list-disc list-inside text-tiny text-ink space-y-0.5">
                       {optimizeData.content_suggestions.map((s, i) => <li key={i}>{s}</li>)}
                     </ul>
                   </div>
                 )}
                 {optimizeData.step_sequence_advice?.length > 0 && (
-                  <div><div className="ui-label text-xs">Step Sequence Advice</div>
+                  <div><div className="ui-label">Step Sequence Advice</div>
                     <ul className="list-disc list-inside text-tiny text-ink space-y-0.5">
                       {optimizeData.step_sequence_advice.map((a, i) => <li key={i}>{a}</li>)}
                     </ul>
