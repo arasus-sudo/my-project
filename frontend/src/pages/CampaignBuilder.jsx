@@ -1377,10 +1377,17 @@ function ReviewAndSendView({
     : "";
 
   const rail = reviewEmails.length > 0 && (
-    <div className={`shadow-card rounded-lg bg-white overflow-hidden flex flex-col transition-all duration-200 ${reviewCollapsed.leadRail ? 'max-h-[44px]' : 'max-h-[calc(100vh-280px)]'}`}>
+    reviewCollapsed.leadRail ? (
+      <button onClick={() => setReviewCollapsed((prev) => ({ ...prev, leadRail: false }))}
+        className="shadow-card rounded-lg bg-white overflow-hidden flex items-center justify-center py-6 cursor-pointer hover:bg-surfacehover transition-colors"
+        title="Expand leads panel">
+        <ChevronRight size={14} className="text-ink-muted" />
+      </button>
+    ) : (
+    <div className="shadow-card rounded-lg bg-white overflow-hidden flex flex-col max-h-[calc(100vh-280px)]">
       <div className="px-3 py-2 border-b border-line flex items-center justify-between cursor-pointer" onClick={() => setReviewCollapsed((prev) => ({ ...prev, leadRail: !prev.leadRail }))}>
         <div className="flex items-center gap-1.5">
-          {reviewCollapsed.leadRail ? <ChevronRight size={12} className="text-ink-muted" /> : <ChevronDown size={12} className="text-ink-muted" />}
+          <ChevronLeft size={12} className="text-ink-muted" />
           <span className="text-tiny font-mono text-ink-muted">Leads</span>
         </div>
         <input type="checkbox" onClick={(e) => e.stopPropagation()}
@@ -1388,27 +1395,26 @@ function ReviewAndSendView({
           onChange={(e) => setSelectedReview(e.target.checked ? reviewEmails.map((l) => l.id) : [])}
           title="Select all" />
       </div>
-      {!reviewCollapsed.leadRail && (<>
-        <div className="px-3 py-1.5 border-b border-line flex items-center gap-2">
-          <input type="range" min={0} max={Math.max(0, reviewEmails.length - 1)} value={reviewIndex}
-            onChange={(e) => setReviewIndex(Number(e.target.value))}
-            className="flex-1 h-1 accent-ink cursor-pointer" />
-          <span className="text-tiny font-mono text-ink-muted shrink-0">{reviewEmails.length > 0 ? `${reviewIndex + 1} / ${reviewEmails.length}` : "—"}</span>
-        </div>
-        <div className="overflow-y-auto flex-1">
-          {reviewEmails.map((l, i) => (
-            <div key={l.id}
-              className={`flex items-center gap-2 px-3 py-2 border-b border-line cursor-pointer hover:bg-surfacehover transition-colors ${i === reviewIndex ? "bg-accent-soft" : ""}`}
-              onClick={() => setReviewIndex(i)}>
-              <input type="checkbox" onClick={(e) => e.stopPropagation()}
-                checked={selectedReview.includes(l.id)} onChange={() => toggleReviewSelected(l.id)} />
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${l.email_status === "approved" ? "bg-success" : l.email_status === "rejected" ? "bg-danger" : l.personalized ? "bg-warning" : "bg-ink-disabled"}`} />
-              <span className="text-caption truncate flex-1">{l.first_name} {l.last_name}</span>
-            </div>
-          ))}
-        </div>
-      </>)}
+      <div className="px-3 py-1.5 border-b border-line flex items-center gap-2">
+        <input type="range" min={0} max={Math.max(0, reviewEmails.length - 1)} value={reviewIndex}
+          onChange={(e) => setReviewIndex(Number(e.target.value))}
+          className="flex-1 h-1 accent-ink cursor-pointer" />
+        <span className="text-tiny text-ink-muted font-mono shrink-0">{reviewIndex + 1}/{reviewEmails.length}</span>
+      </div>
+      <div className="overflow-y-auto flex-1">
+        {reviewEmails.map((l, i) => (
+          <div key={l.id}
+            className={`flex items-center gap-2 px-3 py-2 border-b border-line cursor-pointer hover:bg-surfacehover transition-colors ${i === reviewIndex ? "bg-accent-soft" : ""}`}
+            onClick={() => setReviewIndex(i)}>
+            <input type="checkbox" onClick={(e) => e.stopPropagation()}
+              checked={selectedReview.includes(l.id)} onChange={() => toggleReviewSelected(l.id)} />
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${l.email_status === "approved" ? "bg-success" : l.email_status === "rejected" ? "bg-danger" : l.personalized ? "bg-warning" : "bg-ink-disabled"}`} />
+            <span className="text-caption truncate flex-1">{l.first_name} {l.last_name}</span>
+          </div>
+        ))}
+      </div>
     </div>
+    )
   );
 
   return (
@@ -1447,7 +1453,14 @@ function ReviewAndSendView({
           )}
         </div>
       )}
-      <div className="grid grid-cols-1 gap-3 h-full lg:grid-cols-[220px_1fr_1fr]">
+      <div className={`grid grid-cols-1 gap-3 h-full ${
+        // Tailwind's JIT scans for literal class strings, so every combination
+        // is spelled out here rather than built from a template literal —
+        // an interpolated arbitrary-value class wouldn't be picked up at build time.
+        reviewCollapsed.leadRail
+          ? (reviewCollapsed.preview ? "lg:grid-cols-[48px_1fr_48px]" : "lg:grid-cols-[48px_1fr_1fr]")
+          : (reviewCollapsed.preview ? "lg:grid-cols-[220px_1fr_48px]" : "lg:grid-cols-[220px_1fr_1fr]")
+      }`}>
         {!current ? (
           <>
             {rail}
@@ -1517,39 +1530,43 @@ function ReviewAndSendView({
             </div>
 
             {/* RIGHT: Generated email preview + controls */}
+            {reviewCollapsed.preview ? (
+              <button onClick={() => setReviewCollapsed((prev) => ({ ...prev, preview: false }))}
+                className="shadow-card rounded-lg bg-white overflow-hidden flex items-center justify-center py-6 cursor-pointer hover:bg-surfacehover transition-colors"
+                title="Expand preview panel">
+                <ChevronLeft size={14} className="text-ink-muted" />
+              </button>
+            ) : (
             <div className="shadow-card rounded-lg bg-white">
               <div className="p-3 border-b border-line flex items-center justify-between gap-2 cursor-pointer" onClick={() => setReviewCollapsed((prev) => ({ ...prev, preview: !prev.preview }))}>
                 <div className="flex items-center gap-1.5 min-w-0">
-                  {reviewCollapsed.preview ? <ChevronRight size={12} className="text-ink-muted shrink-0" /> : <ChevronDown size={12} className="text-ink-muted shrink-0" />}
+                  <ChevronRight size={12} className="text-ink-muted shrink-0" />
                   <span className="text-tiny truncate max-w-[120px] font-medium">{current.first_name} {current.last_name}</span>
                   <span className={`text-tiny font-mono px-1.5 py-0.5 rounded-full shrink-0 ${current.email_status === "approved" ? "bg-success/10 text-success" : current.email_status === "rejected" ? "bg-danger/10 text-danger" : "bg-warning/10 text-warning"}`}>
                     {current.email_status === "approved" ? "✓" : current.email_status === "rejected" ? "✗" : "~"}
                   </span>
                 </div>
-                {!reviewCollapsed.preview && (
-                  <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => sendTestEmail(current.id)} disabled={sendingTest} className="btn-ghost text-tiny flex items-center gap-1" data-testid="send-test-email" title="Email this exact preview to yourself">
-                      {sendingTest ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />} Send
-                    </button>
-                    {!isTemplate && (
-                      <>
-                        {editingOpener?.leadId === current.id ? (
-                          <button onClick={() => setEditingOpener(null)} className="btn-ghost text-caption"><X size={12} /> Cancel</button>
-                        ) : (
-                          <button onClick={() => setEditingOpener({ leadId: current.id, opener: current.personalized_opener })} className="btn-ghost text-caption flex items-center gap-1">
-                            <Edit2 size={12} /> {current.personalized_opener ? "Opener" : "Add opener"}
-                          </button>
-                        )}
-                        <button onClick={() => regenerateOpener(current.id)} disabled={generatingEmail === current.id} className="btn-ghost text-caption flex items-center gap-1">
-                          <RotateCw size={12} className={generatingEmail === current.id ? "animate-spin" : ""} /> {current.personalized ? "Regenerate" : "Generate with AI"}
+                <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end" onClick={(e) => e.stopPropagation()}>
+                  <button onClick={() => sendTestEmail(current.id)} disabled={sendingTest} className="btn-ghost text-tiny flex items-center gap-1" data-testid="send-test-email" title="Email this exact preview to yourself">
+                    {sendingTest ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />} Send
+                  </button>
+                  {!isTemplate && (
+                    <>
+                      {editingOpener?.leadId === current.id ? (
+                        <button onClick={() => setEditingOpener(null)} className="btn-ghost text-caption"><X size={12} /> Cancel</button>
+                      ) : (
+                        <button onClick={() => setEditingOpener({ leadId: current.id, opener: current.personalized_opener })} className="btn-ghost text-caption flex items-center gap-1">
+                          <Edit2 size={12} /> {current.personalized_opener ? "Opener" : "Add opener"}
                         </button>
-                      </>
-                    )}
-                  </div>
-                )}
+                      )}
+                      <button onClick={() => regenerateOpener(current.id)} disabled={generatingEmail === current.id} className="btn-ghost text-caption flex items-center gap-1">
+                        <RotateCw size={12} className={generatingEmail === current.id ? "animate-spin" : ""} /> {current.personalized ? "Regenerate" : "Generate with AI"}
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-              {!reviewCollapsed.preview && (
-                <div className="p-3 space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto">
+              <div className="p-3 space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto">
                   {!isTemplate && editingOpener?.leadId === current.id && (
                     <div className="bg-bone border border-line rounded-xl p-3 space-y-2">
                       <div className="text-tiny font-mono text-ink-muted">
@@ -1649,9 +1666,9 @@ function ReviewAndSendView({
                       <button onClick={() => deleteLeadEmail(current.id)} className="btn-ghost text-caption text-ink-muted hover:text-danger ml-auto flex items-center gap-1"><Trash2 size={12} /> Remove</button>
                     )}
                   </div>
-                </div>
-              )}
+              </div>
             </div>
+            )}
           </>
         )}
       </div>
