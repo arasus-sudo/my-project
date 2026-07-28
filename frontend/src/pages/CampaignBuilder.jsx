@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, isCreditError } from "../lib/api";
+import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import RichEmailEditor, { sanitizeEmailHtml } from "../components/RichEmailEditor";
 import { toast } from "sonner";
 import {
-  FileSearch, Save, Play, Pause, Plus, Trash2, Loader2, Check, AlertTriangle, Flame, LayoutTemplate,
-  Mail, Eye, ThumbsUp, Signature, Search, Megaphone,
+  Save, Play, Pause, Plus, Trash2, Loader2, Check, AlertTriangle, LayoutTemplate,
+  Mail, Eye, Signature, Search,
   Zap, ChevronLeft, ChevronRight, ChevronDown,
-  Edit2, RotateCw, Flag, List, Tag, X, PenSquare,
+  Edit2, RotateCw, Flag, X, PenSquare,
   Phone, MessageSquare, Send, MessageCircle,
 } from "lucide-react";
 
@@ -66,14 +66,6 @@ const DEFAULT_STEP = () => ({
   linkedin_connection_note: "",
 });
 
-/** The four steps the backend actually runs (draft_chain.run_chain). */
-const CHAIN_STEPS = [
-  { key: "research", label: "Research" },
-  { key: "angle", label: "Angle" },
-  { key: "draft", label: "Draft" },
-  { key: "humanise", label: "Humanise" },
-];
-
 const htmlToText = (html) => {
   const el = document.createElement("div");
   el.innerHTML = sanitizeEmailHtml(html);
@@ -94,15 +86,8 @@ export default function CampaignBuilder() {
   const [eq, setEq] = useState(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("draft");
-  const [previewLeadId, setPreviewLeadId] = useState("");
-  const [chainStep, setChainStep] = useState(null);   // which chain step is running
-  const [draftMeta, setDraftMeta] = useState(null);   // confidence / angle / note
   const [campaignLeads, setCampaignLeads] = useState([]);
   const [generatingEmail, setGeneratingEmail] = useState(null);
-  const [generatingAll, setGeneratingAll] = useState(false);
-  const [previewEmail, setPreviewEmail] = useState(null);
-  const [selectedPanelLeads, setSelectedPanelLeads] = useState([]);
-  const [selectAllPanel, setSelectAllPanel] = useState(false);
   const [leadSearch, setLeadSearch] = useState("");
   const [leadPickerPage, setLeadPickerPage] = useState(1);
   const LEADS_PAGE_SIZE = 25;
@@ -134,11 +119,9 @@ export default function CampaignBuilder() {
   const [timezone, setTimezone] = useState("UTC");
 
   // Campaign Engine & Review states
-  const [engineRunning, setEngineRunning] = useState(false);
   const [reviewIndex, setReviewIndex] = useState(0);
   const [reviewMode, setReviewMode] = useState(false);
   const [editingOpener, setEditingOpener] = useState(null); // {leadId, opener}
-  const [genJobId, setGenJobId] = useState("");
   // Shared by every generation entry point (save / run-engine / add-leads) so
   // Preview always shows accurate live progress instead of a bare "no emails
   // yet" dead end while a background job is still writing them.
@@ -154,8 +137,7 @@ export default function CampaignBuilder() {
   const [campaignTags, setCampaignTags] = useState("");
   const [advancingBatch, setAdvancingBatch] = useState(false);
   const [showEqPanel, setShowEqPanel] = useState(true);
-  const [showStepsPanel, setShowStepsPanel] = useState(true);
-  const [editorHidden, setEditorHidden] = useState(false);
+  const [railSection, setRailSection] = useState("sequence"); // sequence|audience|sending|signature|basics
   const [reviewCollapsed, setReviewCollapsed] = useState({ leadRail: false, template: false, preview: false });
 
   // Track actual campaign ID — may differ from useParams id when creating new
@@ -221,33 +203,6 @@ export default function CampaignBuilder() {
     }
   }, [id]);
 
-  const generateLeadEmail = async (leadId) => {
-    setGeneratingEmail(leadId);
-    try {
-      const { data } = await api.post(`/campaigns/${id}/leads/${leadId}/generate-email`);
-      toast.success("Personalized email generated");
-      loadCampaignLeads();
-    } catch (err) {
-      toast.error(err?.response?.data?.detail || "Generation failed");
-    } finally {
-      setGeneratingEmail(null);
-    }
-  };
-
-  const generateAllEmails = async () => {
-    setGeneratingAll(true);
-    try {
-      const { data } = await api.post(`/campaigns/${id}/leads/generate-all`);
-      toast.success(`Generated ${data.generated} personalized email${data.generated === 1 ? '' : 's'}`);
-      if (data.errors?.length) console.warn("Generation errors:", data.errors);
-      loadCampaignLeads();
-    } catch (err) {
-      toast.error(err?.response?.data?.detail || "Bulk generation failed");
-    } finally {
-      setGeneratingAll(false);
-    }
-  };
-
   const deleteLeadEmail = async (leadId) => {
     try {
       await api.delete(`/campaigns/${id}/leads/${leadId}/email`);
@@ -293,30 +248,11 @@ export default function CampaignBuilder() {
     } catch { toast.error("Failed to delete"); }
   };
 
-  // Panel: select/deselect all
-  const toggleSelectAllPanel = () => {
-    if (selectAllPanel) {
-      setSelectedPanelLeads([]);
-      setSelectAllPanel(false);
-    } else {
-      setSelectedPanelLeads(campaignLeads.map((l) => l.id));
-      setSelectAllPanel(true);
-    }
-  };
-
-  const togglePanelLead = (lid) => {
-    setSelectedPanelLeads((prev) =>
-      prev.includes(lid) ? prev.filter((x) => x !== lid) : [...prev, lid]
-    );
-    setSelectAllPanel(false);
-  };
-
   // Shared by every generation trigger below: polls generation-status until
   // the job completes, keeping `genProgress` live so Preview can render a
   // real "N/M generated" bar instead of dropping into review mode before any
   // email actually exists.
   const pollGeneration = (cid, jobId, generating) => {
-    setGenJobId(jobId);
     setGenProgress({ done: 0, total: generating || 0 });
     setReviewMode(true);
     setReviewIndex(0);
@@ -326,47 +262,18 @@ export default function CampaignBuilder() {
         const allJobs = Object.values(st.data.jobs);
         const running = allJobs.find((j) => j.status === "running");
         const job = running || allJobs[allJobs.length - 1] || null;
-        if (!job) { clearInterval(poll); setGenProgress(null); setEngineRunning(false); return; }
+        if (!job) { clearInterval(poll); setGenProgress(null); return; }
         setGenProgress({ done: job.done || 0, total: job.total || generating || 0 });
         loadCampaignLeads(cid);
         if (job.status === "complete") {
           clearInterval(poll);
           setGenProgress(null);
-          setEngineRunning(false);
           loadCampaignLeads(cid);
           refreshBatchStatus();
           toast.success(`Generated ${job.done} email${job.done === 1 ? "" : "s"}`);
         }
-      } catch { clearInterval(poll); setGenProgress(null); setEngineRunning(false); }
+      } catch { clearInterval(poll); setGenProgress(null); }
     }, 3000);
-  };
-
-  // Add selected panel leads to campaign and auto-generate emails
-  const addSelectedToCampaign = async () => {
-    const cid = activeCampaignId || id;
-    if (!cid || selectedPanelLeads.length === 0) return;
-    try {
-      const { data } = await api.post(`/campaigns/${cid}/leads/batch`, { lead_ids: selectedPanelLeads });
-      if (data.added === 0) {
-        toast.info("Leads already in campaign");
-        return;
-      }
-      toast.success(`Added ${data.added} lead${data.added === 1 ? '' : 's'} — generating emails...`);
-      const campaign = await api.get(`/campaigns/${cid}`);
-      setSelectedLeads(campaign.data.lead_ids || []);
-      loadCampaignLeads(cid);
-      const engine = await api.post(`/campaigns/${cid}/run-engine`);
-      if (engine.data.job_id) {
-        pollGeneration(cid, engine.data.job_id, engine.data.generating);
-      } else {
-        toast.success(`Generated ${engine.data.generated || 0} personalized emails`);
-        loadCampaignLeads(cid);
-        setReviewMode(true);
-        setReviewIndex(0);
-      }
-    } catch (err) {
-      toast.error(err?.response?.data?.detail || "Failed to add leads");
-    }
   };
 
   // Approve / Reject
@@ -449,29 +356,6 @@ export default function CampaignBuilder() {
       toast.error(err?.response?.data?.detail || "Regenerate-all failed");
     } finally {
       setRegeneratingAll(false);
-    }
-  };
-
-  // Run Campaign Engine - generates personalized openers for all leads
-  const runCampaignEngine = async () => {
-    const cid = activeCampaignId || id;
-    if (!cid) return;
-    setEngineRunning(true);
-    try {
-      const { data } = await api.post(`/campaigns/${cid}/run-engine`);
-      if (data.job_id) {
-        toast.success(`Generating emails for ${data.generating} leads in background`);
-        pollGeneration(cid, data.job_id, data.generating);
-      } else {
-        toast.success(`Campaign engine processed ${data.generated} emails`);
-        loadCampaignLeads(cid);
-        setReviewMode(true);
-        setReviewIndex(0);
-        setEngineRunning(false);
-      }
-    } catch (err) {
-      toast.error(err?.response?.data?.detail || "Engine failed");
-      setEngineRunning(false);
     }
   };
 
@@ -573,14 +457,6 @@ export default function CampaignBuilder() {
 
   const step = steps[activeStep];
 
-  // The AI writes for ONE specific lead. Previously this silently used leads[0]
-  // with no way to change it, so every "personalized" draft was aimed at whoever
-  // happened to be first in the list.
-  const previewLead = useMemo(
-    () => leads.find((l) => l.id === previewLeadId) || leads[0] || null,
-    [leads, previewLeadId],
-  );
-
   useEffect(() => {
     if (!step) return;
     const t = setTimeout(() => {
@@ -603,54 +479,6 @@ export default function CampaignBuilder() {
     if (steps.length === 1) return;
     const next = steps.filter((_, x) => x !== i);
     setSteps(next); setActiveStep(Math.max(0, activeStep - (i <= activeStep ? 1 : 0)));
-  };
-
-  /** Research → Angle → Draft → Humanise, against the selected preview lead. */
-  const writeWithAI = async () => {
-    if (!previewLead) { toast.error("Add a lead first — the AI writes to a real person."); return; }
-    setBusy(true);
-    setDraftMeta(null);
-
-    // The backend runs the chain in one request, so step the indicator on a timer
-    // to reflect roughly where it is rather than pretending to stream.
-    setChainStep("research");
-    const timers = [
-      setTimeout(() => setChainStep("angle"), 2500),
-      setTimeout(() => setChainStep("draft"), 8000),
-      setTimeout(() => setChainStep("humanise"), 15000),
-    ];
-
-    try {
-      const { data } = await api.post("/pitch-eq/draft", {
-        lead_id: previewLead.id,
-        goal: goal || "Book a 15-minute intro call.",
-        // No tone override here — the backend falls back to the workspace's
-        // real Brand Voice tone (Settings → Brand voice) instead of a
-        // hardcoded value that ignored whatever the user configured.
-      });
-      updateStep({
-        subject: data.subject,
-        body_html: sanitizeEmailHtml(data.body_html),
-        body: data.body_text,
-      });
-      setEq(data.eq);
-      setDraftMeta(data);
-      toast.success(
-        data.has_angle
-          ? "Written from a real trigger"
-          : data.has_signal
-            ? "Written — no usable trigger found, so it leads with the pain, not a fake hook"
-            : "Written — no public signals found, so it makes no claims about their company",
-      );
-    } catch (err) {
-      if (!isCreditError(err)) {
-        toast.error(err?.response?.data?.detail || "Could not write the draft");
-      }
-    } finally {
-      timers.forEach(clearTimeout);
-      setChainStep(null);
-      setBusy(false);
-    }
   };
 
   const save = async () => {
@@ -779,7 +607,10 @@ export default function CampaignBuilder() {
         subtitle={`Goal: ${goal}`}
         badge="EQ Editor"
         right={
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            {status !== "draft" && (
+              <span className="text-tiny font-mono px-2 py-1 rounded-lg border border-line text-ink-muted">{status}</span>
+            )}
             <button data-testid="save-campaign" onClick={save} disabled={busy} className="btn-secondary"><Save size={12} /> Save</button>
             {id && (
               <button onClick={async () => {
@@ -789,15 +620,6 @@ export default function CampaignBuilder() {
                 } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
               }} className="btn-secondary"><LayoutTemplate size={12} /> Template</button>
             )}
-            <button
-              data-testid="toggle-preview"
-              onClick={() => setReviewMode((v) => !v)}
-              disabled={leadStats.total === 0}
-              title={leadStats.total === 0 ? "Add at least one lead to preview generated emails" : ""}
-              className="btn-secondary"
-            >
-              {reviewMode ? <><PenSquare size={12} /> Edit template</> : <><Eye size={12} /> Preview</>}
-            </button>
             {status === "active" ? (
               <button
                 data-testid="pause-campaign"
@@ -850,880 +672,968 @@ export default function CampaignBuilder() {
         </div>
       </div>
 
-      <div className="flex min-h-[calc(100vh-90px)]">
-        {/* Steps sidebar */}
-        <aside className={`${showStepsPanel ? "w-72" : "w-0 overflow-hidden"} shrink-0 border-r border-line bg-white transition-all duration-200`}>
-          <div className={`p-3 ${showStepsPanel ? "" : "invisible"}`}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-tiny font-mono text-ink-muted">Sequence</div>
-              <button onClick={() => setShowStepsPanel(false)} className="text-ink-muted hover:text-ink transition-colors" title="Hide steps">
-                <ChevronLeft size={12} />
-              </button>
-            </div>
-          <ol className="space-y-1">
-            {steps.map((s, i) => (
-              <li key={s._key || i}>
-                <div
-                  onClick={() => setActiveStep(i)}
-                  data-testid={`step-${i}`}
-                  className={`w-full text-left p-2 border transition-colors duration-150 ${i === activeStep ? "border-ink bg-surfacehover" : "border-line hover:bg-surfacehover"} rounded-lg cursor-pointer`}
-                >
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-1">
-                      {(() => {
-                        const ch = s.channel || "email";
-                        const icons = { email: <Mail size={10} />, phone_call: <Phone size={10} />, sms: <MessageSquare size={10} />, whatsapp: <MessageCircle size={10} />, linkedin_connect: <Send size={10} />, linkedin_message: <Send size={10} />, linkedin_comment: <MessageCircle size={10} /> };
-                        return <span className="text-ink-muted">{icons[ch] || <Mail size={10} />}</span>;
-                      })()}
-                      <div className="text-tiny font-mono text-ink-muted">Step {i + 1}</div>
-                    </div>
-                    <div className="text-tiny font-mono text-ink-muted">d{s.day}</div>
-                  </div>
-                  {s.subject && <div className="text-tiny font-medium mt-0.5 truncate">{s.subject}</div>}
-                  {i > 0 && s.condition && s.condition !== "always" && (
-                    <div className="flex items-center gap-1 mt-0.5 text-tiny font-mono">
-                      <span className={`px-1 py-0.5 rounded-sm text-tiny ${
-                        s.condition === "if_no_reply" ? "bg-warning/10 text-warning" :
-                        s.condition === "if_replied" ? "bg-success/10 text-success" :
-                        s.condition === "if_opened_no_reply" ? "bg-accent-soft text-primary" :
-                        "bg-neutral-100 text-ink-muted"
-                      }`}>
-                        {s.condition === "if_no_reply" ? "no reply" :
-                         s.condition === "if_replied" ? "replied" :
-                         s.condition === "if_opened_no_reply" ? "opened" :
-                         s.condition === "if_clicked" ? "clicked" :
-                         s.condition === "if_not_opened" ? "not opened" :
-                         s.condition === "if_bounced" ? "bounced" : s.condition}
-                      </span>
-                    </div>
-                  )}
-                  {steps.length > 1 && (
-                    <button onClick={(e) => { e.stopPropagation(); removeStep(i); }} data-testid={`remove-step-${i}`} className="text-tiny text-ink-muted hover:text-danger mt-0.5">
-                      <Trash2 size={10} className="inline" /> remove
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ol>
-          {/* DAG Flow Visual */}
-          {steps.length > 1 && (
-            <div className="mt-3 p-2 bg-bone border border-line rounded-xl">
-              <div className="text-tiny font-mono text-ink-muted mb-2">Flow</div>
-              <div className="space-y-1">
-                {steps.map((s, i) => (
-                  <div key={s._key || i}>
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${i === activeStep ? "bg-ink" : "bg-ink-muted"}`} />
-                      <span className={`text-tiny font-mono truncate ${i === activeStep ? "text-ink font-medium" : "text-ink-muted"}`}>
-                        Step {i + 1}{i > 0 && s.condition && s.condition !== "always" && ` · ${s.condition.replace("if_", "").replace(/_/g, " ")}`}
-                      </span>
-                    </div>
-                    {i < steps.length - 1 && (
-                      <div className="ml-[3px] pl-[3px] border-l border-line py-0.5 ml-1">
-                        <span className="text-tiny text-ink-muted font-mono">├─ day {steps[i + 1]?.day || 0}</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <button onClick={addStep} data-testid="add-step" className="btn-ghost w-full justify-start mt-2 text-tiny"><Plus size={12} /> Add step</button>
-
-          <div className="mt-3 pt-3 border-t border-line">
-            <div className="text-tiny font-mono text-ink-muted mb-1.5">Sending Window</div>
-            <div className="grid grid-cols-2 gap-1.5">
-              <div>
-                <label className="text-tiny text-ink-muted">Start</label>
-                <input type="time" value={sendWindowStart}
-                  onChange={(e) => setSendWindowStart(e.target.value)}
-                  className="w-full border border-line px-1.5 py-1 rounded text-tiny" />
-              </div>
-              <div>
-                <label className="text-tiny text-ink-muted">End</label>
-                <input type="time" value={sendWindowEnd}
-                  onChange={(e) => setSendWindowEnd(e.target.value)}
-                  className="w-full border border-line px-1.5 py-1 rounded text-tiny" />
-              </div>
-            </div>
-      <div className="mt-1.5">
-        <label className="text-tiny text-ink-muted">Timezone</label>
-        <div className="relative">
-          <select value={timezone} onChange={(e) => setTimezone(e.target.value)}
-            className="w-full border border-line px-1.5 py-1 rounded text-tiny font-mono appearance-none pr-6">
-            {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-          </select>
-          <ChevronDown className="absolute right-1.5 top-1/2 transform -translate-y-1/2 text-ink-muted pointer-events-none" size={10} />
+      {/* Build / Review & Send tabs */}
+      <div className="px-3 sm:px-4 border-b border-line">
+        <div className="flex gap-1 overflow-x-auto">
+          <button onClick={() => setReviewMode(false)} data-testid="build-tab"
+            className={`px-4 py-2 text-body font-medium font-display border-b-2 transition-colors whitespace-nowrap shrink-0 ${!reviewMode ? "border-ink text-ink" : "border-transparent text-ink-muted hover:text-ink"}`}>
+            <PenSquare size={14} className="inline mr-1.5" /> Build
+          </button>
+          <button onClick={() => setReviewMode(true)} disabled={leadStats.total === 0} data-testid="toggle-preview"
+            title={leadStats.total === 0 ? "Add at least one lead to preview generated emails" : ""}
+            className={`px-4 py-2 text-body font-medium font-display border-b-2 transition-colors whitespace-nowrap shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${reviewMode ? "border-ink text-ink" : "border-transparent text-ink-muted hover:text-ink"}`}>
+            <Eye size={14} className="inline mr-1.5" /> Review & Send
+          </button>
         </div>
       </div>
-          </div>
 
-          <div className="mt-3 pt-3 border-t border-line">
-            <label className="text-tiny text-ink-muted">Folder</label>
-            <select value={folderId} onChange={(e) => setFolderId(e.target.value)}
-              className="w-full border border-line px-1.5 py-1 rounded text-tiny mt-0.5">
-              <option value="">No folder</option>
-              {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+      {reviewMode ? (
+        <ReviewAndSendView
+          campaignLeads={campaignLeads} leadStats={leadStats}
+          regenerateAllEmails={regenerateAllEmails} regeneratingAll={regeneratingAll}
+          dismissAllEmails={dismissAllEmails} approveAllEmails={approveAllEmails}
+          selectedReview={selectedReview} setSelectedReview={setSelectedReview}
+          bulkSetReviewStatus={bulkSetReviewStatus}
+          getReviewEmails={getReviewEmails} reviewIndex={reviewIndex} setReviewIndex={setReviewIndex}
+          steps={steps} activeStep={activeStep}
+          includeSignature={includeSignature} signatures={signatures} signatureId={signatureId}
+          reviewCollapsed={reviewCollapsed} setReviewCollapsed={setReviewCollapsed}
+          genProgress={genProgress}
+          toggleReviewSelected={toggleReviewSelected}
+          prevReview={prevReview} nextReview={nextReview}
+          sendTestEmail={sendTestEmail} sendingTest={sendingTest}
+          isTemplate={isTemplate}
+          editingOpener={editingOpener} setEditingOpener={setEditingOpener}
+          regenerateOpener={regenerateOpener} generatingEmail={generatingEmail}
+          saveOpener={saveOpener}
+          mailboxView={mailboxView} setMailboxView={setMailboxView}
+          fillMergeFields={fillMergeFields} name={name}
+          approveEmail={approveEmail} rejectEmail={rejectEmail} deleteLeadEmail={deleteLeadEmail}
+        />
+      ) : (
+        <div className="flex flex-col md:flex-row min-h-[calc(100vh-190px)]">
+          {/* Rail */}
+          <aside className="w-full md:w-56 shrink-0 flex md:flex-col gap-1 overflow-x-auto md:overflow-visible px-3 sm:px-4 md:px-3 py-2 md:py-4 border-b md:border-b-0 md:border-r border-line md:sticky md:top-20 md:self-start">
+            <RailBtn active={railSection === "sequence"} onClick={() => setRailSection("sequence")} icon={<LayoutTemplate size={14} />} label="Sequence" testid="rail-sequence" />
+            <RailBtn active={railSection === "audience"} onClick={() => setRailSection("audience")} icon={<Search size={14} />} label="Audience" testid="rail-audience" />
+            <RailBtn active={railSection === "sending"} onClick={() => setRailSection("sending")} icon={<Send size={14} />} label="Sending" testid="rail-sending" />
+            <RailBtn active={railSection === "signature"} onClick={() => setRailSection("signature")} icon={<Signature size={14} />} label="Signature" testid="rail-signature" />
+            <RailBtn active={railSection === "basics"} onClick={() => setRailSection("basics")} icon={<Flag size={14} />} label="Basics" testid="rail-basics" />
+          </aside>
+
+          <div className="flex-1 min-w-0 p-3 sm:p-4 bg-bone">
+            {railSection === "sequence" ? (
+              <div className={`grid grid-cols-1 gap-3 ${showEqPanel ? "lg:grid-cols-[1fr_288px]" : ""}`}>
+                <div className="min-w-0">
+                  <SequenceSection steps={steps} activeStep={activeStep} setActiveStep={setActiveStep}
+                    addStep={addStep} removeStep={removeStep} updateStep={updateStep} step={step} />
+                </div>
+                {showEqPanel ? (
+                  <EqPanel eq={eq} setShowEqPanel={setShowEqPanel} />
+                ) : (
+                  <button onClick={() => setShowEqPanel(true)}
+                    className="hidden lg:flex items-start justify-center pt-2 text-ink-muted hover:text-ink transition-colors" title="Show EQ panel">
+                    <ChevronLeft size={14} />
+                  </button>
+                )}
+              </div>
+            ) : railSection === "audience" ? (
+              <AudienceSection
+                leads={leads} filteredLeads={filteredLeads} paginatedLeads={paginatedLeads} pageSize={LEADS_PAGE_SIZE}
+                selectedLeads={selectedLeads} setSelectedLeads={setSelectedLeads}
+                leadLists={leadLists} selectedListId={selectedListId} setSelectedListId={setSelectedListId}
+                allTags={allTags} selectedTags={selectedTags} setSelectedTags={setSelectedTags}
+                leadSearch={leadSearch} setLeadSearch={setLeadSearch}
+                leadPickerPage={leadPickerPage} setLeadPickerPage={setLeadPickerPage} leadPickerTotalPages={leadPickerTotalPages}
+                selectFromAll={selectFromAll} setSelectFromAll={setSelectFromAll} selectFirstN={selectFirstN}
+                save={save} busy={busy}
+                leadStats={leadStats} phasedGeneration={phasedGeneration} setPhasedGeneration={setPhasedGeneration}
+                batchSize={batchSize} setBatchSize={setBatchSize} batchStatus={batchStatus}
+                advanceBatch={advanceBatch} advancingBatch={advancingBatch}
+                batchApproved={batchApproved} batchTotal={batchTotal}
+              />
+            ) : railSection === "sending" ? (
+              <SendingSection
+                sendWindowStart={sendWindowStart} setSendWindowStart={setSendWindowStart}
+                sendWindowEnd={sendWindowEnd} setSendWindowEnd={setSendWindowEnd}
+                timezone={timezone} setTimezone={setTimezone}
+              />
+            ) : railSection === "signature" ? (
+              <SignatureSection
+                includeSignature={includeSignature} setIncludeSignature={setIncludeSignature}
+                signatures={signatures} signatureId={signatureId} setSignatureId={setSignatureId}
+                deleteSignature={deleteSignature} onNewSignature={() => setShowSignatureModal(true)}
+              />
+            ) : (
+              <BasicsSection
+                goal={goal} setGoal={setGoal}
+                folderId={folderId} setFolderId={setFolderId} folders={folders}
+                campaignTags={campaignTags} setCampaignTags={setCampaignTags}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {showSignatureModal && (
+        <SignatureModal
+          onClose={() => setShowSignatureModal(false)}
+          signatureName={signatureName} setSignatureName={setSignatureName}
+          signatureHtml={signatureHtml} setSignatureHtml={setSignatureHtml}
+          savingSignature={savingSignature} onCreate={createSignature}
+        />
+      )}
+    </div>
+  );
+}
+
+function RailBtn({ active, onClick, icon, label, testid }) {
+  return (
+    <button onClick={onClick} data-testid={testid}
+      className={`shrink-0 md:w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl text-body font-display transition-colors whitespace-nowrap ${active ? "bg-ink text-white" : "hover:bg-neutral-100 text-ink-secondary"}`}>
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function BasicsSection({ goal, setGoal, folderId, setFolderId, folders, campaignTags, setCampaignTags }) {
+  return (
+    <div className="shadow-card rounded-2xl bg-white p-4 sm:p-5 space-y-3 max-w-lg">
+      <div className="text-tiny font-mono text-ink-muted">Basics</div>
+      <div>
+        <label className="form-label">Goal</label>
+        <input value={goal} onChange={(e) => setGoal(e.target.value)} data-testid="goal-input"
+          placeholder="e.g. Book 15-minute intro calls"
+          className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1" />
+      </div>
+      <div>
+        <label className="form-label">Folder</label>
+        <select value={folderId} onChange={(e) => setFolderId(e.target.value)}
+          className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1">
+          <option value="">No folder</option>
+          {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="form-label">Tags (comma-separated)</label>
+        <input value={campaignTags} onChange={(e) => setCampaignTags(e.target.value)}
+          placeholder="e.g. outbound, q4, ae-target"
+          className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1" />
+      </div>
+    </div>
+  );
+}
+
+function SendingSection({ sendWindowStart, setSendWindowStart, sendWindowEnd, setSendWindowEnd, timezone, setTimezone }) {
+  return (
+    <div className="shadow-card rounded-2xl bg-white p-4 sm:p-5 space-y-3 max-w-lg">
+      <div className="text-tiny font-mono text-ink-muted">Sending window</div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="form-label">Start</label>
+          <input type="time" value={sendWindowStart} onChange={(e) => setSendWindowStart(e.target.value)}
+            className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1" />
+        </div>
+        <div>
+          <label className="form-label">End</label>
+          <input type="time" value={sendWindowEnd} onChange={(e) => setSendWindowEnd(e.target.value)}
+            className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1" />
+        </div>
+      </div>
+      <div>
+        <label className="form-label">Timezone</label>
+        <div className="relative mt-1">
+          <select value={timezone} onChange={(e) => setTimezone(e.target.value)}
+            className="w-full border border-line px-3 py-2 rounded-lg text-input font-mono appearance-none pr-8">
+            {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+          </select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" size={14} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SignatureSection({ includeSignature, setIncludeSignature, signatures, signatureId, setSignatureId, deleteSignature, onNewSignature }) {
+  return (
+    <div className="shadow-card rounded-2xl bg-white p-4 sm:p-5 space-y-3 max-w-lg">
+      <label className="flex items-center justify-between cursor-pointer">
+        <span className="flex items-center gap-1.5 form-label"><Signature size={12} /> Include signature</span>
+        <input type="checkbox" checked={includeSignature} onChange={(e) => setIncludeSignature(e.target.checked)}
+          data-testid="include-signature-toggle" className="w-3.5 h-3.5" />
+      </label>
+      {includeSignature && (
+        <div className="flex items-center gap-1.5">
+          {signatures.length > 0 ? (
+            <select value={signatureId} onChange={(e) => setSignatureId(e.target.value)} data-testid="signature-select"
+              className="flex-1 min-w-0 border border-line rounded-lg px-3 py-2 text-input bg-white">
+              <option value="">Choose a signature…</option>
+              {signatures.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+          ) : (
+            <div className="flex-1 text-caption text-ink-muted">No signatures yet.</div>
+          )}
+          <button onClick={onNewSignature} title="New signature" data-testid="new-signature-btn"
+            className="shrink-0 p-2 border border-line rounded-lg text-ink-muted hover:text-ink hover:bg-ash transition-colors">
+            <Plus size={14} />
+          </button>
+          <button
+            onClick={() => { if (signatureId && window.confirm("Delete this signature?")) deleteSignature(signatureId); }}
+            disabled={!signatureId} title="Delete signature" data-testid="delete-signature-btn"
+            className="shrink-0 p-2 border border-line rounded-lg text-ink-muted hover:text-danger hover:bg-ash transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+            <Trash2 size={14} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AudienceSection({
+  leads, filteredLeads, paginatedLeads, pageSize, selectedLeads, setSelectedLeads,
+  leadLists, selectedListId, setSelectedListId, allTags, selectedTags, setSelectedTags,
+  leadSearch, setLeadSearch, leadPickerPage, setLeadPickerPage, leadPickerTotalPages,
+  selectFromAll, setSelectFromAll, selectFirstN, save, busy,
+  leadStats, phasedGeneration, setPhasedGeneration, batchSize, setBatchSize, batchStatus,
+  advanceBatch, advancingBatch, batchApproved, batchTotal,
+}) {
+  return (
+    <div className="shadow-card rounded-2xl bg-white p-4 sm:p-5 max-w-2xl">
+      <div className="text-tiny font-mono text-ink-muted mb-2">Leads ({selectedLeads.length}/{leads.length})</div>
+      {leadLists.length > 0 && (
+        <div className="mb-2">
+          <select value={selectedListId} onChange={(e) => setSelectedListId(e.target.value)}
+            className="w-full border border-line rounded-lg px-2 py-1.5 text-caption font-mono bg-white">
+            <option value="">All lists</option>
+            {leadLists.map((lst) => (
+              <option key={lst.id} value={lst.id}>{lst.name} ({lst.lead_count || (lst.lead_ids || []).length})</option>
+            ))}
+          </select>
+        </div>
+      )}
+      {allTags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {allTags.map((t) => (
+            <button key={t} onClick={() => setSelectedTags((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t])}
+              className={`text-tiny px-1.5 py-0.5 rounded-full border ${selectedTags.includes(t) ? "bg-primary/10 border-primary text-primary" : "border-line text-ink-muted hover:border-neutral-300"}`}>
+              {t}
+            </button>
+          ))}
+          {selectedTags.length > 0 && (
+            <button onClick={() => setSelectedTags([])} className="text-tiny text-ink-muted hover:text-ink">
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      )}
+      <div className="relative mb-2">
+        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
+        <input value={leadSearch} onChange={(e) => setLeadSearch(e.target.value)}
+          placeholder="Search leads..."
+          className="w-full border border-line rounded-xl pl-7 pr-3 py-1.5 text-tiny font-mono" />
+      </div>
+      <div className="border border-line rounded-xl max-h-[420px] overflow-y-auto">
+        {paginatedLeads.map((l) => (
+          <label key={l.id} className="flex items-start gap-1.5 px-2 py-1.5 border-b border-line last:border-b-0 text-tiny cursor-pointer hover:bg-surfacehover transition-colors duration-150">
+            <input type="checkbox" className="mt-0.5 w-3 h-3"
+              checked={selectedLeads.includes(l.id)}
+              onChange={(e) => setSelectedLeads(e.target.checked ? [...selectedLeads, l.id] : selectedLeads.filter((x) => x !== l.id))}
+              data-testid={`lead-check-${l.id}`}
+            />
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-caption truncate">{l.first_name} {l.last_name}</div>
+              <div className="text-ink-muted truncate">{l.company}{l.title ? ` · ${l.title}` : ""}</div>
+              <div className="text-ink-disabled font-mono truncate">{l.email}</div>
+              {(l.tags?.length > 0 || l.campaign_names?.length > 0) && (
+                <div className="flex flex-wrap gap-1 mt-0.5">
+                  {l.tags?.map((t) => (
+                    <span key={t} className="font-mono bg-ink/5 text-ink-muted px-1.5 py-0.5 rounded-full">{t}</span>
+                  ))}
+                  {l.campaign_names?.map((cn) => (
+                    <span key={cn} className="font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{cn}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </label>
+        ))}
+        {filteredLeads.length === 0 && (
+          <div className="text-caption text-ink-muted text-center py-6">No leads match the selected filters</div>
+        )}
+        {filteredLeads.length > 0 && (
+          <div className="flex items-center justify-between px-2 py-1.5 border-t border-line bg-bone text-tiny text-ink-muted">
+            <span>
+              {(leadPickerPage - 1) * pageSize + 1}–{Math.min(leadPickerPage * pageSize, filteredLeads.length)} of {filteredLeads.length}
+            </span>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setLeadPickerPage((p) => Math.max(1, p - 1))} disabled={leadPickerPage <= 1}
+                data-testid="lead-picker-prev"
+                className="p-1 rounded hover:bg-ash disabled:opacity-30 disabled:hover:bg-transparent text-ink-muted hover:text-ink transition-colors">
+                <ChevronLeft size={13} />
+              </button>
+              <button onClick={() => setLeadPickerPage((p) => Math.min(leadPickerTotalPages, p + 1))} disabled={leadPickerPage >= leadPickerTotalPages}
+                data-testid="lead-picker-next"
+                className="p-1 rounded hover:bg-ash disabled:opacity-30 disabled:hover:bg-transparent text-ink-muted hover:text-ink transition-colors">
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+        <button onClick={() => setSelectedLeads(filteredLeads.map((l) => l.id))} className="text-tiny text-ink hover:underline" data-testid="select-all-leads">All ({filteredLeads.length})</button>
+        <button onClick={() => setSelectedLeads([])} className="text-tiny text-ink-muted hover:underline" data-testid="deselect-all-leads">None</button>
+        <span className="text-tiny text-ink-muted">|</span>
+        <input type="number" min={1} placeholder="N"
+          data-testid="select-n-input"
+          className="w-10 border border-line rounded px-1 py-0.5 text-tiny text-center"
+          onKeyDown={(e) => { if (e.key === "Enter") selectFirstN(e.target); }} />
+        <button onClick={() => selectFirstN(document.querySelector('[data-testid="select-n-input"]'))}
+          className="text-tiny text-ink-muted hover:text-ink hover:underline">Select</button>
+        <label className="flex items-center gap-1 text-tiny text-ink-muted cursor-pointer ml-0.5">
+          <input type="checkbox" checked={selectFromAll} onChange={(e) => setSelectFromAll(e.target.checked)} className="w-2.5 h-2.5" />
+          All matching
+        </label>
+      </div>
+      {selectedLeads.length > 0 && (
+        <button onClick={save} disabled={busy} className="btn-primary w-full mt-2 text-tiny flex items-center justify-center gap-1">
+          {busy ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+          Add & Generate ({selectedLeads.length} leads)
+        </button>
+      )}
+
+      {leadStats.total > 0 && (
+        <div className="mt-2 p-2 bg-bone rounded-xl border border-line space-y-1">
+          <label className="flex items-center gap-1.5 text-tiny font-medium cursor-pointer">
+            <input type="checkbox" checked={phasedGeneration}
+              onChange={(e) => setPhasedGeneration(e.target.checked)} className="w-3 h-3" />
+            Phased generation
+          </label>
+          {phasedGeneration && (
+            <div className="space-y-1.5 ml-4">
+              <label className="flex items-center gap-1.5 text-tiny text-ink-muted">
+                <span>Batch:</span>
+                <input type="number" min={1} max={500} value={batchSize}
+                  onChange={(e) => setBatchSize(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className="w-14 border border-line rounded px-1 py-0.5 text-tiny text-center" />
+              </label>
+              {batchStatus && batchStatus.phased && (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-tiny">
+                    <span className="text-ink-muted">Batch {batchStatus.current_batch}/{batchStatus.total_batches}</span>
+                    <span className="text-ink-muted">
+                      {Object.values(batchStatus.batches || {}).reduce((s, b) => s + b.approved, 0)}/{batchStatus.total_leads}
+                    </span>
+                  </div>
+                  <div className="w-full bg-line rounded-full h-1 overflow-hidden">
+                    <div className="bg-primary h-full rounded-full transition-all duration-300"
+                      style={{ width: `${batchStatus.total_leads > 0 ? (Object.values(batchStatus.batches || {}).reduce((s, b) => s + b.approved, 0) / batchStatus.total_leads) * 100 : 0}%` }} />
+                  </div>
+                  {!batchStatus.all_batches_complete && batchApproved(batchStatus, batchStatus.current_batch) >= batchTotal(batchStatus, batchStatus.current_batch) && (
+                    <button onClick={advanceBatch} disabled={advancingBatch}
+                      className="text-tiny text-primary hover:underline flex items-center gap-0.5">
+                      {advancingBatch ? <Loader2 size={10} className="animate-spin" /> : <ChevronRight size={10} />}
+                      Next batch ({batchStatus.current_batch + 1}/{batchStatus.total_batches})
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChannelEditor({ step, updateStep }) {
+  return (
+    <>
+      {(step.channel || "email") === "email" && (
+        <>
+          <div className="text-tiny font-mono text-ink-muted mb-1">Subject</div>
+          <input value={step.subject} onChange={(e) => updateStep({ subject: e.target.value })}
+            data-testid="editor-subject"
+            className="w-full text-caption font-medium border-0 border-b border-line py-1.5 focus:outline-none focus:border-ink bg-transparent"
+            placeholder="Quick idea for {{company}}" />
+          <div className="mt-2 flex items-center justify-between">
+            <div className="text-tiny font-mono text-ink-muted">Body</div>
+            <div className="flex items-center gap-2">
+              <label className="text-tiny text-ink-muted font-mono">day</label>
+              <input type="number" min={0} value={step.day}
+                onChange={(e) => updateStep({ day: Number(e.target.value) })}
+                data-testid="editor-day"
+                className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
+            </div>
           </div>
           <div className="mt-1.5">
-            <label className="text-tiny text-ink-muted">Tags</label>
-            <input value={campaignTags} onChange={(e) => setCampaignTags(e.target.value)}
-              placeholder="e.g. outbound, q4, ae-target"
-              className="w-full border border-line px-1.5 py-1 rounded text-tiny mt-0.5" />
+            <RichEmailEditor value={step.body_html || ""} onChange={(html) => updateStep({ body_html: html })}
+              placeholder="Write your email, or research this lead and draft it for you." />
           </div>
+        </>
+      )}
 
-          <div className="mt-3 pt-3 border-t border-line">
-            <label className="flex items-center justify-between cursor-pointer">
-              <span className="flex items-center gap-1 text-tiny text-ink-muted">
-                <Signature size={10} /> Signature
-              </span>
-              <input type="checkbox" checked={includeSignature}
-                onChange={(e) => setIncludeSignature(e.target.checked)}
-                data-testid="include-signature-toggle" className="w-3 h-3" />
-            </label>
-            {includeSignature && (
-              <div className="mt-1.5 flex items-center gap-1">
-                {signatures.length > 0 ? (
-                  <select value={signatureId} onChange={(e) => setSignatureId(e.target.value)}
-                    data-testid="signature-select"
-                    className="flex-1 min-w-0 border border-line rounded px-1.5 py-1 text-tiny bg-white">
-                    <option value="">Choose a signature…</option>
-                    {signatures.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="flex-1 text-tiny text-ink-muted">No signatures yet.</div>
+      {(step.channel || "") === "phone_call" && (
+        <>
+          <div className="text-tiny font-mono text-ink-muted mb-0.5">Call Script</div>
+          <p className="text-tiny text-ink-muted mb-1">{'{{'}first_name{'}}'}, {'{{'}company{'}}'}, and other merge fields will be filled automatically.</p>
+          <textarea value={step.script || ""} onChange={(e) => updateStep({ script: e.target.value })}
+            rows={4} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
+            placeholder="Hi {{first_name}}, this is [Your Name] from {{company}}... (write your call script with {{merge_fields}})" />
+          <div className="mt-1.5 flex items-center gap-2">
+            <label className="text-tiny text-ink-muted font-mono">day</label>
+            <input type="number" min={0} value={step.day}
+              onChange={(e) => updateStep({ day: Number(e.target.value) })}
+              className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
+          </div>
+        </>
+      )}
+
+      {(step.channel || "") === "sms" && (
+        <>
+          <div className="text-tiny font-mono text-ink-muted mb-0.5">SMS Body</div>
+          <p className="text-tiny text-ink-muted mb-1">Short message. Merge fields supported: {'{{'}first_name{'}}'}, {'{{'}company{'}}'}, etc.</p>
+          <textarea value={step.body || ""} onChange={(e) => updateStep({ body: e.target.value })}
+            rows={2} maxLength={160} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
+            placeholder="Hi {{first_name}}, quick reminder about {{company}}..." />
+          <div className="text-tiny text-ink-muted mt-0.5">{(step.body || "").length}/160 characters</div>
+          <div className="mt-1.5 flex items-center gap-2">
+            <label className="text-tiny text-ink-muted font-mono">day</label>
+            <input type="number" min={0} value={step.day}
+              onChange={(e) => updateStep({ day: Number(e.target.value) })}
+              className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
+          </div>
+        </>
+      )}
+
+      {(step.channel || "") === "whatsapp" && (
+        <>
+          <div className="text-tiny font-mono text-ink-muted mb-0.5">WhatsApp Message</div>
+          <p className="text-tiny text-ink-muted mb-1">Merge fields supported. Keep it conversational.</p>
+          <textarea value={step.body || ""} onChange={(e) => updateStep({ body: e.target.value })}
+            rows={3} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
+            placeholder="Hi {{first_name}}, wanted to share something relevant for {{company}}..." />
+          <div className="mt-1.5 flex items-center gap-2">
+            <label className="text-tiny text-ink-muted font-mono">day</label>
+            <input type="number" min={0} value={step.day}
+              onChange={(e) => updateStep({ day: Number(e.target.value) })}
+              className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
+          </div>
+        </>
+      )}
+
+      {(step.channel || "") === "linkedin_message" && (
+        <>
+          <div className="text-tiny font-mono text-ink-muted mb-0.5">LinkedIn Message</div>
+          <p className="text-tiny text-ink-muted mb-1">This will be marked as a manual task — LinkedIn Messages require sending via LinkedIn.com</p>
+          <textarea value={step.linkedin_message || step.body || ""} onChange={(e) => updateStep({ linkedin_message: e.target.value })}
+            rows={3} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
+            placeholder="Hi {{first_name}}, noticed {{company}}'s recent work on..." />
+          <div className="mt-1.5 flex items-center gap-2">
+            <label className="text-tiny text-ink-muted font-mono">day</label>
+            <input type="number" min={0} value={step.day}
+              onChange={(e) => updateStep({ day: Number(e.target.value) })}
+              className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
+          </div>
+        </>
+      )}
+
+      {(step.channel || "") === "linkedin_comment" && (
+        <>
+          <div className="text-tiny font-mono text-ink-muted mb-0.5">Post URL to comment on</div>
+          <input value={step.linkedin_post_url || ""} onChange={(e) => updateStep({ linkedin_post_url: e.target.value })}
+            className="w-full border border-line px-2 py-1.5 rounded text-tiny text-ink"
+            placeholder="https://www.linkedin.com/posts/..." />
+          <div className="text-tiny font-mono text-ink-muted mt-1.5 mb-0.5">Comment text</div>
+          <textarea value={step.linkedin_comment_text || step.body || ""} onChange={(e) => updateStep({ linkedin_comment_text: e.target.value })}
+            rows={3} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
+            placeholder="Great insight, {{first_name}}! I'd add that..." />
+          <div className="mt-1.5 flex items-center gap-2">
+            <label className="text-tiny text-ink-muted font-mono">day</label>
+            <input type="number" min={0} value={step.day}
+              onChange={(e) => updateStep({ day: Number(e.target.value) })}
+              className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
+          </div>
+        </>
+      )}
+
+      {(step.channel || "") === "linkedin_connect" && (
+        <>
+          <div className="flex items-center gap-1 text-warning mb-1">
+            <AlertTriangle size={12} />
+            <span className="text-tiny font-medium">Manual action required</span>
+          </div>
+          <p className="text-tiny text-ink-muted mb-1.5">LinkedIn doesn't allow automating connection requests. The lead's LinkedIn URL will be shown so you can connect manually.</p>
+          <div className="text-tiny font-mono text-ink-muted mb-0.5">Connection note (optional)</div>
+          <textarea value={step.linkedin_connection_note || step.body || ""} onChange={(e) => updateStep({ linkedin_connection_note: e.target.value })}
+            rows={2} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
+            placeholder="Hi {{first_name}}, I've been following {{company}}'s work..." />
+          <div className="mt-1.5 flex items-center gap-2">
+            <label className="text-tiny text-ink-muted font-mono">day</label>
+            <input type="number" min={0} value={step.day}
+              onChange={(e) => updateStep({ day: Number(e.target.value) })}
+              className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+function SequenceSection({ steps, activeStep, setActiveStep, addStep, removeStep, updateStep, step }) {
+  const channelIcons = { email: <Mail size={12} />, phone_call: <Phone size={12} />, sms: <MessageSquare size={12} />, whatsapp: <MessageCircle size={12} />, linkedin_connect: <Send size={12} />, linkedin_message: <Send size={12} />, linkedin_comment: <MessageCircle size={12} /> };
+  return (
+    <div className="space-y-3">
+      <div className="shadow-card rounded-2xl bg-white p-4 sm:p-5">
+        <div className="text-tiny font-mono text-ink-muted mb-2">Sequence</div>
+        <div className="flex items-stretch gap-0 overflow-x-auto pb-1">
+          {steps.map((s, i) => (
+            <div key={s._key || i} className="flex items-center shrink-0">
+              <div onClick={() => setActiveStep(i)} data-testid={`step-${i}`}
+                className={`text-left px-3 py-2 border rounded-xl transition-colors duration-150 min-w-[140px] cursor-pointer ${i === activeStep ? "border-ink bg-surfacehover" : "border-line hover:bg-surfacehover"}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-ink-muted">
+                    {channelIcons[s.channel || "email"] || <Mail size={12} />}
+                    <span className="text-tiny font-mono">Step {i + 1}</span>
+                  </div>
+                  <span className="text-tiny font-mono text-ink-muted">day {s.day}</span>
+                </div>
+                <div className="text-caption font-medium mt-0.5 truncate max-w-[160px]">{s.subject || CHANNELS.find((c) => c.key === (s.channel || "email"))?.label || "Email"}</div>
+                {i > 0 && s.condition && s.condition !== "always" && (
+                  <div className={`inline-block mt-1 px-1.5 py-0.5 rounded-sm text-tiny font-mono ${
+                    s.condition === "if_no_reply" ? "bg-warning/10 text-warning" :
+                    s.condition === "if_replied" ? "bg-success/10 text-success" :
+                    s.condition === "if_opened_no_reply" ? "bg-accent-soft text-primary" :
+                    "bg-neutral-100 text-ink-muted"
+                  }`}>
+                    {s.condition.replace("if_", "").replace(/_/g, " ")}
+                  </div>
                 )}
-                <button onClick={() => setShowSignatureModal(true)} title="New signature"
-                  data-testid="new-signature-btn"
-                  className="shrink-0 p-1 border border-line rounded text-ink-muted hover:text-ink hover:bg-ash transition-colors">
-                  <Plus size={11} />
-                </button>
+                {steps.length > 1 && (
+                  <button onClick={(e) => { e.stopPropagation(); removeStep(i); }} data-testid={`remove-step-${i}`}
+                    className="block text-tiny text-ink-muted hover:text-danger mt-1">
+                    <Trash2 size={10} className="inline" /> remove
+                  </button>
+                )}
               </div>
-            )}
-          </div>
+              {i < steps.length - 1 && <div className="w-4 h-px bg-line shrink-0 self-center" />}
+            </div>
+          ))}
+          <button onClick={addStep} data-testid="add-step" className="btn-ghost shrink-0 text-tiny ml-2 self-center"><Plus size={14} /> Add step</button>
+        </div>
+      </div>
 
-          <div className="text-tiny font-mono text-ink-muted mt-3 mb-1.5">Leads ({selectedLeads.length}/{leads.length})</div>
-          {leadLists.length > 0 && (
-            <div className="mb-2">
-              <select value={selectedListId} onChange={(e) => setSelectedListId(e.target.value)}
-                className="w-full border border-line rounded-lg px-2 py-1.5 text-caption font-mono bg-white">
-                <option value="">All lists</option>
-                {leadLists.map((lst) => (
-                  <option key={lst.id} value={lst.id}>{lst.name} ({lst.lead_count || (lst.lead_ids || []).length})</option>
-                ))}
-              </select>
-            </div>
-          )}
-          {allTags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-2">
-              {allTags.map((t) => (
-                <button key={t} onClick={() => setSelectedTags((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t])}
-                  className={`text-tiny px-1.5 py-0.5 rounded-full border ${selectedTags.includes(t) ? "bg-primary/10 border-primary text-primary" : "border-line text-ink-muted hover:border-neutral-300"}`}>
-                  {t}
+      <div className="shadow-card rounded-2xl bg-white p-4 sm:p-5">
+        <div className="flex items-center gap-1 mb-3 pb-3 border-b border-line flex-wrap">
+          <div className="text-tiny font-mono text-ink-muted shrink-0">Channel</div>
+          <div className="flex flex-wrap gap-0.5">
+            {CHANNELS.map((ch) => {
+              const active = (step.channel || "email") === ch.key;
+              return (
+                <button key={ch.key} onClick={() => updateStep({ channel: ch.key })}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-tiny font-medium transition-colors ${active ? "bg-ink text-white" : "bg-ash text-ink-muted hover:text-ink"}`}>
+                  {channelIcons[ch.key]} {ch.label}
                 </button>
-              ))}
-              {selectedTags.length > 0 && (
-                <button onClick={() => setSelectedTags([])} className="text-tiny text-ink-muted hover:text-ink">
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-          )}
-          <div className="relative mb-2">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
-            <input value={leadSearch} onChange={(e) => setLeadSearch(e.target.value)}
-              placeholder="Search leads..."
-              className="w-full border border-line rounded-xl pl-7 pr-3 py-1.5 text-tiny font-mono" />
+              );
+            })}
           </div>
-          <div className="border border-line rounded-xl max-h-[132px] overflow-y-auto">
-            {paginatedLeads.map((l) => (
-              <label key={l.id} className="flex items-start gap-1.5 px-1.5 py-0.5 border-b border-line last:border-b-0 text-tiny cursor-pointer hover:bg-surfacehover transition-colors duration-150">
-                <input type="checkbox" className="mt-0.5 w-3 h-3"
-                  checked={selectedLeads.includes(l.id)}
-                  onChange={(e) => setSelectedLeads(e.target.checked ? [...selectedLeads, l.id] : selectedLeads.filter((x) => x !== l.id))}
-                  data-testid={`lead-check-${l.id}`}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-caption truncate">{l.first_name} {l.last_name}</div>
-                  <div className="text-ink-muted truncate">{l.company}{l.title ? ` · ${l.title}` : ""}</div>
-                  <div className="text-ink-disabled font-mono truncate">{l.email}</div>
-                  {(l.tags?.length > 0 || l.campaign_names?.length > 0) && (
-                    <div className="flex flex-wrap gap-1 mt-0.5">
-                      {l.tags?.map((t) => (
-                        <span key={t} className="font-mono bg-ink/5 text-ink-muted px-1.5 py-0.5 rounded-full">{t}</span>
-                      ))}
-                      {l.campaign_names?.map((cn) => (
-                        <span key={cn} className="font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{cn}</span>
-                      ))}
+          <div className="flex items-center gap-1 ml-auto">
+            <label className="text-tiny text-ink-muted font-mono">Condition</label>
+            <select value={step.condition || "always"} onChange={(e) => updateStep({ condition: e.target.value })}
+              className="border border-line px-1.5 py-1 rounded text-tiny font-mono bg-white">
+              <option value="always">Always send</option>
+              <option value="if_no_reply">If no reply</option>
+              <option value="if_opened_no_reply">If opened, no reply</option>
+              <option value="if_replied">If replied</option>
+              <option value="if_clicked">If clicked</option>
+              <option value="if_not_opened">If not opened</option>
+              <option value="if_bounced">If bounced</option>
+            </select>
+          </div>
+        </div>
+        <ChannelEditor step={step} updateStep={updateStep} />
+      </div>
+    </div>
+  );
+}
+
+function EqPanel({ eq, setShowEqPanel }) {
+  return (
+    <aside className="w-full lg:w-72 shrink-0 shadow-card rounded-2xl bg-white p-4 sm:p-5 relative self-start">
+      <button onClick={() => setShowEqPanel(false)}
+        className="absolute top-3 right-3 w-4 h-4 flex items-center justify-center rounded hover:bg-bone text-ink-muted hover:text-ink transition-colors"
+        title="Hide EQ panel">
+        <ChevronRight size={12} />
+      </button>
+      <div className="ui-label text-ink">EQ Score</div>
+      <div className="font-mono text-2xl sm:text-3xl font-bold tracking-tight mt-1"
+        style={{ color: eq ? (eq.overall > 70 ? "#212025" : eq.overall > 40 ? "#5A5A63" : "#B33636") : "#8A8B86" }}>
+        {eq?.overall ?? "—"}
+      </div>
+      <div className="mt-4 space-y-3">
+        {eq && [
+          ["Relevance", eq.relevance],
+          ["Empathy", eq.empathy],
+          ["Clarity", eq.clarity],
+          ["CTA", eq.cta],
+          ["Spam safety", eq.spam_safety],
+        ].map(([k, v]) => (
+          <div key={k}>
+            <div className="flex justify-between text-caption">
+              <span className="ui-label">{k}</span>
+              <span className="font-mono text-ink-secondary">{v}</span>
+            </div>
+            <div className="h-1 mt-1 bg-line rounded-full overflow-hidden">
+              <div className="h-full bg-accent" style={{ width: `${v}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 ui-label mb-1.5">Hints</div>
+      <ul className="space-y-2 text-caption text-ink-secondary">
+        {eq?.hints?.length ? eq.hints.map((h) => (
+          <li key={h} className="border-l-2 border-sanguine pl-2">{h}</li>
+        )) : <li className="text-ink-muted">Looking sharp. Send it.</li>}
+      </ul>
+    </aside>
+  );
+}
+
+function SignatureModal({ onClose, signatureName, setSignatureName, signatureHtml, setSignatureHtml, savingSignature, onCreate }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-lg shadow-card p-5 w-full max-w-xl mx-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-subheading font-display font-semibold">Create Signature</div>
+          <button onClick={onClose} className="btn-ghost text-caption">Close</button>
+        </div>
+        <div className="space-y-2">
+          <input value={signatureName} onChange={(e) => setSignatureName(e.target.value)}
+            className="w-full border border-line rounded-lg px-3 py-1.5 text-caption"
+            placeholder="Signature name (e.g. My Standard Signature)" />
+          <RichEmailEditor
+            value={signatureHtml}
+            onChange={setSignatureHtml}
+            placeholder="Paste or compose your signature here — add images, links, and formatting..."
+          />
+          {signatureHtml && (
+            <div className="bg-bone border border-line rounded-lg p-3 text-caption">
+              <div className="text-tiny font-mono uppercase text-ink-muted mb-1">Preview</div>
+              <div className="border-t border-line pt-2 mt-1 signature-preview" dangerouslySetInnerHTML={{ __html: signatureHtml }} />
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose} className="btn-secondary text-caption">Cancel</button>
+            <button onClick={onCreate} disabled={savingSignature} className="btn-primary text-caption">
+              {savingSignature ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+              Create
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReviewAndSendView({
+  campaignLeads, leadStats, regenerateAllEmails, regeneratingAll, dismissAllEmails, approveAllEmails,
+  selectedReview, setSelectedReview, bulkSetReviewStatus,
+  getReviewEmails, reviewIndex, setReviewIndex, steps, activeStep,
+  includeSignature, signatures, signatureId,
+  reviewCollapsed, setReviewCollapsed, genProgress, toggleReviewSelected,
+  prevReview, nextReview, sendTestEmail, sendingTest, isTemplate,
+  editingOpener, setEditingOpener, regenerateOpener, generatingEmail, saveOpener,
+  mailboxView, setMailboxView, fillMergeFields, name,
+  approveEmail, rejectEmail, deleteLeadEmail,
+}) {
+  const reviewEmails = getReviewEmails();
+  const current = reviewEmails[reviewIndex];
+  const template = steps[activeStep] || steps[0] || {};
+  // Mirrors the real send + test-send append (sender.py / server.py) —
+  // the preview must show exactly what would actually go out.
+  const activeSignatureHtml = includeSignature
+    ? signatures.find((s) => s.id === signatureId)?.content_html || ""
+    : "";
+
+  const rail = reviewEmails.length > 0 && (
+    <div className={`shadow-card rounded-lg bg-white overflow-hidden flex flex-col transition-all duration-200 ${reviewCollapsed.leadRail ? 'max-h-[44px]' : 'max-h-[calc(100vh-280px)]'}`}>
+      <div className="px-3 py-2 border-b border-line flex items-center justify-between cursor-pointer" onClick={() => setReviewCollapsed((prev) => ({ ...prev, leadRail: !prev.leadRail }))}>
+        <div className="flex items-center gap-1.5">
+          {reviewCollapsed.leadRail ? <ChevronRight size={12} className="text-ink-muted" /> : <ChevronDown size={12} className="text-ink-muted" />}
+          <span className="text-tiny font-mono text-ink-muted">Leads</span>
+        </div>
+        <input type="checkbox" onClick={(e) => e.stopPropagation()}
+          checked={selectedReview.length === reviewEmails.length}
+          onChange={(e) => setSelectedReview(e.target.checked ? reviewEmails.map((l) => l.id) : [])}
+          title="Select all" />
+      </div>
+      {!reviewCollapsed.leadRail && (<>
+        <div className="px-3 py-1.5 border-b border-line flex items-center gap-2">
+          <input type="range" min={0} max={Math.max(0, reviewEmails.length - 1)} value={reviewIndex}
+            onChange={(e) => setReviewIndex(Number(e.target.value))}
+            className="flex-1 h-1 accent-ink cursor-pointer" />
+          <span className="text-tiny font-mono text-ink-muted shrink-0">{reviewEmails.length > 0 ? `${reviewIndex + 1} / ${reviewEmails.length}` : "—"}</span>
+        </div>
+        <div className="overflow-y-auto flex-1">
+          {reviewEmails.map((l, i) => (
+            <div key={l.id}
+              className={`flex items-center gap-2 px-3 py-2 border-b border-line cursor-pointer hover:bg-surfacehover transition-colors ${i === reviewIndex ? "bg-accent-soft" : ""}`}
+              onClick={() => setReviewIndex(i)}>
+              <input type="checkbox" onClick={(e) => e.stopPropagation()}
+                checked={selectedReview.includes(l.id)} onChange={() => toggleReviewSelected(l.id)} />
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${l.email_status === "approved" ? "bg-success" : l.email_status === "rejected" ? "bg-danger" : l.personalized ? "bg-warning" : "bg-ink-disabled"}`} />
+              <span className="text-caption truncate flex-1">{l.first_name} {l.last_name}</span>
+            </div>
+          ))}
+        </div>
+      </>)}
+    </div>
+  );
+
+  return (
+    <div className="px-3 sm:px-4 py-3 space-y-3">
+      {campaignLeads.length > 0 && (
+        <div className="shadow-card rounded-lg bg-white">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 flex-wrap">
+            <div className="text-caption text-ink-muted">
+              <span className="font-medium text-ink">{leadStats.approved}</span> approved · {" "}
+              <span className="font-medium text-ink">{leadStats.rejected}</span> rejected · {" "}
+              <span className="font-medium text-ink">{leadStats.total - leadStats.reviewed}</span> awaiting review
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={regenerateAllEmails} disabled={regeneratingAll || leadStats.total === 0} className="btn-ghost text-caption" data-testid="regenerate-all-emails">
+                {regeneratingAll ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />} Regenerate all
+              </button>
+              <button onClick={dismissAllEmails} disabled={leadStats.total === 0} className="btn-ghost text-caption text-danger" data-testid="dismiss-all-emails">
+                <X size={12} /> Dismiss all
+              </button>
+              <button onClick={approveAllEmails} disabled={leadStats.total === 0} className="btn-secondary text-caption" data-testid="approve-all-emails">
+                <Check size={12} /> Approve all
+              </button>
+            </div>
+          </div>
+          {selectedReview.length > 0 && (
+            <div className="flex items-center gap-2 px-4 py-2 border-t border-line bg-accent-soft/40">
+              <span className="text-caption font-medium">{selectedReview.length} selected</span>
+              <button onClick={() => bulkSetReviewStatus("approved")} className="btn-primary text-caption ml-auto" data-testid="bulk-approve">
+                <Check size={12} /> Approve selected
+              </button>
+              <button onClick={() => bulkSetReviewStatus("rejected")} className="btn-ghost text-caption text-danger" data-testid="bulk-reject">
+                <Flag size={12} /> Reject selected
+              </button>
+              <button onClick={() => setSelectedReview([])} className="btn-ghost text-caption text-ink-muted">Clear</button>
+            </div>
+          )}
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-3 h-full lg:grid-cols-[220px_1fr_1fr]">
+        {!current ? (
+          <>
+            {rail}
+            <div className="lg:col-span-2 shadow-card rounded-lg bg-white p-8 text-center">
+              {genProgress ? (
+                <>
+                  <Loader2 size={16} className="animate-spin mx-auto text-ink-muted mb-2" />
+                  <div className="text-caption font-medium">
+                    Generating personalized emails… {genProgress.done}/{genProgress.total || "?"}
+                  </div>
+                  <div className="text-caption text-ink-muted mt-1">This updates live — no need to refresh.</div>
+                  {genProgress.total > 0 && (
+                    <div className="h-1.5 max-w-xs mx-auto mt-3 bg-line rounded-full overflow-hidden">
+                      <div className="h-full bg-accent transition-all duration-500" style={{ width: `${Math.min(100, (genProgress.done / genProgress.total) * 100)}%` }} />
                     </div>
                   )}
+                </>
+              ) : (
+                <>
+                  <Mail size={16} className="mx-auto text-ink-disabled mb-2" />
+                  <div className="text-caption font-medium text-ink-muted">
+                    {leadStats.total === 0 ? "No leads assigned yet" : "Select a lead to preview"}
+                  </div>
+                  <p className="text-caption text-ink-muted mt-1 max-w-sm mx-auto">
+                    {leadStats.total === 0
+                      ? "Assign leads from the Audience section — every lead previews with your template's merge fields filled in, even before you generate."
+                      : "Pick a lead from the list on the left to see its preview."}
+                  </p>
+                </>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            {rail}
+            {/* LEFT: Template with placeholders */}
+            <div className="shadow-card rounded-lg bg-white">
+              <div className="p-3 border-b border-line flex items-center justify-between cursor-pointer" onClick={() => setReviewCollapsed((prev) => ({ ...prev, template: !prev.template }))}>
+                <div className="flex items-center gap-1.5">
+                  {reviewCollapsed.template ? <ChevronRight size={12} className="text-ink-muted" /> : <ChevronDown size={12} className="text-ink-muted" />}
+                  <span className="text-tiny font-mono text-ink-muted">Template</span>
                 </div>
-              </label>
-            ))}
-            {filteredLeads.length === 0 && (
-              <div className="text-caption text-ink-muted text-center py-6">No leads match the selected filters</div>
-            )}
-            {filteredLeads.length > 0 && (
-              <div className="flex items-center justify-between px-2 py-1.5 border-t border-line bg-bone text-tiny text-ink-muted">
-                <span>
-                  {(leadPickerPage - 1) * LEADS_PAGE_SIZE + 1}–{Math.min(leadPickerPage * LEADS_PAGE_SIZE, filteredLeads.length)} of {filteredLeads.length}
-                </span>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => setLeadPickerPage((p) => Math.max(1, p - 1))} disabled={leadPickerPage <= 1}
-                    data-testid="lead-picker-prev"
-                    className="p-1 rounded hover:bg-ash disabled:opacity-30 disabled:hover:bg-transparent text-ink-muted hover:text-ink transition-colors">
-                    <ChevronLeft size={13} />
-                  </button>
-                  <button onClick={() => setLeadPickerPage((p) => Math.min(leadPickerTotalPages, p + 1))} disabled={leadPickerPage >= leadPickerTotalPages}
-                    data-testid="lead-picker-next"
-                    className="p-1 rounded hover:bg-ash disabled:opacity-30 disabled:hover:bg-transparent text-ink-muted hover:text-ink transition-colors">
-                    <ChevronRight size={13} />
-                  </button>
-                </div>
+                {!reviewCollapsed.template && <span className="text-tiny text-ink-muted font-mono">{reviewIndex + 1} / {reviewEmails.length}</span>}
               </div>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-            <button onClick={() => setSelectedLeads(filteredLeads.map((l) => l.id))} className="text-tiny text-ink hover:underline" data-testid="select-all-leads">All ({filteredLeads.length})</button>
-            <button onClick={() => setSelectedLeads([])} className="text-tiny text-ink-muted hover:underline" data-testid="deselect-all-leads">None</button>
-            <span className="text-tiny text-ink-muted">|</span>
-            <input type="number" min={1} placeholder="N"
-              data-testid="select-n-input"
-              className="w-10 border border-line rounded px-1 py-0.5 text-tiny text-center"
-              onKeyDown={(e) => { if (e.key === "Enter") selectFirstN(e.target); }} />
-            <button onClick={() => selectFirstN(document.querySelector('[data-testid="select-n-input"]'))}
-              className="text-tiny text-ink-muted hover:text-ink hover:underline">Select</button>
-            <label className="flex items-center gap-1 text-tiny text-ink-muted cursor-pointer ml-0.5">
-              <input type="checkbox" checked={selectFromAll} onChange={(e) => setSelectFromAll(e.target.checked)} className="w-2.5 h-2.5" />
-              All matching
-            </label>
-          </div>
-          {selectedLeads.length > 0 && (
-            <button onClick={save} disabled={busy} className="btn-primary w-full mt-2 text-tiny flex items-center justify-center gap-1">
-              {busy ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
-              Add & Generate ({selectedLeads.length} leads)
-            </button>
-          )}
-
-          {/* Phased generation config */}
-          {leadStats.total > 0 && (
-            <div className="mt-2 p-2 bg-bone rounded-xl border border-line space-y-1">
-              <label className="flex items-center gap-1.5 text-tiny font-medium cursor-pointer">
-                <input type="checkbox" checked={phasedGeneration}
-                  onChange={(e) => setPhasedGeneration(e.target.checked)} className="w-3 h-3" />
-                Phased generation
-              </label>
-              {phasedGeneration && (
-                <div className="space-y-1.5 ml-4">
-                  <label className="flex items-center gap-1.5 text-tiny text-ink-muted">
-                    <span>Batch:</span>
-                    <input type="number" min={1} max={500} value={batchSize}
-                      onChange={(e) => setBatchSize(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                      className="w-14 border border-line rounded px-1 py-0.5 text-tiny text-center" />
-                  </label>
-                  {batchStatus && batchStatus.phased && (
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-tiny">
-                        <span className="text-ink-muted">Batch {batchStatus.current_batch}/{batchStatus.total_batches}</span>
-                        <span className="text-ink-muted">
-                          {Object.values(batchStatus.batches || {}).reduce((s, b) => s + b.approved, 0)}/{batchStatus.total_leads}
-                        </span>
-                      </div>
-                      <div className="w-full bg-line rounded-full h-1 overflow-hidden">
-                        <div className="bg-primary h-full rounded-full transition-all duration-300"
-                          style={{ width: `${batchStatus.total_leads > 0 ? (Object.values(batchStatus.batches || {}).reduce((s, b) => s + b.approved, 0) / batchStatus.total_leads) * 100 : 0}%` }} />
-                      </div>
-                      {!batchStatus.all_batches_complete && batchApproved(batchStatus, batchStatus.current_batch) >= batchTotal(batchStatus, batchStatus.current_batch) && (
-                        <button onClick={advanceBatch} disabled={advancingBatch}
-                          className="text-tiny text-primary hover:underline flex items-center gap-0.5">
-                          {advancingBatch ? <Loader2 size={10} className="animate-spin" /> : <ChevronRight size={10} />}
-                          Next batch ({batchStatus.current_batch + 1}/{batchStatus.total_batches})
-                        </button>
+              {!reviewCollapsed.template && (
+                <div className="p-3 space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto">
+                  <div>
+                    <div className="text-tiny text-ink-muted mb-0.5 font-mono">SUBJECT</div>
+                    <div className="text-tiny font-semibold font-mono text-ink-secondary">{template.subject || "(no subject)"}</div>
+                  </div>
+                  <div>
+                    <div className="text-tiny text-ink-muted mb-0.5 font-mono">BODY</div>
+                    <div className="text-tiny text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded p-2 bg-bone">
+                      {template.body_html ? (
+                        <div className="prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: template.body_html.replace(/\{\{personalized_opener\}\}/g, '<mark class="bg-warning/20 text-warning px-0.5 rounded">{{personalized_opener}}</mark>') }} />
+                      ) : (
+                        <div className="whitespace-pre-wrap font-mono text-tiny text-ink-secondary leading-relaxed">{template.body}</div>
                       )}
                     </div>
-                  )}
+                  </div>
+                  <div className="flex items-center gap-2 pt-1.5 border-t border-line">
+                    <button onClick={prevReview} disabled={reviewIndex === 0} className="btn-ghost text-tiny px-1.5 py-0.5"><ChevronLeft size={10} /> Prev</button>
+                    <button onClick={nextReview} disabled={reviewIndex >= reviewEmails.length - 1} className="btn-ghost text-tiny px-1.5 py-0.5">Next <ChevronRight size={10} /></button>
+                  </div>
                 </div>
               )}
             </div>
-          )}
-          </div>
-        </aside>
 
-        <section className={`flex-1 min-w-0 p-3 sm:p-4 bg-bone space-y-2 relative`}>
-          {!showStepsPanel && (
-            <button onClick={() => setShowStepsPanel(true)}
-              className="absolute top-3 left-3 w-4 h-4 flex items-center justify-center rounded hover:bg-white/50 text-ink-muted hover:text-ink transition-colors z-10"
-              title="Show steps">
-              <ChevronRight size={12} />
-            </button>
-          )}
-          {!showEqPanel && (
-            <button onClick={() => setShowEqPanel(true)}
-              className="absolute top-3 right-3 w-4 h-4 flex items-center justify-center rounded hover:bg-white/50 text-ink-muted hover:text-ink transition-colors z-10"
-              title="Show EQ panel">
-              <ChevronLeft size={12} />
-            </button>
-          )}
-          {reviewMode ? (
-            /* REVIEW MODE — split pane: template left, generated email right */
-            <div className="space-y-3">
-              {campaignLeads.length > 0 && (
-                <div className="shadow-card rounded-lg bg-white">
-                  <div className="flex items-center justify-between gap-2 px-3 py-2 flex-wrap">
-                    <div className="text-caption text-ink-muted">
-                      <span className="font-medium text-ink">{leadStats.approved}</span> approved · {" "}
-                      <span className="font-medium text-ink">{leadStats.rejected}</span> rejected · {" "}
-                      <span className="font-medium text-ink">{leadStats.total - leadStats.reviewed}</span> awaiting review
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={regenerateAllEmails} disabled={regeneratingAll || leadStats.total === 0} className="btn-ghost text-caption" data-testid="regenerate-all-emails">
-                        {regeneratingAll ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />} Regenerate all
-                      </button>
-                      <button onClick={dismissAllEmails} disabled={leadStats.total === 0} className="btn-ghost text-caption text-danger" data-testid="dismiss-all-emails">
-                        <X size={12} /> Dismiss all
-                      </button>
-                      <button onClick={approveAllEmails} disabled={leadStats.total === 0} className="btn-secondary text-caption" data-testid="approve-all-emails">
-                        <Check size={12} /> Approve all
-                      </button>
-                    </div>
-                  </div>
-                  {selectedReview.length > 0 && (
-                    <div className="flex items-center gap-2 px-4 py-2 border-t border-line bg-accent-soft/40">
-                      <span className="text-caption font-medium">{selectedReview.length} selected</span>
-                      <button onClick={() => bulkSetReviewStatus("approved")} className="btn-primary text-caption ml-auto" data-testid="bulk-approve">
-                        <Check size={12} /> Approve selected
-                      </button>
-                      <button onClick={() => bulkSetReviewStatus("rejected")} className="btn-ghost text-caption text-danger" data-testid="bulk-reject">
-                        <Flag size={12} /> Reject selected
-                      </button>
-                      <button onClick={() => setSelectedReview([])} className="btn-ghost text-caption text-ink-muted">Clear</button>
-                    </div>
-                  )}
+            {/* RIGHT: Generated email preview + controls */}
+            <div className="shadow-card rounded-lg bg-white">
+              <div className="p-3 border-b border-line flex items-center justify-between gap-2 cursor-pointer" onClick={() => setReviewCollapsed((prev) => ({ ...prev, preview: !prev.preview }))}>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {reviewCollapsed.preview ? <ChevronRight size={12} className="text-ink-muted shrink-0" /> : <ChevronDown size={12} className="text-ink-muted shrink-0" />}
+                  <span className="text-tiny truncate max-w-[120px] font-medium">{current.first_name} {current.last_name}</span>
+                  <span className={`text-tiny font-mono px-1.5 py-0.5 rounded-full shrink-0 ${current.email_status === "approved" ? "bg-success/10 text-success" : current.email_status === "rejected" ? "bg-danger/10 text-danger" : "bg-warning/10 text-warning"}`}>
+                    {current.email_status === "approved" ? "✓" : current.email_status === "rejected" ? "✗" : "~"}
+                  </span>
                 </div>
-              )}
-              <div className={`grid grid-cols-1 gap-3 h-full ${showEqPanel ? "lg:grid-cols-[180px_1fr_1fr]" : "lg:grid-cols-[160px_1fr_2fr]"}`}>
-              {(() => {
-                const reviewEmails = getReviewEmails();
-                const current = reviewEmails[reviewIndex];
-                const template = steps[activeStep] || steps[0] || {};
-                // Mirrors the real send + test-send append (sender.py / server.py) —
-                // the preview must show exactly what would actually go out.
-                const activeSignatureHtml = includeSignature
-                  ? signatures.find((s) => s.id === signatureId)?.content_html || ""
-                  : "";
-                const rail = reviewEmails.length > 0 && (
-                  <div className={`shadow-card rounded-lg bg-white overflow-hidden flex flex-col transition-all duration-200 ${reviewCollapsed.leadRail ? 'max-h-[44px]' : 'max-h-[calc(100vh-280px)]'}`}>
-                    <div className="px-3 py-2 border-b border-line flex items-center justify-between cursor-pointer" onClick={() => setReviewCollapsed(prev => ({ ...prev, leadRail: !prev.leadRail }))}>
-                      <div className="flex items-center gap-1.5">
-                        {reviewCollapsed.leadRail ? <ChevronRight size={12} className="text-ink-muted" /> : <ChevronDown size={12} className="text-ink-muted" />}
-                        <span className="text-tiny font-mono text-ink-muted">Leads</span>
-                      </div>
-                      <input type="checkbox" onClick={(e) => e.stopPropagation()}
-                        checked={selectedReview.length === reviewEmails.length}
-                        onChange={(e) => setSelectedReview(e.target.checked ? reviewEmails.map((l) => l.id) : [])}
-                        title="Select all" />
-                    </div>
-                    {!reviewCollapsed.leadRail && (<>
-                    <div className="px-3 py-1.5 border-b border-line flex items-center gap-2">
-                      <input type="range" min={0} max={Math.max(0, reviewEmails.length - 1)} value={reviewIndex}
-                        onChange={(e) => setReviewIndex(Number(e.target.value))}
-                        className="flex-1 h-1 accent-ink cursor-pointer" />
-                      <span className="text-tiny font-mono text-ink-muted shrink-0">{reviewEmails.length > 0 ? `${reviewIndex + 1} / ${reviewEmails.length}` : "—"}</span>
-                    </div>
-                    <div className="overflow-y-auto flex-1">
-                      {reviewEmails.map((l, i) => (
-                        <div key={l.id}
-                          className={`flex items-center gap-2 px-3 py-2 border-b border-line cursor-pointer hover:bg-surfacehover transition-colors ${i === reviewIndex ? "bg-accent-soft" : ""}`}
-                          onClick={() => setReviewIndex(i)}>
-                          <input type="checkbox" onClick={(e) => e.stopPropagation()}
-                            checked={selectedReview.includes(l.id)} onChange={() => toggleReviewSelected(l.id)} />
-                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${l.email_status === "approved" ? "bg-success" : l.email_status === "rejected" ? "bg-danger" : l.personalized ? "bg-warning" : "bg-ink-disabled"}`} />
-                          <span className="text-caption truncate flex-1">{l.first_name} {l.last_name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>)}
-                  </div>
-                );
-                if (!current) return (
-                  <>
-                    {rail}
-                    <div className="lg:col-span-2 shadow-card rounded-lg bg-white p-8 text-center">
-                    {genProgress ? (
+                {!reviewCollapsed.preview && (
+                  <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => sendTestEmail(current.id)} disabled={sendingTest} className="btn-ghost text-tiny flex items-center gap-1" data-testid="send-test-email" title="Email this exact preview to yourself">
+                      {sendingTest ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />} Send
+                    </button>
+                    {!isTemplate && (
                       <>
-                        <Loader2 size={16} className="animate-spin mx-auto text-ink-muted mb-2" />
-                        <div className="text-caption font-medium">
-                          Generating personalized emails… {genProgress.done}/{genProgress.total || "?"}
-                        </div>
-                        <div className="text-caption text-ink-muted mt-1">This updates live — no need to refresh.</div>
-                        {genProgress.total > 0 && (
-                          <div className="h-1.5 max-w-xs mx-auto mt-3 bg-line rounded-full overflow-hidden">
-                            <div className="h-full bg-accent transition-all duration-500" style={{ width: `${Math.min(100, (genProgress.done / genProgress.total) * 100)}%` }} />
-                          </div>
+                        {editingOpener?.leadId === current.id ? (
+                          <button onClick={() => setEditingOpener(null)} className="btn-ghost text-caption"><X size={12} /> Cancel</button>
+                        ) : (
+                          <button onClick={() => setEditingOpener({ leadId: current.id, opener: current.personalized_opener })} className="btn-ghost text-caption flex items-center gap-1">
+                            <Edit2 size={12} /> {current.personalized_opener ? "Opener" : "Add opener"}
+                          </button>
                         )}
-                      </>
-                    ) : (
-                      <>
-                        <Mail size={16} className="mx-auto text-ink-disabled mb-2" />
-                        <div className="text-caption font-medium text-ink-muted">
-                          {leadStats.total === 0 ? "No leads assigned yet" : "Select a lead to preview"}
-                        </div>
-                        <p className="text-caption text-ink-muted mt-1 max-w-sm mx-auto">
-                          {leadStats.total === 0
-                            ? "Assign leads from the sidebar — every lead previews with your template's merge fields filled in, even before you generate."
-                            : "Pick a lead from the list on the left to see its preview."}
-                        </p>
+                        <button onClick={() => regenerateOpener(current.id)} disabled={generatingEmail === current.id} className="btn-ghost text-caption flex items-center gap-1">
+                          <RotateCw size={12} className={generatingEmail === current.id ? "animate-spin" : ""} /> {current.personalized ? "Regenerate" : "Generate with AI"}
+                        </button>
                       </>
                     )}
-                    </div>
-                  </>
-                );
-                return (
-                  <>
-                    {rail}
-                    {/* LEFT: Template with placeholders */}
-                    <div className="shadow-card rounded-lg bg-white">
-                      <div className="p-3 border-b border-line flex items-center justify-between cursor-pointer" onClick={() => setReviewCollapsed(prev => ({ ...prev, template: !prev.template }))}>
-                        <div className="flex items-center gap-1.5">
-                          {reviewCollapsed.template ? <ChevronRight size={12} className="text-ink-muted" /> : <ChevronDown size={12} className="text-ink-muted" />}
-                          <span className="text-tiny font-mono text-ink-muted">Template</span>
-                        </div>
-                        {!reviewCollapsed.template && <span className="text-tiny text-ink-muted font-mono">{reviewIndex + 1} / {reviewEmails.length}</span>}
-                      </div>
-                      {!reviewCollapsed.template && (
-                      <div className="p-3 space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto">
-                        <div>
-                          <div className="text-tiny text-ink-muted mb-0.5 font-mono">SUBJECT</div>
-                          <div className="text-tiny font-semibold font-mono text-ink-secondary">{template.subject || "(no subject)"}</div>
-                        </div>
-                        <div>
-                          <div className="text-tiny text-ink-muted mb-0.5 font-mono">BODY</div>
-                          <div className="text-tiny text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded p-2 bg-bone">
-                            {template.body_html ? (
-                              <div className="prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: template.body_html.replace(/\{\{personalized_opener\}\}/g, '<mark class="bg-warning/20 text-warning px-0.5 rounded">{{personalized_opener}}</mark>') }} />
-                            ) : (
-                              <div className="whitespace-pre-wrap font-mono text-tiny text-ink-secondary leading-relaxed">{template.body}</div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 pt-1.5 border-t border-line">
-                          <button onClick={prevReview} disabled={reviewIndex === 0} className="btn-ghost text-tiny px-1.5 py-0.5"><ChevronLeft size={10} /> Prev</button>
-                          <button onClick={nextReview} disabled={reviewIndex >= reviewEmails.length - 1} className="btn-ghost text-tiny px-1.5 py-0.5">Next <ChevronRight size={10} /></button>
-                        </div>
-                      </div>
-                      )}
-                    </div>
-
-                    {/* RIGHT: Generated email preview + controls */}
-                    <div className="shadow-card rounded-lg bg-white">
-                      <div className="p-3 border-b border-line flex items-center justify-between gap-2 cursor-pointer" onClick={() => setReviewCollapsed(prev => ({ ...prev, preview: !prev.preview }))}>
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {reviewCollapsed.preview ? <ChevronRight size={12} className="text-ink-muted shrink-0" /> : <ChevronDown size={12} className="text-ink-muted shrink-0" />}
-                          <span className="text-tiny truncate max-w-[120px] font-medium">{current.first_name} {current.last_name}</span>
-                          <span className={`text-tiny font-mono px-1.5 py-0.5 rounded-full shrink-0 ${current.email_status === "approved" ? "bg-success/10 text-success" : current.email_status === "rejected" ? "bg-danger/10 text-danger" : "bg-warning/10 text-warning"}`}>
-                            {current.email_status === "approved" ? "✓" : current.email_status === "rejected" ? "✗" : "~"}
-                          </span>
-                        </div>
-                        {!reviewCollapsed.preview && (
-                        <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end" onClick={(e) => e.stopPropagation()}>
-                          <button onClick={() => sendTestEmail(current.id)} disabled={sendingTest} className="btn-ghost text-tiny flex items-center gap-1" data-testid="send-test-email" title="Email this exact preview to yourself">
-                            {sendingTest ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />} Send
-                          </button>
-                          {!isTemplate && (
-                            <>
-                          {editingOpener?.leadId === current.id ? (
-                            <button onClick={() => setEditingOpener(null)} className="btn-ghost text-caption"><X size={12} /> Cancel</button>
-                          ) : (
-                            <button onClick={() => setEditingOpener({ leadId: current.id, opener: current.personalized_opener })} className="btn-ghost text-caption flex items-center gap-1">
-                              <Edit2 size={12} /> {current.personalized_opener ? "Opener" : "Add opener"}
-                            </button>
-                          )}
-                          <button onClick={() => regenerateOpener(current.id)} disabled={generatingEmail === current.id} className="btn-ghost text-caption flex items-center gap-1">
-                            <RotateCw size={12} className={generatingEmail === current.id ? "animate-spin" : ""} /> {current.personalized ? "Regenerate" : "Generate with AI"}
-                          </button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    {!reviewCollapsed.preview && (
-                      <div className="p-3 space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto">
-                        {/* Opener editing — available even before any AI generation has
-                            run, so a user can write/edit it by hand and immediately see
-                            an approvable draft without spending a generation credit. */
-                        !isTemplate && editingOpener?.leadId === current.id && (
-                          <div className="bg-bone border border-line rounded-xl p-3 space-y-2">
-                            <div className="text-tiny font-mono text-ink-muted">
-                              {current.personalized_opener ? "Edit personalized opener" : "Write an opener"}
-                            </div>
-                            <textarea value={editingOpener.opener} onChange={(e) => setEditingOpener({ ...editingOpener, opener: e.target.value })}
-                              rows={3} placeholder="A one-line hook personal to this lead…"
-                              className="w-full border border-line px-2 py-1.5 rounded-lg text-caption font-sans" />
-                            <div className="flex justify-end gap-2">
-                              <button onClick={() => setEditingOpener(null)} className="btn-secondary text-caption">Cancel</button>
-                              <button onClick={() => saveOpener(current.id, editingOpener.opener)} disabled={!editingOpener.opener?.trim()} className="btn-primary text-caption"><Check size={12} /> Save</button>
-                            </div>
-                          </div>
-                        )}
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="text-tiny text-ink-muted font-mono">SUBJECT</div>
-                            <button onClick={() => setMailboxView(!mailboxView)}
-                              className="text-tiny text-ink-muted hover:text-ink flex items-center gap-1 transition-colors">
-                              {mailboxView ? <Edit2 size={11} /> : <Eye size={11} />}
-                              {mailboxView ? "Edit view" : "Mailbox view"}
-                            </button>
-                          </div>
-                          <div className="text-caption font-semibold font-mono text-ink-secondary border border-line rounded-xl px-3 py-2">
-                            {fillMergeFields(current.email_subject || "(no subject)", current)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-tiny text-ink-muted mb-1 font-mono">BODY</div>
-                          {mailboxView ? (
-                            <div className="border border-line rounded-xl bg-white overflow-hidden">
-                              <div className="text-caption text-ink-muted px-4 py-2 border-b border-line space-y-0.5 font-mono">
-                                <div><span className="font-medium text-ink">From:</span> {name || "PitchEQ"}</div>
-                                <div><span className="font-medium text-ink">To:</span> {current.email || "lead@example.com"}</div>
-                                <div><span className="font-medium text-ink">Date:</span> {new Date().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</div>
-                              </div>
-                              <div className="p-3 text-caption text-ink leading-relaxed prose-email">
-                                {current.email_body_html ? (
-                                  <div dangerouslySetInnerHTML={{ __html: fillMergeFields(current.email_body_html, current) + (activeSignatureHtml ? "<br><br>" + activeSignatureHtml : "") }} />
-                                ) : (
-                                  <div className="whitespace-pre-wrap font-sans">
-                                    {fillMergeFields(current.email_body, current)}
-                                    {activeSignatureHtml && <div className="mt-3" dangerouslySetInnerHTML={{ __html: activeSignatureHtml }} />}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                          <div className="max-h-96 overflow-y-auto text-caption text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded-xl p-3 bg-white prose-email">
-                            {current.email_body || current.email_body_html ? (
-                              <div dangerouslySetInnerHTML={{ __html: fillMergeFields(current.email_body_html || current.email_body?.replace(/\n/g, "<br>") || "", current) + (activeSignatureHtml ? "<br><br>" + activeSignatureHtml : "") }} />
-                            ) : (
-                              <div className="text-ink-muted italic">No content</div>
-                            )}
-                          </div>
-                          )}
-                          {activeSignatureHtml && (
-                            <div className="flex items-center gap-1 text-tiny text-ink-muted mt-1.5">
-                              <Signature size={11} /> Signature included in preview
-                            </div>
-                          )}
-                          {/\{\{\s*\w+\s*\}\}/.test(current.email_body || "") && (
-                            <div className="flex items-center gap-1.5 text-tiny text-warning mt-1.5">
-                              <AlertTriangle size={11} /> Contains an unresolved merge field — this lead may be missing that field.
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 pt-3 border-t border-line">
-                          {isTemplate ? (
-                            current.email_status === "approved" ? (
-                              <>
-                                <span className="flex items-center gap-1 text-caption text-success font-medium"><Check size={12} /> Approved</span>
-                                <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1 ml-auto"><Flag size={12} /> Reject</button>
-                              </>
-                            ) : (
-                              <>
-                                <button onClick={() => approveEmail(current.id)} className="btn-primary text-caption flex items-center gap-1"><Check size={12} /> Approve</button>
-                                <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1"><Flag size={12} /> Reject</button>
-                              </>
-                            )
-                          ) : (
-                          !current.personalized ? (
-                            <span className="text-caption text-ink-muted">Write an opener above (or generate with AI) to enable approval.</span>
-                          ) : current.email_status === "approved" ? (
-                            <>
-                              <span className="flex items-center gap-1 text-caption text-success font-medium"><Check size={12} /> Approved</span>
-                              <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1 ml-auto"><Flag size={12} /> Reject</button>
-                            </>
-                          ) : (
-                            <>
-                              <button onClick={() => approveEmail(current.id)} className="btn-primary text-caption flex items-center gap-1"><Check size={12} /> Approve</button>
-                              <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1"><Flag size={12} /> Reject</button>
-                            </>
-                          ))}
-                          {current.personalized && (
-                            <button onClick={() => deleteLeadEmail(current.id)} className="btn-ghost text-caption text-ink-muted hover:text-danger ml-auto flex items-center gap-1"><Trash2 size={12} /> Remove</button>
-                          )}
-                        </div>
-                      </div>
-                      )}
-                    </div>
-                  </>
-                );
-              })()}
+                  </div>
+                )}
               </div>
-            </div>
-          ) : (
-            /* TEMPLATE EDITOR — multi-channel */
-            <div className="shadow-card p-2 sm:p-3 rounded-lg">
-              <div className="flex items-center justify-between mb-1 cursor-pointer select-none" onClick={() => setEditorHidden(v => !v)}>
-                <span className="text-tiny font-mono text-ink-muted">Draft editor</span>
-                <button className="text-ink-muted hover:text-ink transition-colors" title="Toggle editor">
-                  {editorHidden ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-                </button>
-              </div>
-              {!editorHidden && (<>
-              {/* Channel selector */}
-              <div className="flex items-center gap-1 mb-2 pb-2 border-b border-line flex-wrap">
-                <div className="text-tiny font-mono text-ink-muted shrink-0">Channel</div>
-                <div className="flex flex-wrap gap-0.5">
-                  {CHANNELS.map((ch) => {
-                    const active = (step.channel || "email") === ch.key;
-                    const chIcons = { email: <Mail size={12} />, phone_call: <Phone size={12} />, sms: <MessageSquare size={12} />, whatsapp: <MessageCircle size={12} />, linkedin_connect: <Send size={12} />, linkedin_message: <Send size={12} />, linkedin_comment: <MessageCircle size={12} /> };
-                    return (
-                      <button key={ch.key} onClick={() => updateStep({ channel: ch.key })}
-                        className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-tiny font-medium transition-colors ${active ? "bg-ink text-white" : "bg-ash text-ink-muted hover:text-ink"}`}>
-                        {chIcons[ch.key]} {ch.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="flex items-center gap-1 ml-auto">
-                  <label className="text-tiny text-ink-muted font-mono">Condition</label>
-                  <select value={step.condition || "always"} onChange={(e) => updateStep({ condition: e.target.value })}
-                    className="border border-line px-1.5 py-0.5 rounded text-tiny font-mono bg-white">
-                    <option value="always">Always send</option>
-                    <option value="if_no_reply">If no reply</option>
-                    <option value="if_opened_no_reply">If opened, no reply</option>
-                    <option value="if_replied">If replied</option>
-                    <option value="if_clicked">If clicked</option>
-                    <option value="if_not_opened">If not opened</option>
-                    <option value="if_bounced">If bounced</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Email fields */}
-              {(step.channel || "email") === "email" && (
-                <>
-                  <div className="text-tiny font-mono text-ink-muted mb-1">Subject</div>
-                  <input value={step.subject} onChange={(e) => updateStep({ subject: e.target.value })}
-                    data-testid="editor-subject"
-                    className="w-full text-caption font-medium border-0 border-b border-line py-1.5 focus:outline-none focus:border-ink bg-transparent"
-                    placeholder="Quick idea for {{company}}" />
-                  <div className="mt-2 flex items-center justify-between">
-                    <div className="text-tiny font-mono text-ink-muted">Body</div>
-                    <div className="flex items-center gap-2">
-                      <label className="text-tiny text-ink-muted font-mono">day</label>
-                      <input type="number" min={0} value={step.day}
-                        onChange={(e) => updateStep({ day: Number(e.target.value) })}
-                        data-testid="editor-day"
-                        className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
-                    </div>
-                  </div>
-                  <div className="mt-1.5">
-                    <RichEmailEditor value={step.body_html || ""} onChange={(html) => updateStep({ body_html: html })}
-                      placeholder="Write your email, or research this lead and draft it for you." />
-                  </div>
-                </>
-              )}
-
-              {/* Phone Call fields */}
-              {(step.channel || "") === "phone_call" && (
-                <>
-                  <div className="text-tiny font-mono text-ink-muted mb-0.5">Call Script</div>
-                  <p className="text-tiny text-ink-muted mb-1">{{first_name}}, {{company}}, and other merge fields will be filled automatically.</p>
-                  <textarea value={step.script || ""} onChange={(e) => updateStep({ script: e.target.value })}
-                    rows={4} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
-                    placeholder="Hi {{first_name}}, this is [Your Name] from {{company}}... (write your call script with {{merge_fields}})" />
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <label className="text-tiny text-ink-muted font-mono">day</label>
-                    <input type="number" min={0} value={step.day}
-                      onChange={(e) => updateStep({ day: Number(e.target.value) })}
-                      className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
-                  </div>
-                </>
-              )}
-
-              {/* SMS fields */}
-              {(step.channel || "") === "sms" && (
-                <>
-                  <div className="text-tiny font-mono text-ink-muted mb-0.5">SMS Body</div>
-                  <p className="text-tiny text-ink-muted mb-1">Short message. Merge fields supported: {'{{'}first_name{'}}'}, {'{{'}company{'}}'}, etc.</p>
-                  <textarea value={step.body || ""} onChange={(e) => updateStep({ body: e.target.value })}
-                    rows={2} maxLength={160} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
-                    placeholder="Hi {{first_name}}, quick reminder about {{company}}..." />
-                  <div className="text-tiny text-ink-muted mt-0.5">{(step.body || "").length}/160 characters</div>
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <label className="text-tiny text-ink-muted font-mono">day</label>
-                    <input type="number" min={0} value={step.day}
-                      onChange={(e) => updateStep({ day: Number(e.target.value) })}
-                      className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
-                  </div>
-                </>
-              )}
-
-              {/* WhatsApp fields */}
-              {(step.channel || "") === "whatsapp" && (
-                <>
-                  <div className="text-tiny font-mono text-ink-muted mb-0.5">WhatsApp Message</div>
-                  <p className="text-tiny text-ink-muted mb-1">Merge fields supported. Keep it conversational.</p>
-                  <textarea value={step.body || ""} onChange={(e) => updateStep({ body: e.target.value })}
-                    rows={3} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
-                    placeholder="Hi {{first_name}}, wanted to share something relevant for {{company}}..." />
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <label className="text-tiny text-ink-muted font-mono">day</label>
-                    <input type="number" min={0} value={step.day}
-                      onChange={(e) => updateStep({ day: Number(e.target.value) })}
-                      className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
-                  </div>
-                </>
-              )}
-
-              {/* LinkedIn Message fields */}
-              {(step.channel || "") === "linkedin_message" && (
-                <>
-                  <div className="text-tiny font-mono text-ink-muted mb-0.5">LinkedIn Message</div>
-                  <p className="text-tiny text-ink-muted mb-1">This will be marked as a manual task — LinkedIn Messages require sending via LinkedIn.com</p>
-                  <textarea value={step.linkedin_message || step.body || ""} onChange={(e) => updateStep({ linkedin_message: e.target.value })}
-                    rows={3} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
-                    placeholder="Hi {{first_name}}, noticed {{company}}'s recent work on..." />
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <label className="text-tiny text-ink-muted font-mono">day</label>
-                    <input type="number" min={0} value={step.day}
-                      onChange={(e) => updateStep({ day: Number(e.target.value) })}
-                      className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
-                  </div>
-                </>
-              )}
-
-              {/* LinkedIn Comment fields */}
-              {(step.channel || "") === "linkedin_comment" && (
-                <>
-                  <div className="text-tiny font-mono text-ink-muted mb-0.5">Post URL to comment on</div>
-                  <input value={step.linkedin_post_url || ""} onChange={(e) => updateStep({ linkedin_post_url: e.target.value })}
-                    className="w-full border border-line px-2 py-1.5 rounded text-tiny text-ink"
-                    placeholder="https://www.linkedin.com/posts/..." />
-                  <div className="text-tiny font-mono text-ink-muted mt-1.5 mb-0.5">Comment text</div>
-                  <textarea value={step.linkedin_comment_text || step.body || ""} onChange={(e) => updateStep({ linkedin_comment_text: e.target.value })}
-                    rows={3} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
-                    placeholder="Great insight, {{first_name}}! I'd add that..." />
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <label className="text-tiny text-ink-muted font-mono">day</label>
-                    <input type="number" min={0} value={step.day}
-                      onChange={(e) => updateStep({ day: Number(e.target.value) })}
-                      className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
-                  </div>
-                </>
-              )}
-
-              {/* LinkedIn Connect fields */}
-              {(step.channel || "") === "linkedin_connect" && (
-                <>
-                  <div className="flex items-center gap-1 text-warning mb-1">
-                    <AlertTriangle size={12} />
-                    <span className="text-tiny font-medium">Manual action required</span>
-                  </div>
-                  <p className="text-tiny text-ink-muted mb-1.5">LinkedIn doesn't allow automating connection requests. The lead's LinkedIn URL will be shown so you can connect manually.</p>
-                  <div className="text-tiny font-mono text-ink-muted mb-0.5">Connection note (optional)</div>
-                  <textarea value={step.linkedin_connection_note || step.body || ""} onChange={(e) => updateStep({ linkedin_connection_note: e.target.value })}
-                    rows={2} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
-                    placeholder="Hi {{first_name}}, I've been following {{company}}'s work..." />
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <label className="text-tiny text-ink-muted font-mono">day</label>
-                    <input type="number" min={0} value={step.day}
-                      onChange={(e) => updateStep({ day: Number(e.target.value) })}
-                      className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
-                  </div>
-                </>
-              )}
-            </>)}
-            </div>
-          )}
-
-          {/* Signature modal */}
-          {showSignatureModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowSignatureModal(false)}>
-              <div className="bg-white rounded-lg shadow-card p-5 w-full max-w-xl mx-4" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-subheading font-display font-semibold">Create Signature</div>
-                  <button onClick={() => setShowSignatureModal(false)} className="btn-ghost text-caption">Close</button>
-                </div>
-                <div className="space-y-2">
-                  <input value={signatureName} onChange={(e) => setSignatureName(e.target.value)}
-                    className="w-full border border-line rounded-lg px-3 py-1.5 text-caption"
-                    placeholder="Signature name (e.g. My Standard Signature)" />
-                  <RichEmailEditor
-                    value={signatureHtml}
-                    onChange={setSignatureHtml}
-                    placeholder="Paste or compose your signature here — add images, links, and formatting..."
-                  />
-                  {signatureHtml && (
-                    <div className="bg-bone border border-line rounded-lg p-3 text-caption">
-                      <div className="text-tiny font-mono uppercase text-ink-muted mb-1">Preview</div>
-                      <div className="border-t border-line pt-2 mt-1 signature-preview" dangerouslySetInnerHTML={{ __html: signatureHtml }} />
+              {!reviewCollapsed.preview && (
+                <div className="p-3 space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto">
+                  {!isTemplate && editingOpener?.leadId === current.id && (
+                    <div className="bg-bone border border-line rounded-xl p-3 space-y-2">
+                      <div className="text-tiny font-mono text-ink-muted">
+                        {current.personalized_opener ? "Edit personalized opener" : "Write an opener"}
+                      </div>
+                      <textarea value={editingOpener.opener} onChange={(e) => setEditingOpener({ ...editingOpener, opener: e.target.value })}
+                        rows={3} placeholder="A one-line hook personal to this lead…"
+                        className="w-full border border-line px-2 py-1.5 rounded-lg text-caption font-sans" />
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => setEditingOpener(null)} className="btn-secondary text-caption">Cancel</button>
+                        <button onClick={() => saveOpener(current.id, editingOpener.opener)} disabled={!editingOpener.opener?.trim()} className="btn-primary text-caption"><Check size={12} /> Save</button>
+                      </div>
                     </div>
                   )}
-                  <div className="flex justify-end gap-2">
-                    <button onClick={() => setShowSignatureModal(false)} className="btn-secondary text-caption">Cancel</button>
-                    <button onClick={createSignature} disabled={savingSignature} className="btn-primary text-caption">
-                      {savingSignature ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                      Create
-                    </button>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-tiny text-ink-muted font-mono">SUBJECT</div>
+                      <button onClick={() => setMailboxView(!mailboxView)}
+                        className="text-tiny text-ink-muted hover:text-ink flex items-center gap-1 transition-colors">
+                        {mailboxView ? <Edit2 size={11} /> : <Eye size={11} />}
+                        {mailboxView ? "Edit view" : "Mailbox view"}
+                      </button>
+                    </div>
+                    <div className="text-caption font-semibold font-mono text-ink-secondary border border-line rounded-xl px-3 py-2">
+                      {fillMergeFields(current.email_subject || "(no subject)", current)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-tiny text-ink-muted mb-1 font-mono">BODY</div>
+                    {mailboxView ? (
+                      <div className="border border-line rounded-xl bg-white overflow-hidden">
+                        <div className="text-caption text-ink-muted px-4 py-2 border-b border-line space-y-0.5 font-mono">
+                          <div><span className="font-medium text-ink">From:</span> {name || "PitchEQ"}</div>
+                          <div><span className="font-medium text-ink">To:</span> {current.email || "lead@example.com"}</div>
+                          <div><span className="font-medium text-ink">Date:</span> {new Date().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</div>
+                        </div>
+                        <div className="p-3 text-caption text-ink leading-relaxed prose-email">
+                          {current.email_body_html ? (
+                            <div dangerouslySetInnerHTML={{ __html: fillMergeFields(current.email_body_html, current) + (activeSignatureHtml ? "<br><br>" + activeSignatureHtml : "") }} />
+                          ) : (
+                            <div className="whitespace-pre-wrap font-sans">
+                              {fillMergeFields(current.email_body, current)}
+                              {activeSignatureHtml && <div className="mt-3" dangerouslySetInnerHTML={{ __html: activeSignatureHtml }} />}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="max-h-96 overflow-y-auto text-caption text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded-xl p-3 bg-white prose-email">
+                        {current.email_body || current.email_body_html ? (
+                          <div dangerouslySetInnerHTML={{ __html: fillMergeFields(current.email_body_html || current.email_body?.replace(/\n/g, "<br>") || "", current) + (activeSignatureHtml ? "<br><br>" + activeSignatureHtml : "") }} />
+                        ) : (
+                          <div className="text-ink-muted italic">No content</div>
+                        )}
+                      </div>
+                    )}
+                    {activeSignatureHtml && (
+                      <div className="flex items-center gap-1 text-tiny text-ink-muted mt-1.5">
+                        <Signature size={11} /> Signature included in preview
+                      </div>
+                    )}
+                    {/\{\{\s*\w+\s*\}\}/.test(current.email_body || "") && (
+                      <div className="flex items-center gap-1.5 text-tiny text-warning mt-1.5">
+                        <AlertTriangle size={11} /> Contains an unresolved merge field — this lead may be missing that field.
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 pt-3 border-t border-line">
+                    {isTemplate ? (
+                      current.email_status === "approved" ? (
+                        <>
+                          <span className="flex items-center gap-1 text-caption text-success font-medium"><Check size={12} /> Approved</span>
+                          <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1 ml-auto"><Flag size={12} /> Reject</button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => approveEmail(current.id)} className="btn-primary text-caption flex items-center gap-1"><Check size={12} /> Approve</button>
+                          <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1"><Flag size={12} /> Reject</button>
+                        </>
+                      )
+                    ) : (
+                      !current.personalized ? (
+                        <span className="text-caption text-ink-muted">Write an opener above (or generate with AI) to enable approval.</span>
+                      ) : current.email_status === "approved" ? (
+                        <>
+                          <span className="flex items-center gap-1 text-caption text-success font-medium"><Check size={12} /> Approved</span>
+                          <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1 ml-auto"><Flag size={12} /> Reject</button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => approveEmail(current.id)} className="btn-primary text-caption flex items-center gap-1"><Check size={12} /> Approve</button>
+                          <button onClick={() => rejectEmail(current.id)} className="btn-ghost text-caption text-danger flex items-center gap-1"><Flag size={12} /> Reject</button>
+                        </>
+                      )
+                    )}
+                    {current.personalized && (
+                      <button onClick={() => deleteLeadEmail(current.id)} className="btn-ghost text-caption text-ink-muted hover:text-danger ml-auto flex items-center gap-1"><Trash2 size={12} /> Remove</button>
+                    )}
                   </div>
                 </div>
-              </div>
+              )}
             </div>
-          )}
-        </section>
-
-        {/* EQ Panel */}
-        <aside className={`${showEqPanel ? "w-72" : "w-0 overflow-hidden"} shrink-0 border-l border-line bg-white transition-all duration-200 relative`}>
-          <div className={`p-4 sm:p-5 ${showEqPanel ? "" : "invisible"}`}>
-          {showEqPanel && (
-            <button onClick={() => setShowEqPanel(false)}
-              className="absolute top-2 right-2 w-4 h-4 flex items-center justify-center rounded hover:bg-bone text-ink-muted hover:text-ink transition-colors"
-              title="Hide EQ panel">
-              <ChevronRight size={12} />
-            </button>
-          )}
-          <div className="ui-label text-ink">EQ Score</div>
-          <div className="font-mono text-2xl sm:text-3xl font-bold tracking-tight mt-1"
-            style={{ color: eq ? (eq.overall > 70 ? "#212025" : eq.overall > 40 ? "#5A5A63" : "#B33636") : "#8A8B86" }}>
-            {eq?.overall ?? "—"}
-          </div>
-          <div className="mt-4 space-y-3">
-            {eq && [
-              ["Relevance", eq.relevance],
-              ["Empathy", eq.empathy],
-              ["Clarity", eq.clarity],
-              ["CTA", eq.cta],
-              ["Spam safety", eq.spam_safety],
-            ].map(([k, v]) => (
-              <div key={k}>
-                <div className="flex justify-between text-caption">
-                  <span className="ui-label">{k}</span>
-                  <span className="font-mono text-ink-secondary">{v}</span>
-                </div>
-                <div className="h-1 mt-1 bg-line rounded-full overflow-hidden">
-                  <div className="h-full bg-accent" style={{ width: `${v}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-6 ui-label mb-1.5">Hints</div>
-          <ul className="space-y-2 text-caption text-ink-secondary">
-            {eq?.hints?.length ? eq.hints.map((h) => (
-              <li key={h} className="border-l-2 border-sanguine pl-2">{h}</li>
-            )) : <li className="text-ink-muted">Looking sharp. Send it.</li>}
-          </ul>
-
-          {status !== "draft" && (
-            <div className="mt-6 shadow-card p-3">
-              <div className="ui-label mb-0.5">Status</div>
-              <div className="font-mono text-caption">{status}</div>
-            </div>
-          )}
-          </div>
-        </aside>
+          </>
+        )}
       </div>
     </div>
   );
