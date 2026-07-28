@@ -1233,6 +1233,17 @@ async def launch_campaign(cid: str, skip_pending: bool = False, user=Depends(cur
         logger.error("enqueue_campaign crashed\n%s", _tb())
         raise HTTPException(500, "Campaign engine error")
 
+    # A campaign whose every lead was rejected (or quarantined, or otherwise
+    # has nothing left to send) queues zero items without enqueue_campaign
+    # raising — previously this still flipped status to "active", leaving a
+    # campaign that looks launched but will never send a single email.
+    if result.get("queued", 0) == 0:
+        raise HTTPException(
+            400,
+            "Nothing to send — every lead was skipped (rejected, quarantined, or missing "
+            "a personalized email). Approve at least one lead before launching.",
+        )
+
     await db.campaigns.update_one({"id": cid}, {"$set": {"status": "active", "launched_at": now_iso()}})
     await _audit(user, "campaign.launch", {"campaign_id": cid, **result})
     return {"ok": True, "status": "active", **result}

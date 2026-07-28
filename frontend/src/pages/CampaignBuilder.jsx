@@ -797,96 +797,118 @@ function RailBtn({ active, onClick, icon, label, testid }) {
   );
 }
 
+/** Shared collapse/expand header used by every card-style section below —
+ * one toggle pattern instead of each section reinventing it. */
+function CollapsibleCard({ title, testid, defaultOpen = true, className = "max-w-lg", children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className={`shadow-card rounded-2xl bg-white ${className}`}>
+      <div className="flex items-center justify-between px-4 sm:px-5 py-3 cursor-pointer select-none"
+        onClick={() => setOpen((v) => !v)} data-testid={testid}>
+        <div className="text-tiny font-mono text-ink-muted">{title}</div>
+        <button className="text-ink-muted hover:text-ink transition-colors" title={open ? "Collapse" : "Expand"}>
+          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+      </div>
+      {open && <div className="px-4 sm:px-5 pb-4 sm:pb-5">{children}</div>}
+    </div>
+  );
+}
+
 function BasicsSection({ goal, setGoal, folderId, setFolderId, folders, campaignTags, setCampaignTags }) {
   return (
-    <div className="shadow-card rounded-2xl bg-white p-4 sm:p-5 space-y-3 max-w-lg">
-      <div className="text-tiny font-mono text-ink-muted">Basics</div>
-      <div>
-        <label className="form-label">Goal</label>
-        <input value={goal} onChange={(e) => setGoal(e.target.value)} data-testid="goal-input"
-          placeholder="e.g. Book 15-minute intro calls"
-          className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1" />
+    <CollapsibleCard title="Basics" testid="collapse-basics">
+      <div className="space-y-3">
+        <div>
+          <label className="form-label">Goal</label>
+          <input value={goal} onChange={(e) => setGoal(e.target.value)} data-testid="goal-input"
+            placeholder="e.g. Book 15-minute intro calls"
+            className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1" />
+        </div>
+        <div>
+          <label className="form-label">Folder</label>
+          <select value={folderId} onChange={(e) => setFolderId(e.target.value)}
+            className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1">
+            <option value="">No folder</option>
+            {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="form-label">Tags (comma-separated)</label>
+          <input value={campaignTags} onChange={(e) => setCampaignTags(e.target.value)}
+            placeholder="e.g. outbound, q4, ae-target"
+            className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1" />
+        </div>
       </div>
-      <div>
-        <label className="form-label">Folder</label>
-        <select value={folderId} onChange={(e) => setFolderId(e.target.value)}
-          className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1">
-          <option value="">No folder</option>
-          {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-        </select>
-      </div>
-      <div>
-        <label className="form-label">Tags (comma-separated)</label>
-        <input value={campaignTags} onChange={(e) => setCampaignTags(e.target.value)}
-          placeholder="e.g. outbound, q4, ae-target"
-          className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1" />
-      </div>
-    </div>
+    </CollapsibleCard>
   );
 }
 
 function SendingSection({ sendWindowStart, setSendWindowStart, sendWindowEnd, setSendWindowEnd, timezone, setTimezone }) {
   return (
-    <div className="shadow-card rounded-2xl bg-white p-4 sm:p-5 space-y-3 max-w-lg">
-      <div className="text-tiny font-mono text-ink-muted">Sending window</div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="form-label">Start</label>
-          <input type="time" value={sendWindowStart} onChange={(e) => setSendWindowStart(e.target.value)}
-            className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1" />
+    <CollapsibleCard title="Sending window" testid="collapse-sending">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="form-label">Start</label>
+            <input type="time" value={sendWindowStart} onChange={(e) => setSendWindowStart(e.target.value)}
+              className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1" />
+          </div>
+          <div>
+            <label className="form-label">End</label>
+            <input type="time" value={sendWindowEnd} onChange={(e) => setSendWindowEnd(e.target.value)}
+              className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1" />
+          </div>
         </div>
         <div>
-          <label className="form-label">End</label>
-          <input type="time" value={sendWindowEnd} onChange={(e) => setSendWindowEnd(e.target.value)}
-            className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1" />
+          <label className="form-label">Timezone</label>
+          <div className="relative mt-1">
+            <select value={timezone} onChange={(e) => setTimezone(e.target.value)}
+              className="w-full border border-line px-3 py-2 rounded-lg text-input font-mono appearance-none pr-8">
+              {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" size={14} />
+          </div>
         </div>
       </div>
-      <div>
-        <label className="form-label">Timezone</label>
-        <div className="relative mt-1">
-          <select value={timezone} onChange={(e) => setTimezone(e.target.value)}
-            className="w-full border border-line px-3 py-2 rounded-lg text-input font-mono appearance-none pr-8">
-            {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-          </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" size={14} />
-        </div>
-      </div>
-    </div>
+    </CollapsibleCard>
   );
 }
 
 function SignatureSection({ includeSignature, setIncludeSignature, signatures, signatureId, setSignatureId, deleteSignature, onNewSignature }) {
   return (
-    <div className="shadow-card rounded-2xl bg-white p-4 sm:p-5 space-y-3 max-w-lg">
-      <label className="flex items-center justify-between cursor-pointer">
-        <span className="flex items-center gap-1.5 form-label"><Signature size={12} /> Include signature</span>
-        <input type="checkbox" checked={includeSignature} onChange={(e) => setIncludeSignature(e.target.checked)}
-          data-testid="include-signature-toggle" className="w-3.5 h-3.5" />
-      </label>
-      {includeSignature && (
-        <div className="flex items-center gap-1.5">
-          {signatures.length > 0 ? (
-            <select value={signatureId} onChange={(e) => setSignatureId(e.target.value)} data-testid="signature-select"
-              className="flex-1 min-w-0 border border-line rounded-lg px-3 py-2 text-input bg-white">
-              <option value="">Choose a signature…</option>
-              {signatures.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          ) : (
-            <div className="flex-1 text-caption text-ink-muted">No signatures yet.</div>
-          )}
-          <button onClick={onNewSignature} title="New signature" data-testid="new-signature-btn"
-            className="shrink-0 p-2 border border-line rounded-lg text-ink-muted hover:text-ink hover:bg-ash transition-colors">
-            <Plus size={14} />
-          </button>
-          <button
-            onClick={() => { if (signatureId && window.confirm("Delete this signature?")) deleteSignature(signatureId); }}
-            disabled={!signatureId} title="Delete signature" data-testid="delete-signature-btn"
-            className="shrink-0 p-2 border border-line rounded-lg text-ink-muted hover:text-danger hover:bg-ash transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-            <Trash2 size={14} />
-          </button>
-        </div>
-      )}
-    </div>
+    <CollapsibleCard title="Signature" testid="collapse-signature">
+      <div className="space-y-3">
+        <label className="flex items-center justify-between cursor-pointer">
+          <span className="flex items-center gap-1.5 form-label"><Signature size={12} /> Include signature</span>
+          <input type="checkbox" checked={includeSignature} onChange={(e) => setIncludeSignature(e.target.checked)}
+            data-testid="include-signature-toggle" className="w-3.5 h-3.5" />
+        </label>
+        {includeSignature && (
+          <div className="flex items-center gap-1.5">
+            {signatures.length > 0 ? (
+              <select value={signatureId} onChange={(e) => setSignatureId(e.target.value)} data-testid="signature-select"
+                className="flex-1 min-w-0 border border-line rounded-lg px-3 py-2 text-input bg-white">
+                <option value="">Choose a signature…</option>
+                {signatures.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            ) : (
+              <div className="flex-1 text-caption text-ink-muted">No signatures yet.</div>
+            )}
+            <button onClick={onNewSignature} title="New signature" data-testid="new-signature-btn"
+              className="shrink-0 p-2 border border-line rounded-lg text-ink-muted hover:text-ink hover:bg-ash transition-colors">
+              <Plus size={14} />
+            </button>
+            <button
+              onClick={() => { if (signatureId && window.confirm("Delete this signature?")) deleteSignature(signatureId); }}
+              disabled={!signatureId} title="Delete signature" data-testid="delete-signature-btn"
+              className="shrink-0 p-2 border border-line rounded-lg text-ink-muted hover:text-danger hover:bg-ash transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+              <Trash2 size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+    </CollapsibleCard>
   );
 }
 
@@ -899,8 +921,7 @@ function AudienceSection({
   advanceBatch, advancingBatch, batchApproved, batchTotal,
 }) {
   return (
-    <div className="shadow-card rounded-2xl bg-white p-4 sm:p-5 max-w-2xl">
-      <div className="text-tiny font-mono text-ink-muted mb-2">Leads ({selectedLeads.length}/{leads.length})</div>
+    <CollapsibleCard title={`Leads (${selectedLeads.length}/${leads.length})`} testid="collapse-audience" className="max-w-2xl">
       {leadLists.length > 0 && (
         <div className="mb-2">
           <select value={selectedListId} onChange={(e) => setSelectedListId(e.target.value)}
@@ -1043,7 +1064,7 @@ function AudienceSection({
           )}
         </div>
       )}
-    </div>
+    </CollapsibleCard>
   );
 }
 
@@ -1185,8 +1206,7 @@ function SequenceSection({ steps, activeStep, setActiveStep, addStep, removeStep
   const channelIcons = { email: <Mail size={12} />, phone_call: <Phone size={12} />, sms: <MessageSquare size={12} />, whatsapp: <MessageCircle size={12} />, linkedin_connect: <Send size={12} />, linkedin_message: <Send size={12} />, linkedin_comment: <MessageCircle size={12} /> };
   return (
     <div className="space-y-3">
-      <div className="shadow-card rounded-2xl bg-white p-4 sm:p-5">
-        <div className="text-tiny font-mono text-ink-muted mb-2">Sequence</div>
+      <CollapsibleCard title="Sequence" testid="collapse-sequence-steps" className="">
         <div className="flex items-stretch gap-0 overflow-x-auto pb-1">
           {steps.map((s, i) => (
             <div key={s._key || i} className="flex items-center shrink-0">
@@ -1222,9 +1242,9 @@ function SequenceSection({ steps, activeStep, setActiveStep, addStep, removeStep
           ))}
           <button onClick={addStep} data-testid="add-step" className="btn-ghost shrink-0 text-tiny ml-2 self-center"><Plus size={14} /> Add step</button>
         </div>
-      </div>
+      </CollapsibleCard>
 
-      <div className="shadow-card rounded-2xl bg-white p-4 sm:p-5">
+      <CollapsibleCard title="Draft editor" testid="collapse-sequence-editor" className="">
         <div className="flex items-center gap-1 mb-3 pb-3 border-b border-line flex-wrap">
           <div className="text-tiny font-mono text-ink-muted shrink-0">Channel</div>
           <div className="flex flex-wrap gap-0.5">
@@ -1253,7 +1273,7 @@ function SequenceSection({ steps, activeStep, setActiveStep, addStep, removeStep
           </div>
         </div>
         <ChannelEditor step={step} updateStep={updateStep} />
-      </div>
+      </CollapsibleCard>
     </div>
   );
 }
