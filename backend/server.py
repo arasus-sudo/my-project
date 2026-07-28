@@ -26,6 +26,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
+from urllib.parse import quote
 import asyncio
 import secrets as _secrets
 import anthropic
@@ -2125,6 +2126,26 @@ async def update_signature(sid: str, body: SignatureIn, user=Depends(current_use
         raise HTTPException(404, "Signature not found")
     updated = await db.signatures.find_one({"id": sid, "workspace_id": user["workspace_id"]}, {"_id": 0})
     return updated
+
+
+def inject_tracking(html: str, workspace_id: str, queue_id: str, base_url: str) -> str:
+    """Inject open-tracking pixel and wrap links for click tracking."""
+    pixel_url = f"{base_url}/t/o/{queue_id}"
+    pixel = f'<img src="{pixel_url}" width="1" height="1" style="display:none" alt="" />'
+
+    def _wrap(m):
+        u = m.group(1)
+        if u.startswith("#") or u.startswith("mailto:"):
+            return m.group(0)
+        return f'href="{base_url}/t/c/{queue_id}?u={quote(u, safe="")}"'
+
+    html = re.sub(r'href="([^"]+)"', _wrap, html)
+
+    if "</body>" in html:
+        html = html.replace("</body>", f"{pixel}</body>")
+    else:
+        html += pixel
+    return html
 
 
 # ---- Open / click tracking (PUBLIC — called by the recipient's mail client) ----
@@ -5335,6 +5356,14 @@ async def _start_scheduler():
                 pass
         if _fixed:
             logger.info("migrated %s send_queue item(s) to UTC send_at", _fixed)
+
+        # Reset send_queue items that failed due to the missing inject_tracking bug
+        _reset = await db.send_queue.update_many(
+            {"status": "failed", "error": {"$regex": "inject_tracking", "$options": "i"}},
+            {"$set": {"status": "pending", "error": None, "attempts": 0}}
+        )
+        if _reset.modified_count:
+            logger.info("reset %s failed send_queue item(s) for inject_tracking retry", _reset.modified_count)
 
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         from schedule_eq import run_reminder_tick
