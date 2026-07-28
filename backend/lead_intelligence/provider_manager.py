@@ -499,12 +499,12 @@ class ProviderManager:
     async def natural_search(self, query: str, workspace_id: str = "",
                               user_id: str = "") -> SearchResult:
         """Parse a natural language query into structured filters and execute."""
-        filters = await self._nl_to_filters(query, workspace_id=workspace_id)
+        filters = await self._nl_to_filters(query, workspace_id=workspace_id, user_id=user_id)
         result = await self.search(filters, workspace_id=workspace_id, user_id=user_id)
         result.parsed_filters = {k: v for k, v in filters.model_dump().items() if v not in (None, "", [], {}, False)}
         return result
 
-    async def _nl_to_filters(self, query: str, workspace_id: str = "") -> UnifiedSearchFilters:
+    async def _nl_to_filters(self, query: str, workspace_id: str = "", user_id: str = "") -> UnifiedSearchFilters:
         """Use an LLM to parse natural language into structured filters."""
         import os
         import logging
@@ -546,7 +546,7 @@ Output ONLY valid JSON matching this schema (no markdown, no explanation):
                 await record_llm_usage(
                     workspace_id, "claude-sonnet-4-6",
                     msg.usage.input_tokens, msg.usage.output_tokens,
-                    agent="pitch", action="lead_search_nl_parse",
+                    agent="pitch", action="lead_search_nl_parse", user_id=user_id or None,
                 )
             text = msg.content[0].text if msg.content else "{}"
             # Strip markdown code fences if present

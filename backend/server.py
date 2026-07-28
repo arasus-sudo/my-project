@@ -381,6 +381,10 @@ async def login(request: Request, body: LoginIn):
     if ws and ws.get("blocked"):
         raise HTTPException(403, "Workspace has been suspended. Contact your admin.")
     token = make_token(user["id"], user["workspace_id"])
+    await db.users.update_one({"id": user["id"]}, {"$set": {
+        "last_login_at": now_iso(),
+        "last_login_ip": request.client.host if request.client else None,
+    }})
     ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0})
     return {"token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"], "is_admin": _is_admin(user)},
             "workspace": {"id": ws["id"], "name": ws["name"]}}
@@ -391,7 +395,7 @@ class GoogleAuthIn(BaseModel):
 
 
 @api.post("/auth/google")
-async def google_auth(body: GoogleAuthIn):
+async def google_auth(request: Request, body: GoogleAuthIn):
     """Sign in / sign up with Google. The browser gets an ID token from Google
     Identity Services (client ID only — no secret involved in this flow) and
     posts it here; we verify the JWT's signature and audience against our
@@ -452,6 +456,10 @@ async def google_auth(body: GoogleAuthIn):
 
     ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0})
     token = make_token(user["id"], user["workspace_id"])
+    await db.users.update_one({"id": user["id"]}, {"$set": {
+        "last_login_at": now_iso(),
+        "last_login_ip": request.client.host if request.client else None,
+    }})
     return {"token": token, "created": created,
             "user": {"id": user["id"], "email": user["email"], "name": user["name"], "is_admin": _is_admin(user)},
             "workspace": {"id": ws["id"], "name": ws["name"]}}
@@ -2381,7 +2389,7 @@ async def _llm_chat(system: str, user_text: str, session_id: str, user: Optional
                 await record_llm_usage(
                     user.get("workspace_id"), PERPLEXITY_MODEL,
                     resp.usage.prompt_tokens, resp.usage.completion_tokens,
-                    agent=agent, action=action,
+                    agent=agent, action=action, user_id=user.get("id"),
                 )
             return resp.choices[0].message.content or ""
         except openai.RateLimitError as ex:
@@ -3472,6 +3480,8 @@ async def generate_ai_image(user: Dict[str, Any], prompt: str, provider: str = "
                 raise HTTPException(502, "gpt-image-1 returned no image")
             img_bytes = base64.b64decode(resp.data[0].b64_json)
             await _audit(user, "ai_image.generate", {"provider": "gpt-image-1", "prompt": prompt[:120]})
+            from token_usage import record_image_usage
+            await record_image_usage(user["workspace_id"], "gpt-image-1", agent="create", action="ai_image", user_id=user.get("id"))
             return {"image_bytes": img_bytes, "mime_type": "image/png", "provider": "gpt-image-1"}
         except HTTPException:
             raise
@@ -3508,6 +3518,8 @@ async def generate_ai_image(user: Dict[str, Any], prompt: str, provider: str = "
         if not isinstance(img_bytes, (bytes, bytearray)):
             img_bytes = base64.b64decode(img_bytes)
         await _audit(user, "ai_image.generate", {"provider": "nano-banana", "prompt": prompt[:120]})
+        from token_usage import record_image_usage
+        await record_image_usage(user["workspace_id"], "nano-banana", agent="create", action="ai_image", user_id=user.get("id"))
         return {"image_bytes": bytes(img_bytes), "mime_type": mime_type, "provider": "nano-banana"}
     except HTTPException:
         raise
@@ -4547,6 +4559,45 @@ async def admin_users(_: Any = Depends(require_admin)):
         u["workspace_name"] = ws_map.get(u.get("workspace_id"))
         u["is_admin"] = (u.get("email") or "").lower() in ADMIN_EMAILS
     return users
+
+
+@api.get("/admin/audit-log")
+async def admin_audit_log(limit: int = 300, workspace_id: Optional[str] = None,
+                           user_id: Optional[str] = None, _: Any = Depends(require_admin)):
+    """Platform-wide access/action trail — unlike GET /audit-log (workspace-
+    scoped, for a workspace's own org_admin), this crosses every workspace so
+    a suite admin can see who did what, anywhere on the platform."""
+    q: Dict[str, Any] = {}
+    if workspace_id:
+        q["workspace_id"] = workspace_id
+    if user_id:
+        q["user_id"] = user_id
+    items = await db.audit_log.find(q, {"_id": 0}).sort("at", -1).to_list(min(limit, 1000))
+    ws_map = {w["id"]: w["name"] async for w in db.workspaces.find({}, {"_id": 0, "id": 1, "name": 1})}
+    for it in items:
+        it["workspace_name"] = ws_map.get(it.get("workspace_id"))
+    return items
+
+
+@api.get("/admin/users/{uid}/activity")
+async def admin_user_activity(uid: str, _: Any = Depends(require_admin)):
+    """Everything a suite admin needs to answer "what has this user actually
+    been doing": profile + last login, their audit trail across the platform,
+    and the real LLM cost they've driven. Credit spend (billing.py) is only
+    tracked per-workspace, not per-user, so it isn't attributable here."""
+    user = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(404, "not found")
+    ws = await db.workspaces.find_one({"id": user.get("workspace_id")}, {"_id": 0, "id": 1, "name": 1})
+    audit = await db.audit_log.find({"user_id": uid}, {"_id": 0}).sort("at", -1).to_list(200)
+    usage = await db.token_usage_log.find({"user_id": uid}, {"_id": 0}).sort("at", -1).to_list(200)
+    return {
+        "user": {**user, "is_admin": (user.get("email") or "").lower() in ADMIN_EMAILS},
+        "workspace": ws,
+        "audit_log": audit,
+        "llm_usage": usage,
+        "llm_cost_usd": round(sum(u["cost_usd"] for u in usage), 4),
+    }
 
 
 @api.post("/admin/users/{uid}/toggle")
