@@ -3652,6 +3652,12 @@ class AiImageIn(BaseModel):
     aspect: Optional[str] = "portrait"  # informational hint for the model
 
 
+class AssetSearchIn(BaseModel):
+    query: str = ""
+    slide_content: Optional[Dict[str, Any]] = None  # if set, derives search terms from this instead of query
+    target_aspect: Optional[float] = None  # width/height of the slot being filled, for ranking
+
+
 # Gemini image generation only accepts these discrete aspect ratios (no arbitrary
 # width:height) — pick whichever is closest to what was actually requested so a
 # "wide panorama" request returns a genuinely wide image instead of a square one.
@@ -3778,6 +3784,30 @@ async def carousel_ai_image(request: Request, body: AiImageIn, user=Depends(curr
         "mime_type": result["mime_type"],
         "provider": result["provider"],
     }
+
+
+@api.post("/carousel/asset-search")
+@limiter.limit("30/minute", key_func=_workspace_or_ip_key)
+async def carousel_asset_search(request: Request, body: AssetSearchIn, user=Depends(current_user)):
+    """Stock-photo search for the CreateEQ asset picker (Unsplash + Pexels).
+    Free and unmetered — unlike AI image generation this doesn't call
+    billing.charge_credits. Degrades to an empty result set with
+    providers_configured=[] until at least one of UNSPLASH_ACCESS_KEY /
+    PEXELS_API_KEY is set in the environment, rather than erroring."""
+    from asset_engine import search_photos, derive_search_terms, configured_providers
+    query = (body.query or "").strip()
+    if body.slide_content:
+        terms = await derive_search_terms(body.slide_content, user)
+        if terms:
+            query = ", ".join(terms)
+        elif not query:
+            # Term derivation failed (LLM quota/network — not the caller's fault,
+            # they did supply slide_content) — degrade to an empty result rather
+            # than a misleading "you forgot a required field" 400.
+            return {"results": [], "providers_configured": configured_providers()}
+    if not query:
+        raise HTTPException(400, "query or slide_content is required")
+    return await search_photos(query, target_aspect=body.target_aspect)
 
 
 @api.get("/carousel/image/{image_id}")

@@ -41,6 +41,8 @@ export function renderBackgroundExt(bg, palette) {
       return blueprintBg(bg, palette);
     case "halftone":
       return halftoneBg(bg, palette);
+    case "wave":
+      return waveBg(bg, palette);
 
     default:
       return resolveColor(bg.color || "bg", palette);
@@ -151,6 +153,18 @@ function halftoneBg(bg, palette) {
   return `radial-gradient(${dotColor}${alpha} ${r}px, transparent ${r}px)`;
 }
 
+function waveBg(bg, palette) {
+  const base = resolveColor(bg.color || "bg", palette);
+  const line = resolveColor(bg.line_color || "accent", palette).replace("#", "%23");
+  const alpha = Math.round((bg.opacity ?? 0.15) * 255).toString(16).padStart(2, "0");
+  const amp = bg.amplitude || 16;
+  const w = bg.wavelength || 120;
+  const h = amp * 2 + 8;
+  const mid = h / 2;
+  const waveSvg = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}' viewBox='0 0 ${w} ${h}'%3E%3Cpath d='M0 ${mid} Q ${w / 4} ${mid - amp} ${w / 2} ${mid} T ${w} ${mid}' fill='none' stroke='${line}${alpha}' stroke-width='2'/%3E%3C/svg%3E`;
+  return `${base} url("${waveSvg}")`;
+}
+
 function blueprintBg(bg, palette) {
   const base = resolveColor(bg.color || "#0A3D6B", palette);
   const line = resolveColor(bg.line_color || "#60A5FA", palette);
@@ -198,11 +212,37 @@ export const BG_PRESETS = [
   { id: "radial-spotlight", name: "Spotlight", bg: { type: "radial", color: "bg", color2: "accent", shape: "circle", x: "50%", y: "30%" } },
   { id: "swiss-heavy", name: "Swiss bold", bg: { type: "swiss", color: "bg", color2: "accent", stripe_size: 80, opacity: 0.1 } },
   { id: "elegant", name: "Elegant", bg: { type: "solid", color: "#1C1917" }, palette_id: "midnight" },
+  { id: "wave-soft", name: "Soft waves", bg: { type: "wave", color: "bg", line_color: "accent", amplitude: 14, wavelength: 120, opacity: 0.15 } },
+  { id: "wave-bold", name: "Bold waves", bg: { type: "wave", color: "bg", line_color: "muted", amplitude: 22, wavelength: 90, opacity: 0.25 } },
 ];
 
 export const BG_PRESET_GROUPS = [
   { label: "Solid", presets: BG_PRESETS.filter((p) => p.bg.type === "solid") },
   { label: "Gradient", presets: BG_PRESETS.filter((p) => p.bg.type === "gradient" || p.bg.type === "mesh" || p.bg.type === "radial") },
-  { label: "Texture", presets: BG_PRESETS.filter((p) => p.bg.type === "noise" || p.bg.type === "grid" || p.bg.type === "dots" || p.bg.type === "swiss") },
+  { label: "Texture", presets: BG_PRESETS.filter((p) => p.bg.type === "noise" || p.bg.type === "grid" || p.bg.type === "dots" || p.bg.type === "swiss" || p.bg.type === "wave") },
   { label: "Abstract", presets: BG_PRESETS.filter((p) => p.bg.type === "abstract" || p.bg.type === "glass") },
 ];
+
+/** Generate a fresh, randomized background using the deck's current palette
+ * tokens ("bg"/"accent"/"muted", resolved at render time) rather than fixed
+ * hex — so every shuffle stays on-brand, and "shuffle again" gives a genuinely
+ * different variation instead of cycling a fixed preset list. */
+export function randomBgPreset() {
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const rnd = (min, max) => min + Math.random() * (max - min);
+  const type = pick(["mesh", "abstract", "dots", "grid", "radial", "swiss", "wave", "noise"]);
+  const colorPairs = [["bg", "accent"], ["accent", "muted"], ["bg", "muted"]];
+  const [c1, c2] = pick(colorPairs);
+
+  const byType = {
+    mesh: { type: "mesh", colors: [c1, c2, "accent"], angle: Math.round(rnd(90, 200)) },
+    abstract: { type: "abstract", shape: pick(["blob-1", "blob-2", "blob-3"]), color: "bg", accent_color: "accent", opacity: +rnd(0.1, 0.25).toFixed(2) },
+    dots: { type: "dots", color: pick(["muted", "accent"]), spacing: Math.round(rnd(16, 36)), radius: +rnd(1.5, 3.5).toFixed(1), opacity: +rnd(0.08, 0.22).toFixed(2) },
+    grid: { type: "grid", color: pick(["muted", "accent"]), size: Math.round(rnd(24, 80)), opacity: +rnd(0.04, 0.12).toFixed(2) },
+    radial: { type: "radial", color: "bg", color2: "accent", shape: pick(["circle", "ellipse"]), x: pick(["50%", "0%", "100%"]), y: pick(["50%", "0%", "100%"]) },
+    swiss: { type: "swiss", color: "bg", color2: "accent", stripe_size: Math.round(rnd(30, 80)), opacity: +rnd(0.03, 0.08).toFixed(2) },
+    wave: { type: "wave", color: "bg", line_color: pick(["accent", "muted"]), amplitude: Math.round(rnd(10, 24)), wavelength: Math.round(rnd(80, 160)), opacity: +rnd(0.1, 0.25).toFixed(2) },
+    noise: { type: "noise", base_color: "bg", opacity: +rnd(0.03, 0.1).toFixed(2) },
+  };
+  return { id: `shuffle-${Date.now()}`, name: "Generated", bg: byType[type] };
+}

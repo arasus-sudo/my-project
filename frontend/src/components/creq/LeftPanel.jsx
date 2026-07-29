@@ -1,11 +1,12 @@
-import { memo, useState } from "react";
-import { ChevronDown, Minus as LineIcon, MoveRight, ArrowLeftRight, Circle as DotIcon, Image as ImageIcon, MessageSquare, User as UserIcon } from "lucide-react";
+import { memo, useState, useMemo } from "react";
+import { ChevronDown, Minus as LineIcon, MoveRight, ArrowLeftRight, Circle as DotIcon, Image as ImageIcon, MessageSquare, User as UserIcon, Search as SearchIcon, Shuffle } from "lucide-react";
 import { TEMPLATES } from "../../lib/creqTemplates";
 import { STYLES, LAYOUTS } from "../../lib/creqStyles";
-import { ICONS } from "./ElementRender";
+import { ALL_ICONS, iconProps } from "../../lib/creqIconSets";
+import { ILLUSTRATIONS, ILLUSTRATION_CATEGORIES } from "../../lib/creqIllustrations";
 import { SHAPE_KINDS, ShapePreview } from "./shapes";
 import { IMAGE_FRAMES, FRAME_CATEGORIES, DECORATIVE_PRESETS, ACCENT_ELEMENTS, DESIGN_THEMES, COMPOSITIONS } from "../../lib/creqDesignEngine";
-import { BG_PRESETS } from "../../lib/creqBgStyles";
+import { BG_PRESETS, randomBgPreset } from "../../lib/creqBgStyles";
 import { CHART_PRESETS, CARD_PRESETS } from "../../lib/creqCharts";
 
 const DECORATIVE_SHAPES = ["scribble", "wavy", "zigzag", "spiral", "leaf", "teardrop", "cross", "plus", "paint-splash", "highlight"];
@@ -17,6 +18,14 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
   // bounded instead of stacking every section's full content at once.
   const [open, setOpen] = useState(null);
   const toggle = (key) => setOpen((cur) => (cur === key ? null : key));
+  const [iconQuery, setIconQuery] = useState("");
+  const [illoCategory, setIlloCategory] = useState("All");
+  const illoResults = illoCategory === "All" ? ILLUSTRATIONS : ILLUSTRATIONS.filter((i) => i.category === illoCategory);
+  const iconResults = useMemo(() => {
+    const q = iconQuery.trim().toLowerCase();
+    if (!q) return ALL_ICONS.slice(0, 28);
+    return ALL_ICONS.filter((ic) => ic.name.toLowerCase().includes(q) || ic.set.includes(q)).slice(0, 120);
+  }, [iconQuery]);
 
   return (
     <div className="divide-y divide-line">
@@ -112,6 +121,10 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
       </Section>
 
       <Section title="Backgrounds" isOpen={open === "backgrounds"} onToggle={() => toggle("backgrounds")}>
+        <button onClick={() => onAddBgPreset(randomBgPreset())} data-testid="bg-shuffle"
+          className="w-full mb-2 py-1.5 rounded-md border border-dashed border-line hover:border-ink text-caption text-ink-tertiary hover:text-ink flex items-center justify-center gap-1.5">
+          <Shuffle size={12} /> Generate background
+        </button>
         <div className="grid grid-cols-3 gap-1">
           {BG_PRESETS.map((bp) => {
             const b = bp.bg || {};
@@ -134,6 +147,25 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
               </button>
             );
           })}
+        </div>
+      </Section>
+
+      <Section title="Illustrations" isOpen={open === "illustrations"} onToggle={() => toggle("illustrations")}>
+        <div className="flex flex-wrap gap-1 mb-2">
+          {["All", ...ILLUSTRATION_CATEGORIES].map((cat) => (
+            <button key={cat} onClick={() => setIlloCategory(cat)}
+              className={`text-tiny px-2 py-0.5 rounded-full border ${illoCategory === cat ? "border-ink bg-ink text-white" : "border-line text-ink-tertiary hover:border-ink"}`}>
+              {cat}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-3 gap-1.5">
+          {illoResults.map(({ name, Component: IC }) => (
+            <button key={name} onClick={() => onAddIcon(name, "illustration")} title={name}
+              className="aspect-square rounded-md border border-line hover:border-ink flex items-center justify-center p-2 text-ink-tertiary">
+              <IC {...iconProps("illustration", 40, "currentColor")} />
+            </button>
+          ))}
         </div>
       </Section>
 
@@ -200,13 +232,25 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
           </div>
           <div>
             <div className="ui-label mb-1.5">Badge &amp; icons</div>
-            <div className="grid grid-cols-4 gap-1">
+            <div className="grid grid-cols-4 gap-1 mb-1.5">
               <ElementBtn onClick={onAddBadge} title="Badge">Bdg</ElementBtn>
-              {Object.keys(ICONS).map((n) => {
-                const IC = ICONS[n];
-                return <ElementBtn key={n} onClick={() => onAddIcon(n)} title={n}><IC size={16} /></ElementBtn>;
-              })}
             </div>
+            <div className="relative mb-1.5">
+              <SearchIcon size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-ink-tertiary" />
+              <input value={iconQuery} onChange={(e) => setIconQuery(e.target.value)}
+                placeholder={`Search ${ALL_ICONS.length} icons…`} data-testid="icon-search"
+                className="w-full text-caption border border-line rounded-md pl-6 pr-2 py-1 focus:outline-none focus:border-ink" />
+            </div>
+            <div className="grid grid-cols-4 gap-1">
+              {iconResults.map(({ set, name, Component: IC }) => (
+                <ElementBtn key={`${set}-${name}`} onClick={() => onAddIcon(name, set)} title={`${name} (${set})`}>
+                  <IC {...iconProps(set, 16, "currentColor")} />
+                </ElementBtn>
+              ))}
+            </div>
+            {iconQuery && iconResults.length === 0 && (
+              <div className="text-tiny text-ink-tertiary text-center py-2">No icons match "{iconQuery}"</div>
+            )}
           </div>
         </div>
       </Section>
