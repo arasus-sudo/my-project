@@ -38,6 +38,16 @@ const linkFor = (kind, value) => {
 function renderPhoto(data, style) {
   if (!data.imageUrl) return "";
   const size = data.size || 80;
+  // "contain" (wide logo): the image is uploaded as-is, unrocropped, so it's
+  // shown at its own aspect ratio instead of forced into a square — width
+  // caps at `size`, height follows naturally. "cover" (photo/headshot): the
+  // shape (circle/rounded) is already baked into the uploaded PNG itself by
+  // ImageCropModal's canvas clip, since Outlook's Word engine doesn't
+  // reliably honor CSS border-radius on <img> — the radius here is just a
+  // harmless fallback for clients that do.
+  if (data.fit === "contain") {
+    return `<td style="padding-right:16px;vertical-align:top;" valign="top"><img src="${esc(data.imageUrl)}" alt="" style="display:block;max-width:${size}px;height:auto;border:0;" /></td>`;
+  }
   const radius = data.shape === "circle" ? "50%" : data.shape === "rounded" ? "10px" : "0";
   return `<td style="padding-right:16px;vertical-align:top;" valign="top"><img src="${esc(data.imageUrl)}" width="${size}" height="${size}" alt="" style="display:block;width:${size}px;height:${size}px;border-radius:${radius};object-fit:cover;border:0;" /></td>`;
 }
