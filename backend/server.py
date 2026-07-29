@@ -5358,12 +5358,16 @@ async def _start_scheduler():
             logger.info("migrated %s send_queue item(s) to UTC send_at", _fixed)
 
         # Reset send_queue items that failed due to the missing inject_tracking bug
-        _reset = await db.send_queue.update_many(
-            {"status": "failed", "error": {"$regex": "inject_tracking", "$options": "i"}},
-            {"$set": {"status": "pending", "error": None, "attempts": 0}}
-        )
-        if _reset.modified_count:
-            logger.info("reset %s failed send_queue item(s) for inject_tracking retry", _reset.modified_count)
+        try:
+            _reset = await db.send_queue.update_many(
+                {"status": "failed", "error": {"$regex": "inject_tracking", "$options": "i"}},
+                {"$set": {"status": "pending", "error": None, "attempts": 0}},
+                maxTimeMS=5000,
+            )
+            if _reset.modified_count:
+                logger.info("reset %s failed send_queue item(s) for inject_tracking retry", _reset.modified_count)
+        except Exception:
+            pass
 
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         from schedule_eq import run_reminder_tick
