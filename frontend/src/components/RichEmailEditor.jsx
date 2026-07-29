@@ -61,7 +61,7 @@ function ToolBtn({ active, disabled, onClick, title, children, testid }) {
   );
 }
 
-export default function RichEmailEditor({ value, onChange, placeholder = "Write your email…" }) {
+export default function RichEmailEditor({ value, onChange, placeholder = "Write your email…", showMergeFields = true }) {
   const [uploading, setUploading] = useState(false);
   const internalUpdate = useRef(false);
 
@@ -183,22 +183,24 @@ export default function RichEmailEditor({ value, onChange, placeholder = "Write 
         <ToolBtn testid="fmt-redo" title="Redo" disabled={!editor.can().redo()}
           onClick={() => editor.chain().focus().redo().run()}><Redo2 size={14} /></ToolBtn>
 
-        <div className="ml-auto flex items-center gap-1">
-          <Braces size={12} className="text-neutral-400" />
-          {MERGE_FIELDS.map((f) => (
-            <button
-              key={f.token}
-              type="button"
-              title={`Insert ${f.label}`}
-              data-testid={`insert-${f.token.replace(/[{}]/g, "")}`}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => insertField(f.token)}
-              className="kbd hover:bg-ink hover:text-white transition-colors"
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        {showMergeFields && (
+          <div className="ml-auto flex items-center gap-1">
+            <Braces size={12} className="text-neutral-400" />
+            {MERGE_FIELDS.map((f) => (
+              <button
+                key={f.token}
+                type="button"
+                title={`Insert ${f.label}`}
+                data-testid={`insert-${f.token.replace(/[{}]/g, "")}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertField(f.token)}
+                className="kbd hover:bg-ink hover:text-white transition-colors"
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="relative">

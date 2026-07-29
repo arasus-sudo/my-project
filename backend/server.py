@@ -221,6 +221,19 @@ class SignatureIn(BaseModel):
     content_html: str = ""
     content_text: str = ""
     is_default: bool = False
+    # Structured source-of-truth for the visual builder. content_html/content_text
+    # above stay the rendered output every existing send path (sender.py,
+    # draft_chain.py, campaign_engine.py) already consumes unmodified — these two
+    # fields are additive, only read by the builder itself when re-opening a
+    # signature for editing.
+    blocks_json: List[Dict[str, Any]] = []
+    style_json: Dict[str, Any] = {}
+    # Approval workflow — defaults to "approved" so every existing signature and
+    # every workspace that hasn't opted into requiring approval behaves exactly
+    # as before. Only meaningful once a workspace turns on "require approval"
+    # (see /signatures/approval-settings); it never hard-gates signature use.
+    status: str = "approved"
+    click_tracking: bool = False
 
 
 class MailboxIn(BaseModel):
@@ -2073,9 +2086,16 @@ async def serve_image(image_id: str, t: str = None,
 
 
 # ----------------------------- Signature Management ----------------------------
+SIGNATURE_VERSION_MIN_GAP_SECONDS = 300  # don't snapshot more than once per 5 min of active autosaving
+SIGNATURE_VERSION_CAP = 20
+
+
 @api.post("/signatures")
 async def create_signature(body: SignatureIn, user=Depends(current_user)):
     sig = body.model_dump()
+    ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0, "signature_approval_required": 1})
+    if (ws or {}).get("signature_approval_required"):
+        sig["status"] = "pending_approval"
     sig.update({
         "id": new_id(),
         "workspace_id": user["workspace_id"],
@@ -2099,21 +2119,157 @@ async def delete_signature(sid: str, user=Depends(current_user)):
     result = await db.signatures.delete_one({"id": sid, "workspace_id": user["workspace_id"]})
     if result.deleted_count == 0:
         raise HTTPException(404, "Signature not found")
+    await db.signature_versions.delete_many({"signature_id": sid})
     return {"ok": True}
 
 
 @api.put("/signatures/{sid}")
 async def update_signature(sid: str, body: SignatureIn, user=Depends(current_user)):
+    current = await db.signatures.find_one({"id": sid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not current:
+        raise HTTPException(404, "Signature not found")
+
+    # Version history: snapshot the PRE-update state, throttled so a burst of
+    # autosaves (every ~1.2s while actively typing) doesn't flood the history
+    # with keystroke-level checkpoints — only one snapshot per active editing
+    # window at most.
+    last_version = await db.signature_versions.find_one(
+        {"signature_id": sid}, {"_id": 0, "at": 1}, sort=[("at", -1)]
+    )
+    last_at = last_version["at"] if last_version else current.get("created_at")
+    stale_enough = True
+    if last_at:
+        try:
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(last_at)).total_seconds()
+            stale_enough = age >= SIGNATURE_VERSION_MIN_GAP_SECONDS
+        except Exception:
+            stale_enough = True
+    if stale_enough:
+        await db.signature_versions.insert_one({
+            "id": new_id(), "signature_id": sid, "workspace_id": user["workspace_id"],
+            "name": current.get("name"), "content_html": current.get("content_html"),
+            "content_text": current.get("content_text"),
+            "blocks_json": current.get("blocks_json", []), "style_json": current.get("style_json", {}),
+            "at": now_iso(),
+        })
+        old_versions = await db.signature_versions.find(
+            {"signature_id": sid}, {"_id": 0, "id": 1}
+        ).sort("at", -1).skip(SIGNATURE_VERSION_CAP).to_list(1000)
+        if old_versions:
+            await db.signature_versions.delete_many({"id": {"$in": [v["id"] for v in old_versions]}})
+
     sig = body.model_dump()
+    # Approval status only changes via the dedicated submit/approve/reject
+    # routes below — never as a side effect of a routine (autosave-driven) edit.
+    sig.pop("status", None)
     sig["updated_at"] = now_iso()
-    result = await db.signatures.update_one(
+    await db.signatures.update_one(
         {"id": sid, "workspace_id": user["workspace_id"]},
         {"$set": sig}
     )
-    if result.matched_count == 0:
-        raise HTTPException(404, "Signature not found")
     updated = await db.signatures.find_one({"id": sid, "workspace_id": user["workspace_id"]}, {"_id": 0})
     return updated
+
+
+@api.get("/signatures/{sid}/versions")
+async def list_signature_versions(sid: str, user=Depends(current_user)):
+    sig = await db.signatures.find_one({"id": sid, "workspace_id": user["workspace_id"]}, {"_id": 0, "id": 1})
+    if not sig:
+        raise HTTPException(404, "Signature not found")
+    return await db.signature_versions.find(
+        {"signature_id": sid}, {"_id": 0, "content_html": 0, "content_text": 0}
+    ).sort("at", -1).to_list(SIGNATURE_VERSION_CAP)
+
+
+@api.post("/signatures/{sid}/versions/{vid}/restore")
+async def restore_signature_version(sid: str, vid: str, user=Depends(current_user)):
+    version = await db.signature_versions.find_one(
+        {"id": vid, "signature_id": sid, "workspace_id": user["workspace_id"]}, {"_id": 0}
+    )
+    if not version:
+        raise HTTPException(404, "Version not found")
+    return {"blocks_json": version.get("blocks_json", []), "style_json": version.get("style_json", {}),
+            "name": version.get("name")}
+
+
+class ApprovalSettingsIn(BaseModel):
+    require_approval: bool
+
+
+# NOTE: this path has 2 segments after /signatures/ deliberately — a single
+# segment (e.g. /signatures/approval-settings) would collide with the
+# PUT /signatures/{sid} route above, since {sid} is a wildcard that matches
+# any string and that route is registered first.
+@api.get("/signatures/settings/approval-required")
+async def get_approval_settings(user=Depends(current_user)):
+    ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0, "signature_approval_required": 1})
+    return {"require_approval": bool((ws or {}).get("signature_approval_required"))}
+
+
+@api.post("/signatures/{sid}/submit-for-approval")
+async def submit_signature_for_approval(sid: str, user=Depends(current_user)):
+    result = await db.signatures.update_one(
+        {"id": sid, "workspace_id": user["workspace_id"]}, {"$set": {"status": "pending_approval"}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Signature not found")
+    await _audit(user, "signature.submit_for_approval", {"signature_id": sid})
+    return {"ok": True, "status": "pending_approval"}
+
+
+# NOTE: set_approval_settings / list_pending_signatures / approve_signature /
+# reject_signature are defined further down, right after require_role() —
+# they depend on it and require_role is defined later in this file.
+
+
+class AiAssistIn(BaseModel):
+    action: str  # improve_tagline | tone_professional | tone_executive | generate_disclaimer | accessibility
+    text: str = ""
+    context: Dict[str, Any] = {}
+
+
+@api.post("/signatures/ai-assist")
+async def signature_ai_assist(body: AiAssistIn, user=Depends(current_user)):
+    prompts = {
+        "improve_tagline": (
+            "You write short, punchy professional email-signature taglines (one line, under 60 characters). "
+            "Given the person's current tagline (or role/company if none), return ONLY the improved tagline text — "
+            "no quotes, no explanation."
+        ),
+        "tone_professional": (
+            "Rewrite the given text in a clear, professional tone suitable for a business email signature. "
+            "Keep it brief. Return ONLY the rewritten text, no quotes, no explanation."
+        ),
+        "tone_executive": (
+            "Rewrite the given text in a confident, executive tone suitable for a senior leader's email signature. "
+            "Keep it brief. Return ONLY the rewritten text, no quotes, no explanation."
+        ),
+        "generate_disclaimer": (
+            "Write a short (2-3 sentence), plain-English confidentiality disclaimer suitable for a company email "
+            "signature, given the company name provided. Return ONLY the disclaimer text as a single paragraph, "
+            "no quotes, no markdown, no explanation."
+        ),
+        "accessibility": (
+            "You review email signature color/typography choices for accessibility. Given the primary text color, "
+            "background (assume white), and font size in px, give at most 2 short, concrete suggestions to improve "
+            "readability if needed, or say \"Looks good — no changes needed.\" if it's already accessible. "
+            "Return ONLY the suggestion text, no markdown, no explanation."
+        ),
+    }
+    system = prompts.get(body.action)
+    if not system:
+        raise HTTPException(400, "Unknown AI assist action")
+    if not PERPLEXITY_API_KEY:
+        raise HTTPException(503, "AI assistant is not configured")
+    from billing import charge_credits
+    await charge_credits(user["workspace_id"], "signature_ai_assist", meta={"kind": body.action})
+    user_text = body.text.strip() or json.dumps(body.context)
+    try:
+        result = await _llm_chat(system, user_text, f"sig-ai-{user['id']}", user=user, max_tokens=200,
+                                  agent="pitch", action="signature_ai_assist")
+    except Exception as ex:
+        raise HTTPException(502, f"AI assist failed: {ex}")
+    return {"result": result.strip().strip('"')}
 
 
 # ---- Open / click tracking (PUBLIC — called by the recipient's mail client) ----
@@ -2157,6 +2313,69 @@ async def track_click(request: Request, queue_id: str, u: str = ""):
     # anything is a phishing vector.
     target = u if u.startswith("http://") or u.startswith("https://") else FRONTEND_URL
     return RedirectResponse(target, status_code=302)
+
+
+@api.get("/t/sig/{signature_id}")
+@limiter.limit("60/minute")
+async def track_signature_click(request: Request, signature_id: str, u: str = ""):
+    """PUBLIC — the recipient's mail client follows this, not the signature's
+    owner. Only ever bounces to an absolute http(s) URL, same guard as
+    track_click above — mailto:/tel: links are never wrapped through here in
+    the first place (see renderHtml.js), so there's nothing non-http to worry
+    about, but the guard stays as defense in depth."""
+    sig = await db.signatures.find_one({"id": signature_id}, {"_id": 0, "workspace_id": 1})
+    if sig and u:
+        await db.signature_clicks.insert_one({
+            "id": new_id(), "signature_id": signature_id, "workspace_id": sig["workspace_id"],
+            "url": u[:400], "at": now_iso(),
+        })
+    target = u if u.startswith("http://") or u.startswith("https://") else FRONTEND_URL
+    return RedirectResponse(target, status_code=302)
+
+
+@api.get("/signatures/{sid}/click-analytics")
+async def signature_click_analytics(sid: str, user=Depends(current_user)):
+    sig = await db.signatures.find_one({"id": sid, "workspace_id": user["workspace_id"]}, {"_id": 0, "id": 1})
+    if not sig:
+        raise HTTPException(404, "Signature not found")
+    rows = await db.signature_clicks.find({"signature_id": sid}, {"_id": 0}).to_list(5000)
+    by_url: Dict[str, int] = {}
+    for r in rows:
+        by_url[r["url"]] = by_url.get(r["url"], 0) + 1
+    return {
+        "total_clicks": len(rows),
+        "by_url": sorted(
+            [{"url": u, "clicks": c} for u, c in by_url.items()], key=lambda x: -x["clicks"]
+        ),
+    }
+
+
+class CheckLinksIn(BaseModel):
+    urls: List[str] = []
+
+
+@api.post("/signatures/check-links")
+async def check_signature_links(body: CheckLinksIn, user=Depends(current_user)):
+    """HEAD-check each link server-side — a browser-side fetch would hit CORS
+    on arbitrary third-party domains, so this has to run here."""
+    import httpx
+    results = []
+    async with httpx.AsyncClient(follow_redirects=True, timeout=5.0) as client:
+        for url in body.urls[:20]:
+            if not (url.startswith("http://") or url.startswith("https://")):
+                results.append({"url": url, "status": "skipped"})
+                continue
+            try:
+                resp = await client.head(url)
+                if resp.status_code >= 400:
+                    resp = await client.get(url)  # some servers reject HEAD but allow GET
+                results.append({"url": url, "status": "ok" if resp.status_code < 400 else "broken",
+                                 "code": resp.status_code})
+            except httpx.TimeoutException:
+                results.append({"url": url, "status": "timeout"})
+            except Exception:
+                results.append({"url": url, "status": "broken"})
+    return {"results": results}
 
 
 @api.post("/campaigns/{cid}/pause")
@@ -4501,6 +4720,47 @@ def require_role(*allowed: str):
     return _dep
 
 
+# ---- Signature approval — org_admin-gated routes (need require_role, defined
+# just above; ApprovalSettingsIn/get_approval_settings/submit-for-approval are
+# up in the main Signature Management section since they don't) -------------
+@api.put("/signatures/settings/approval-required")
+async def set_approval_settings(body: ApprovalSettingsIn, user=Depends(require_role("org_admin"))):
+    await db.workspaces.update_one(
+        {"id": user["workspace_id"]}, {"$set": {"signature_approval_required": body.require_approval}}
+    )
+    await _audit(user, "signature.approval_settings", {"require_approval": body.require_approval})
+    return {"ok": True, "require_approval": body.require_approval}
+
+
+@api.get("/signatures/pending-approval")
+async def list_pending_signatures(user=Depends(require_role("org_admin"))):
+    return await db.signatures.find(
+        {"workspace_id": user["workspace_id"], "status": "pending_approval"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(200)
+
+
+@api.post("/signatures/{sid}/approve")
+async def approve_signature(sid: str, user=Depends(require_role("org_admin"))):
+    result = await db.signatures.update_one(
+        {"id": sid, "workspace_id": user["workspace_id"]}, {"$set": {"status": "approved"}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Signature not found")
+    await _audit(user, "signature.approve", {"signature_id": sid})
+    return {"ok": True, "status": "approved"}
+
+
+@api.post("/signatures/{sid}/reject")
+async def reject_signature(sid: str, user=Depends(require_role("org_admin"))):
+    result = await db.signatures.update_one(
+        {"id": sid, "workspace_id": user["workspace_id"]}, {"$set": {"status": "draft"}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Signature not found")
+    await _audit(user, "signature.reject", {"signature_id": sid})
+    return {"ok": True, "status": "draft"}
+
+
 @api.get("/admin/summary")
 async def admin_summary(_: Any = Depends(require_admin)):
     return {
@@ -5379,6 +5639,7 @@ async def _start_scheduler():
         from sms_eq import run_sms_send_tick
         from whatsapp_eq import run_whatsapp_send_tick
         from crm import run_recycle_bin_purge_tick, run_dedup_scan_tick
+        from banner_tick import run_signature_banner_tick
 
         scheduler = AsyncIOScheduler(timezone="UTC")
         # Every job below runs through _tracked_tick (records to db.tick_health,
@@ -5447,11 +5708,18 @@ async def _start_scheduler():
         # so this just checks in until each job completes.
         scheduler.add_job(_tracked_tick, "interval", minutes=2, args=["video_poll", run_video_poll_tick],
                           id="video_poll", max_instances=1, coalesce=True)
+        # Keeps any signature with a scheduled banner block's stored HTML in
+        # sync with "today" even if nobody reopens the editor — see
+        # backend/banner_tick.py for why this is a small ported selector
+        # rather than a full re-render.
+        scheduler.add_job(_tracked_tick, "interval", hours=24, args=["signature_banner_refresh", run_signature_banner_tick],
+                          id="signature_banner_refresh", max_instances=1, coalesce=True)
         scheduler.start()
         logger.info("scheduler started (reminders 15m, sends 2m, reply polling 10m, "
                    "social publish 2m, social engagement 10m, RSS poll 30m, site recrawl 24h, "
                    "sms send 2m, whatsapp send 2m, recycle bin purge 24h, dedup scan 1h, "
-                   "social insights 24h, social daily content 24h, video poll 2m)")
+                   "social insights 24h, social daily content 24h, video poll 2m, "
+                   "signature banner refresh 24h)")
     except Exception as ex:
         logger.warning("scheduler failed to start: %s", ex)
 
