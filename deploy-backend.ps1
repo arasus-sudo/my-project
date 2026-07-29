@@ -9,7 +9,7 @@ if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 
 python -c @"
 import zipfile, os, re
-exclude_ext = {'.log', '.txt', '.zip', '.err'}
+exclude_ext = {'.log', '.zip', '.err'}
 exclude_files = {'deploy.zip', 'backend-deploy.zip'}
 zp = os.environ['TEMP'] + '\\backend-deploy.zip'
 z = zipfile.ZipFile(re.sub(r'\\', '/', zp), 'w', zipfile.ZIP_DEFLATED)
