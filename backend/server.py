@@ -2114,6 +2114,19 @@ async def list_signatures(user=Depends(current_user)):
     return sigs
 
 
+@api.get("/signatures/my-preference")
+async def get_my_signature_preference(user=Depends(current_user)):
+    """Signatures are a shared workspace pool (campaigns pick one by id, not
+    per-user ownership) — this is the one per-user hook: a role/department
+    signature policy (see /signature-policies/{id}/apply) can set this, and
+    the campaign builder prefers it over the workspace-wide default when
+    prefilling a new campaign's signature."""
+    pref = await db.user_signature_prefs.find_one(
+        {"workspace_id": user["workspace_id"], "user_id": user["id"]}, {"_id": 0, "signature_id": 1}
+    )
+    return {"signature_id": (pref or {}).get("signature_id")}
+
+
 @api.delete("/signatures/{sid}")
 async def delete_signature(sid: str, user=Depends(current_user)):
     result = await db.signatures.delete_one({"id": sid, "workspace_id": user["workspace_id"]})
@@ -4317,6 +4330,12 @@ class TeamInviteIn(BaseModel):
     email: EmailStr
     role: str = "campaign_manager"
     password: str
+    department: Optional[str] = None
+
+
+class TeamUpdateIn(BaseModel):
+    role: Optional[str] = None
+    department: Optional[str] = None
 
 
 @api.get("/team")
@@ -4341,10 +4360,34 @@ async def invite_member(body: TeamInviteIn, user=Depends(current_user)):
         "id": uid, "email": body.email.lower(), "name": body.name,
         "password_hash": hash_pw(body.password),
         "workspace_id": user["workspace_id"], "role": body.role,
+        "department": (body.department or "").strip() or None,
         "invited_by": user["id"], "created_at": now_iso(),
     })
     await _audit(user, "team.invite", {"user_id": uid, "email": body.email.lower(), "role": body.role})
     return {"ok": True, "user_id": uid}
+
+
+@api.put("/team/{uid}")
+async def update_member(uid: str, body: TeamUpdateIn, user=Depends(current_user)):
+    """Org admin edits an existing member's role/department — invite-time is
+    the only other place these are set, so without this a member's department
+    (needed for signature policy matching) could never change after signup."""
+    if user.get("role") != "org_admin" and not _is_admin(user):
+        raise HTTPException(403, "Only Org Admin can edit members")
+    victim = await db.users.find_one({"id": uid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not victim:
+        raise HTTPException(404, "not found")
+    updates: Dict[str, Any] = {}
+    if body.role is not None:
+        if body.role not in ROLES:
+            raise HTTPException(400, "invalid role")
+        updates["role"] = body.role
+    if body.department is not None:
+        updates["department"] = body.department.strip() or None
+    if updates:
+        await db.users.update_one({"id": uid}, {"$set": updates})
+        await _audit(user, "team.update", {"user_id": uid, **updates})
+    return {"ok": True}
 
 
 @api.delete("/team/{uid}")
@@ -4789,6 +4832,157 @@ async def reject_signature(sid: str, user=Depends(require_role("org_admin"))):
         raise HTTPException(404, "Signature not found")
     await _audit(user, "signature.reject", {"signature_id": sid})
     return {"ok": True, "status": "draft"}
+
+
+# ---- Org signature policies — org_admin defines a role/department match ->
+# an existing (shared) signature; "Apply" is an explicit batch action, not a
+# continuous sync, and only writes db.user_signature_prefs — a per-user
+# preference the campaign builder prefers over the workspace default when
+# prefilling a new campaign. Real directory-driven auto-provisioning would
+# need the directory-sync connections below to be live, which they aren't. --
+class SignaturePolicyIn(BaseModel):
+    name: str
+    match_role: Optional[str] = None
+    match_department: Optional[str] = None
+    signature_id: str
+
+
+def _policy_match_query(workspace_id: str, policy: Dict[str, Any]) -> Dict[str, Any]:
+    q: Dict[str, Any] = {"workspace_id": workspace_id}
+    if policy.get("match_role"):
+        q["role"] = policy["match_role"]
+    if policy.get("match_department"):
+        q["department"] = policy["match_department"]
+    return q
+
+
+@api.post("/signature-policies")
+async def create_signature_policy(body: SignaturePolicyIn, user=Depends(require_role("org_admin"))):
+    if not body.match_role and not (body.match_department or "").strip():
+        raise HTTPException(400, "Set at least a role or a department to match on")
+    sig = await db.signatures.find_one({"id": body.signature_id, "workspace_id": user["workspace_id"]}, {"_id": 0, "id": 1})
+    if not sig:
+        raise HTTPException(404, "signature not found")
+    policy = {
+        "id": new_id(), "workspace_id": user["workspace_id"], "name": body.name.strip(),
+        "match_role": body.match_role or None, "match_department": (body.match_department or "").strip() or None,
+        "signature_id": body.signature_id, "created_at": now_iso(), "created_by": user["id"],
+    }
+    await db.signature_policies.insert_one(policy)
+    await _audit(user, "signature_policy.create", {"policy_id": policy["id"], "name": policy["name"]})
+    policy.pop("_id", None)
+    return policy
+
+
+@api.get("/signature-policies")
+async def list_signature_policies(user=Depends(require_role("org_admin"))):
+    return await db.signature_policies.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(200)
+
+
+@api.delete("/signature-policies/{pid}")
+async def delete_signature_policy(pid: str, user=Depends(require_role("org_admin"))):
+    await db.signature_policies.delete_one({"id": pid, "workspace_id": user["workspace_id"]})
+    await _audit(user, "signature_policy.delete", {"policy_id": pid})
+    return {"ok": True}
+
+
+@api.get("/signature-policies/{pid}/matching-users")
+async def signature_policy_matching_users(pid: str, user=Depends(require_role("org_admin"))):
+    policy = await db.signature_policies.find_one({"id": pid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not policy:
+        raise HTTPException(404, "policy not found")
+    users = await db.users.find(
+        _policy_match_query(user["workspace_id"], policy),
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "department": 1},
+    ).to_list(500)
+    return {"count": len(users), "users": users}
+
+
+@api.post("/signature-policies/{pid}/apply")
+async def apply_signature_policy(pid: str, user=Depends(require_role("org_admin"))):
+    policy = await db.signature_policies.find_one({"id": pid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not policy:
+        raise HTTPException(404, "policy not found")
+    users = await db.users.find(_policy_match_query(user["workspace_id"], policy), {"_id": 0, "id": 1}).to_list(1000)
+    now = now_iso()
+    for u in users:
+        await db.user_signature_prefs.update_one(
+            {"workspace_id": user["workspace_id"], "user_id": u["id"]},
+            {"$set": {"signature_id": policy["signature_id"], "set_via_policy_id": pid, "updated_at": now}},
+            upsert=True,
+        )
+    await _audit(user, "signature_policy.apply", {"policy_id": pid, "applied_count": len(users)})
+    return {"ok": True, "applied_count": len(users)}
+
+
+# ---- Directory-sync settings — configuration-storage scaffolding ONLY. There
+# is no real tenant to connect to, so these routes never attempt a live
+# connection (no OAuth redirect, no SCIM/Graph/Admin SDK calls) — they just
+# store the config fields an org admin enters, and always report
+# connected=False. A real integration would need this to actually call out.
+DIRECTORY_SYNC_PROVIDERS = ["google_workspace", "microsoft_365", "azure_ad", "saml"]
+
+
+class DirectorySyncConfigIn(BaseModel):
+    config: Dict[str, str] = {}
+
+
+def _mask_directory_sync_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    out = {}
+    for k, v in (config or {}).items():
+        out[k] = ("•" * 8) if v and ("secret" in k.lower() or "certificate" in k.lower()) else v
+    return out
+
+
+@api.get("/directory-sync/status")
+async def directory_sync_status(user=Depends(require_role("org_admin"))):
+    rows = await db.directory_sync_integrations.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).to_list(20)
+    by_provider = {r["provider"]: r for r in rows}
+    out = []
+    for p in DIRECTORY_SYNC_PROVIDERS:
+        row = by_provider.get(p)
+        out.append({
+            "provider": p,
+            "configured": bool(row and row.get("config")),
+            "config": _mask_directory_sync_config(row.get("config")) if row else {},
+            "updated_at": row.get("updated_at") if row else None,
+            "connected": False,
+        })
+    return out
+
+
+@api.put("/directory-sync/{provider}")
+async def update_directory_sync_config(provider: str, body: DirectorySyncConfigIn, user=Depends(require_role("org_admin"))):
+    """Merges into the stored config rather than replacing it — the frontend
+    omits secret fields the admin left blank (since GET only ever returns
+    them masked), and a full-replace here would silently wipe those out."""
+    if provider not in DIRECTORY_SYNC_PROVIDERS:
+        raise HTTPException(404, "unknown provider")
+    existing = await db.directory_sync_integrations.find_one(
+        {"workspace_id": user["workspace_id"], "provider": provider}, {"_id": 0, "config": 1}
+    )
+    merged = {**(existing or {}).get("config", {}), **{k: v for k, v in body.config.items() if v}}
+    await db.directory_sync_integrations.update_one(
+        {"workspace_id": user["workspace_id"], "provider": provider},
+        {
+            "$set": {"config": merged, "updated_at": now_iso()},
+            "$setOnInsert": {"id": new_id(), "workspace_id": user["workspace_id"], "provider": provider, "created_at": now_iso()},
+        },
+        upsert=True,
+    )
+    await _audit(user, "directory_sync.update_config", {"provider": provider})
+    return {"ok": True}
+
+
+@api.delete("/directory-sync/{provider}")
+async def clear_directory_sync_config(provider: str, user=Depends(require_role("org_admin"))):
+    await db.directory_sync_integrations.delete_one({"workspace_id": user["workspace_id"], "provider": provider})
+    await _audit(user, "directory_sync.clear_config", {"provider": provider})
+    return {"ok": True}
 
 
 @api.get("/admin/summary")
@@ -5617,6 +5811,9 @@ async def _create_indexes():
         await db.accounting_bills.create_index([("workspace_id", 1), ("status", 1)])
         await db.interview_bookings.create_index([("workspace_id", 1), ("id", 1)])
         await db.interview_bookings.create_index([("workspace_id", 1), ("candidate_id", 1)])
+        await db.signature_policies.create_index([("workspace_id", 1), ("id", 1)])
+        await db.user_signature_prefs.create_index([("workspace_id", 1), ("user_id", 1)], unique=True)
+        await db.directory_sync_integrations.create_index([("workspace_id", 1), ("provider", 1)], unique=True)
         logger.info("indexes ensured")
     except Exception as ex:
         logger.warning("index setup: %s", ex)

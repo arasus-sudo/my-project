@@ -30,6 +30,8 @@ const Pipeline = lazy(() => import("./pages/Pipeline"));
 const LeadLists = lazy(() => import("./pages/LeadLists"));
 const CustomFieldsSettings = lazy(() => import("./pages/CustomFieldsSettings"));
 const Signatures = lazy(() => import("./pages/Signatures"));
+const SignaturePolicies = lazy(() => import("./pages/SignaturePolicies"));
+const DirectorySyncSettings = lazy(() => import("./pages/DirectorySyncSettings"));
 const CompaniesList = lazy(() => import("./pages/Companies").then((m) => ({ default: m.CompaniesList })));
 const CompanyDetail = lazy(() => import("./pages/Companies").then((m) => ({ default: m.CompanyDetail })));
 const LeadSearch = lazy(() => import("./pages/LeadSearch"));
@@ -160,6 +162,8 @@ function App() {
               <Route path="crm/companies" element={<CompaniesList />} />
               <Route path="crm/companies/:id" element={<CompanyDetail />} />
               <Route path="signatures" element={<Signatures />} />
+              <Route path="signature-policies" element={<SignaturePolicies />} />
+              <Route path="directory-sync" element={<DirectorySyncSettings />} />
               {/* Legacy leads routes redirect to CRM */}
               <Route path="leads" element={<Navigate to="/app/crm/leads" replace />} />
               <Route path="leads/:id" element={<Navigate to="/app/crm/leads/:id" replace />} />

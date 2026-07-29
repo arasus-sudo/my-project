@@ -252,14 +252,25 @@ export default function CampaignBuilder() {
     }
   };
 
-  // Load signatures
+  // Load signatures — a per-user preference set by an org signature policy
+  // (see Signature Policies) takes priority over the workspace-wide default,
+  // since signatures are a shared pool with no per-user ownership otherwise.
+  // Only prefills for a NEW campaign (no `id`) — an existing campaign's own
+  // saved signature_id is loaded separately above and shouldn't be overridden.
   useEffect(() => {
-    api.get("/signatures").then((r) => {
-      setSignatures(r.data || []);
-      const def = (r.data || []).find((s) => s.is_default);
+    Promise.all([
+      api.get("/signatures"),
+      id ? Promise.resolve({ data: { signature_id: null } }) : api.get("/signatures/my-preference").catch(() => ({ data: { signature_id: null } })),
+    ]).then(([sigRes, prefRes]) => {
+      const sigs = sigRes.data || [];
+      setSignatures(sigs);
+      if (id) return;
+      const preferredId = prefRes.data?.signature_id;
+      const preferred = preferredId && sigs.find((s) => s.id === preferredId);
+      const def = preferred || sigs.find((s) => s.is_default);
       if (def) setSignatureId(def.id);
     }).catch(() => {});
-  }, []);
+  }, [id]);
 
   // Signature CRUD
   const createSignature = async () => {
