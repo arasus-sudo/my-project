@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  User as UserIcon, KeyRound, Building2, Loader2, Camera, Trash2, MessageSquare, ArrowLeft, LogOut,
+  User as UserIcon, KeyRound, Building2, Loader2, Camera, Trash2, MessageSquare, ArrowLeft, LogOut, Plug,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -47,6 +47,9 @@ export default function Settings() {
             <TabBtn active={tab === "security"} onClick={() => setTab("security")} icon={<KeyRound size={14} />} label="Security" testid="settings-tab-security" />
             <TabBtn active={tab === "workspace"} onClick={() => setTab("workspace")} icon={<Building2 size={14} />} label="Workspace" testid="settings-tab-workspace" />
             <TabBtn active={tab === "brand"} onClick={() => setTab("brand")} icon={<MessageSquare size={14} />} label="Brand voice" testid="settings-tab-brand" />
+            {user?.role === "org_admin" && (
+              <TabBtn active={tab === "ai-clients"} onClick={() => setTab("ai-clients")} icon={<Plug size={14} />} label="AI clients" testid="settings-tab-ai-clients" />
+            )}
           </div>
         </aside>
 
@@ -55,6 +58,7 @@ export default function Settings() {
           {tab === "security" && <SecuritySection />}
           {tab === "workspace" && <WorkspaceSection user={user} workspace={workspace} />}
           {tab === "brand" && <BrandVoiceSection />}
+          {tab === "ai-clients" && <ConnectedClientsSection />}
         </section>
       </div>
     </div>
@@ -277,6 +281,66 @@ function WorkspaceSection({ user, workspace }) {
         <Row k="Workspace ID" v={workspace?.id} mono />
         <Row k="LLM quota used" v={String(workspace?.quota_used ?? 0)} mono />
       </div>
+    </div>
+  );
+}
+
+/* --- Connected AI clients (MCP) --- */
+
+function ConnectedClientsSection() {
+  const [clients, setClients] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+
+  const load = () => api.get("/oauth/connected-clients").then((r) => setClients(r.data)).catch(() => setClients([]));
+  useEffect(() => { load(); }, []);
+
+  const revoke = async (grantId) => {
+    setBusyId(grantId);
+    try {
+      await api.post("/oauth/connected-clients/revoke", { grant_id: grantId });
+      toast.success("Connection revoked");
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Revoke failed");
+    } finally { setBusyId(null); }
+  };
+
+  if (!clients) return <div className="text-ink-muted text-caption">Loading connected AI clients…</div>;
+
+  return (
+    <div className="card-flat shadow-card p-6 space-y-4" data-testid="connected-clients-section">
+      <div>
+        <div className="font-display font-semibold text-card-title">Connected AI clients</div>
+        <div className="text-caption text-ink-muted mt-0.5">
+          AI assistants a teammate has connected to this workspace via MCP. Revoking cuts off access
+          immediately — every action an AI client takes is also visible in the audit log.
+        </div>
+      </div>
+
+      {clients.length === 0 ? (
+        <div className="text-caption text-ink-muted py-6 text-center border border-dashed border-line rounded-xl">
+          No AI clients connected yet.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {clients.map((c) => (
+            <div key={c.grant_id} data-testid="connected-client-row"
+              className="flex items-center justify-between border border-line rounded-lg px-3 py-2.5 bg-white gap-3">
+              <div className="min-w-0">
+                <div className="text-body font-medium truncate">{c.client_name}</div>
+                <div className="text-tiny text-ink-muted mt-0.5 truncate">
+                  Connected by {c.connected_by} · {new Date(c.connected_at).toLocaleDateString()} · {c.scopes.join(", ")}
+                </div>
+              </div>
+              <button onClick={() => revoke(c.grant_id)} disabled={busyId === c.grant_id}
+                data-testid="connected-client-revoke"
+                className="btn-secondary text-danger shrink-0 disabled:opacity-60">
+                {busyId === c.grant_id ? <Loader2 size={14} className="animate-spin" /> : "Revoke"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

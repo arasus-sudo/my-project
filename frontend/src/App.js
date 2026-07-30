@@ -15,6 +15,7 @@ import { OutOfCreditsWatcher } from "./components/Credits";
 // page into its own request, fetched only when actually navigated to.
 const Landing = lazy(() => import("./pages/Landing"));
 const Login = lazy(() => import("./pages/Login"));
+const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 const Signup = lazy(() => import("./pages/Signup"));
 const SuiteHome = lazy(() => import("./pages/SuiteHome"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -136,6 +137,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/oauth/consent" element={<OAuthConsent />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/onboarding" element={<Private><Onboarding /></Private>} />
             <Route path="/suite" element={<Private><SuiteHome /></Private>} />
