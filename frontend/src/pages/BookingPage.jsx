@@ -17,7 +17,7 @@ export default function BookingPage() {
     api.get(`/book/${workspaceId}/${eventTypeSlug}`).then((r) => {
       setData(r.data);
     }).catch((err) => {
-      const detail = err?.response?.data?.detail || "";
+      const detail = err?.response?.data?.detail || err.message || "";
       setError(detail || "Booking page not found");
     });
   }, [workspaceId, eventTypeSlug]);

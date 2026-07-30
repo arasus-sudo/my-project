@@ -545,7 +545,10 @@ async def public_event_type(workspace_id: str, event_type_slug: str):
         {"workspace_id": workspace_id, "slug": event_type_slug, "active": True}, {"_id": 0})
     if not ws or not et:
         raise HTTPException(404, "not found")
-    slots = await _compute_open_slots(workspace_id, et)
+    try:
+        slots = await _compute_open_slots(workspace_id, et)
+    except Exception as ex:
+        raise HTTPException(500, f"Slot computation failed: {ex}")
     public_et = {k: v for k, v in et.items() if k not in ("webhook_url",)}
     return {"workspace_name": ws.get("name"), "event_type": public_et, "open_slots": slots, "mocked": GOOGLE_MOCKED}
 
