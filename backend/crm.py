@@ -1227,19 +1227,53 @@ def _recycle_types() -> Dict[str, Any]:
 
 
 @crm_router.get("/crm/recycle-bin")
-async def list_recycle_bin(user=Depends(require_role("org_admin", "campaign_manager"))):
-    out = []
+async def list_recycle_bin(user=Depends(require_role("org_admin", "campaign_manager")), page: int = 1, per_page: int = 25):
+    wid = user["workspace_id"]
+    # Collect all recycle items in memory (the total is small — leads, companies,
+    # lists — bounded by the 30-day purge window).
+    all_items: List[Dict] = []
     for type_key, (col, label_fn) in _recycle_types().items():
         docs = await col.find(
-            {"workspace_id": user["workspace_id"], "deleted_at": {"$ne": None}}, {"_id": 0},
+            {"workspace_id": wid, "deleted_at": {"$ne": None}}, {"_id": 0},
         ).sort("deleted_at", -1).to_list(500)
         for d in docs:
-            out.append({
+            all_items.append({
                 "type": type_key, "id": d["id"], "name": label_fn(d),
                 "deleted_at": d.get("deleted_at"), "deleted_by": d.get("deleted_by"),
             })
-    out.sort(key=lambda r: r["deleted_at"] or "", reverse=True)
-    return out
+    all_items.sort(key=lambda r: r["deleted_at"] or "", reverse=True)
+    total = len(all_items)
+    skip = (page - 1) * per_page
+    rows = all_items[skip: skip + per_page]
+    return {"total": total, "page": page, "per_page": per_page, "rows": rows}
+
+@crm_router.get("/crm/recycle-bin/all-ids")
+async def list_recycle_bin_ids(user=Depends(require_role("org_admin", "campaign_manager"))):
+    wid = user["workspace_id"]
+    keys: List[str] = []
+    for type_key, (col, label_fn) in _recycle_types().items():
+        docs = await col.find(
+            {"workspace_id": wid, "deleted_at": {"$ne": None}}, {"_id": 0, "id": 1},
+        ).to_list(500)
+        keys.extend(f"{type_key}::{d['id']}" for d in docs)
+    return {"ids": keys}
+
+@crm_router.post("/crm/recycle-bin/purge-batch")
+async def purge_recycled_batch(body: Dict[str, Any], user=Depends(require_role("org_admin", "campaign_manager"))):
+    items = body.get("items", [])  # [{"type": "lead", "id": "..."}, ...]
+    if not items:
+        raise HTTPException(400, "No items provided")
+    count = 0
+    for item in items:
+        typ = item.get("type", "")
+        item_id = item.get("id", "")
+        if typ not in _recycle_types():
+            continue
+        col, _ = _recycle_types()[typ]
+        r = await col.delete_one({"id": item_id, "workspace_id": user["workspace_id"], "deleted_at": {"$ne": None}})
+        count += r.deleted_count
+    await _audit(user, "crm.recycle_bin.purge_batch", {"count": count})
+    return {"ok": True, "deleted": count}
 
 
 @crm_router.post("/crm/recycle-bin/{type}/{item_id}/restore")

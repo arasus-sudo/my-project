@@ -7,6 +7,7 @@ import {
   Users, ListChecks, Kanban, BarChart3, Plus, Target, Activity, Phone, Mail,
   CalendarClock, FileText, MessageSquare, ArrowRight, Share2, Search,
   CheckSquare, ShieldAlert, ChevronDown, ChevronUp, Building2, Trash2, RotateCcw, Copy,
+  ChevronLeft, ChevronRight, Loader2, ListOrdered,
 } from "lucide-react";
 
 const RECYCLE_TYPE_LABEL = { lead: "Lead", company: "Company", list: "Lead list", company_list: "Company list" };
@@ -26,8 +27,13 @@ export default function CRM() {
   const [tasks, setTasks] = useState([]);
   const [quarantine, setQuarantine] = useState([]);
   const [quarantineOpen, setQuarantineOpen] = useState(false);
-  const [recycleBin, setRecycleBin] = useState([]);
+  const [recycleBin, setRecycleBin] = useState({ rows: [], total: 0, page: 1 });
   const [recycleBinOpen, setRecycleBinOpen] = useState(false);
+  const [recyclePage, setRecyclePage] = useState(1);
+  const [recycleSelected, setRecycleSelected] = useState(new Set());
+  const [recycleSelectN, setRecycleSelectN] = useState("");
+  const [recycleSelectFromAll, setRecycleSelectFromAll] = useState(false);
+  const [purging, setPurging] = useState(false);
   const [duplicates, setDuplicates] = useState([]);
   const [duplicatesOpen, setDuplicatesOpen] = useState(true);
 
@@ -40,7 +46,7 @@ export default function CRM() {
       api.get("/crm/tasks", { params: { status: "open" } }).catch(() => ({ data: [] })),
       api.get("/quarantine").catch(() => ({ data: [] })),
       api.get("/companies?page_size=1").catch(() => ({ data: { total: 0 } })),
-      api.get("/crm/recycle-bin").catch(() => ({ data: [] })),
+      api.get("/crm/recycle-bin", { params: { page: recyclePage, per_page: 25 } }).catch(() => ({ data: { rows: [], total: 0 } })),
       api.get("/crm/duplicates").catch(() => ({ data: [] })),
     ]);
     const deals = dealsRes.data;
@@ -48,7 +54,8 @@ export default function CRM() {
     setRecentActivity((activityRes.data || []).slice(0, 10));
     setTasks((tasksRes.data || []).slice(0, 8));
     setQuarantine(quarantineRes.data || []);
-    setRecycleBin(recycleBinRes.data || []);
+    setRecycleBin(recycleBinRes.data || { rows: [], total: 0, page: 1 });
+    setRecycleSelected(new Set());
     setDuplicates(duplicatesRes.data || []);
     setStats({
       totalLeads: leadsRes?.data?.total || 0,
@@ -59,7 +66,7 @@ export default function CRM() {
     });
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [recyclePage]);
 
   const dismissQuarantine = async (qid) => {
     try {
@@ -80,7 +87,7 @@ export default function CRM() {
     try {
       await api.post(`/crm/recycle-bin/${item.type}/${item.id}/restore`);
       toast.success(`Restored ${item.name || RECYCLE_TYPE_LABEL[item.type]}`);
-      setRecycleBin((r) => r.filter((x) => !(x.type === item.type && x.id === item.id)));
+      load();
     } catch (err) { toast.error(err?.response?.data?.detail || "Restore failed"); }
   };
 
@@ -88,8 +95,56 @@ export default function CRM() {
     try {
       await api.delete(`/crm/recycle-bin/${item.type}/${item.id}`);
       toast.success("Deleted permanently");
-      setRecycleBin((r) => r.filter((x) => !(x.type === item.type && x.id === item.id)));
+      load();
     } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+  };
+
+  const purgeSelected = async () => {
+    if (recycleSelected.size === 0) return;
+    setPurging(true);
+    try {
+      const items = Array.from(recycleSelected).map((key) => {
+        const [type, id] = key.split("::");
+        return { type, id };
+      });
+      await api.post("/crm/recycle-bin/purge-batch", { items });
+      toast.success(`Deleted ${recycleSelected.size} item(s) permanently`);
+      load();
+    } catch { toast.error("Purge failed"); }
+    setPurging(false);
+  };
+
+  const toggleRecycleSelect = (key) => {
+    setRecycleSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const selectAllRecycle = () => {
+    const rows = recycleBin.rows || [];
+    if (recycleSelected.size === rows.length) {
+      setRecycleSelected(new Set());
+    } else {
+      setRecycleSelected(new Set(rows.map((r) => `${r.type}::${r.id}`)));
+    }
+  };
+
+  const selectFirstNRecycle = async () => {
+    const n = parseInt(recycleSelectN, 10);
+    if (!n || n < 1) return;
+    const rows = recycleBin.rows || [];
+    if (!recycleSelectFromAll) {
+      setRecycleSelected(new Set(rows.slice(0, n).map((r) => `${r.type}::${r.id}`)));
+      return;
+    }
+    try {
+      const { data } = await api.get("/crm/recycle-bin/all-ids");
+      setRecycleSelected(new Set(data.ids.slice(0, n)));
+    } catch {
+      setRecycleSelected(new Set(rows.slice(0, n).map((r) => `${r.type}::${r.id}`)));
+    }
   };
 
   const mergeDuplicate = async (candidate, survivorId) => {
@@ -340,33 +395,87 @@ export default function CRM() {
         )}
 
         {/* Recycle bin */}
-        {recycleBin.length > 0 && (
+        {(recycleBin.total || 0) > 0 && (
           <div>
             <button onClick={() => setRecycleBinOpen((o) => !o)} className="ui-label mb-3 flex items-center gap-1.5 w-full">
-              <Trash2 size={14} /> Recycle bin ({recycleBin.length})
+              <Trash2 size={14} /> Recycle bin ({recycleBin.total || 0})
               {recycleBinOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
             {recycleBinOpen && (
-              <div className="space-y-2">
-                {recycleBin.map((item) => (
-                  <div key={`${item.type}-${item.id}`} className="shadow-card p-3 rounded-xl flex items-center justify-between gap-3 bg-white">
-                    <div className="min-w-0">
-                      <div className="text-body truncate">{item.name || "(untitled)"}</div>
-                      <div className="text-caption text-ink-muted">
-                        {RECYCLE_TYPE_LABEL[item.type] || item.type}
-                        {item.deleted_at && ` · deleted ${new Date(item.deleted_at).toLocaleDateString()}`}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button onClick={() => restoreRecycled(item)} className="btn-secondary text-caption">
-                        <RotateCcw size={12} /> Restore
-                      </button>
-                      <button onClick={() => purgeRecycled(item)} className="text-caption text-ink-muted hover:text-danger">
-                        Delete permanently
-                      </button>
-                    </div>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1">
+                    <input value={recycleSelectN} onChange={(e) => setRecycleSelectN(e.target.value.replace(/\D/, ""))}
+                      placeholder="N" className="inp text-tiny w-12 text-center font-mono" />
+                    <button onClick={selectFirstNRecycle} disabled={!recycleSelectN || parseInt(recycleSelectN) < 1}
+                      className="btn-ghost text-[11px] flex items-center gap-1 disabled:opacity-40">
+                      <ListOrdered size={10} /> Select {recycleSelectN || "N"}
+                    </button>
                   </div>
-                ))}
+                  <label className="flex items-center gap-1 text-[10.5px] text-ink-muted cursor-pointer select-none">
+                    <input type="checkbox" checked={recycleSelectFromAll} onChange={(e) => setRecycleSelectFromAll(e.target.checked)} />
+                    from all pages
+                  </label>
+                  {recycleSelected.size > 0 && (
+                    <button onClick={purgeSelected} disabled={purging}
+                      className="btn-ghost text-[11px] text-danger flex items-center gap-1 ml-auto">
+                      {purging ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
+                      Delete {recycleSelected.size} permanently
+                    </button>
+                  )}
+                </div>
+                <div className="shadow-card rounded-lg bg-white overflow-hidden">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-line text-[10.5px] font-mono text-ink-muted uppercase tracking-wider">
+                        <th className="px-3 py-2 w-10">
+                          <input type="checkbox" checked={(recycleBin.rows || []).length > 0 && recycleSelected.size === (recycleBin.rows || []).length}
+                            onChange={selectAllRecycle} title="Select all on this page" />
+                        </th>
+                        <th className="text-left px-3 py-2 font-normal">Name</th>
+                        <th className="text-left px-3 py-2 font-normal">Type</th>
+                        <th className="text-left px-3 py-2 font-normal">Deleted</th>
+                        <th className="text-right px-3 py-2 font-normal">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(recycleBin.rows || []).map((item) => {
+                        const key = `${item.type}::${item.id}`;
+                        return (
+                          <tr key={key} className={`border-b border-line text-body ${recycleSelected.has(key) ? "bg-accent-soft/30" : "hover:bg-surfacehover"}`}>
+                            <td className="px-3 py-2">
+                              <input type="checkbox" checked={recycleSelected.has(key)} onChange={() => toggleRecycleSelect(key)} />
+                            </td>
+                            <td className="px-3 py-2 font-medium">{item.name || "(untitled)"}</td>
+                            <td className="px-3 py-2 text-ink-muted">{RECYCLE_TYPE_LABEL[item.type] || item.type}</td>
+                            <td className="px-3 py-2 text-tiny font-mono text-ink-muted">
+                              {item.deleted_at ? new Date(item.deleted_at).toLocaleString() : "—"}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <div className="flex items-center gap-2 justify-end">
+                                <button onClick={() => restoreRecycled(item)} className="btn-secondary text-caption">
+                                  <RotateCcw size={11} /> Restore
+                                </button>
+                                <button onClick={() => purgeRecycled(item)} className="btn-ghost text-caption text-ink-muted hover:text-danger">
+                                  <Trash2 size={11} /> Delete permanently
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="text-tiny text-ink-muted font-mono">Page {recycleBin.page} of {Math.max(1, Math.ceil((recycleBin.total || 0) / 25))}</div>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setRecyclePage((p) => Math.max(1, p - 1))} disabled={recyclePage <= 1}
+                      className="btn-ghost text-[11px] px-1.5 py-0.5 disabled:opacity-30"><ChevronLeft size={12} /> Prev</button>
+                    <button onClick={() => setRecyclePage((p) => p + 1)} disabled={recyclePage >= Math.ceil((recycleBin.total || 0) / 25)}
+                      className="btn-ghost text-[11px] px-1.5 py-0.5 disabled:opacity-30">Next <ChevronRight size={12} /></button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

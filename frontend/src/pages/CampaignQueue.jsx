@@ -22,7 +22,7 @@ export default function CampaignQueue() {
   const [deleting, setDeleting] = useState(false);
   const [selectN, setSelectN] = useState("");
   const [selectFromAll, setSelectFromAll] = useState(false);
-  const perPage = 20;
+  const perPage = 25;
 
   const load = useCallback(() => {
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
