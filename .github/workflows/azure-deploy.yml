@@ -63,6 +63,14 @@ jobs:
             --name ${{ env.BACKEND_NAME }} \
             --startup-file "python -m uvicorn server:app --host 0.0.0.0 --port 8000 --workers 1 --timeout-keep-alive 120"
 
+      - name: Wait for SCM container to settle after config changes
+        run: |
+          # The two `az webapp config` calls above each restart the site's Kudu/SCM
+          # container. Deploying immediately afterward races that restart and Kudu
+          # aborts with "Deployment has been stopped due to SCM container restart" —
+          # this is Azure's own documented fix for exactly that error.
+          sleep 30
+
       - name: Package and deploy backend
         run: |
           cd backend
