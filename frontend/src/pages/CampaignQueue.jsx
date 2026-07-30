@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
-import { ChevronLeft, ChevronRight, Clock, CheckCircle, XCircle, Loader2, Send, Trash2, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, CheckCircle, XCircle, Loader2, Send, Trash2, Search, X, ListOrdered } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -20,6 +20,8 @@ export default function CampaignQueue() {
   const [searchInput, setSearchInput] = useState("");
   const [selected, setSelected] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [selectN, setSelectN] = useState("");
+  const [selectFromAll, setSelectFromAll] = useState(false);
   const perPage = 20;
 
   const load = useCallback(() => {
@@ -52,6 +54,24 @@ export default function CampaignQueue() {
     }
   };
 
+  const selectFirstN = async () => {
+    const n = parseInt(selectN, 10);
+    if (!n || n < 1) return;
+    if (!data) return;
+    if (!selectFromAll) {
+      setSelected(new Set(data.rows.slice(0, n).map((r) => r.id)));
+      return;
+    }
+    try {
+      const params = {};
+      if (search) params.search = search;
+      const { data: allData } = await api.get("/queue/all-ids", { params });
+      setSelected(new Set((allData.ids || []).slice(0, n)));
+    } catch {
+      setSelected(new Set(data.rows.slice(0, n).map((r) => r.id)));
+    }
+  };
+
   const deleteSelected = async () => {
     if (selected.size === 0) return;
     setDeleting(true);
@@ -59,7 +79,9 @@ export default function CampaignQueue() {
       await api.post("/queue/delete", { ids: Array.from(selected) });
       toast.success(`Deleted ${selected.size} queue item(s)`);
       load();
-    } catch { toast.error("Delete failed"); }
+    } catch {
+      toast.error("Delete failed — check the server logs");
+    }
     setDeleting(false);
   };
 
@@ -73,22 +95,38 @@ export default function CampaignQueue() {
     <div className="animate-fade-in">
       <PageHeader title="Send Queue" subtitle="Emails scheduled to go out, listed chronologically." />
       <div className="px-6 sm:px-8 pb-6 space-y-4">
-        <form onSubmit={handleSearch} className="flex items-center gap-2">
-          <div className="relative flex-1 max-w-sm">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
-            <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search by name, email, subject, campaign, or queue ID..."
-              className="inp pl-7 text-tiny w-full" />
-            {searchInput && (
-              <button type="button" onClick={() => { setSearchInput(""); setSearch(""); setPage(1); }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink">
-                <X size={12} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <form onSubmit={handleSearch} className="flex items-center gap-2">
+            <div className="relative flex-1 max-w-sm">
+              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
+              <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search by name, email, subject, campaign, or queue ID..."
+                className="inp pl-7 text-tiny w-full" />
+              {searchInput && (
+                <button type="button" onClick={() => { setSearchInput(""); setSearch(""); setPage(1); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink">
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            <button type="submit" className="btn-secondary text-[11px]"><Search size={11} /> Search</button>
+            {search && <span className="text-tiny text-ink-muted font-mono">Filtered: "{search}"</span>}
+          </form>
+          <div className="flex items-center gap-1.5 ml-auto">
+            <div className="flex items-center gap-1">
+              <input value={selectN} onChange={(e) => setSelectN(e.target.value.replace(/\D/, ""))}
+                placeholder="N" className="inp text-tiny w-12 text-center font-mono" />
+              <button onClick={selectFirstN} disabled={!selectN || parseInt(selectN) < 1}
+                className="btn-ghost text-[11px] flex items-center gap-1 disabled:opacity-40">
+                <ListOrdered size={10} /> Select {selectN || "N"}
               </button>
-            )}
+            </div>
+            <label className="flex items-center gap-1 text-[10.5px] text-ink-muted cursor-pointer select-none">
+              <input type="checkbox" checked={selectFromAll} onChange={(e) => setSelectFromAll(e.target.checked)} />
+              from all pages
+            </label>
           </div>
-          <button type="submit" className="btn-secondary text-[11px]"><Search size={11} /> Search</button>
-          {search && <span className="text-tiny text-ink-muted font-mono">Filtered: "{search}"</span>}
-        </form>
+        </div>
 
         {!data ? (
           <div className="text-center py-12 text-ink-muted text-tiny">Loading...</div>

@@ -2612,8 +2612,37 @@ async def list_queue(user=Depends(current_user), page: int = 1, per_page: int = 
             r["campaign_name"] = campaign.get("name", "")
     return {"total": total, "page": page, "per_page": per_page, "rows": rows}
 
+@api.get("/queue/all-ids")
+async def list_queue_ids(user=Depends(current_user), search: str = ""):
+    wid = user["workspace_id"]
+    query: Dict[str, Any] = {"workspace_id": wid}
+    if search:
+        leads = await db.leads.find({
+            "workspace_id": wid,
+            "$or": [
+                {"first_name": {"$regex": search, "$options": "i"}},
+                {"last_name": {"$regex": search, "$options": "i"}},
+                {"email": {"$regex": search, "$options": "i"}},
+            ],
+        }, {"_id": 0, "id": 1}).to_list(500)
+        lead_ids = [l["id"] for l in leads]
+        campaigns = await db.campaigns.find({
+            "workspace_id": wid,
+            "name": {"$regex": search, "$options": "i"},
+        }, {"_id": 0, "id": 1}).to_list(500)
+        campaign_ids = [c["id"] for c in campaigns]
+        query["$or"] = [
+            {"lead_id": {"$in": lead_ids}},
+            {"campaign_id": {"$in": campaign_ids}},
+            {"subject": {"$regex": search, "$options": "i"}},
+            {"id": {"$regex": search, "$options": "i"}},
+        ]
+    ids = await db.send_queue.find(query, {"_id": 0, "id": 1}).sort("send_at", 1).to_list(5000)
+    return {"ids": [r["id"] for r in ids]}
+
 @api.post("/queue/delete")
-async def delete_queue_items(ids: List[str], user=Depends(current_user)):
+async def delete_queue_items(body: Dict[str, Any], user=Depends(current_user)):
+    ids = body.get("ids", [])
     if not ids:
         raise HTTPException(400, "No ids provided")
     result = await db.send_queue.delete_many({"id": {"$in": ids}, "workspace_id": user["workspace_id"]})
