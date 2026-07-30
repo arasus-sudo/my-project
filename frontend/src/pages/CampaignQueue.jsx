@@ -21,7 +21,6 @@ export default function CampaignQueue() {
   const [selected, setSelected] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
   const [selectN, setSelectN] = useState("");
-  const [selectFromAll, setSelectFromAll] = useState(false);
   const perPage = 25;
 
   const load = useCallback(() => {
@@ -58,10 +57,6 @@ export default function CampaignQueue() {
     const n = parseInt(selectN, 10);
     if (!n || n < 1) return;
     if (!data) return;
-    if (!selectFromAll) {
-      setSelected(new Set(data.rows.slice(0, n).map((r) => r.id)));
-      return;
-    }
     try {
       const params = {};
       if (search) params.search = search;
@@ -121,10 +116,6 @@ export default function CampaignQueue() {
                 <ListOrdered size={10} /> Select {selectN || "N"}
               </button>
             </div>
-            <label className="flex items-center gap-1 text-[10.5px] text-ink-muted cursor-pointer select-none">
-              <input type="checkbox" checked={selectFromAll} onChange={(e) => setSelectFromAll(e.target.checked)} />
-              from all pages
-            </label>
           </div>
         </div>
 

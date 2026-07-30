@@ -32,7 +32,6 @@ export default function CRM() {
   const [recyclePage, setRecyclePage] = useState(1);
   const [recycleSelected, setRecycleSelected] = useState(new Set());
   const [recycleSelectN, setRecycleSelectN] = useState("");
-  const [recycleSelectFromAll, setRecycleSelectFromAll] = useState(false);
   const [purging, setPurging] = useState(false);
   const [duplicates, setDuplicates] = useState([]);
   const [duplicatesOpen, setDuplicatesOpen] = useState(true);
@@ -134,15 +133,11 @@ export default function CRM() {
   const selectFirstNRecycle = async () => {
     const n = parseInt(recycleSelectN, 10);
     if (!n || n < 1) return;
-    const rows = recycleBin.rows || [];
-    if (!recycleSelectFromAll) {
-      setRecycleSelected(new Set(rows.slice(0, n).map((r) => `${r.type}::${r.id}`)));
-      return;
-    }
     try {
       const { data } = await api.get("/crm/recycle-bin/all-ids");
       setRecycleSelected(new Set(data.ids.slice(0, n)));
     } catch {
+      const rows = recycleBin.rows || [];
       setRecycleSelected(new Set(rows.slice(0, n).map((r) => `${r.type}::${r.id}`)));
     }
   };
@@ -412,10 +407,6 @@ export default function CRM() {
                       <ListOrdered size={10} /> Select {recycleSelectN || "N"}
                     </button>
                   </div>
-                  <label className="flex items-center gap-1 text-[10.5px] text-ink-muted cursor-pointer select-none">
-                    <input type="checkbox" checked={recycleSelectFromAll} onChange={(e) => setRecycleSelectFromAll(e.target.checked)} />
-                    from all pages
-                  </label>
                   {recycleSelected.size > 0 && (
                     <button onClick={purgeSelected} disabled={purging}
                       className="btn-ghost text-[11px] text-danger flex items-center gap-1 ml-auto">
