@@ -18,6 +18,18 @@
       "runtimeExecutable": "cmd",
       "runtimeArgs": ["/c", "cd /d D:\\SUITEOFAGETNS\\backend && .\\venv\\Scripts\\python.exe -m uvicorn server:app --reload --port 8001"],
       "port": 8001
+    },
+    {
+      "name": "backend-worktree",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd /d D:\\SUITEOFAGETNS\\.claude\\worktrees\\dazzling-perlman-1bf0d3\\backend && set FRONTEND_URL=http://localhost:3010&& set CORS_ORIGINS=http://localhost:3010&& .\\venv\\Scripts\\python.exe -m uvicorn server:app --reload --port 8011"],
+      "port": 8011
+    },
+    {
+      "name": "frontend-worktree",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd /d D:\\SUITEOFAGETNS\\.claude\\worktrees\\dazzling-perlman-1bf0d3\\frontend && set PORT=3010&& set REACT_APP_BACKEND_URL=http://localhost:8011&& npm start"],
+      "port": 3010
     }
   ]
 }
