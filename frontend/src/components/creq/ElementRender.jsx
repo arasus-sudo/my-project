@@ -11,6 +11,7 @@ import { textStyleOf } from "./utils";
 import { SHAPE_KINDS, renderShapeSvg, renderLineSvg } from "./shapes";
 import { IMAGE_FRAMES } from "../../lib/creqDesignEngine";
 import { renderBarChart, renderPieChart, renderDonutChart, renderLineChart, renderAreaChart, renderStackedBarChart, renderHBarChart, renderProgressBar, renderKpiCard, renderTimeline, IMAGE_EFFECTS } from "../../lib/creqCharts";
+import { findIcon, iconProps } from "../../lib/creqIconSets";
 
 export const ICONS = {
   Zap, Award, Star, Rocket, Sparkles,
@@ -524,10 +525,14 @@ function ElementRender({ el, palette, onPointerDown, onMeasure, onDoubleClick, e
   }
 
   if (el.type === "icon") {
-    const IC = ICONS[el.name] || Zap;
+    // el.set is absent on decks saved before the multi-set picker (Lucide-only
+    // era) — default to "lucide" so those elements keep rendering unchanged.
+    const set = el.set || "lucide";
+    const IC = findIcon(set, el.name);
+    const color = resolveColor(el.color, palette);
     return (
-      <div className="creq-el" onPointerDown={bind} style={{ ...common, width: el.w, height: el.w, color: resolveColor(el.color, palette) }}>
-        <IC size={el.w} strokeWidth={el.stroke || 2} />
+      <div className="creq-el" onPointerDown={bind} style={{ ...common, width: el.w, height: el.w, color }}>
+        <IC {...iconProps(set, el.w, color, el.stroke || 2)} />
       </div>
     );
   }

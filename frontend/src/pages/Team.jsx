@@ -16,7 +16,8 @@ export default function Team() {
   const { user } = useAuth();
   const [members, setMembers] = useState([]);
   const [modal, setModal] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", role: "campaign_manager", password: "" });
+  const [form, setForm] = useState({ name: "", email: "", role: "campaign_manager", password: "", department: "" });
+  const isOrgAdmin = user?.role === "org_admin" || user?.is_admin;
 
   const load = () => api.get("/team").then((r) => setMembers(r.data));
   useEffect(() => { load(); }, []);
@@ -26,7 +27,7 @@ export default function Team() {
     try {
       await api.post("/team/invite", form);
       toast.success(`Invited ${form.email}`);
-      setModal(false); setForm({ name: "", email: "", role: "campaign_manager", password: "" });
+      setModal(false); setForm({ name: "", email: "", role: "campaign_manager", password: "", department: "" });
       load();
     } catch (err) { toast.error(err?.response?.data?.detail || "Invite failed"); }
   };
@@ -34,6 +35,12 @@ export default function Team() {
     if (!confirm("Remove this member?")) return;
     try { await api.delete(`/team/${id}`); load(); }
     catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+  };
+  const updateDepartment = async (id, department) => {
+    try {
+      await api.put(`/team/${id}`, { department });
+      setMembers((prev) => prev.map((m) => m.id === id ? { ...m, department } : m));
+    } catch (err) { toast.error(err?.response?.data?.detail || "Update failed"); }
   };
 
   return (
@@ -47,7 +54,7 @@ export default function Team() {
           <table className="w-full text-table min-w-[520px]">
             <thead>
               <tr className="border-b border-line">
-                {["Name", "Email", "Role", "Joined", ""].map((h) => <th key={h} className="table-header text-left p-3">{h}</th>)}
+                {["Name", "Email", "Role", "Department", "Joined", ""].map((h) => <th key={h} className="table-header text-left p-3">{h}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -56,6 +63,14 @@ export default function Team() {
                   <td className="p-3 font-medium">{m.name} {m.id === user?.id && <span className="pill ml-1">You</span>}</td>
                   <td className="p-3 font-mono">{m.email}</td>
                   <td className="p-3">{ROLES.find(r => r.k === m.role)?.t || m.role}</td>
+                  <td className="p-3">
+                    {isOrgAdmin ? (
+                      <input defaultValue={m.department || ""} placeholder="—"
+                        onBlur={(e) => { if (e.target.value !== (m.department || "")) updateDepartment(m.id, e.target.value.trim()); }}
+                        data-testid={`member-department-${m.id}`}
+                        className="w-28 bg-transparent border-b border-transparent hover:border-line focus:border-ink focus:outline-none text-table" />
+                    ) : (m.department || "—")}
+                  </td>
                   <td className="p-3 text-ink-muted">{m.created_at?.slice(0, 10)}</td>
                   <td className="p-3 text-right">
                     {m.id !== user?.id && (
@@ -81,6 +96,7 @@ export default function Team() {
             <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} data-testid="invite-role" className="input-premium w-full bg-white">
               {ROLES.map((r) => <option key={r.k} value={r.k}>{r.t}</option>)}
             </select>
+            <input placeholder="Department (optional — e.g. Sales)" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} data-testid="invite-department" className="input-premium w-full" />
             <p className="text-caption text-ink-muted">MVP note: no email sending yet — share the temporary password with them directly.</p>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>

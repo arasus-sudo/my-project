@@ -181,7 +181,7 @@ export default function Billing() {
                   <ul className="text-caption space-y-1.5 mt-4 flex-1">
                     <li className="flex items-center gap-1.5"><Check size={12} className="text-accent" /> {fmt(p.credits)} credits / month</li>
                     <li className="flex items-center gap-1.5"><Check size={12} className="text-accent" /> {p.seats === 0 ? "Unlimited seats" : `${p.seats} seat${p.seats > 1 ? "s" : ""}`}</li>
-                    <li className="flex items-center gap-1.5"><Check size={12} className="text-accent" /> All six agents</li>
+                    <li className="flex items-center gap-1.5"><Check size={12} className="text-accent" /> All ten agents</li>
                   </ul>
                   <button
                     disabled={current || busy === p.id || p.id === "trial"}

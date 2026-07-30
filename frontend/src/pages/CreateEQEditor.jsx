@@ -6,7 +6,7 @@ import jsPDF from "jspdf";
 import { toast } from "sonner";
 import {
   Save, Download, ChevronLeft, Loader2, Plus, Trash2, Copy,
-  Palette, Undo2, Redo2, PenSquare, ImagePlus, FileText, LayoutGrid, Maximize2, Mountain, Play, Image as ImageIcon,
+  Palette, Undo2, Redo2, PenSquare, ImagePlus, FileText, LayoutGrid, Maximize2, Mountain, Play, Image as ImageIcon, Search,
 } from "lucide-react";
 
 import { api, isCreditError } from "../lib/api";
@@ -29,6 +29,7 @@ import DeckOverlay from "../components/creq/DeckOverlay";
 import BrandKitDrawer from "../components/creq/drawers/BrandKitDrawer";
 import AiImageDrawer from "../components/creq/drawers/AiImageDrawer";
 import ImageGalleryDrawer from "../components/creq/drawers/ImageGalleryDrawer";
+import StockPhotoDrawer from "../components/creq/drawers/StockPhotoDrawer";
 import PanoramaDrawer from "../components/creq/drawers/PanoramaDrawer";
 import PdfExportDialog, { EXPORT_QUALITIES } from "../components/creq/drawers/PdfExportDialog";
 import { newId, renderBackground, renderBackgroundImageCss, stripLocalKeys, elementBounds } from "../components/creq/utils";
@@ -165,6 +166,7 @@ export default function CreateEQEditor() {
   const [showBrandKit, setShowBrandKit] = useState(false);
   const [showAiImage, setShowAiImage] = useState(false);
   const [showImageGallery, setShowImageGallery] = useState(false);
+  const [showStockPhotos, setShowStockPhotos] = useState(false);
   const [showPanorama, setShowPanorama] = useState(false);
   const [showPdfPicker, setShowPdfPicker] = useState(false);
   const [showGenerateContent, setShowGenerateContent] = useState(false);
@@ -1410,6 +1412,7 @@ export default function CreateEQEditor() {
             <button onClick={() => setShowGenerateContent(true)} data-testid="generate-content-open" className="btn-secondary"><PenSquare size={14} /> Generate content</button>
             <button onClick={() => setShowPanorama(true)} data-testid="panorama-open" className="btn-secondary"><Mountain size={14} /> Panorama</button>
             <button onClick={() => setShowAiImage(true)} data-testid="ai-image-open" className="btn-secondary"><ImagePlus size={14} /> Generate image</button>
+            <button onClick={() => setShowStockPhotos(true)} data-testid="stock-photos-open" className="btn-secondary"><Search size={14} /> Stock photos</button>
             <button onClick={() => setShowImageGallery(true)} data-testid="image-gallery-open" className="btn-secondary"><ImageIcon size={14} /> Images</button>
             <button onClick={() => setShowBrandKit(true)} data-testid="brand-kit-open" className="btn-secondary"><Palette size={14} /> Brand kit</button>
             <button onClick={exportSlidePng} data-testid="export-png-btn" className="btn-secondary"><Download size={14} /> PNG</button>
@@ -1432,7 +1435,7 @@ export default function CreateEQEditor() {
               onAddShape={(shape) => addElement({ type: "shape", shape, x: 400, y: 500, w: 280, h: 280, fill: "accent", opacity: 1, radius: shape === "circle" ? 999 : shape === "rect" ? 24 : 0 })}
               onAddLine={(caps) => addElement({ type: "line", x: 80, y: 700, w: 920, h: caps ? 6 : 4, color: "text", ...(caps || {}) })}
               onAddBadge={() => addElement({ type: "badge", x: 80, y: 96, text: "NEW", bg: "accent", color: "bg", radius: 999, size: 20 })}
-              onAddIcon={(name) => addElement({ type: "icon", x: 400, y: 500, w: 128, name, color: "accent", stroke: 2 })}
+              onAddIcon={(name, set) => addElement({ type: "icon", x: 400, y: 500, w: 128, name, set, color: "accent", stroke: 2 })}
               onAddImage={() => imageFileRef.current?.click()}
               onAddImageUrl={() => {
                 const url = prompt("Paste image URL (PNG/JPG/SVG)");
@@ -1749,6 +1752,29 @@ export default function CreateEQEditor() {
               s.elements.unshift({ id: newId(), type: "image", role: "background", src: dataUrl, x: 0, y: 0, w: CANVAS.w, h: CANVAS.h, fit: "cover", radius: 0 });
             });
             setShowAiImage(false);
+            toast.success("Background applied");
+          }}
+        />
+      )}
+
+      {showStockPhotos && (
+        <StockPhotoDrawer
+          onClose={() => setShowStockPhotos(false)}
+          slideContent={{
+            texts: (slide?.elements || []).filter((el) => el.type === "text" && el.text).map((el) => el.text),
+          }}
+          onAddAsElement={(imageUrl) => {
+            addElement({ type: "image", src: imageUrl, x: 120, y: 240, w: 840, h: 840, fit: "cover", radius: 24 });
+            setShowStockPhotos(false);
+            toast.success("Image added to slide");
+          }}
+          onAddAsBackground={(imageUrl) => {
+            mutate((n) => {
+              const s = n.slides[activeSlide];
+              s.elements = (s.elements || []).filter((el) => !(el.type === "image" && el.role === "background"));
+              s.elements.unshift({ id: newId(), type: "image", role: "background", src: imageUrl, x: 0, y: 0, w: CANVAS.w, h: CANVAS.h, fit: "cover", radius: 0 });
+            });
+            setShowStockPhotos(false);
             toast.success("Background applied");
           }}
         />

@@ -222,6 +222,19 @@ class SignatureIn(BaseModel):
     content_html: str = ""
     content_text: str = ""
     is_default: bool = False
+    # Structured source-of-truth for the visual builder. content_html/content_text
+    # above stay the rendered output every existing send path (sender.py,
+    # draft_chain.py, campaign_engine.py) already consumes unmodified — these two
+    # fields are additive, only read by the builder itself when re-opening a
+    # signature for editing.
+    blocks_json: List[Dict[str, Any]] = []
+    style_json: Dict[str, Any] = {}
+    # Approval workflow — defaults to "approved" so every existing signature and
+    # every workspace that hasn't opted into requiring approval behaves exactly
+    # as before. Only meaningful once a workspace turns on "require approval"
+    # (see /signatures/approval-settings); it never hard-gates signature use.
+    status: str = "approved"
+    click_tracking: bool = False
 
 
 class MailboxIn(BaseModel):
@@ -382,6 +395,10 @@ async def login(request: Request, body: LoginIn):
     if ws and ws.get("blocked"):
         raise HTTPException(403, "Workspace has been suspended. Contact your admin.")
     token = make_token(user["id"], user["workspace_id"])
+    await db.users.update_one({"id": user["id"]}, {"$set": {
+        "last_login_at": now_iso(),
+        "last_login_ip": request.client.host if request.client else None,
+    }})
     ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0})
     return {"token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"], "is_admin": _is_admin(user)},
             "workspace": {"id": ws["id"], "name": ws["name"]}}
@@ -392,7 +409,7 @@ class GoogleAuthIn(BaseModel):
 
 
 @api.post("/auth/google")
-async def google_auth(body: GoogleAuthIn):
+async def google_auth(request: Request, body: GoogleAuthIn):
     """Sign in / sign up with Google. The browser gets an ID token from Google
     Identity Services (client ID only — no secret involved in this flow) and
     posts it here; we verify the JWT's signature and audience against our
@@ -453,6 +470,10 @@ async def google_auth(body: GoogleAuthIn):
 
     ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0})
     token = make_token(user["id"], user["workspace_id"])
+    await db.users.update_one({"id": user["id"]}, {"$set": {
+        "last_login_at": now_iso(),
+        "last_login_ip": request.client.host if request.client else None,
+    }})
     return {"token": token, "created": created,
             "user": {"id": user["id"], "email": user["email"], "name": user["name"], "is_admin": _is_admin(user)},
             "workspace": {"id": ws["id"], "name": ws["name"]}}
@@ -1205,6 +1226,11 @@ async def launch_campaign(cid: str, skip_pending: bool = False, user=Depends(cur
     to send only to leads whose personalised email has been approved — the rest
     are skipped rather than blocked.
     """
+    # require_role is defined later in this file (it needs _is_admin, defined
+    # further down still) so it can't be used as this route's own Depends(...)
+    # default without a NameError at module-load time — called inline instead,
+    # which only runs at request time, long after the whole module has loaded.
+    await require_role("org_admin", "campaign_manager")(user=user)
     from sender import enqueue_campaign
 
     c = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
@@ -2148,9 +2174,16 @@ async def serve_image(image_id: str, t: str = None,
 
 
 # ----------------------------- Signature Management ----------------------------
+SIGNATURE_VERSION_MIN_GAP_SECONDS = 300  # don't snapshot more than once per 5 min of active autosaving
+SIGNATURE_VERSION_CAP = 20
+
+
 @api.post("/signatures")
 async def create_signature(body: SignatureIn, user=Depends(current_user)):
     sig = body.model_dump()
+    ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0, "signature_approval_required": 1})
+    if (ws or {}).get("signature_approval_required"):
+        sig["status"] = "pending_approval"
     sig.update({
         "id": new_id(),
         "workspace_id": user["workspace_id"],
@@ -2169,26 +2202,175 @@ async def list_signatures(user=Depends(current_user)):
     return sigs
 
 
+@api.get("/signatures/my-preference")
+async def get_my_signature_preference(user=Depends(current_user)):
+    """Signatures are a shared workspace pool (campaigns pick one by id, not
+    per-user ownership) — this is the one per-user hook: a role/department
+    signature policy (see /signature-policies/{id}/apply) can set this, and
+    the campaign builder prefers it over the workspace-wide default when
+    prefilling a new campaign's signature."""
+    pref = await db.user_signature_prefs.find_one(
+        {"workspace_id": user["workspace_id"], "user_id": user["id"]}, {"_id": 0, "signature_id": 1}
+    )
+    return {"signature_id": (pref or {}).get("signature_id")}
+
+
 @api.delete("/signatures/{sid}")
 async def delete_signature(sid: str, user=Depends(current_user)):
     result = await db.signatures.delete_one({"id": sid, "workspace_id": user["workspace_id"]})
     if result.deleted_count == 0:
         raise HTTPException(404, "Signature not found")
+    await db.signature_versions.delete_many({"signature_id": sid})
     return {"ok": True}
 
 
 @api.put("/signatures/{sid}")
 async def update_signature(sid: str, body: SignatureIn, user=Depends(current_user)):
+    current = await db.signatures.find_one({"id": sid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not current:
+        raise HTTPException(404, "Signature not found")
+
+    # Version history: snapshot the PRE-update state, throttled so a burst of
+    # autosaves (every ~1.2s while actively typing) doesn't flood the history
+    # with keystroke-level checkpoints — only one snapshot per active editing
+    # window at most.
+    last_version = await db.signature_versions.find_one(
+        {"signature_id": sid}, {"_id": 0, "at": 1}, sort=[("at", -1)]
+    )
+    last_at = last_version["at"] if last_version else current.get("created_at")
+    stale_enough = True
+    if last_at:
+        try:
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(last_at)).total_seconds()
+            stale_enough = age >= SIGNATURE_VERSION_MIN_GAP_SECONDS
+        except Exception:
+            stale_enough = True
+    if stale_enough:
+        await db.signature_versions.insert_one({
+            "id": new_id(), "signature_id": sid, "workspace_id": user["workspace_id"],
+            "name": current.get("name"), "content_html": current.get("content_html"),
+            "content_text": current.get("content_text"),
+            "blocks_json": current.get("blocks_json", []), "style_json": current.get("style_json", {}),
+            "at": now_iso(),
+        })
+        old_versions = await db.signature_versions.find(
+            {"signature_id": sid}, {"_id": 0, "id": 1}
+        ).sort("at", -1).skip(SIGNATURE_VERSION_CAP).to_list(1000)
+        if old_versions:
+            await db.signature_versions.delete_many({"id": {"$in": [v["id"] for v in old_versions]}})
+
     sig = body.model_dump()
+    # Approval status only changes via the dedicated submit/approve/reject
+    # routes below — never as a side effect of a routine (autosave-driven) edit.
+    sig.pop("status", None)
     sig["updated_at"] = now_iso()
-    result = await db.signatures.update_one(
+    await db.signatures.update_one(
         {"id": sid, "workspace_id": user["workspace_id"]},
         {"$set": sig}
     )
-    if result.matched_count == 0:
-        raise HTTPException(404, "Signature not found")
     updated = await db.signatures.find_one({"id": sid, "workspace_id": user["workspace_id"]}, {"_id": 0})
     return updated
+
+
+@api.get("/signatures/{sid}/versions")
+async def list_signature_versions(sid: str, user=Depends(current_user)):
+    sig = await db.signatures.find_one({"id": sid, "workspace_id": user["workspace_id"]}, {"_id": 0, "id": 1})
+    if not sig:
+        raise HTTPException(404, "Signature not found")
+    return await db.signature_versions.find(
+        {"signature_id": sid}, {"_id": 0, "content_html": 0, "content_text": 0}
+    ).sort("at", -1).to_list(SIGNATURE_VERSION_CAP)
+
+
+@api.post("/signatures/{sid}/versions/{vid}/restore")
+async def restore_signature_version(sid: str, vid: str, user=Depends(current_user)):
+    version = await db.signature_versions.find_one(
+        {"id": vid, "signature_id": sid, "workspace_id": user["workspace_id"]}, {"_id": 0}
+    )
+    if not version:
+        raise HTTPException(404, "Version not found")
+    return {"blocks_json": version.get("blocks_json", []), "style_json": version.get("style_json", {}),
+            "name": version.get("name")}
+
+
+class ApprovalSettingsIn(BaseModel):
+    require_approval: bool
+
+
+# NOTE: this path has 2 segments after /signatures/ deliberately — a single
+# segment (e.g. /signatures/approval-settings) would collide with the
+# PUT /signatures/{sid} route above, since {sid} is a wildcard that matches
+# any string and that route is registered first.
+@api.get("/signatures/settings/approval-required")
+async def get_approval_settings(user=Depends(current_user)):
+    ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0, "signature_approval_required": 1})
+    return {"require_approval": bool((ws or {}).get("signature_approval_required"))}
+
+
+@api.post("/signatures/{sid}/submit-for-approval")
+async def submit_signature_for_approval(sid: str, user=Depends(current_user)):
+    result = await db.signatures.update_one(
+        {"id": sid, "workspace_id": user["workspace_id"]}, {"$set": {"status": "pending_approval"}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Signature not found")
+    await _audit(user, "signature.submit_for_approval", {"signature_id": sid})
+    return {"ok": True, "status": "pending_approval"}
+
+
+# NOTE: set_approval_settings / list_pending_signatures / approve_signature /
+# reject_signature are defined further down, right after require_role() —
+# they depend on it and require_role is defined later in this file.
+
+
+class AiAssistIn(BaseModel):
+    action: str  # improve_tagline | tone_professional | tone_executive | generate_disclaimer | accessibility
+    text: str = ""
+    context: Dict[str, Any] = {}
+
+
+@api.post("/signatures/ai-assist")
+async def signature_ai_assist(body: AiAssistIn, user=Depends(current_user)):
+    prompts = {
+        "improve_tagline": (
+            "You write short, punchy professional email-signature taglines (one line, under 60 characters). "
+            "Given the person's current tagline (or role/company if none), return ONLY the improved tagline text — "
+            "no quotes, no explanation."
+        ),
+        "tone_professional": (
+            "Rewrite the given text in a clear, professional tone suitable for a business email signature. "
+            "Keep it brief. Return ONLY the rewritten text, no quotes, no explanation."
+        ),
+        "tone_executive": (
+            "Rewrite the given text in a confident, executive tone suitable for a senior leader's email signature. "
+            "Keep it brief. Return ONLY the rewritten text, no quotes, no explanation."
+        ),
+        "generate_disclaimer": (
+            "Write a short (2-3 sentence), plain-English confidentiality disclaimer suitable for a company email "
+            "signature, given the company name provided. Return ONLY the disclaimer text as a single paragraph, "
+            "no quotes, no markdown, no explanation."
+        ),
+        "accessibility": (
+            "You review email signature color/typography choices for accessibility. Given the primary text color, "
+            "background (assume white), and font size in px, give at most 2 short, concrete suggestions to improve "
+            "readability if needed, or say \"Looks good — no changes needed.\" if it's already accessible. "
+            "Return ONLY the suggestion text, no markdown, no explanation."
+        ),
+    }
+    system = prompts.get(body.action)
+    if not system:
+        raise HTTPException(400, "Unknown AI assist action")
+    if not PERPLEXITY_API_KEY:
+        raise HTTPException(503, "AI assistant is not configured")
+    from billing import charge_credits
+    await charge_credits(user["workspace_id"], "signature_ai_assist", meta={"kind": body.action})
+    user_text = body.text.strip() or json.dumps(body.context)
+    try:
+        result = await _llm_chat(system, user_text, f"sig-ai-{user['id']}", user=user, max_tokens=200,
+                                  agent="pitch", action="signature_ai_assist")
+    except Exception as ex:
+        raise HTTPException(502, f"AI assist failed: {ex}")
+    return {"result": result.strip().strip('"')}
 
 
 def inject_tracking(html: str, workspace_id: str, queue_id: str, base_url: str) -> str:
@@ -2252,6 +2434,69 @@ async def track_click(request: Request, queue_id: str, u: str = ""):
     # anything is a phishing vector.
     target = u if u.startswith("http://") or u.startswith("https://") else FRONTEND_URL
     return RedirectResponse(target, status_code=302)
+
+
+@api.get("/t/sig/{signature_id}")
+@limiter.limit("60/minute")
+async def track_signature_click(request: Request, signature_id: str, u: str = ""):
+    """PUBLIC — the recipient's mail client follows this, not the signature's
+    owner. Only ever bounces to an absolute http(s) URL, same guard as
+    track_click above — mailto:/tel: links are never wrapped through here in
+    the first place (see renderHtml.js), so there's nothing non-http to worry
+    about, but the guard stays as defense in depth."""
+    sig = await db.signatures.find_one({"id": signature_id}, {"_id": 0, "workspace_id": 1})
+    if sig and u:
+        await db.signature_clicks.insert_one({
+            "id": new_id(), "signature_id": signature_id, "workspace_id": sig["workspace_id"],
+            "url": u[:400], "at": now_iso(),
+        })
+    target = u if u.startswith("http://") or u.startswith("https://") else FRONTEND_URL
+    return RedirectResponse(target, status_code=302)
+
+
+@api.get("/signatures/{sid}/click-analytics")
+async def signature_click_analytics(sid: str, user=Depends(current_user)):
+    sig = await db.signatures.find_one({"id": sid, "workspace_id": user["workspace_id"]}, {"_id": 0, "id": 1})
+    if not sig:
+        raise HTTPException(404, "Signature not found")
+    rows = await db.signature_clicks.find({"signature_id": sid}, {"_id": 0}).to_list(5000)
+    by_url: Dict[str, int] = {}
+    for r in rows:
+        by_url[r["url"]] = by_url.get(r["url"], 0) + 1
+    return {
+        "total_clicks": len(rows),
+        "by_url": sorted(
+            [{"url": u, "clicks": c} for u, c in by_url.items()], key=lambda x: -x["clicks"]
+        ),
+    }
+
+
+class CheckLinksIn(BaseModel):
+    urls: List[str] = []
+
+
+@api.post("/signatures/check-links")
+async def check_signature_links(body: CheckLinksIn, user=Depends(current_user)):
+    """HEAD-check each link server-side — a browser-side fetch would hit CORS
+    on arbitrary third-party domains, so this has to run here."""
+    import httpx
+    results = []
+    async with httpx.AsyncClient(follow_redirects=True, timeout=5.0) as client:
+        for url in body.urls[:20]:
+            if not (url.startswith("http://") or url.startswith("https://")):
+                results.append({"url": url, "status": "skipped"})
+                continue
+            try:
+                resp = await client.head(url)
+                if resp.status_code >= 400:
+                    resp = await client.get(url)  # some servers reject HEAD but allow GET
+                results.append({"url": url, "status": "ok" if resp.status_code < 400 else "broken",
+                                 "code": resp.status_code})
+            except httpx.TimeoutException:
+                results.append({"url": url, "status": "timeout"})
+            except Exception:
+                results.append({"url": url, "status": "broken"})
+    return {"results": results}
 
 
 @api.post("/campaigns/{cid}/pause")
@@ -2460,7 +2705,8 @@ def _extract_json(text: str) -> Optional[Dict[str, Any]]:
     return _fix_json(m.group(0))
 
 
-async def _llm_chat(system: str, user_text: str, session_id: str, user: Optional[Dict[str, Any]] = None, max_tokens: int = 2048) -> str:
+async def _llm_chat(system: str, user_text: str, session_id: str, user: Optional[Dict[str, Any]] = None, max_tokens: int = 2048,
+                     agent: Optional[str] = None, action: Optional[str] = None) -> str:
     if not PERPLEXITY_API_KEY:
         raise RuntimeError("PERPLEXITY_API_KEY not configured")
     if user and not await _rate_ok(user):
@@ -2478,6 +2724,13 @@ async def _llm_chat(system: str, user_text: str, session_id: str, user: Optional
                     {"role": "user", "content": user_text},
                 ],
             )
+            if user and resp.usage:
+                from token_usage import record_llm_usage
+                await record_llm_usage(
+                    user.get("workspace_id"), PERPLEXITY_MODEL,
+                    resp.usage.prompt_tokens, resp.usage.completion_tokens,
+                    agent=agent, action=action, user_id=user.get("id"),
+                )
             return resp.choices[0].message.content or ""
         except openai.RateLimitError as ex:
             last_err = ex
@@ -3599,6 +3852,12 @@ class AiImageIn(BaseModel):
     aspect: Optional[str] = "portrait"  # informational hint for the model
 
 
+class AssetSearchIn(BaseModel):
+    query: str = ""
+    slide_content: Optional[Dict[str, Any]] = None  # if set, derives search terms from this instead of query
+    target_aspect: Optional[float] = None  # width/height of the slot being filled, for ranking
+
+
 # Gemini image generation only accepts these discrete aspect ratios (no arbitrary
 # width:height) — pick whichever is closest to what was actually requested so a
 # "wide panorama" request returns a genuinely wide image instead of a square one.
@@ -3646,6 +3905,8 @@ async def generate_ai_image(user: Dict[str, Any], prompt: str, provider: str = "
                 raise HTTPException(502, "gpt-image-1 returned no image")
             img_bytes = base64.b64decode(resp.data[0].b64_json)
             await _audit(user, "ai_image.generate", {"provider": "gpt-image-1", "prompt": prompt[:120]})
+            from token_usage import record_image_usage
+            await record_image_usage(user["workspace_id"], "gpt-image-1", agent="create", action="ai_image", user_id=user.get("id"))
             return {"image_bytes": img_bytes, "mime_type": "image/png", "provider": "gpt-image-1"}
         except HTTPException:
             raise
@@ -3682,6 +3943,8 @@ async def generate_ai_image(user: Dict[str, Any], prompt: str, provider: str = "
         if not isinstance(img_bytes, (bytes, bytearray)):
             img_bytes = base64.b64decode(img_bytes)
         await _audit(user, "ai_image.generate", {"provider": "nano-banana", "prompt": prompt[:120]})
+        from token_usage import record_image_usage
+        await record_image_usage(user["workspace_id"], "nano-banana", agent="create", action="ai_image", user_id=user.get("id"))
         return {"image_bytes": bytes(img_bytes), "mime_type": mime_type, "provider": "nano-banana"}
     except HTTPException:
         raise
@@ -3721,6 +3984,30 @@ async def carousel_ai_image(request: Request, body: AiImageIn, user=Depends(curr
         "mime_type": result["mime_type"],
         "provider": result["provider"],
     }
+
+
+@api.post("/carousel/asset-search")
+@limiter.limit("30/minute", key_func=_workspace_or_ip_key)
+async def carousel_asset_search(request: Request, body: AssetSearchIn, user=Depends(current_user)):
+    """Stock-photo search for the CreateEQ asset picker (Unsplash + Pexels).
+    Free and unmetered — unlike AI image generation this doesn't call
+    billing.charge_credits. Degrades to an empty result set with
+    providers_configured=[] until at least one of UNSPLASH_ACCESS_KEY /
+    PEXELS_API_KEY is set in the environment, rather than erroring."""
+    from asset_engine import search_photos, derive_search_terms, configured_providers
+    query = (body.query or "").strip()
+    if body.slide_content:
+        terms = await derive_search_terms(body.slide_content, user)
+        if terms:
+            query = ", ".join(terms)
+        elif not query:
+            # Term derivation failed (LLM quota/network — not the caller's fault,
+            # they did supply slide_content) — degrade to an empty result rather
+            # than a misleading "you forgot a required field" 400.
+            return {"results": [], "providers_configured": configured_providers()}
+    if not query:
+        raise HTTPException(400, "query or slide_content is required")
+    return await search_photos(query, target_aspect=body.target_aspect)
 
 
 @api.get("/carousel/image/{image_id}")
@@ -4230,6 +4517,12 @@ class TeamInviteIn(BaseModel):
     email: EmailStr
     role: str = "campaign_manager"
     password: str
+    department: Optional[str] = None
+
+
+class TeamUpdateIn(BaseModel):
+    role: Optional[str] = None
+    department: Optional[str] = None
 
 
 @api.get("/team")
@@ -4254,10 +4547,34 @@ async def invite_member(body: TeamInviteIn, user=Depends(current_user)):
         "id": uid, "email": body.email.lower(), "name": body.name,
         "password_hash": hash_pw(body.password),
         "workspace_id": user["workspace_id"], "role": body.role,
+        "department": (body.department or "").strip() or None,
         "invited_by": user["id"], "created_at": now_iso(),
     })
     await _audit(user, "team.invite", {"user_id": uid, "email": body.email.lower(), "role": body.role})
     return {"ok": True, "user_id": uid}
+
+
+@api.put("/team/{uid}")
+async def update_member(uid: str, body: TeamUpdateIn, user=Depends(current_user)):
+    """Org admin edits an existing member's role/department — invite-time is
+    the only other place these are set, so without this a member's department
+    (needed for signature policy matching) could never change after signup."""
+    if user.get("role") != "org_admin" and not _is_admin(user):
+        raise HTTPException(403, "Only Org Admin can edit members")
+    victim = await db.users.find_one({"id": uid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not victim:
+        raise HTTPException(404, "not found")
+    updates: Dict[str, Any] = {}
+    if body.role is not None:
+        if body.role not in ROLES:
+            raise HTTPException(400, "invalid role")
+        updates["role"] = body.role
+    if body.department is not None:
+        updates["department"] = body.department.strip() or None
+    if updates:
+        await db.users.update_one({"id": uid}, {"$set": updates})
+        await _audit(user, "team.update", {"user_id": uid, **updates})
+    return {"ok": True}
 
 
 @api.delete("/team/{uid}")
@@ -4663,6 +4980,198 @@ def require_role(*allowed: str):
     return _dep
 
 
+# ---- Signature approval — org_admin-gated routes (need require_role, defined
+# just above; ApprovalSettingsIn/get_approval_settings/submit-for-approval are
+# up in the main Signature Management section since they don't) -------------
+@api.put("/signatures/settings/approval-required")
+async def set_approval_settings(body: ApprovalSettingsIn, user=Depends(require_role("org_admin"))):
+    await db.workspaces.update_one(
+        {"id": user["workspace_id"]}, {"$set": {"signature_approval_required": body.require_approval}}
+    )
+    await _audit(user, "signature.approval_settings", {"require_approval": body.require_approval})
+    return {"ok": True, "require_approval": body.require_approval}
+
+
+@api.get("/signatures/pending-approval")
+async def list_pending_signatures(user=Depends(require_role("org_admin"))):
+    return await db.signatures.find(
+        {"workspace_id": user["workspace_id"], "status": "pending_approval"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(200)
+
+
+@api.post("/signatures/{sid}/approve")
+async def approve_signature(sid: str, user=Depends(require_role("org_admin"))):
+    result = await db.signatures.update_one(
+        {"id": sid, "workspace_id": user["workspace_id"]}, {"$set": {"status": "approved"}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Signature not found")
+    await _audit(user, "signature.approve", {"signature_id": sid})
+    return {"ok": True, "status": "approved"}
+
+
+@api.post("/signatures/{sid}/reject")
+async def reject_signature(sid: str, user=Depends(require_role("org_admin"))):
+    result = await db.signatures.update_one(
+        {"id": sid, "workspace_id": user["workspace_id"]}, {"$set": {"status": "draft"}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Signature not found")
+    await _audit(user, "signature.reject", {"signature_id": sid})
+    return {"ok": True, "status": "draft"}
+
+
+# ---- Org signature policies — org_admin defines a role/department match ->
+# an existing (shared) signature; "Apply" is an explicit batch action, not a
+# continuous sync, and only writes db.user_signature_prefs — a per-user
+# preference the campaign builder prefers over the workspace default when
+# prefilling a new campaign. Real directory-driven auto-provisioning would
+# need the directory-sync connections below to be live, which they aren't. --
+class SignaturePolicyIn(BaseModel):
+    name: str
+    match_role: Optional[str] = None
+    match_department: Optional[str] = None
+    signature_id: str
+
+
+def _policy_match_query(workspace_id: str, policy: Dict[str, Any]) -> Dict[str, Any]:
+    q: Dict[str, Any] = {"workspace_id": workspace_id}
+    if policy.get("match_role"):
+        q["role"] = policy["match_role"]
+    if policy.get("match_department"):
+        q["department"] = policy["match_department"]
+    return q
+
+
+@api.post("/signature-policies")
+async def create_signature_policy(body: SignaturePolicyIn, user=Depends(require_role("org_admin"))):
+    if not body.match_role and not (body.match_department or "").strip():
+        raise HTTPException(400, "Set at least a role or a department to match on")
+    sig = await db.signatures.find_one({"id": body.signature_id, "workspace_id": user["workspace_id"]}, {"_id": 0, "id": 1})
+    if not sig:
+        raise HTTPException(404, "signature not found")
+    policy = {
+        "id": new_id(), "workspace_id": user["workspace_id"], "name": body.name.strip(),
+        "match_role": body.match_role or None, "match_department": (body.match_department or "").strip() or None,
+        "signature_id": body.signature_id, "created_at": now_iso(), "created_by": user["id"],
+    }
+    await db.signature_policies.insert_one(policy)
+    await _audit(user, "signature_policy.create", {"policy_id": policy["id"], "name": policy["name"]})
+    policy.pop("_id", None)
+    return policy
+
+
+@api.get("/signature-policies")
+async def list_signature_policies(user=Depends(require_role("org_admin"))):
+    return await db.signature_policies.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(200)
+
+
+@api.delete("/signature-policies/{pid}")
+async def delete_signature_policy(pid: str, user=Depends(require_role("org_admin"))):
+    await db.signature_policies.delete_one({"id": pid, "workspace_id": user["workspace_id"]})
+    await _audit(user, "signature_policy.delete", {"policy_id": pid})
+    return {"ok": True}
+
+
+@api.get("/signature-policies/{pid}/matching-users")
+async def signature_policy_matching_users(pid: str, user=Depends(require_role("org_admin"))):
+    policy = await db.signature_policies.find_one({"id": pid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not policy:
+        raise HTTPException(404, "policy not found")
+    users = await db.users.find(
+        _policy_match_query(user["workspace_id"], policy),
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "department": 1},
+    ).to_list(500)
+    return {"count": len(users), "users": users}
+
+
+@api.post("/signature-policies/{pid}/apply")
+async def apply_signature_policy(pid: str, user=Depends(require_role("org_admin"))):
+    policy = await db.signature_policies.find_one({"id": pid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not policy:
+        raise HTTPException(404, "policy not found")
+    users = await db.users.find(_policy_match_query(user["workspace_id"], policy), {"_id": 0, "id": 1}).to_list(1000)
+    now = now_iso()
+    for u in users:
+        await db.user_signature_prefs.update_one(
+            {"workspace_id": user["workspace_id"], "user_id": u["id"]},
+            {"$set": {"signature_id": policy["signature_id"], "set_via_policy_id": pid, "updated_at": now}},
+            upsert=True,
+        )
+    await _audit(user, "signature_policy.apply", {"policy_id": pid, "applied_count": len(users)})
+    return {"ok": True, "applied_count": len(users)}
+
+
+# ---- Directory-sync settings — configuration-storage scaffolding ONLY. There
+# is no real tenant to connect to, so these routes never attempt a live
+# connection (no OAuth redirect, no SCIM/Graph/Admin SDK calls) — they just
+# store the config fields an org admin enters, and always report
+# connected=False. A real integration would need this to actually call out.
+DIRECTORY_SYNC_PROVIDERS = ["google_workspace", "microsoft_365", "azure_ad", "saml"]
+
+
+class DirectorySyncConfigIn(BaseModel):
+    config: Dict[str, str] = {}
+
+
+def _mask_directory_sync_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    out = {}
+    for k, v in (config or {}).items():
+        out[k] = ("•" * 8) if v and ("secret" in k.lower() or "certificate" in k.lower()) else v
+    return out
+
+
+@api.get("/directory-sync/status")
+async def directory_sync_status(user=Depends(require_role("org_admin"))):
+    rows = await db.directory_sync_integrations.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).to_list(20)
+    by_provider = {r["provider"]: r for r in rows}
+    out = []
+    for p in DIRECTORY_SYNC_PROVIDERS:
+        row = by_provider.get(p)
+        out.append({
+            "provider": p,
+            "configured": bool(row and row.get("config")),
+            "config": _mask_directory_sync_config(row.get("config")) if row else {},
+            "updated_at": row.get("updated_at") if row else None,
+            "connected": False,
+        })
+    return out
+
+
+@api.put("/directory-sync/{provider}")
+async def update_directory_sync_config(provider: str, body: DirectorySyncConfigIn, user=Depends(require_role("org_admin"))):
+    """Merges into the stored config rather than replacing it — the frontend
+    omits secret fields the admin left blank (since GET only ever returns
+    them masked), and a full-replace here would silently wipe those out."""
+    if provider not in DIRECTORY_SYNC_PROVIDERS:
+        raise HTTPException(404, "unknown provider")
+    existing = await db.directory_sync_integrations.find_one(
+        {"workspace_id": user["workspace_id"], "provider": provider}, {"_id": 0, "config": 1}
+    )
+    merged = {**(existing or {}).get("config", {}), **{k: v for k, v in body.config.items() if v}}
+    await db.directory_sync_integrations.update_one(
+        {"workspace_id": user["workspace_id"], "provider": provider},
+        {
+            "$set": {"config": merged, "updated_at": now_iso()},
+            "$setOnInsert": {"id": new_id(), "workspace_id": user["workspace_id"], "provider": provider, "created_at": now_iso()},
+        },
+        upsert=True,
+    )
+    await _audit(user, "directory_sync.update_config", {"provider": provider})
+    return {"ok": True}
+
+
+@api.delete("/directory-sync/{provider}")
+async def clear_directory_sync_config(provider: str, user=Depends(require_role("org_admin"))):
+    await db.directory_sync_integrations.delete_one({"workspace_id": user["workspace_id"], "provider": provider})
+    await _audit(user, "directory_sync.clear_config", {"provider": provider})
+    return {"ok": True}
+
+
 @api.get("/admin/summary")
 async def admin_summary(_: Any = Depends(require_admin)):
     return {
@@ -4677,6 +5186,15 @@ async def admin_summary(_: Any = Depends(require_admin)):
         "blocked_users": await db.users.count_documents({"blocked": True}),
         "blocked_workspaces": await db.workspaces.count_documents({"blocked": True}),
     }
+
+
+@api.get("/admin/token-usage")
+async def admin_token_usage(_: Any = Depends(require_admin)):
+    """Real $ cost of LLM token usage across the whole platform — actual COGS,
+    independent of the flat credits a workspace's plan charges it. Suite-admin
+    only: this is our own margin visibility, never shown to a customer."""
+    from token_usage import get_platform_token_usage_summary
+    return await get_platform_token_usage_summary()
 
 
 @api.get("/admin/tick-health")
@@ -4712,6 +5230,45 @@ async def admin_users(_: Any = Depends(require_admin)):
         u["workspace_name"] = ws_map.get(u.get("workspace_id"))
         u["is_admin"] = (u.get("email") or "").lower() in ADMIN_EMAILS
     return users
+
+
+@api.get("/admin/audit-log")
+async def admin_audit_log(limit: int = 300, workspace_id: Optional[str] = None,
+                           user_id: Optional[str] = None, _: Any = Depends(require_admin)):
+    """Platform-wide access/action trail — unlike GET /audit-log (workspace-
+    scoped, for a workspace's own org_admin), this crosses every workspace so
+    a suite admin can see who did what, anywhere on the platform."""
+    q: Dict[str, Any] = {}
+    if workspace_id:
+        q["workspace_id"] = workspace_id
+    if user_id:
+        q["user_id"] = user_id
+    items = await db.audit_log.find(q, {"_id": 0}).sort("at", -1).to_list(min(limit, 1000))
+    ws_map = {w["id"]: w["name"] async for w in db.workspaces.find({}, {"_id": 0, "id": 1, "name": 1})}
+    for it in items:
+        it["workspace_name"] = ws_map.get(it.get("workspace_id"))
+    return items
+
+
+@api.get("/admin/users/{uid}/activity")
+async def admin_user_activity(uid: str, _: Any = Depends(require_admin)):
+    """Everything a suite admin needs to answer "what has this user actually
+    been doing": profile + last login, their audit trail across the platform,
+    and the real LLM cost they've driven. Credit spend (billing.py) is only
+    tracked per-workspace, not per-user, so it isn't attributable here."""
+    user = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(404, "not found")
+    ws = await db.workspaces.find_one({"id": user.get("workspace_id")}, {"_id": 0, "id": 1, "name": 1})
+    audit = await db.audit_log.find({"user_id": uid}, {"_id": 0}).sort("at", -1).to_list(200)
+    usage = await db.token_usage_log.find({"user_id": uid}, {"_id": 0}).sort("at", -1).to_list(200)
+    return {
+        "user": {**user, "is_admin": (user.get("email") or "").lower() in ADMIN_EMAILS},
+        "workspace": ws,
+        "audit_log": audit,
+        "llm_usage": usage,
+        "llm_cost_usd": round(sum(u["cost_usd"] for u in usage), 4),
+    }
 
 
 @api.post("/admin/users/{uid}/toggle")
@@ -5307,7 +5864,165 @@ async def li_bulk_campaigns(user=Depends(current_user)):
     return {"campaigns": camps}
 
 
+# ----------------------------- MCP OAuth consent flow ------------------------
+# Two authenticated endpoints the frontend consent page
+# (frontend/src/pages/OAuthConsent.jsx) drives — these must be registered
+# before app.include_router(api) below, same as every other @api route (a
+# route added to `api` after that call never actually reaches `app`).
+@api.get("/oauth/consent-info")
+async def mcp_oauth_consent_info(request_id: str, user=Depends(current_user)):
+    from mcp_auth import now as _mcp_now, scopes_allowed_for_role as _scopes_allowed_for_role
+    pending = await db.oauth_pending_authorizations.find_one({"request_id": request_id}, {"_id": 0})
+    if not pending or pending["expires_at"] < _mcp_now():
+        raise HTTPException(404, "This authorization request has expired — go back and try connecting again.")
+    allowed = _scopes_allowed_for_role(user.get("role"), _is_admin(user))
+    return {
+        "client_name": pending["client_name"],
+        "requested_scopes": pending["scopes"],
+        "grantable_scopes": [s for s in pending["scopes"] if s in allowed],
+        "workspace_name": (await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0, "name": 1}) or {}).get("name"),
+    }
+
+
+class McpConsentApproveIn(BaseModel):
+    request_id: str
+    approve: bool = True
+
+
+@api.post("/oauth/consent/approve")
+async def mcp_oauth_consent_approve(body: McpConsentApproveIn, user=Depends(current_user)):
+    import secrets as _secrets
+    from mcp.server.auth.provider import construct_redirect_uri as _construct_redirect_uri
+    from mcp_auth import now as _mcp_now, scopes_allowed_for_role as _scopes_allowed_for_role, AUTH_CODE_TTL_SECONDS as _CODE_TTL
+
+    pending = await db.oauth_pending_authorizations.find_one({"request_id": body.request_id}, {"_id": 0})
+    if not pending or pending["expires_at"] < _mcp_now():
+        raise HTTPException(404, "This authorization request has expired — go back and try connecting again.")
+    await db.oauth_pending_authorizations.delete_one({"request_id": body.request_id})  # single-use regardless of outcome
+
+    if not body.approve:
+        return {"redirect_url": _construct_redirect_uri(pending["redirect_uri"], error="access_denied", state=pending.get("state"))}
+
+    allowed = _scopes_allowed_for_role(user.get("role"), _is_admin(user))
+    granted_scopes = [s for s in pending["scopes"] if s in allowed]
+
+    code = _secrets.token_urlsafe(32)
+    t = _mcp_now()
+    await db.oauth_auth_codes.insert_one({
+        "code": code, "client_id": pending["client_id"], "scopes": granted_scopes,
+        "expires_at": t + _CODE_TTL, "code_challenge": pending["code_challenge"],
+        "redirect_uri": pending["redirect_uri"],
+        "redirect_uri_provided_explicitly": pending["redirect_uri_provided_explicitly"],
+        "resource": pending.get("resource"), "subject": user["id"],
+    })
+    await _audit(user, "mcp.oauth.consent_approved", {"client_id": pending["client_id"], "scopes": granted_scopes})
+    return {"redirect_url": _construct_redirect_uri(pending["redirect_uri"], code=code, state=pending.get("state"))}
+
+
+# ----------------------------- Connected AI clients (Settings panel) --------
+@api.get("/oauth/connected-clients")
+async def list_mcp_connected_clients(user=Depends(require_role("org_admin"))):
+    """Every live MCP grant across the workspace — any teammate who's
+    connected an AI client, not just the caller. Admin-only kill-switch
+    visibility, independent of the audit log."""
+    workspace_users = await db.users.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0, "id": 1, "name": 1, "email": 1}
+    ).to_list(500)
+    users_by_id = {u["id"]: u for u in workspace_users}
+    grants = await db.oauth_refresh_tokens.find(
+        {"subject": {"$in": list(users_by_id)}, "revoked": {"$ne": True}}, {"_id": 0, "token": 0}
+    ).sort("created_at", -1).to_list(200)
+    clients_by_id = {
+        c["client_id"]: c for c in await db.oauth_clients.find(
+            {"client_id": {"$in": list({g["client_id"] for g in grants})}}, {"_id": 0}
+        ).to_list(200)
+    }
+    out = []
+    for g in grants:
+        connected_user = users_by_id.get(g["subject"], {})
+        out.append({
+            "grant_id": g["grant_id"],
+            "client_name": clients_by_id.get(g["client_id"], {}).get("client_name", "Unknown app"),
+            "scopes": g["scopes"],
+            "connected_by": connected_user.get("name") or connected_user.get("email") or "Unknown",
+            "connected_at": datetime.fromtimestamp(g["created_at"], tz=timezone.utc).isoformat(),
+        })
+    return out
+
+
+class RevokeMcpClientIn(BaseModel):
+    grant_id: str
+
+
+@api.post("/oauth/connected-clients/revoke")
+async def revoke_mcp_connected_client(body: RevokeMcpClientIn, user=Depends(require_role("org_admin"))):
+    grant = await db.oauth_refresh_tokens.find_one({"grant_id": body.grant_id})
+    if not grant:
+        raise HTTPException(404, "not found")
+    connected_user = await db.users.find_one({"id": grant["subject"]}, {"_id": 0, "workspace_id": 1})
+    if not connected_user or connected_user["workspace_id"] != user["workspace_id"]:
+        raise HTTPException(404, "not found")
+    await db.oauth_refresh_tokens.update_one({"grant_id": body.grant_id}, {"$set": {"revoked": True}})
+    # Refresh tokens stop minting new access tokens immediately (checked
+    # above); any access token already issued under this grant would
+    # otherwise keep working until its own natural ~1h expiry, so delete
+    # those too rather than just waiting that out.
+    await db.oauth_access_tokens.delete_many({"client_id": grant["client_id"], "subject": grant["subject"]})
+    await _audit(user, "mcp.connected_client.revoke", {"client_id": grant["client_id"], "revoked_subject": grant["subject"]})
+    return {"ok": True}
+
+
 app.include_router(api)
+
+# ----------------------------- MCP OAuth authorization server ---------------
+# Mounted at the app root (not under /api) — .well-known discovery paths are
+# conventionally served from the issuer's root, and MCP clients resolve them
+# relative to the server URL they were given, not this app's /api prefix.
+from pydantic import AnyHttpUrl as _AnyHttpUrl
+from mcp.server.auth.routes import create_auth_routes as _create_mcp_auth_routes
+from mcp.server.auth.settings import ClientRegistrationOptions as _ClientRegOpts, RevocationOptions as _RevocationOpts
+from mcp_auth import InnoiraOAuthProvider as _InnoiraOAuthProvider
+
+_mcp_issuer_url = _AnyHttpUrl(PUBLIC_BASE_URL or "http://localhost:8001")
+_mcp_oauth_provider = _InnoiraOAuthProvider(db)
+app.router.routes.extend(_create_mcp_auth_routes(
+    provider=_mcp_oauth_provider,
+    issuer_url=_mcp_issuer_url,
+    client_registration_options=_ClientRegOpts(enabled=True, valid_scopes=["read", "write", "send"], default_scopes=["read"]),
+    revocation_options=_RevocationOpts(enabled=True),
+))
+
+# ----------------------------- MCP tool server -------------------------------
+# Mounted LAST (after every other route, including the OAuth routes above) so
+# its catch-all sub-app only ever sees requests nothing else already matched
+# — Starlette tries routes in registration order and stops at the first hit.
+# token_verifier (not auth_server_provider) is used inside mcp_server.py
+# specifically so this doesn't build a second, duplicate copy of /authorize,
+# /register, /token, /revoke — those are the ones registered just above.
+from contextlib import AsyncExitStack as _AsyncExitStack
+from mcp_server import build_mcp_app as _build_mcp_app
+
+_mcp_resource_url = f"{str(_mcp_issuer_url).rstrip('/')}/mcp"
+_mcp_app = _build_mcp_app(db, str(_mcp_issuer_url), _mcp_resource_url)
+app.mount("/", _mcp_app.streamable_http_app())
+
+# `app.mount()` does not forward the ASGI `lifespan` protocol to a mounted
+# sub-app — FastMCP's StreamableHTTPSessionManager.run() (which the mounted
+# app's own `lifespan=` would normally trigger) therefore never starts on its
+# own, and every request 500s with "Task group is not initialized." Enter that
+# context manager manually here, kept open in this stack for the process
+# lifetime, and close it on shutdown.
+_mcp_session_manager_stack = _AsyncExitStack()
+
+
+@app.on_event("startup")
+async def _start_mcp_session_manager():
+    await _mcp_session_manager_stack.enter_async_context(_mcp_app.session_manager.run())
+
+
+@app.on_event("shutdown")
+async def _stop_mcp_session_manager():
+    await _mcp_session_manager_stack.aclose()
 
 
 @app.on_event("startup")
@@ -5441,6 +6156,16 @@ async def _create_indexes():
         await db.accounting_bills.create_index([("workspace_id", 1), ("status", 1)])
         await db.interview_bookings.create_index([("workspace_id", 1), ("id", 1)])
         await db.interview_bookings.create_index([("workspace_id", 1), ("candidate_id", 1)])
+        await db.signature_policies.create_index([("workspace_id", 1), ("id", 1)])
+        await db.user_signature_prefs.create_index([("workspace_id", 1), ("user_id", 1)], unique=True)
+        await db.directory_sync_integrations.create_index([("workspace_id", 1), ("provider", 1)], unique=True)
+        await db.oauth_clients.create_index("client_id", unique=True)
+        await db.oauth_pending_authorizations.create_index("request_id", unique=True)
+        await db.oauth_auth_codes.create_index("code", unique=True)
+        await db.oauth_access_tokens.create_index("token", unique=True)
+        await db.oauth_refresh_tokens.create_index("token", unique=True)
+        await db.oauth_refresh_tokens.create_index("grant_id", unique=True, sparse=True)
+        await db.mcp_rate_limits.create_index([("workspace_id", 1), ("minute", 1)], unique=True)
         logger.info("indexes ensured")
     except Exception as ex:
         logger.warning("index setup: %s", ex)
@@ -5535,6 +6260,7 @@ async def _start_scheduler():
         from sms_eq import run_sms_send_tick
         from whatsapp_eq import run_whatsapp_send_tick
         from crm import run_recycle_bin_purge_tick, run_dedup_scan_tick
+        from banner_tick import run_signature_banner_tick
 
         scheduler = AsyncIOScheduler(timezone="UTC")
         # Every job below runs through _tracked_tick (records to db.tick_health,
@@ -5603,11 +6329,18 @@ async def _start_scheduler():
         # so this just checks in until each job completes.
         scheduler.add_job(_tracked_tick, "interval", minutes=2, args=["video_poll", run_video_poll_tick],
                           id="video_poll", max_instances=1, coalesce=True)
+        # Keeps any signature with a scheduled banner block's stored HTML in
+        # sync with "today" even if nobody reopens the editor — see
+        # backend/banner_tick.py for why this is a small ported selector
+        # rather than a full re-render.
+        scheduler.add_job(_tracked_tick, "interval", hours=24, args=["signature_banner_refresh", run_signature_banner_tick],
+                          id="signature_banner_refresh", max_instances=1, coalesce=True)
         scheduler.start()
         logger.info("scheduler started (reminders 15m, sends 2m, reply polling 10m, "
                    "social publish 2m, social engagement 10m, RSS poll 30m, site recrawl 24h, "
                    "sms send 2m, whatsapp send 2m, recycle bin purge 24h, dedup scan 1h, "
-                   "social insights 24h, social daily content 24h, video poll 2m)")
+                   "social insights 24h, social daily content 24h, video poll 2m, "
+                   "signature banner refresh 24h)")
     except Exception as ex:
         logger.warning("scheduler failed to start: %s", ex)
 

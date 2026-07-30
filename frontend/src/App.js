@@ -15,6 +15,7 @@ import { OutOfCreditsWatcher } from "./components/Credits";
 // page into its own request, fetched only when actually navigated to.
 const Landing = lazy(() => import("./pages/Landing"));
 const Login = lazy(() => import("./pages/Login"));
+const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 const Signup = lazy(() => import("./pages/Signup"));
 const SuiteHome = lazy(() => import("./pages/SuiteHome"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -31,8 +32,10 @@ const Pipeline = lazy(() => import("./pages/Pipeline"));
 const LeadLists = lazy(() => import("./pages/LeadLists"));
 const CustomFieldsSettings = lazy(() => import("./pages/CustomFieldsSettings"));
 const Signatures = lazy(() => import("./pages/Signatures"));
-const CompaniesList = lazy(() => import("./pages/Companies").then(m => ({ default: m.CompaniesList })));
-const CompanyDetail = lazy(() => import("./pages/Companies").then(m => ({ default: m.CompanyDetail })));
+const SignaturePolicies = lazy(() => import("./pages/SignaturePolicies"));
+const DirectorySyncSettings = lazy(() => import("./pages/DirectorySyncSettings"));
+const CompaniesList = lazy(() => import("./pages/Companies").then((m) => ({ default: m.CompaniesList })));
+const CompanyDetail = lazy(() => import("./pages/Companies").then((m) => ({ default: m.CompanyDetail })));
 const LeadSearch = lazy(() => import("./pages/LeadSearch"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Analytics = lazy(() => import("./pages/Analytics"));
@@ -135,6 +138,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/oauth/consent" element={<OAuthConsent />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/onboarding" element={<Private><Onboarding /></Private>} />
             <Route path="/suite" element={<Private><SuiteHome /></Private>} />
@@ -162,6 +166,8 @@ function App() {
               <Route path="crm/companies" element={<CompaniesList />} />
               <Route path="crm/companies/:id" element={<CompanyDetail />} />
               <Route path="signatures" element={<Signatures />} />
+              <Route path="signature-policies" element={<SignaturePolicies />} />
+              <Route path="directory-sync" element={<DirectorySyncSettings />} />
               {/* Legacy leads routes redirect to CRM */}
               <Route path="leads" element={<Navigate to="/app/crm/leads" replace />} />
               <Route path="leads/:id" element={<Navigate to="/app/crm/leads/:id" replace />} />

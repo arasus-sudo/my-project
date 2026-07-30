@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 
-from server import db, current_user, now_iso, new_id, _audit, _rate_ok, STAGES, _llm_chat, _extract_json, ANTHROPIC_API_KEY, _log_activity
+from server import db, current_user, now_iso, new_id, _audit, _rate_ok, STAGES, _llm_chat, _extract_json, ANTHROPIC_API_KEY, _log_activity, require_role
 from twilio_client import twilio_client, TWILIO_MOCKED, TWILIO_FROM_NUMBER
 from openai_realtime_client import OPENAI_MOCKED, TELEPHONY_SAFE_VOICES, DEFAULT_VOICE
 
@@ -604,7 +604,7 @@ async def list_languages():
 # ---------------------------------------------------------------------------
 
 @voice_router.post("/calls/click-to-call")
-async def click_to_call(body: ClickToCallIn, user=Depends(current_user)):
+async def click_to_call(body: ClickToCallIn, user=Depends(require_role("org_admin", "campaign_manager"))):
     lead = await db.leads.find_one({"id": body.lead_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
     if not lead:
         raise HTTPException(404, "lead not found")
@@ -829,7 +829,7 @@ async def delete_voice_campaign(cid: str, user=Depends(current_user)):
 
 
 @voice_router.post("/campaigns/{cid}/launch")
-async def launch_voice_campaign(cid: str, user=Depends(current_user)):
+async def launch_voice_campaign(cid: str, user=Depends(require_role("org_admin", "campaign_manager"))):
     c = await db.voice_campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
     if not c:
         raise HTTPException(404, "not found")

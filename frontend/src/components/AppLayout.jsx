@@ -11,7 +11,7 @@ import {
   Bot, PhoneCall, History, Radio, Clock, CalendarClock, CalendarCheck, CalendarRange, FileBarChart, Tags,
   Share2, PenSquare, ListChecks, LayoutGrid, Menu, X, Search, Upload, Globe, Loader2,
   Building2, Briefcase, BookOpen, DollarSign, FileDown, Scale, TrendingUp,
-  Smartphone, Phone,
+  Smartphone, Phone, Zap, KeyRound,
 } from "lucide-react";
 
 const FONT_FAMILIES = {
@@ -46,6 +46,8 @@ const CRM_NAV = [
   { to: "/app/crm/pipeline", label: "Pipeline", icon: Kanban, tid: "crm-nav-pipeline" },
   { to: "/app/crm/custom-fields", label: "Custom Fields", icon: SettingsIcon, tid: "crm-nav-custom-fields" },
   { to: "/app/signatures", label: "Signatures", icon: PenSquare, tid: "nav-signatures" },
+  { to: "/app/signature-policies", label: "Signature Policies", icon: Zap, tid: "nav-signature-policies", orgAdminOnly: true },
+  { to: "/app/directory-sync", label: "Directory Sync", icon: KeyRound, tid: "nav-directory-sync", orgAdminOnly: true },
 ];
 
 const CREATE_NAV = [
@@ -248,7 +250,7 @@ export default function AppLayout() {
           <NotificationsCenter />
         </div>
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-thin">
-          {currentAgent.nav.map((n) => (
+          {currentAgent.nav.filter((n) => !n.orgAdminOnly || user?.role === "org_admin" || user?.is_admin).map((n) => (
             <NavLink
               key={n.to}
               to={n.to}

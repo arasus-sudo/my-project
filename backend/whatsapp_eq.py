@@ -412,7 +412,7 @@ async def suggest_reply(cid: str, user=Depends(current_user)):
               "preamble, no quotes.")
 
     try:
-        suggestion = await _llm_chat(system, recent, f"wa-suggest-{cid[:8]}", user=user)
+        suggestion = await _llm_chat(system, recent, f"wa-suggest-{cid[:8]}", user=user, agent="whatsapp", action="whatsapp_reply_suggest")
         suggestion = (suggestion or "").strip() or "Thank you for your message."
     except Exception:
         suggestion = "Thank you for your message."
@@ -859,7 +859,7 @@ async def _handle_automated_reply(conv: Dict[str, Any], wid: str, phone: str, bo
         user_text = f"Conversation so far:\n{history_text}\n\nCustomer's new message: {body}"
 
         await charge_credits(wid, "whatsapp_ai_reply", meta={"conversation_id": cid})
-        raw = await _llm_chat(system, user_text, f"wa-agent-{cid[:8]}", user={"workspace_id": wid})
+        raw = await _llm_chat(system, user_text, f"wa-agent-{cid[:8]}", user={"workspace_id": wid}, agent="whatsapp", action="whatsapp_automated_reply")
         parsed = _extract_json(raw) or {}
         intent = parsed.get("intent") or "faq"
         reply = _clean_reply(parsed.get("reply") or "") or "Thanks for your message — let me get back to you on that."

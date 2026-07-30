@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Sparkles, Pencil, Image as ImageIcon } from "lucide-react";
+import { Vibrant } from "node-vibrant/browser";
 import { api } from "../../../lib/api";
 import { PALETTES } from "../../../lib/creqTemplates";
 import GoogleFontPicker from "../GoogleFontPicker";
@@ -94,6 +95,25 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
     onDeleted?.(bid);
   };
 
+  // Auto-suggest a brand palette from the uploaded logo's dominant colors —
+  // swatches remain fully editable afterward, this just replaces the generic
+  // DEFAULT_COLORS() starting point with something actually derived from the
+  // logo. Best-effort: a flat single-color logo can yield too few distinct
+  // swatches, so failures/empty results just leave the existing colors alone.
+  const extractLogoColors = async (dataUrl) => {
+    try {
+      const palette = await Vibrant.from(dataUrl).getPalette();
+      const order = ["Vibrant", "DarkVibrant", "Muted", "LightVibrant", "DarkMuted", "LightMuted"];
+      const hexes = order.map((k) => palette[k]?.hex).filter(Boolean).slice(0, 4);
+      if (hexes.length) {
+        setEditing((cur) => cur ? { ...cur, colors: hexes.map((hex) => ({ id: newId(), hex })) } : cur);
+        toast.success("Colors auto-detected from logo — tweak any swatch below");
+      }
+    } catch {
+      // Non-fatal — manual color pickers below still work as before.
+    }
+  };
+
   const onLogoFile = (e) => {
     const f = e.target.files?.[0];
     e.target.value = "";
@@ -101,7 +121,11 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
     if (!f.type.startsWith("image/")) { toast.error("Please pick an image file"); return; }
     if (f.size > 3 * 1024 * 1024) { toast.error("Logo too large (max ~3 MB)"); return; }
     const reader = new FileReader();
-    reader.onload = () => setEditing((cur) => cur ? { ...cur, logo_url: String(reader.result || "") } : cur);
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      setEditing((cur) => cur ? { ...cur, logo_url: dataUrl } : cur);
+      extractLogoColors(dataUrl);
+    };
     reader.readAsDataURL(f);
   };
 
