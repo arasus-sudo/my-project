@@ -1219,6 +1219,11 @@ async def launch_campaign(cid: str, skip_pending: bool = False, user=Depends(cur
     to send only to leads whose personalised email has been approved — the rest
     are skipped rather than blocked.
     """
+    # require_role is defined later in this file (it needs _is_admin, defined
+    # further down still) so it can't be used as this route's own Depends(...)
+    # default without a NameError at module-load time — called inline instead,
+    # which only runs at request time, long after the whole module has loaded.
+    await require_role("org_admin", "campaign_manager")(user=user)
     from sender import enqueue_campaign
 
     c = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
@@ -5677,7 +5682,165 @@ async def li_bulk_campaigns(user=Depends(current_user)):
     return {"campaigns": camps}
 
 
+# ----------------------------- MCP OAuth consent flow ------------------------
+# Two authenticated endpoints the frontend consent page
+# (frontend/src/pages/OAuthConsent.jsx) drives — these must be registered
+# before app.include_router(api) below, same as every other @api route (a
+# route added to `api` after that call never actually reaches `app`).
+@api.get("/oauth/consent-info")
+async def mcp_oauth_consent_info(request_id: str, user=Depends(current_user)):
+    from mcp_auth import now as _mcp_now, scopes_allowed_for_role as _scopes_allowed_for_role
+    pending = await db.oauth_pending_authorizations.find_one({"request_id": request_id}, {"_id": 0})
+    if not pending or pending["expires_at"] < _mcp_now():
+        raise HTTPException(404, "This authorization request has expired — go back and try connecting again.")
+    allowed = _scopes_allowed_for_role(user.get("role"), _is_admin(user))
+    return {
+        "client_name": pending["client_name"],
+        "requested_scopes": pending["scopes"],
+        "grantable_scopes": [s for s in pending["scopes"] if s in allowed],
+        "workspace_name": (await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0, "name": 1}) or {}).get("name"),
+    }
+
+
+class McpConsentApproveIn(BaseModel):
+    request_id: str
+    approve: bool = True
+
+
+@api.post("/oauth/consent/approve")
+async def mcp_oauth_consent_approve(body: McpConsentApproveIn, user=Depends(current_user)):
+    import secrets as _secrets
+    from mcp.server.auth.provider import construct_redirect_uri as _construct_redirect_uri
+    from mcp_auth import now as _mcp_now, scopes_allowed_for_role as _scopes_allowed_for_role, AUTH_CODE_TTL_SECONDS as _CODE_TTL
+
+    pending = await db.oauth_pending_authorizations.find_one({"request_id": body.request_id}, {"_id": 0})
+    if not pending or pending["expires_at"] < _mcp_now():
+        raise HTTPException(404, "This authorization request has expired — go back and try connecting again.")
+    await db.oauth_pending_authorizations.delete_one({"request_id": body.request_id})  # single-use regardless of outcome
+
+    if not body.approve:
+        return {"redirect_url": _construct_redirect_uri(pending["redirect_uri"], error="access_denied", state=pending.get("state"))}
+
+    allowed = _scopes_allowed_for_role(user.get("role"), _is_admin(user))
+    granted_scopes = [s for s in pending["scopes"] if s in allowed]
+
+    code = _secrets.token_urlsafe(32)
+    t = _mcp_now()
+    await db.oauth_auth_codes.insert_one({
+        "code": code, "client_id": pending["client_id"], "scopes": granted_scopes,
+        "expires_at": t + _CODE_TTL, "code_challenge": pending["code_challenge"],
+        "redirect_uri": pending["redirect_uri"],
+        "redirect_uri_provided_explicitly": pending["redirect_uri_provided_explicitly"],
+        "resource": pending.get("resource"), "subject": user["id"],
+    })
+    await _audit(user, "mcp.oauth.consent_approved", {"client_id": pending["client_id"], "scopes": granted_scopes})
+    return {"redirect_url": _construct_redirect_uri(pending["redirect_uri"], code=code, state=pending.get("state"))}
+
+
+# ----------------------------- Connected AI clients (Settings panel) --------
+@api.get("/oauth/connected-clients")
+async def list_mcp_connected_clients(user=Depends(require_role("org_admin"))):
+    """Every live MCP grant across the workspace — any teammate who's
+    connected an AI client, not just the caller. Admin-only kill-switch
+    visibility, independent of the audit log."""
+    workspace_users = await db.users.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0, "id": 1, "name": 1, "email": 1}
+    ).to_list(500)
+    users_by_id = {u["id"]: u for u in workspace_users}
+    grants = await db.oauth_refresh_tokens.find(
+        {"subject": {"$in": list(users_by_id)}, "revoked": {"$ne": True}}, {"_id": 0, "token": 0}
+    ).sort("created_at", -1).to_list(200)
+    clients_by_id = {
+        c["client_id"]: c for c in await db.oauth_clients.find(
+            {"client_id": {"$in": list({g["client_id"] for g in grants})}}, {"_id": 0}
+        ).to_list(200)
+    }
+    out = []
+    for g in grants:
+        connected_user = users_by_id.get(g["subject"], {})
+        out.append({
+            "grant_id": g["grant_id"],
+            "client_name": clients_by_id.get(g["client_id"], {}).get("client_name", "Unknown app"),
+            "scopes": g["scopes"],
+            "connected_by": connected_user.get("name") or connected_user.get("email") or "Unknown",
+            "connected_at": datetime.fromtimestamp(g["created_at"], tz=timezone.utc).isoformat(),
+        })
+    return out
+
+
+class RevokeMcpClientIn(BaseModel):
+    grant_id: str
+
+
+@api.post("/oauth/connected-clients/revoke")
+async def revoke_mcp_connected_client(body: RevokeMcpClientIn, user=Depends(require_role("org_admin"))):
+    grant = await db.oauth_refresh_tokens.find_one({"grant_id": body.grant_id})
+    if not grant:
+        raise HTTPException(404, "not found")
+    connected_user = await db.users.find_one({"id": grant["subject"]}, {"_id": 0, "workspace_id": 1})
+    if not connected_user or connected_user["workspace_id"] != user["workspace_id"]:
+        raise HTTPException(404, "not found")
+    await db.oauth_refresh_tokens.update_one({"grant_id": body.grant_id}, {"$set": {"revoked": True}})
+    # Refresh tokens stop minting new access tokens immediately (checked
+    # above); any access token already issued under this grant would
+    # otherwise keep working until its own natural ~1h expiry, so delete
+    # those too rather than just waiting that out.
+    await db.oauth_access_tokens.delete_many({"client_id": grant["client_id"], "subject": grant["subject"]})
+    await _audit(user, "mcp.connected_client.revoke", {"client_id": grant["client_id"], "revoked_subject": grant["subject"]})
+    return {"ok": True}
+
+
 app.include_router(api)
+
+# ----------------------------- MCP OAuth authorization server ---------------
+# Mounted at the app root (not under /api) — .well-known discovery paths are
+# conventionally served from the issuer's root, and MCP clients resolve them
+# relative to the server URL they were given, not this app's /api prefix.
+from pydantic import AnyHttpUrl as _AnyHttpUrl
+from mcp.server.auth.routes import create_auth_routes as _create_mcp_auth_routes
+from mcp.server.auth.settings import ClientRegistrationOptions as _ClientRegOpts, RevocationOptions as _RevocationOpts
+from mcp_auth import InnoiraOAuthProvider as _InnoiraOAuthProvider
+
+_mcp_issuer_url = _AnyHttpUrl(PUBLIC_BASE_URL or "http://localhost:8001")
+_mcp_oauth_provider = _InnoiraOAuthProvider(db)
+app.router.routes.extend(_create_mcp_auth_routes(
+    provider=_mcp_oauth_provider,
+    issuer_url=_mcp_issuer_url,
+    client_registration_options=_ClientRegOpts(enabled=True, valid_scopes=["read", "write", "send"], default_scopes=["read"]),
+    revocation_options=_RevocationOpts(enabled=True),
+))
+
+# ----------------------------- MCP tool server -------------------------------
+# Mounted LAST (after every other route, including the OAuth routes above) so
+# its catch-all sub-app only ever sees requests nothing else already matched
+# — Starlette tries routes in registration order and stops at the first hit.
+# token_verifier (not auth_server_provider) is used inside mcp_server.py
+# specifically so this doesn't build a second, duplicate copy of /authorize,
+# /register, /token, /revoke — those are the ones registered just above.
+from contextlib import AsyncExitStack as _AsyncExitStack
+from mcp_server import build_mcp_app as _build_mcp_app
+
+_mcp_resource_url = f"{str(_mcp_issuer_url).rstrip('/')}/mcp"
+_mcp_app = _build_mcp_app(db, str(_mcp_issuer_url), _mcp_resource_url)
+app.mount("/", _mcp_app.streamable_http_app())
+
+# `app.mount()` does not forward the ASGI `lifespan` protocol to a mounted
+# sub-app — FastMCP's StreamableHTTPSessionManager.run() (which the mounted
+# app's own `lifespan=` would normally trigger) therefore never starts on its
+# own, and every request 500s with "Task group is not initialized." Enter that
+# context manager manually here, kept open in this stack for the process
+# lifetime, and close it on shutdown.
+_mcp_session_manager_stack = _AsyncExitStack()
+
+
+@app.on_event("startup")
+async def _start_mcp_session_manager():
+    await _mcp_session_manager_stack.enter_async_context(_mcp_app.session_manager.run())
+
+
+@app.on_event("shutdown")
+async def _stop_mcp_session_manager():
+    await _mcp_session_manager_stack.aclose()
 
 
 @app.on_event("startup")
@@ -5814,6 +5977,13 @@ async def _create_indexes():
         await db.signature_policies.create_index([("workspace_id", 1), ("id", 1)])
         await db.user_signature_prefs.create_index([("workspace_id", 1), ("user_id", 1)], unique=True)
         await db.directory_sync_integrations.create_index([("workspace_id", 1), ("provider", 1)], unique=True)
+        await db.oauth_clients.create_index("client_id", unique=True)
+        await db.oauth_pending_authorizations.create_index("request_id", unique=True)
+        await db.oauth_auth_codes.create_index("code", unique=True)
+        await db.oauth_access_tokens.create_index("token", unique=True)
+        await db.oauth_refresh_tokens.create_index("token", unique=True)
+        await db.oauth_refresh_tokens.create_index("grant_id", unique=True, sparse=True)
+        await db.mcp_rate_limits.create_index([("workspace_id", 1), ("minute", 1)], unique=True)
         logger.info("indexes ensured")
     except Exception as ex:
         logger.warning("index setup: %s", ex)

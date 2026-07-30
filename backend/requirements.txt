@@ -1,5 +1,12 @@
 fastapi==0.110.1
-uvicorn==0.25.0
+# Pinned explicitly (not just transitively via fastapi) — mcp's own dependency
+# floor is starlette>=0.27, so an unpinned `pip install` resolving mcp's deps
+# in isolation will happily pick the latest starlette (currently a 1.x major
+# with breaking Router.__init__ changes) and silently break fastapi==0.110.1,
+# which requires starlette<0.38.0,>=0.37.2. Bumping either pin needs both
+# updated together and the app re-verified to actually start.
+starlette==0.37.2
+uvicorn==0.31.1
 requests-oauthlib>=2.0.0
 cryptography>=42.0.8
 python-dotenv>=1.0.1
@@ -33,3 +40,4 @@ python-dateutil>=2.9.0
 slowapi>=0.1.9
 sentry-sdk[fastapi]>=2.0.0
 pypdf>=4.0.0
+mcp==1.29.0
