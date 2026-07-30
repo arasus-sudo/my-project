@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Calendar, Clock, MapPin, CheckCircle, Loader2 } from "lucide-react";
 
 export default function BookingPage() {
-  const { workspace_id, event_type_slug } = useParams();
+  const { workspaceId, eventTypeSlug } = useParams();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [selectedSlot, setSelectedSlot] = useState("");
@@ -14,13 +14,13 @@ export default function BookingPage() {
   const [done, setDone] = useState(null);
 
   useEffect(() => {
-    api.get(`/book/${workspace_id}/${event_type_slug}`).then((r) => {
+    api.get(`/book/${workspaceId}/${eventTypeSlug}`).then((r) => {
       setData(r.data);
     }).catch((err) => {
       const detail = err?.response?.data?.detail || "";
       setError(detail || "Booking page not found");
     });
-  }, [workspace_id, event_type_slug]);
+  }, [workspaceId, eventTypeSlug]);
 
   if (error) {
     return (
@@ -29,7 +29,7 @@ export default function BookingPage() {
           <Calendar size={32} className="mx-auto mb-3 text-ink-muted opacity-40" />
           <h1 className="text-heading font-medium mb-1">This booking page isn't available</h1>
           <p className="text-body text-ink-muted mb-4">The link may be invalid or the event type has been removed.</p>
-          {error && <p className="text-tiny font-mono text-ink-muted bg-ash rounded p-2 text-left">API: /book/{workspace_id}/{event_type_slug}<br />Detail: {error}</p>}
+          {error && <p className="text-tiny font-mono text-ink-muted bg-ash rounded p-2 text-left">API: /book/{workspaceId}/{eventTypeSlug}<br />Detail: {error}</p>}
         </div>
       </div>
     );
@@ -64,7 +64,7 @@ export default function BookingPage() {
     if (!selectedSlot) { toast.error("Select a time slot"); return; }
     setSaving(true);
     try {
-      const { data: result } = await api.post(`/book/${workspace_id}/${event_type_slug}`, {
+      const { data: result } = await api.post(`/book/${workspaceId}/${eventTypeSlug}`, {
         guest_name: form.guest_name,
         guest_email: form.guest_email,
         guest_phone: form.guest_phone || undefined,
