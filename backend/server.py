@@ -1593,6 +1593,26 @@ async def run_campaign_engine(cid: str, user=Depends(current_user)):
     if not to_generate:
         return {"generated": 0, "job_id": "", "message": "All leads already have personalized emails"}
 
+    # Template campaigns have no AI work — generate synchronously so
+    # personalized_emails exist immediately and the user can approve right away.
+    if is_template:
+        campaign_steps = campaign.get("steps", [])
+        step_template = campaign_steps[0] if campaign_steps else {}
+        for lid in to_generate:
+            await db.campaigns.update_one(
+                {"id": cid},
+                {"$push": {"personalized_emails": {
+                    "lead_id": lid,
+                    "subject": step_template.get("subject", ""),
+                    "body": step_template.get("body", "") or "",
+                    "body_html": step_template.get("body_html", "") or "",
+                    "personalized_opener": "",
+                    "status": "draft",
+                    "generated_at": now_iso(),
+                }}}
+            )
+        return {"generated": len(to_generate), "job_id": "", "message": f"Emails ready for {len(to_generate)} leads"}
+
     gen_id = new_id()
     await db.campaigns.update_one({"id": cid}, {"$set": {f"generation_{gen_id}": {"status": "running", "total": len(to_generate), "done": 0, "errors": []}}})
     asyncio.create_task(_run_generation_background(cid, wid, to_generate, campaign, user, gen_id))
@@ -1795,7 +1815,25 @@ async def approve_campaign_lead_email(cid: str, lead_id: str, user=Depends(curre
         {"$set": {"personalized_emails.$.status": "approved"}}
     )
     if result.modified_count == 0:
-        raise HTTPException(404, "Personalized email not found")
+        # Template campaigns may not have a personalized_emails entry yet —
+        # auto-create one so the user can approve without a separate generation step.
+        is_template = campaign.get("campaign_type") == "template"
+        if is_template:
+            step_template = (campaign.get("steps") or [{}])[0]
+            await db.campaigns.update_one(
+                {"id": cid},
+                {"$push": {"personalized_emails": {
+                    "lead_id": lead_id,
+                    "subject": step_template.get("subject", ""),
+                    "body": step_template.get("body", "") or "",
+                    "body_html": step_template.get("body_html", "") or "",
+                    "personalized_opener": "",
+                    "status": "approved",
+                    "generated_at": now_iso(),
+                }}}
+            )
+        else:
+            raise HTTPException(404, "Personalized email not found")
     await _audit(user, "campaign.lead.email_approved", {"campaign_id": cid, "lead_id": lead_id})
     return {"status": "approved"}
 
@@ -1824,6 +1862,25 @@ async def approve_all_campaign_emails(cid: str, user=Depends(current_user)):
     campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
     if not campaign:
         raise HTTPException(404, "not found")
+    # For template campaigns, auto-generate entries for any leads that don't have one yet.
+    is_template = campaign.get("campaign_type") == "template"
+    if is_template:
+        step_template = (campaign.get("steps") or [{}])[0]
+        existing = {p["lead_id"] for p in campaign.get("personalized_emails", [])}
+        for lid in campaign.get("lead_ids", []):
+            if lid not in existing:
+                await db.campaigns.update_one(
+                    {"id": cid},
+                    {"$push": {"personalized_emails": {
+                        "lead_id": lid,
+                        "subject": step_template.get("subject", ""),
+                        "body": step_template.get("body", "") or "",
+                        "body_html": step_template.get("body_html", "") or "",
+                        "personalized_opener": "",
+                        "status": "draft",
+                        "generated_at": now_iso(),
+                    }}}
+                )
     result = await db.campaigns.update_one(
         {"id": cid},
         {"$set": {"personalized_emails.$[elem].status": "approved"}},
