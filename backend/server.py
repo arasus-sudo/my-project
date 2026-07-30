@@ -679,6 +679,9 @@ async def _campaign_stats(cid: str, wid: str) -> Dict[str, Any]:
     events = await db.events.find({"campaign_id": cid, "workspace_id": wid}, {"_id": 0}).to_list(5000)
     sent = sum(1 for e in events if e["type"] == "sent")
     opened = sum(1 for e in events if e["type"] == "opened")
+    qpending = await db.send_queue.count_documents({"campaign_id": cid, "workspace_id": wid, "status": "pending"})
+    qsending = await db.send_queue.count_documents({"campaign_id": cid, "workspace_id": wid, "status": "sending"})
+    qfailed = await db.send_queue.count_documents({"campaign_id": cid, "workspace_id": wid, "status": "failed"})
     replied = sum(1 for e in events if e["type"] == "replied")
     clicked = sum(1 for e in events if e["type"] == "clicked")
     meetings = sum(1 for e in events if e["type"] == "meeting_booked")
@@ -695,6 +698,9 @@ async def _campaign_stats(cid: str, wid: str) -> Dict[str, Any]:
         "click_rate": round(clicked / sent * 100, 1) if sent else 0,
         "bounce_rate": round(bounced / sent * 100, 1) if sent else 0,
         "meeting_rate": round(meetings / sent * 100, 1) if sent else 0,
+        "queue_pending": qpending,
+        "queue_sending": qsending,
+        "queue_failed": qfailed,
     }
 
 
@@ -2510,6 +2516,22 @@ async def ai_personalize(body: AIPersonalizeIn, user=Depends(current_user)):
 
 
 # ----------------------------- Dashboard -------------------------------------
+@api.get("/queue")
+async def list_queue(user=Depends(current_user), page: int = 1, per_page: int = 20):
+    wid = user["workspace_id"]
+    skip = (page - 1) * per_page
+    total = await db.send_queue.count_documents({"workspace_id": wid})
+    rows = await db.send_queue.find({"workspace_id": wid}, {"_id": 0}).sort("send_at", 1).skip(skip).limit(per_page).to_list(per_page)
+    for r in rows:
+        lead = await db.leads.find_one({"id": r.get("lead_id")}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1})
+        if lead:
+            r["lead_name"] = f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip()
+            r["lead_email"] = lead.get("email", "")
+        campaign = await db.campaigns.find_one({"id": r.get("campaign_id")}, {"_id": 0, "name": 1})
+        if campaign:
+            r["campaign_name"] = campaign.get("name", "")
+    return {"total": total, "page": page, "per_page": per_page, "rows": rows}
+
 @api.get("/dashboard")
 async def dashboard(user=Depends(current_user)):
     wid = user["workspace_id"]
@@ -2518,6 +2540,9 @@ async def dashboard(user=Depends(current_user)):
     leads_count = await db.leads.count_documents({"workspace_id": wid})
     active_campaigns = await db.campaigns.count_documents({"workspace_id": wid, "status": "active"})
     mailboxes = await db.mailboxes.count_documents({"workspace_id": wid})
+    queue_pending = await db.send_queue.count_documents({"workspace_id": wid, "status": "pending"})
+    queue_sending = await db.send_queue.count_documents({"workspace_id": wid, "status": "sending"})
+    queue_failed = await db.send_queue.count_documents({"workspace_id": wid, "status": "failed"})
     def c(t): return sum(1 for e in events if e["type"] == t)
     sent, opened, clicked, replied, mtg = c("sent"), c("opened"), c("clicked"), c("replied"), c("meeting_booked")
 
@@ -2541,6 +2566,7 @@ async def dashboard(user=Depends(current_user)):
         "counts": {
             "campaigns": campaigns_count, "active_campaigns": active_campaigns,
             "leads": leads_count, "mailboxes": mailboxes,
+            "queue_pending": queue_pending, "queue_sending": queue_sending, "queue_failed": queue_failed,
         },
         "trend": trend,
     }

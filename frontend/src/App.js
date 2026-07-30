@@ -19,6 +19,7 @@ const Signup = lazy(() => import("./pages/Signup"));
 const SuiteHome = lazy(() => import("./pages/SuiteHome"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Campaigns = lazy(() => import("./pages/Campaigns"));
+const CampaignQueue = lazy(() => import("./pages/CampaignQueue"));
 const CampaignBuilder = lazy(() => import("./pages/CampaignBuilder"));
 const Leads = lazy(() => import("./pages/Leads"));
 const LeadDetail = lazy(() => import("./pages/LeadDetail"));
@@ -147,6 +148,7 @@ function App() {
             <Route path="/app" element={<Private><AppLayout /></Private>}>
               <Route index element={<Dashboard />} />
               <Route path="campaigns" element={<Campaigns />} />
+              <Route path="campaigns/queue" element={<CampaignQueue />} />
               <Route path="campaigns/new" element={<CampaignBuilder />} />
               <Route path="campaigns/:id" element={<CampaignBuilder />} />
               {/* CRM routes */}

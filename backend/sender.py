@@ -16,7 +16,7 @@ import mailbox_client
 
 log = logging.getLogger(__name__)
 
-MAX_PER_TICK = 25
+MAX_PER_TICK = 5
 RETRY_BACKOFF_MIN = 15
 
 # Bounce threshold for auto-quarantine (>2%).

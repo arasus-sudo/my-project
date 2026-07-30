@@ -8,7 +8,7 @@ import NotificationsCenter from "./NotificationsCenter";
 import {
   LayoutDashboard, Send, Users, Inbox as InboxIcon, Kanban, Mail, Settings as SettingsIcon, LogOut, Info, Shield,
   FileText, BarChart3, UsersRound, ShieldCheck, Image as ImageIcon, ChevronDown, Layers, Webhook, Link2,
-  Bot, PhoneCall, History, Radio, CalendarClock, CalendarCheck, CalendarRange, FileBarChart, Tags,
+  Bot, PhoneCall, History, Radio, Clock, CalendarClock, CalendarCheck, CalendarRange, FileBarChart, Tags,
   Share2, PenSquare, ListChecks, LayoutGrid, Menu, X, Search, Upload, Globe, Loader2,
   Building2, Briefcase, BookOpen, DollarSign, FileDown, Scale, TrendingUp,
   Smartphone, Phone,
@@ -25,6 +25,7 @@ const FONT_FAMILIES = {
 const PITCH_NAV = [
   { to: "/app", label: "Overview", icon: LayoutDashboard, end: true, tid: "nav-overview" },
   { to: "/app/campaigns", label: "Campaigns", icon: Send, tid: "nav-campaigns" },
+  { to: "/app/campaigns/queue", label: "Queue", icon: Clock, tid: "nav-queue" },
   { to: "/app/intelligence", label: "Intelligence", icon: Search, tid: "nav-intelligence" },
   { to: "/app/services", label: "Services", icon: Layers, tid: "nav-services" },
   { to: "/app/templates", label: "Templates", icon: FileText, tid: "nav-templates" },
