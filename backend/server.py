@@ -2517,20 +2517,50 @@ async def ai_personalize(body: AIPersonalizeIn, user=Depends(current_user)):
 
 # ----------------------------- Dashboard -------------------------------------
 @api.get("/queue")
-async def list_queue(user=Depends(current_user), page: int = 1, per_page: int = 20):
+async def list_queue(user=Depends(current_user), page: int = 1, per_page: int = 20, search: str = ""):
     wid = user["workspace_id"]
     skip = (page - 1) * per_page
-    total = await db.send_queue.count_documents({"workspace_id": wid})
-    rows = await db.send_queue.find({"workspace_id": wid}, {"_id": 0}).sort("send_at", 1).skip(skip).limit(per_page).to_list(per_page)
+    query: Dict[str, Any] = {"workspace_id": wid}
+    if search:
+        leads = await db.leads.find({
+            "workspace_id": wid,
+            "$or": [
+                {"first_name": {"$regex": search, "$options": "i"}},
+                {"last_name": {"$regex": search, "$options": "i"}},
+                {"email": {"$regex": search, "$options": "i"}},
+            ],
+        }, {"_id": 0, "id": 1}).to_list(500)
+        lead_ids = [l["id"] for l in leads]
+        campaigns = await db.campaigns.find({
+            "workspace_id": wid,
+            "name": {"$regex": search, "$options": "i"},
+        }, {"_id": 0, "id": 1}).to_list(500)
+        campaign_ids = [c["id"] for c in campaigns]
+        query["$or"] = [
+            {"lead_id": {"$in": lead_ids}},
+            {"campaign_id": {"$in": campaign_ids}},
+            {"subject": {"$regex": search, "$options": "i"}},
+            {"id": {"$regex": search, "$options": "i"}},
+        ]
+    total = await db.send_queue.count_documents(query)
+    rows = await db.send_queue.find(query, {"_id": 0}).sort("send_at", 1).skip(skip).limit(per_page).to_list(per_page)
     for r in rows:
-        lead = await db.leads.find_one({"id": r.get("lead_id")}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1})
+        lead = await db.leads.find_one({"id": r.get("lead_id")}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1, "company": 1})
         if lead:
             r["lead_name"] = f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip()
             r["lead_email"] = lead.get("email", "")
+            r["lead_company"] = lead.get("company", "")
         campaign = await db.campaigns.find_one({"id": r.get("campaign_id")}, {"_id": 0, "name": 1})
         if campaign:
             r["campaign_name"] = campaign.get("name", "")
     return {"total": total, "page": page, "per_page": per_page, "rows": rows}
+
+@api.post("/queue/delete")
+async def delete_queue_items(ids: List[str], user=Depends(current_user)):
+    if not ids:
+        raise HTTPException(400, "No ids provided")
+    result = await db.send_queue.delete_many({"id": {"$in": ids}, "workspace_id": user["workspace_id"]})
+    return {"deleted": result.deleted_count}
 
 @api.get("/dashboard")
 async def dashboard(user=Depends(current_user)):
