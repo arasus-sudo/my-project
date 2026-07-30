@@ -19,6 +19,17 @@ log = logging.getLogger(__name__)
 MAX_PER_TICK = 5
 RETRY_BACKOFF_MIN = 15
 
+# Gap between two consecutive sends of the same step, randomized per recipient.
+# A launch that fires every email at the same instant is the single clearest
+# automation signal to mailbox providers; 2–5 minutes is the range cold-email
+# tooling converges on for looking like a human working through a list.
+SEND_SPACING_MIN_SECONDS = 120
+SEND_SPACING_MAX_SECONDS = 300
+
+# The queue tick claims anything already due, so give a launch a moment to
+# finish writing before its first item becomes eligible.
+SEND_LAUNCH_GRACE_SECONDS = 60
+
 # Bounce threshold for auto-quarantine (>2%).
 BOUNCE_QUARANTINE_THRESHOLD = 0.02
 
@@ -85,6 +96,12 @@ async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[
         if p.get("status") == "approved":
             personalized_map[p["lead_id"]] = p
 
+    # Cumulative spacing per step, so each additional recipient of a step lands
+    # a few minutes after the previous one instead of all at the same instant.
+    import random as _spacing_rnd
+    step_offsets: Dict[int, int] = {}
+    not_before = now_local + timedelta(seconds=SEND_LAUNCH_GRACE_SECONDS)
+
     queued, skipped = 0, 0
     for lid in lead_ids:
         lead = await db.leads.find_one({"id": lid, "workspace_id": workspace_id}, {"_id": 0})
@@ -115,11 +132,17 @@ async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[
             if channel == "email" and not personal:
                 continue
 
+            offset = step_offsets.get(step_idx, 0)
             send_at = _next_window_slot(
                 now_local + timedelta(days=int(step.get("day") or 0)),
                 campaign.get("send_window_start", "09:00"),
                 campaign.get("send_window_end", "17:00"),
                 tz,
+                not_before=not_before,
+                offset_seconds=offset,
+            )
+            step_offsets[step_idx] = offset + _spacing_rnd.randint(
+                SEND_SPACING_MIN_SECONDS, SEND_SPACING_MAX_SECONDS
             )
             send_at_utc = send_at.astimezone(dt_timezone.utc)
 
@@ -204,6 +227,10 @@ async def run_send_tick(base_url: str = "") -> int:
 
     log.info("run_send_tick: found %s pending items", len(due))
     sent = 0
+    # (workspace_id, campaign_id) of rows that actually sent this tick. Derived
+    # from real sends rather than slicing `due`, which also holds the rows that
+    # were cancelled or skipped before ever dispatching.
+    sent_keys: set = set()
     for row in due:
         if sent >= MAX_PER_TICK:
             break
@@ -271,29 +298,34 @@ async def run_send_tick(base_url: str = "") -> int:
             "channel": channel,
         })
         sent += 1
+        sent_keys.add((row["workspace_id"], row["campaign_id"]))
 
-    if sent:
-        touched_campaigns = set(row["campaign_id"] for row in due[:sent])
-        for cid in touched_campaigns:
-            events = await db.events.find(
-                {"campaign_id": cid, "workspace_id": row["workspace_id"]},
-                {"_id": 0, "type": 1},
-            ).to_list(2000)
-            total = len(events)
-            bounces = sum(1 for e in events if e.get("type") == "bounced")
-            if total > 20 and bounces / total > BOUNCE_QUARANTINE_THRESHOLD:
-                await db.campaigns.update_one({"id": cid}, {"$set": {"status": "quarantined", "quarantined_at": now_iso()}})
-                log.warning("auto-quarantined campaign %s: bounce rate %.1f%%", cid, bounces / total * 100)
-            else:
-                remaining = await db.send_queue.count_documents({"campaign_id": cid, "status": "pending"})
-                if remaining == 0:
-                    await db.campaigns.update_one({"id": cid}, {"$set": {"status": "completed", "completed_at": now_iso()}})
-                    log.info("auto-completed campaign %s", cid)
+    for wid, cid in sent_keys:
+        events = await db.events.find(
+            {"campaign_id": cid, "workspace_id": wid},
+            {"_id": 0, "type": 1},
+        ).to_list(2000)
+        total = len(events)
+        bounces = sum(1 for e in events if e.get("type") == "bounced")
+        if total > 20 and bounces / total > BOUNCE_QUARANTINE_THRESHOLD:
+            await db.campaigns.update_one({"id": cid}, {"$set": {"status": "quarantined", "quarantined_at": now_iso()}})
+            log.warning("auto-quarantined campaign %s: bounce rate %.1f%%", cid, bounces / total * 100)
+            continue
+        # "sending" rows are mid-dispatch on another tick, so they still count as
+        # outstanding — completing on pending==0 alone would mark a campaign done
+        # while its last items were in flight, flipping the UI back to a
+        # relaunchable state.
+        remaining = await db.send_queue.count_documents(
+            {"campaign_id": cid, "workspace_id": wid, "status": {"$in": ["pending", "sending"]}}
+        )
+        if remaining == 0:
+            await db.campaigns.update_one({"id": cid}, {"$set": {"status": "completed", "completed_at": now_iso()}})
+            log.info("auto-completed campaign %s", cid)
 
     if sent:
         # Lightweight auto-optimize: check every active campaign for issues
         try:
-            wid_set = set(row["workspace_id"] for row in due[:sent])
+            wid_set = set(wid for wid, _ in sent_keys)
             for wid in wid_set:
                 campaigns = await db.campaigns.find(
                     {"workspace_id": wid, "status": "active"}, {"_id": 0}).to_list(50)
@@ -605,22 +637,43 @@ def _merge_fields(text: str, lead: Dict[str, Any]) -> str:
 
 
 def _next_window_slot(target: datetime, win_start: str, win_end: str,
-                       tz: ZoneInfo) -> datetime:
-    """Clamp a send time into the campaign's sending window."""
+                       tz: ZoneInfo, not_before: Optional[datetime] = None,
+                       offset_seconds: int = 0) -> datetime:
+    """The local datetime a step should actually send at.
+
+    Guarantees, in order: on a weekday, inside the campaign's daily window,
+    never before `not_before`, and displaced by `offset_seconds` from the
+    campaign's other sends. `offset_seconds` is a budget spent against each
+    day's remaining window and carried onto following business days, so a
+    batch larger than one day's window spills forward instead of piling up
+    at the window's edge.
+    """
     from datetime import time as _time
     try:
         ws = _time(*map(int, win_start.split(":")))
         we = _time(*map(int, win_end.split(":")))
     except Exception:
         ws, we = _time(9, 0), _time(17, 0)
+    if we <= ws:
+        ws, we = _time(9, 0), _time(17, 0)
 
-    if target.weekday() >= 5:
-        target += timedelta(days=(7 - target.weekday()))
+    earliest = target
+    if not_before is not None and earliest < not_before:
+        earliest = not_before
 
-    target = target.replace(hour=ws.hour, minute=ws.minute, second=0, microsecond=0)
-    if not (ws <= target.time() <= we):
-        target = target.replace(hour=ws.hour, minute=ws.minute)
-    return target
+    remaining = max(0, offset_seconds)
+    day = earliest.date()
+    while True:
+        if day.weekday() < 5:
+            win_close = datetime.combine(day, we, tzinfo=tz)
+            start = max(datetime.combine(day, ws, tzinfo=tz), earliest)
+            if start <= win_close:
+                available = (win_close - start).total_seconds()
+                if remaining <= available:
+                    return (start + timedelta(seconds=remaining)).replace(microsecond=0)
+                remaining -= available
+        day += timedelta(days=1)
+        earliest = datetime.combine(day, ws, tzinfo=tz)
 
 
 # ----------------------------- Reply polling ------------------------------------

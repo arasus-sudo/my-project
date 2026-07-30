@@ -1237,6 +1237,13 @@ async def launch_campaign(cid: str, skip_pending: bool = False, user=Depends(cur
     if not c:
         raise HTTPException(404, "not found")
 
+    # Relaunching an active campaign re-runs enqueue_campaign and queues every
+    # lead a second time — the same person receives the sequence twice. The UI
+    # hides Launch once status is active, but a stale tab or a direct API call
+    # would otherwise still get through.
+    if c.get("status") == "active":
+        raise HTTPException(409, "This campaign is already running — pause it before relaunching.")
+
     lead_ids = c.get("lead_ids") or []
     if lead_ids:
         pmap = {p["lead_id"]: p for p in c.get("personalized_emails", [])}
@@ -1258,11 +1265,26 @@ async def launch_campaign(cid: str, skip_pending: bool = False, user=Depends(cur
                 )
 
     from traceback import format_exc as _tb
+
+    # Flip to "active" BEFORE enqueueing, not after. run_send_tick cancels any
+    # due queue item whose campaign isn't active, and it runs every 2 minutes —
+    # so with the old ordering a tick landing between the inserts and this
+    # update would cancel the whole batch it had just found. Restore the prior
+    # status on any failure path so a rejected launch doesn't strand the
+    # campaign as active with nothing queued.
+    prev_status = c.get("status", "draft")
+    await db.campaigns.update_one({"id": cid}, {"$set": {"status": "active", "launched_at": now_iso()}})
+
+    async def _revert():
+        await db.campaigns.update_one({"id": cid}, {"$set": {"status": prev_status}, "$unset": {"launched_at": ""}})
+
     try:
         result = await enqueue_campaign(user["workspace_id"], c)
     except ValueError as ex:
+        await _revert()
         raise HTTPException(400, str(ex))
-    except Exception as ex:
+    except Exception:
+        await _revert()
         logger.error("enqueue_campaign crashed\n%s", _tb())
         raise HTTPException(500, "Campaign engine error")
 
@@ -1271,13 +1293,13 @@ async def launch_campaign(cid: str, skip_pending: bool = False, user=Depends(cur
     # raising — previously this still flipped status to "active", leaving a
     # campaign that looks launched but will never send a single email.
     if result.get("queued", 0) == 0:
+        await _revert()
         raise HTTPException(
             400,
             "Nothing to send — every lead was skipped (rejected, quarantined, or missing "
             "a personalized email). Approve at least one lead before launching.",
         )
 
-    await db.campaigns.update_one({"id": cid}, {"$set": {"status": "active", "launched_at": now_iso()}})
     await _audit(user, "campaign.launch", {"campaign_id": cid, **result})
     return {"ok": True, "status": "active", **result}
 
@@ -1409,11 +1431,16 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
 
 
 @api.get("/campaigns/{cid}/leads")
-async def get_campaign_leads(cid: str, user=Depends(current_user)):
+async def get_campaign_leads(cid: str, step: int = 0, user=Depends(current_user)):
     """Return leads for a campaign with their personalized email status. Leads
     that have never been through AI generation (or a manual opener edit) still
     get a merge-field-resolved preview of the raw template, so the review
-    screen has something to show — and to edit — before any generation runs."""
+    screen has something to show — and to edit — before any generation runs.
+
+    `step` selects which sequence step to preview. Only step 0 is stored per
+    lead in personalized_emails; later steps are rendered the way sender.py
+    renders them at send time (that step's template with the lead's opener
+    applied), so the preview matches what would actually go out."""
     wid = user["workspace_id"]
     campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0, "personalized_emails": 1, "lead_ids": 1, "steps": 1})
     if not campaign:
@@ -1421,7 +1448,10 @@ async def get_campaign_leads(cid: str, user=Depends(current_user)):
     lead_ids = campaign.get("lead_ids", [])
     personalized = campaign.get("personalized_emails", [])
     personalization_map = {p["lead_id"]: p for p in personalized}
-    step_template = (campaign.get("steps") or [{}])[0]
+    steps = campaign.get("steps") or []
+    step_idx = step if 0 <= step < len(steps) else 0
+    step_template = steps[step_idx] if steps else {}
+    from sender import _apply_opener
     leads = await db.leads.find(
         {"id": {"$in": lead_ids}, "workspace_id": wid},
         {"_id": 0}
@@ -1440,16 +1470,19 @@ async def get_campaign_leads(cid: str, user=Depends(current_user)):
     result = []
     for lead in leads:
         p = personalization_map.get(lead["id"])
-        if p:
+        opener = p.get("personalized_opener", "") if p else ""
+        if p and step_idx == 0:
             subject = _resolve(p.get("subject", ""), lead)
             body = _resolve(p.get("body", ""), lead)
             body_html = _resolve(p.get("body_html", ""), lead)
-            opener = p.get("personalized_opener", "")
+        elif step_idx > 0:
+            subject = _resolve(_apply_opener(step_template.get("subject", ""), opener), lead)
+            body = _resolve(_apply_opener(step_template.get("body_text") or step_template.get("body", ""), opener), lead)
+            body_html = _resolve(_apply_opener(step_template.get("body_html") or step_template.get("body", ""), opener), lead)
         else:
             subject = _resolve(step_template.get("subject", ""), lead)
             body = _resolve((step_template.get("body", "") or "").replace("{{personalized_opener}}", ""), lead)
             body_html = _resolve((step_template.get("body_html", "") or "").replace("{{personalized_opener}}", ""), lead)
-            opener = ""
         result.append({
             "id": lead["id"],
             "first_name": lead.get("first_name", ""),
@@ -1465,7 +1498,10 @@ async def get_campaign_leads(cid: str, user=Depends(current_user)):
             "personalized_opener": opener,
             "generated_at": p.get("generated_at", "") if p else "",
         })
-    return {"leads": result, "personalized_count": len(personalized), "total_count": len(lead_ids)}
+    return {
+        "leads": result, "personalized_count": len(personalized), "total_count": len(lead_ids),
+        "step": step_idx, "total_steps": len(steps),
+    }
 
 
 @api.post("/campaigns/{cid}/leads/generate-all")
@@ -5878,8 +5914,17 @@ async def mcp_oauth_consent_info(request_id: str, user=Depends(current_user)):
     allowed = _scopes_allowed_for_role(user.get("role"), _is_admin(user))
     return {
         "client_name": pending["client_name"],
+        # What the client's own /authorize call asked for — Claude Desktop and
+        # similar MCP clients often only request "read write" by default and
+        # have no way to know this server also has a "send" scope. We don't
+        # limit the grant to this list; it's shown only as the pre-checked
+        # default in the consent UI.
         "requested_scopes": pending["scopes"],
-        "grantable_scopes": [s for s in pending["scopes"] if s in allowed],
+        # Every scope the approving user's own role is allowed to grant,
+        # regardless of what the client requested — lets an org_admin/
+        # campaign_manager opt into "send" even when the client never asked
+        # for it.
+        "allowed_scopes": allowed,
         "workspace_name": (await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0, "name": 1}) or {}).get("name"),
     }
 
@@ -5887,6 +5932,7 @@ async def mcp_oauth_consent_info(request_id: str, user=Depends(current_user)):
 class McpConsentApproveIn(BaseModel):
     request_id: str
     approve: bool = True
+    scopes: Optional[List[str]] = None
 
 
 @api.post("/oauth/consent/approve")
@@ -5904,7 +5950,13 @@ async def mcp_oauth_consent_approve(body: McpConsentApproveIn, user=Depends(curr
         return {"redirect_url": _construct_redirect_uri(pending["redirect_uri"], error="access_denied", state=pending.get("state"))}
 
     allowed = _scopes_allowed_for_role(user.get("role"), _is_admin(user))
-    granted_scopes = [s for s in pending["scopes"] if s in allowed]
+    # The user may choose to grant a different scope set than the client's
+    # own /authorize request asked for (e.g. adding "send" when the client
+    # only requested "read write") — always clamp to what their role allows,
+    # never trust the request body beyond that. Omitting `scopes` keeps the
+    # old default of exactly what the client requested, intersected with role.
+    requested_by_user = body.scopes if body.scopes is not None else pending["scopes"]
+    granted_scopes = [s for s in requested_by_user if s in allowed]
 
     code = _secrets.token_urlsafe(32)
     t = _mcp_now()
@@ -5915,8 +5967,18 @@ async def mcp_oauth_consent_approve(body: McpConsentApproveIn, user=Depends(curr
         "redirect_uri_provided_explicitly": pending["redirect_uri_provided_explicitly"],
         "resource": pending.get("resource"), "subject": user["id"],
     })
+    final_redirect_url = _construct_redirect_uri(pending["redirect_uri"], code=code, state=pending.get("state"))
+    # Temporary diagnostic: "authorized but failed to connect" reports from
+    # Claude Desktop/claude.ai have no corresponding /token call in our logs
+    # afterward, so we can't yet tell whether this redirect ever reaches the
+    # client. Logging the exact computed URL here settles it on the next
+    # attempt without guessing. Safe to remove once the connect issue is closed.
+    logger.info(
+        "mcp.oauth.consent_approved client_id=%s redirect_base=%s final=%s",
+        pending["client_id"], pending["redirect_uri"], final_redirect_url,
+    )
     await _audit(user, "mcp.oauth.consent_approved", {"client_id": pending["client_id"], "scopes": granted_scopes})
-    return {"redirect_url": _construct_redirect_uri(pending["redirect_uri"], code=code, state=pending.get("state"))}
+    return {"redirect_url": final_redirect_url}
 
 
 # ----------------------------- Connected AI clients (Settings panel) --------

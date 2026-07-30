@@ -87,6 +87,9 @@ export default function CampaignBuilder() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("draft");
   const [campaignLeads, setCampaignLeads] = useState([]);
+  // Which sequence step the review pane renders. Separate from activeStep (the
+  // step being edited) so switching the editor tab doesn't refetch every lead.
+  const [previewStep, setPreviewStep] = useState(0);
   const [generatingEmail, setGeneratingEmail] = useState(null);
   const [leadSearch, setLeadSearch] = useState("");
   const [leadPickerPage, setLeadPickerPage] = useState(1);
@@ -144,10 +147,12 @@ export default function CampaignBuilder() {
   const [activeCampaignId, setActiveCampaignId] = useState(id);
   useEffect(() => { setActiveCampaignId(id); }, [id]);
 
-  const loadCampaignLeads = (overrideId) => {
+  const loadCampaignLeads = (overrideId, overrideStep) => {
     const cid = overrideId || activeCampaignId || id;
     if (!cid) return;
-    api.get(`/campaigns/${cid}/leads`).then((r) => setCampaignLeads(r.data.leads || [])).catch(() => {});
+    const s = overrideStep ?? previewStep;
+    api.get(`/campaigns/${cid}/leads`, { params: { step: s } })
+      .then((r) => setCampaignLeads(r.data.leads || [])).catch(() => {});
   };
 
   // Select first N leads — from current filtered view or from ALL matching leads
@@ -305,6 +310,16 @@ export default function CampaignBuilder() {
     } catch { toast.error("Approve-all failed"); }
   };
 
+  const rejectAllEmails = async () => {
+    if (!id || !campaignLeads?.length) return;
+    const allIds = campaignLeads.map((l) => l.id);
+    try {
+      const { data } = await api.post(`/campaigns/${id}/leads/bulk-status`, { lead_ids: allIds, status: "rejected" });
+      toast.success(`${data.updated} email(s) rejected`);
+      loadCampaignLeads();
+    } catch { toast.error("Reject-all failed"); }
+  };
+
   const dismissAllEmails = async () => {
     if (!id) return;
     try {
@@ -402,6 +417,11 @@ export default function CampaignBuilder() {
   // resolves merge fields against the raw template even before any AI
   // generation runs), not just leads that have already been personalized.
   const getReviewEmails = () => campaignLeads;
+
+  const changePreviewStep = (s) => {
+    setPreviewStep(s);
+    loadCampaignLeads(undefined, s);
+  };
 
   const nextReview = () => {
     const emails = getReviewEmails();
@@ -702,11 +722,12 @@ export default function CampaignBuilder() {
         <ReviewAndSendView
           campaignLeads={campaignLeads} leadStats={leadStats}
           regenerateAllEmails={regenerateAllEmails} regeneratingAll={regeneratingAll}
-          dismissAllEmails={dismissAllEmails} approveAllEmails={approveAllEmails}
+          rejectAllEmails={rejectAllEmails} dismissAllEmails={dismissAllEmails} approveAllEmails={approveAllEmails}
           selectedReview={selectedReview} setSelectedReview={setSelectedReview}
           bulkSetReviewStatus={bulkSetReviewStatus}
           getReviewEmails={getReviewEmails} reviewIndex={reviewIndex} setReviewIndex={setReviewIndex}
           steps={steps} activeStep={activeStep}
+          previewStep={previewStep} changePreviewStep={changePreviewStep}
           includeSignature={includeSignature} signatures={signatures} signatureId={signatureId}
           reviewCollapsed={reviewCollapsed} setReviewCollapsed={setReviewCollapsed}
           genProgress={genProgress}
@@ -1368,9 +1389,10 @@ function SignatureModal({ onClose, signatureName, setSignatureName, signatureHtm
 }
 
 function ReviewAndSendView({
-  campaignLeads, leadStats, regenerateAllEmails, regeneratingAll, dismissAllEmails, approveAllEmails,
+  campaignLeads, leadStats, regenerateAllEmails, regeneratingAll, rejectAllEmails, dismissAllEmails, approveAllEmails,
   selectedReview, setSelectedReview, bulkSetReviewStatus,
   getReviewEmails, reviewIndex, setReviewIndex, steps, activeStep,
+  previewStep, changePreviewStep,
   includeSignature, signatures, signatureId,
   reviewCollapsed, setReviewCollapsed, genProgress, toggleReviewSelected,
   prevReview, nextReview, sendTestEmail, sendingTest, isTemplate,
@@ -1380,7 +1402,6 @@ function ReviewAndSendView({
 }) {
   const reviewEmails = getReviewEmails();
   const current = reviewEmails[reviewIndex];
-  const template = steps[activeStep] || steps[0] || {};
   // Mirrors the real send + test-send append (sender.py / server.py) —
   // the preview must show exactly what would actually go out.
   const activeSignatureHtml = includeSignature
@@ -1433,35 +1454,50 @@ function ReviewAndSendView({
       {campaignLeads.length > 0 && (
         <div className="shadow-card rounded-lg bg-white">
           <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 flex-wrap">
-            <div className="text-[11px] text-ink-muted">
-              <span className="font-medium text-ink">{leadStats.approved}</span> approved · {" "}
-              <span className="font-medium text-ink">{leadStats.rejected}</span> rejected · {" "}
-              <span className="font-medium text-ink">{leadStats.total - leadStats.reviewed}</span> awaiting review
-            </div>
-            <div className="flex items-center gap-1.5">
-              <button onClick={regenerateAllEmails} disabled={regeneratingAll || leadStats.total === 0} className="btn-ghost text-[11px]" data-testid="regenerate-all-emails">
-                {regeneratingAll ? <Loader2 size={10} className="animate-spin" /> : <RotateCw size={10} />} Regenerate all
-              </button>
-              <button onClick={dismissAllEmails} disabled={leadStats.total === 0} className="btn-ghost text-[11px] text-danger" data-testid="dismiss-all-emails">
-                <X size={10} /> Dismiss all
-              </button>
-              <button onClick={approveAllEmails} disabled={leadStats.total === 0} className="btn-secondary text-[11px]" data-testid="approve-all-emails">
-                <Check size={10} /> Approve all
-              </button>
-            </div>
+            {selectedReview.length === 0 ? (
+              <>
+                <div className="text-[11px] text-ink-muted">
+                  <span className="font-medium text-ink">{leadStats.approved}</span> approved · {" "}
+                  <span className="font-medium text-ink">{leadStats.rejected}</span> rejected · {" "}
+                  <span className="font-medium text-ink">{leadStats.total - leadStats.reviewed}</span> awaiting review
+                  <button onClick={dismissAllEmails} disabled={leadStats.total === 0}
+                    className="ml-2 text-danger/50 hover:text-danger underline decoration-dotted underline-offset-2">
+                    Delete all
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={regenerateAllEmails} disabled={regeneratingAll || leadStats.total === 0}
+                    className="btn-ghost text-[11px]" data-testid="regenerate-all-emails">
+                    {regeneratingAll ? <Loader2 size={10} className="animate-spin" /> : <RotateCw size={10} />} Regenerate all
+                  </button>
+                  <button onClick={rejectAllEmails} disabled={leadStats.total === 0}
+                    className="btn-ghost text-[11px]" data-testid="reject-all-emails">
+                    <Flag size={10} /> Reject all
+                  </button>
+                  <button onClick={approveAllEmails} disabled={leadStats.total === 0}
+                    className="btn-secondary text-[11px]" data-testid="approve-all-emails">
+                    <Check size={10} /> Approve all
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="text-[11px] font-medium">{selectedReview.length} selected</span>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => setSelectedReview([])}
+                    className="btn-ghost text-[11px] text-ink-muted">Clear</button>
+                  <button onClick={() => bulkSetReviewStatus("rejected")}
+                    className="btn-ghost text-[11px]" data-testid="bulk-reject">
+                    <Flag size={10} /> Reject selected
+                  </button>
+                  <button onClick={() => bulkSetReviewStatus("approved")}
+                    className="btn-primary text-[11px]" data-testid="bulk-approve">
+                    <Check size={10} /> Approve selected
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-          {selectedReview.length > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1.5 border-t border-line bg-accent-soft/40">
-              <span className="text-[11px] font-medium">{selectedReview.length} selected</span>
-              <button onClick={() => bulkSetReviewStatus("approved")} className="btn-primary text-[11px] ml-auto" data-testid="bulk-approve">
-                <Check size={10} /> Approve selected
-              </button>
-              <button onClick={() => bulkSetReviewStatus("rejected")} className="btn-ghost text-[11px] text-danger" data-testid="bulk-reject">
-                <Flag size={10} /> Reject selected
-              </button>
-              <button onClick={() => setSelectedReview([])} className="btn-ghost text-[11px] text-ink-muted">Clear</button>
-            </div>
-          )}
         </div>
       )}
 
@@ -1507,6 +1543,27 @@ function ReviewAndSendView({
             {rail}
             {/* Preview - always expanded, takes remaining space */}
             <div className="shadow-card rounded-lg bg-white">
+              {steps.length > 1 && (
+                <div className="px-2.5 py-1.5 border-b border-line flex items-center gap-1.5 flex-wrap" data-testid="preview-step-tabs">
+                  <span className="text-[10.5px] text-ink-muted font-mono mr-0.5">STEP</span>
+                  {steps.map((s, i) => (
+                    <button key={i} onClick={() => changePreviewStep(i)}
+                      data-testid={`preview-step-${i}`}
+                      title={s?.subject || `Step ${i + 1}`}
+                      className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${i === previewStep ? "border-ink bg-surfacehover font-medium" : "border-line text-ink-muted hover:bg-surfacehover"}`}>
+                      {i + 1}
+                      <span className="text-[10px] text-ink-muted ml-1 font-mono">
+                        {s?.day ? `+${s.day}d` : "d0"}
+                      </span>
+                    </button>
+                  ))}
+                  {previewStep > 0 && (
+                    <span className="text-[10px] text-ink-muted ml-1">
+                      Follow-up — shows this step's template with each lead's opener applied.
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="px-2.5 py-1.5 border-b border-line flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1 min-w-0">
                   <button onClick={prevReview} disabled={reviewIndex === 0} className="btn-ghost text-[11px] px-1 py-0.5 disabled:opacity-30"><ChevronLeft size={10} /></button>

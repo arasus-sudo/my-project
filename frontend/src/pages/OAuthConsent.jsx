@@ -6,6 +6,9 @@ import { toast } from "sonner";
 import InnoiraLogo from "../components/InnoiraLogo";
 import { ShieldCheck, Eye, Pencil, Send, Loader2 } from "lucide-react";
 
+// Fixed display order, independent of what the client requested.
+const ALL_SCOPES = ["read", "write", "send"];
+
 // Human-readable framing for each MCP scope — shown on the consent screen so
 // granting "send" (real outbound contact + real cost) is never a blind click.
 const SCOPE_INFO = {
@@ -29,6 +32,7 @@ export default function OAuthConsent() {
   const requestId = params.get("request_id");
   const { user, loading, login } = useAuth();
   const [info, setInfo] = useState(null);
+  const [selectedScopes, setSelectedScopes] = useState([]);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
@@ -38,9 +42,18 @@ export default function OAuthConsent() {
   useEffect(() => {
     if (!user || !requestId) return;
     api.get(`/oauth/consent-info?request_id=${encodeURIComponent(requestId)}`)
-      .then((r) => setInfo(r.data))
+      .then((r) => {
+        setInfo(r.data);
+        // Default to exactly what the client asked for — the user can still
+        // opt into anything else their role allows (e.g. "send") below.
+        setSelectedScopes(r.data.requested_scopes.filter((s) => r.data.allowed_scopes.includes(s)));
+      })
       .catch((err) => setError(err?.response?.data?.detail || "This authorization request has expired — go back and try connecting again."));
   }, [user, requestId]);
+
+  const toggleScope = (scope) => {
+    setSelectedScopes((cur) => cur.includes(scope) ? cur.filter((s) => s !== scope) : [...cur, scope]);
+  };
 
   const doLogin = async (e) => {
     e.preventDefault();
@@ -57,7 +70,7 @@ export default function OAuthConsent() {
   const decide = async (approve) => {
     setBusy(true);
     try {
-      const { data } = await api.post("/oauth/consent/approve", { request_id: requestId, approve });
+      const { data } = await api.post("/oauth/consent/approve", { request_id: requestId, approve, scopes: selectedScopes });
       window.location.href = data.redirect_url;
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Something went wrong — try connecting again.");
@@ -104,20 +117,25 @@ export default function OAuthConsent() {
       <div className="text-section font-display font-semibold mt-4">
         <span className="text-accent">{info.client_name}</span> wants to access {info.workspace_name}
       </div>
-      <p className="text-caption text-ink-muted mb-5">Signed in as {user.email}. Review what you're granting before continuing.</p>
+      <p className="text-caption text-ink-muted mb-1">Signed in as {user.email}. Review what you're granting before continuing.</p>
+      <p className="text-tiny text-ink-muted mb-5">{info.client_name} asked for {info.requested_scopes.join(", ") || "no scopes"} — you can grant more or less, up to what your role allows.</p>
       <div className="space-y-3 w-full mb-6 text-left">
-        {info.requested_scopes.map((scope) => {
+        {ALL_SCOPES.map((scope) => {
           const s = SCOPE_INFO[scope] || { icon: ShieldCheck, label: scope, desc: "" };
           const Icon = s.icon;
-          const grantable = info.grantable_scopes.includes(scope);
+          const allowed = info.allowed_scopes.includes(scope);
+          const checked = selectedScopes.includes(scope);
           return (
-            <div key={scope} className={`flex items-start gap-3 p-3 rounded-xl border border-line ${grantable ? "" : "opacity-40"}`}>
+            <label key={scope}
+              className={`flex items-start gap-3 p-3 rounded-xl border border-line ${allowed ? "cursor-pointer hover:bg-ash" : "opacity-40 cursor-not-allowed"}`}>
+              <input type="checkbox" className="mt-1 shrink-0" checked={allowed && checked} disabled={!allowed}
+                onChange={() => toggleScope(scope)} data-testid={`oauth-consent-scope-${scope}`} />
               <Icon size={16} className="mt-0.5 shrink-0 text-ink-muted" />
               <div>
-                <div className="text-body font-medium">{s.label}{!grantable && " — not available for your role"}</div>
+                <div className="text-body font-medium">{s.label}{!allowed && " — not available for your role"}</div>
                 <div className="text-caption text-ink-muted">{s.desc}</div>
               </div>
-            </div>
+            </label>
           );
         })}
       </div>
