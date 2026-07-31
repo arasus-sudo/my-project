@@ -78,7 +78,6 @@ let webpackConfig = {
   webpack: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
-      'node-vibrant/browser$': path.resolve(__dirname, 'node_modules/node-vibrant/dist/esm/browser.js'),
     },
     configure: (webpackConfig) => {
 
