@@ -564,7 +564,7 @@ async def create_mailbox(body: MailboxIn, user=Depends(current_user)):
         "status": "disconnected",
         "warmup_enabled": True,
         "warmup_day": 1,
-        "warmup_target": 30,
+        "warmup_target": m.get("daily_cap", 50),
         # Unknown until we actually resolve it — not True by default.
         "dns": {"spf": False, "dkim": False, "dmarc": False, "checked": False},
         "sent_today": 0,
@@ -670,6 +670,12 @@ async def toggle_warmup(mid: str, user=Depends(current_user)):
     if enabled:
         day = m.get("warmup_day", 1)
         update["daily_cap"] = _warmup_daily_cap(day)
+    else:
+        # Pausing warmup must actually unblock sending — `_pick_mailbox` gates
+        # on daily_cap alone, so leaving the ramped-down cap in place would keep
+        # failing every send with "no eligible mailbox" right after the user
+        # paused warmup. Restore the full cap.
+        update["daily_cap"] = m.get("warmup_target", 50)
     await db.mailboxes.update_one({"id": mid}, {"$set": update})
     return {"warmup_enabled": enabled}
 
