@@ -5,9 +5,17 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# This workflow ships BOTH halves of the release, so the group is named for the
+# workflow, not for one job (it used to be called "deploy-backend" while gating
+# the frontend job too).
+#
+# cancel-in-progress is deliberately false: cancelling a deploy part-way through
+# is one of the ways production ends up with a new backend and a stale frontend.
+# A newer push queues behind the in-flight run instead — GitHub keeps only the
+# newest pending run, so the latest commit still wins, it just waits its turn.
 concurrency:
-  group: deploy-backend
-  cancel-in-progress: true
+  group: deploy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -18,8 +26,19 @@ env:
   BACKEND_NAME: innoira-api
   FRONTEND_NAME: innoira-app
 
+# Job graph (see the 2026-07-30 split-brain deploy, run 30548010702):
+#
+#   build-backend  ─┐
+#                   ├─> deploy-backend ─> deploy-frontend ─> deploy-status
+#   build-frontend ─┘
+#
+# Nothing touches Azure until BOTH halves have been built and validated, so a
+# frontend build failure now blocks the backend deploy instead of letting the
+# two halves diverge. deploy-status runs unconditionally and fails loudly if
+# only one half made it out.
 jobs:
-  deploy-backend:
+  build-backend:
+    name: Build & validate backend package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +60,113 @@ jobs:
           pip install cryptography==42.0.8 --target=/tmp/backend-vendor \
             --only-binary=:all: --platform manylinux_2_17_x86_64 \
             --python-version 3.11 --implementation cp --no-deps
+
+      - name: Validate backend sources compile
+        run: |
+          # Cheap equivalent of the frontend's build step: a syntax error in any
+          # backend module fails here, before anything is deployed. Runs before
+          # vendor/ exists so it only compiles first-party code.
+          python -m compileall -q backend -x '(venv|vendor|node_modules)'
+
+      - name: Package backend
+        run: |
+          cd backend
+          rm -f deploy.zip backend-deploy.zip
+          # Copy pre-installed deps into vendor/
+          mkdir -p vendor
+          cp -r /tmp/backend-vendor/* vendor/
+          # Zip without stale artifacts
+          zip -r /tmp/deploy.zip . \
+            -x "*__pycache__*" \
+            -x "*/__pycache__/*" \
+            -x "*venv*" \
+            -x "*/venv/*" \
+            -x "*.venv*" \
+            -x ".git*" \
+            -x "*.log" \
+            -x "*.err" \
+            -x ".env" \
+            -x "deploy.zip" \
+            -x "backend-deploy.zip"
+          echo "Zip size: $(du -sh /tmp/deploy.zip | cut -f1)"
+          ls -lh /tmp/deploy.zip
+
+      - name: Validate package contents
+        run: |
+          unzip -l /tmp/deploy.zip > /tmp/zip-listing.txt
+          if ! grep -qE ' server\.py$' /tmp/zip-listing.txt; then
+            echo "::error::server.py is missing from the backend package"
+            exit 1
+          fi
+          vendor_entries=$(grep -cE ' vendor/' /tmp/zip-listing.txt || true)
+          echo "Vendored files in package: ${vendor_entries:-0}"
+          if [ "${vendor_entries:-0}" -lt 50 ]; then
+            echo "::error::backend package has no vendored dependencies (PYTHONPATH would be empty)"
+            exit 1
+          fi
+
+      - name: Upload backend package
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-package
+          path: /tmp/deploy.zip
+          retention-days: 7
+          if-no-files-found: error
+
+  build-frontend:
+    name: Build & validate frontend bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci --legacy-peer-deps
+          npm run build
+        env:
+          REACT_APP_BACKEND_URL: ${{ env.BACKEND_URL }}
+          CI: false
+
+      - name: Validate build output
+        run: |
+          if [ ! -f frontend/build/index.html ]; then
+            echo "::error::frontend/build/index.html missing — build produced no bundle"
+            exit 1
+          fi
+          js_bundles=$(find frontend/build -name '*.js' | wc -l)
+          echo "JS bundles: $js_bundles"
+          if [ "$js_bundles" -lt 1 ]; then
+            echo "::error::frontend build contains no JS bundle"
+            exit 1
+          fi
+
+      - name: Upload frontend bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/build
+          retention-days: 7
+          if-no-files-found: error
+
+  deploy-backend:
+    name: Deploy backend
+    runs-on: ubuntu-latest
+    # Gated on BOTH builds: a broken frontend build must not let the backend ship alone.
+    needs: [build-backend, build-frontend]
+    outputs:
+      deployed: ${{ steps.push.outputs.deployed }}
+    steps:
+      - name: Download backend package
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-package
+          path: /tmp
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -71,27 +197,9 @@ jobs:
           # this is Azure's own documented fix for exactly that error.
           sleep 30
 
-      - name: Package and deploy backend
+      - name: Deploy backend
+        id: push
         run: |
-          cd backend
-          rm -f deploy.zip backend-deploy.zip
-          # Copy pre-installed deps into vendor/
-          mkdir -p vendor
-          cp -r /tmp/backend-vendor/* vendor/
-          # Zip without stale artifacts
-          zip -r /tmp/deploy.zip . \
-            -x "*__pycache__*" \
-            -x "*/__pycache__/*" \
-            -x "*venv*" \
-            -x "*/venv/*" \
-            -x "*.venv*" \
-            -x ".git*" \
-            -x "*.log" \
-            -x "*.err" \
-            -x ".env" \
-            -x "deploy.zip" \
-            -x "backend-deploy.zip"
-          echo "Zip size: $(du -sh /tmp/deploy.zip | cut -f1)"
           ls -lh /tmp/deploy.zip
           az webapp deploy \
             --resource-group ${{ env.AZURE_RG }} \
@@ -100,6 +208,10 @@ jobs:
             --type zip \
             --timeout 1200 \
             --verbose
+          # Only reached when the upload succeeded — deploy-status keys the
+          # split-brain check off this, not off the job's overall result, so a
+          # later health-check failure still counts as "backend code shipped".
+          echo "deployed=true" >> "$GITHUB_OUTPUT"
 
       - name: Verify deployment
         run: |
@@ -134,23 +246,24 @@ jobs:
           exit 1
 
   deploy-frontend:
+    name: Deploy frontend
     runs-on: ubuntu-latest
+    # Backend first (it is the backward-compatible half), then the bundle that
+    # talks to it. If the backend deploy fails, the frontend is skipped and
+    # production stays wholly on the previous release.
+    needs: [build-backend, build-frontend, deploy-backend]
+    outputs:
+      deployed: ${{ steps.push.outputs.deployed }}
     steps:
+      # The SWA action expects a checked-out workspace; the bundle itself comes
+      # from the build stage's artifact, it is never rebuilt here.
       - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Download frontend bundle
+        uses: actions/download-artifact@v4
         with:
-          node-version: 22
-
-      - name: Build frontend
-        run: |
-          cd frontend
-          npm ci --legacy-peer-deps
-          npm run build
-        env:
-          REACT_APP_BACKEND_URL: ${{ env.BACKEND_URL }}
-          CI: false
+          name: frontend-build
+          path: frontend/build
 
       - name: Deploy to Static Web App
         uses: Azure/static-web-apps-deploy@v1
@@ -161,6 +274,63 @@ jobs:
           app_location: frontend/build
           skip_app_build: true
 
+      - name: Record successful upload
+        id: push
+        run: echo "deployed=true" >> "$GITHUB_OUTPUT"
+
       - name: Verify deployment
         run: |
           curl -s -o /dev/null -w "Frontend HTTP %{http_code}\n" "https://brave-pebble-0bf1fca00.7.azurestaticapps.net/"
+
+  deploy-status:
+    name: Release consistency check
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend, deploy-backend, deploy-frontend]
+    if: always()
+    steps:
+      - name: Fail loudly if only one half of the release shipped
+        env:
+          BACKEND_RESULT: ${{ needs.deploy-backend.result }}
+          FRONTEND_RESULT: ${{ needs.deploy-frontend.result }}
+          BACKEND_PUSHED: ${{ needs.deploy-backend.outputs.deployed }}
+          FRONTEND_PUSHED: ${{ needs.deploy-frontend.outputs.deployed }}
+        run: |
+          backend="${BACKEND_PUSHED:-false}"
+          frontend="${FRONTEND_PUSHED:-false}"
+          {
+            echo "### Release consistency"
+            echo ""
+            echo "| half | job result | shipped to production |"
+            echo "| --- | --- | --- |"
+            echo "| backend | \`$BACKEND_RESULT\` | \`$backend\` |"
+            echo "| frontend | \`$FRONTEND_RESULT\` | \`$frontend\` |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$backend" = "$frontend" ]; then
+            if [ "$backend" = "true" ]; then
+              echo "Both halves shipped from ${GITHUB_SHA}." | tee -a "$GITHUB_STEP_SUMMARY"
+            else
+              echo "Neither half shipped — production is unchanged and internally consistent." \
+                | tee -a "$GITHUB_STEP_SUMMARY"
+              if [ "$BACKEND_RESULT" = "cancelled" ] || [ "$FRONTEND_RESULT" = "cancelled" ]; then
+                echo "::warning::A deploy job was cancelled; if it died mid-upload, verify production by hand."
+              fi
+            fi
+            exit 0
+          fi
+
+          if [ "$backend" = "true" ]; then
+            shipped="backend"; stale="frontend"
+          else
+            shipped="frontend"; stale="backend"
+          fi
+          {
+            echo "**SPLIT DEPLOY — production is serving mismatched halves.**"
+            echo ""
+            echo "Commit \`${GITHUB_SHA}\` shipped the **$shipped** but not the **$stale**."
+            echo "Production is running new $shipped code against the old $stale."
+            echo "Fix the failing job and re-run this workflow until both halves report shipped."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Split deploy — $shipped shipped from ${GITHUB_SHA}, $stale did not. Production halves are out of sync."
+          exit 1
