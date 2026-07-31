@@ -1,11 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { Loader2, Image, Trash2 } from "lucide-react";
+import { Loader2, Image, Trash2, Upload } from "lucide-react";
 import { api } from "../../../lib/api";
 
 export default function ImageGalleryDrawer({ onClose, onAddAsElement, onAddAsBackground }) {
   const [images, setImages] = useState([]);
   const [busy, setBusy] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -19,6 +21,26 @@ export default function ImageGalleryDrawer({ onClose, onAddAsElement, onAddAsBac
       }
     })();
   }, []);
+
+  const onUploadFile = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    if (!f.type.startsWith("image/")) { toast.error("Please pick an image file"); return; }
+    if (f.size > 5 * 1024 * 1024) { toast.error("Image too large (max 5 MB)"); return; }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const { data } = await api.post("/carousel/image/upload", fd);
+      setImages((prev) => [{ id: data.image_id, image_url: data.image_url, prompt: data.prompt || f.name }, ...prev]);
+      toast.success("Image uploaded to your gallery");
+    } catch {
+      toast.error("Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const del = async (imageId) => {
     try {
@@ -35,15 +57,21 @@ export default function ImageGalleryDrawer({ onClose, onAddAsElement, onAddAsBac
       <div className="w-full max-w-md bg-white h-full overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 bg-white border-b border-line px-5 py-4 flex items-center gap-3 z-10">
           <Image size={16} />
-          <div className="font-display font-semibold text-subheading">Generated images</div>
-          <button onClick={onClose} className="ml-auto btn-ghost text-caption">Close</button>
+          <div className="font-display font-semibold text-subheading">Images</div>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onUploadFile} data-testid="gallery-upload-file" />
+          <button onClick={() => fileRef.current?.click()} disabled={uploading}
+            data-testid="gallery-upload-btn"
+            className="ml-auto btn-ghost text-caption">
+            {uploading ? <><Loader2 size={12} className="animate-spin" /> Uploading…</> : <><Upload size={12} /> Upload</>}
+          </button>
+          <button onClick={onClose} className="btn-ghost text-caption">Close</button>
         </div>
 
         <div className="p-4">
           {busy ? (
             <div className="flex items-center justify-center py-16"><Loader2 size={20} className="animate-spin text-ink-muted" /></div>
           ) : images.length === 0 ? (
-            <div className="text-center py-16 text-ink-muted text-body">No images yet — generate one from the Generate image panel.</div>
+            <div className="text-center py-16 text-ink-muted text-body">No images yet — upload one or generate from the Generate image panel.</div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {images.map((img) => (

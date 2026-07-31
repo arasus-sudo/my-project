@@ -24,6 +24,7 @@ PRICING_PER_MILLION: Dict[str, Dict[str, float]] = {
     "claude-sonnet-4-5": {"input": 3.00, "output": 15.00},
     "claude-haiku-4-5": {"input": 1.00, "output": 5.00},
     "sonar-pro": {"input": 3.00, "output": 15.00},  # Perplexity — unverified, confirm against invoice
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},  # OpenAI — unverified, confirm against invoice
 }
 # Fallback for any model not in the table above — priced at Sonnet-tier rather
 # than silently going uncounted.

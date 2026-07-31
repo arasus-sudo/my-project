@@ -1321,8 +1321,10 @@ export default function CreateEQEditor() {
 
   /* --- Brand kit apply / AI copy assist --- */
   const LOGO_POS = {
-    tl: { x: 80, y: 80 }, tr: { x: CANVAS.w - 80 - 240, y: 80 },
-    bl: { x: 80, y: CANVAS.h - 120 - 120 }, br: { x: CANVAS.w - 80 - 240, y: CANVAS.h - 120 - 120 },
+    tl: (d) => ({ x: 80, y: 80 }),
+    tr: (d) => ({ x: CANVAS.w - 80 - d.w, y: 80 }),
+    bl: (d) => ({ x: 80, y: CANVAS.h - 80 - d.h }),
+    br: (d) => ({ x: CANVAS.w - 80 - d.w, y: CANVAS.h - 80 - d.h }),
   };
   const LOGO_DIMS = { s: { w: 120, h: 60 }, m: { w: 180, h: 90 }, l: { w: 240, h: 120 }, xl: { w: 360, h: 180 } };
   const applyBrandKit = async (kit) => {
@@ -1331,18 +1333,17 @@ export default function CreateEQEditor() {
     const sizeKey = kit.logo_size || "l";
     const posKey = kit.logo_position || "bl";
     const dims = LOGO_DIMS[sizeKey] || LOGO_DIMS.l;
-    const pos = LOGO_POS[posKey] || LOGO_POS.bl;
+    const pos = (LOGO_POS[posKey] || LOGO_POS.bl)(dims);
     mutate((n) => {
       if (kit.palette_id && !reapply) n.palette_id = kit.palette_id;
       n.brand = { ...(n.brand || {}), logo_url: kit.logo_url, colors: kit.colors, fonts: kit.fonts, logo_size: sizeKey, logo_position: posKey };
       if (kit.logo_url) {
         for (const s of n.slides) {
-          const existing = (s.elements || []).findIndex((e) => e.type === "image" && e.role === "logo");
-          if (reapply || existing === -1) {
-            if (existing >= 0) s.elements.splice(existing, 1);
+          const existing = (s.elements || []).find((e) => e.type === "image" && e.role === "logo");
+          if (!existing) {
             s.elements.push({ id: newId(), type: "image", role: "logo", src: kit.logo_url, x: pos.x, y: pos.y, w: dims.w, h: dims.h, fit: "contain" });
-          } else {
-            s.elements.push({ id: newId(), type: "image", role: "logo", src: kit.logo_url, x: pos.x, y: pos.y, w: dims.w, h: dims.h, fit: "contain" });
+          } else if (reapply) {
+            Object.assign(existing, { src: kit.logo_url, x: pos.x, y: pos.y, w: dims.w, h: dims.h });
           }
         }
       }

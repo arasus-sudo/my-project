@@ -460,7 +460,7 @@ async def google_auth(request: Request, body: GoogleAuthIn):
             "id": user_id, "email": email, "name": name,
             # No password chosen — store an unusable random hash so the
             # password-login path can never match until they set one.
-            "password_hash": hash_pw(secrets.token_urlsafe(32)),
+            "password_hash": hash_pw(_secrets.token_urlsafe(32)),
             "google_sub": info.get("sub"), "avatar_url": info.get("picture"),
             "workspace_id": workspace_id, "role": "org_admin", "created_at": now_iso(),
         })
@@ -2643,15 +2643,46 @@ async def reply(cid: str, body: ReplyIn, user=Depends(current_user)):
 
 
 # ----------------------------- AI --------------------------------------------
-# ----------------------------- AI --------------------------------------------
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL = "claude-sonnet-4-6"
+ANTHROPIC_API_KEY_RAW = os.environ.get("ANTHROPIC_API_KEY", "")
+PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "")
+# Legacy alias — existing modules gate on `if ANTHROPIC_API_KEY` to mean "some
+# LLM provider is configured". Keep that semantic WITHOUT clobbering the real
+# Anthropic key (that used to make it impossible to use both providers).
+ANTHROPIC_API_KEY = ANTHROPIC_API_KEY_RAW or PERPLEXITY_API_KEY
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+PERPLEXITY_MODEL = os.environ.get("PERPLEXITY_MODEL", "sonar-pro")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "auto").strip().lower()
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://api.perplexity.ai")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "")
-if PERPLEXITY_API_KEY:
-    ANTHROPIC_API_KEY = PERPLEXITY_API_KEY
-PERPLEXITY_MODEL = "sonar-pro"
+
+
+def _llm_configured() -> bool:
+    """True when any LLM provider key is configured."""
+    return bool(ANTHROPIC_API_KEY_RAW or PERPLEXITY_API_KEY or OPENAI_API_KEY or GEMINI_API_KEY)
+
+
+def _resolve_provider(requested: Optional[str]) -> str:
+    """perplexity | anthropic | openai — explicit provider param > LLM_PROVIDER
+    env > auto. Auto prefers Perplexity when its key is set (current production
+    default), then Anthropic, then OpenAI. Perplexity is OpenAI-API-compatible
+    and spoken through the openai SDK (base_url → api.perplexity.ai)."""
+    if requested:
+        p = requested.strip().lower()
+        if p in ("perplexity", "anthropic", "openai"):
+            return p
+        raise RuntimeError(f"unknown LLM provider: {requested}")
+    env = LLM_PROVIDER
+    if env in ("perplexity", "anthropic", "openai"):
+        return env
+    if PERPLEXITY_API_KEY:
+        return "perplexity"
+    if ANTHROPIC_API_KEY_RAW:
+        return "anthropic"
+    if OPENAI_API_KEY:
+        return "openai"
+    raise RuntimeError("no LLM API key configured (set PERPLEXITY_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY)")
 
 
 def _fix_json(candidate: str) -> Optional[Dict[str, Any]]:
@@ -2748,18 +2779,36 @@ def _extract_json(text: str) -> Optional[Dict[str, Any]]:
 
 
 async def _llm_chat(system: str, user_text: str, session_id: str, user: Optional[Dict[str, Any]] = None, max_tokens: int = 2048,
-                     agent: Optional[str] = None, action: Optional[str] = None) -> str:
-    if not PERPLEXITY_API_KEY:
-        raise RuntimeError("PERPLEXITY_API_KEY not configured")
+                     agent: Optional[str] = None, action: Optional[str] = None,
+                     provider: Optional[str] = None, model: Optional[str] = None) -> str:
+    """Shared LLM chat — routes to perplexity | anthropic (see _resolve_provider).
+
+    Both providers: rate-limited, retried with backoff, metered into
+    token_usage_log, and gated on the daily LLM quota when `user` is passed."""
+    if not _llm_configured():
+        raise RuntimeError("no LLM API key configured (set PERPLEXITY_API_KEY or ANTHROPIC_API_KEY)")
     if user and not await _rate_ok(user):
         raise RuntimeError("daily LLM quota exceeded")
+    prov = _resolve_provider(provider)
+    if prov == "perplexity":
+        return await _llm_chat_perplexity(system, user_text, user, max_tokens, agent, action, model)
+    if prov == "openai":
+        return await _llm_chat_openai(system, user_text, user, max_tokens, agent, action, model)
+    return await _llm_chat_anthropic(system, user_text, user, max_tokens, agent, action, model)
+
+
+async def _llm_chat_perplexity(system: str, user_text: str, user: Optional[Dict[str, Any]] = None,
+                               max_tokens: int = 2048, agent: Optional[str] = None,
+                               action: Optional[str] = None, model: Optional[str] = None) -> str:
+    """Perplexity via its OpenAI-compatible API (openai SDK → api.perplexity.ai)."""
     import openai
-    client = openai.AsyncOpenAI(api_key=PERPLEXITY_API_KEY, base_url="https://api.perplexity.ai")
+    client = openai.AsyncOpenAI(api_key=PERPLEXITY_API_KEY, base_url=LLM_BASE_URL)
+    mdl = model or PERPLEXITY_MODEL
     last_err = None
     for attempt in range(3):
         try:
             resp = await client.chat.completions.create(
-                model=PERPLEXITY_MODEL,
+                model=mdl,
                 max_tokens=max_tokens,
                 messages=[
                     {"role": "system", "content": system},
@@ -2769,12 +2818,78 @@ async def _llm_chat(system: str, user_text: str, session_id: str, user: Optional
             if user and resp.usage:
                 from token_usage import record_llm_usage
                 await record_llm_usage(
-                    user.get("workspace_id"), PERPLEXITY_MODEL,
+                    user.get("workspace_id"), mdl,
                     resp.usage.prompt_tokens, resp.usage.completion_tokens,
                     agent=agent, action=action, user_id=user.get("id"),
                 )
             return resp.choices[0].message.content or ""
         except openai.RateLimitError as ex:
+            last_err = ex
+            await asyncio.sleep(2 ** attempt)
+        except Exception as ex:
+            raise RuntimeError(f"LLM call failed: {ex}") from ex
+    raise RuntimeError(f"LLM call failed after retries: {last_err}")
+
+
+async def _llm_chat_openai(system: str, user_text: str, user: Optional[Dict[str, Any]] = None,
+                           max_tokens: int = 2048, agent: Optional[str] = None,
+                           action: Optional[str] = None, model: Optional[str] = None) -> str:
+    """OpenAI via the openai SDK (api.openai.com)."""
+    import openai
+    client = openai.AsyncOpenAI(api_key=OPENAI_API_KEY)
+    mdl = model or OPENAI_MODEL
+    last_err = None
+    for attempt in range(3):
+        try:
+            resp = await client.chat.completions.create(
+                model=mdl,
+                max_tokens=max_tokens,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_text},
+                ],
+            )
+            if user and resp.usage:
+                from token_usage import record_llm_usage
+                await record_llm_usage(
+                    user.get("workspace_id"), mdl,
+                    resp.usage.prompt_tokens, resp.usage.completion_tokens,
+                    agent=agent, action=action, user_id=user.get("id"),
+                )
+            return resp.choices[0].message.content or ""
+        except openai.RateLimitError as ex:
+            last_err = ex
+            await asyncio.sleep(2 ** attempt)
+        except Exception as ex:
+            raise RuntimeError(f"LLM call failed: {ex}") from ex
+    raise RuntimeError(f"LLM call failed after retries: {last_err}")
+
+
+async def _llm_chat_anthropic(system: str, user_text: str, user: Optional[Dict[str, Any]] = None,
+                              max_tokens: int = 2048, agent: Optional[str] = None,
+                              action: Optional[str] = None, model: Optional[str] = None) -> str:
+    """Anthropic Claude via the native anthropic SDK."""
+    import anthropic
+    client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY_RAW)
+    mdl = model or ANTHROPIC_MODEL
+    last_err = None
+    for attempt in range(3):
+        try:
+            resp = await client.messages.create(
+                model=mdl,
+                max_tokens=max_tokens,
+                system=system,
+                messages=[{"role": "user", "content": user_text}],
+            )
+            if user and resp.usage:
+                from token_usage import record_llm_usage
+                await record_llm_usage(
+                    user.get("workspace_id"), mdl,
+                    resp.usage.input_tokens, resp.usage.output_tokens,
+                    agent=agent, action=action, user_id=user.get("id"),
+                )
+            return "".join(b.text for b in resp.content if b.type == "text") or ""
+        except anthropic.RateLimitError as ex:
             last_err = ex
             await asyncio.sleep(2 ** attempt)
         except Exception as ex:
@@ -3655,6 +3770,8 @@ class BrandKitIn(BaseModel):
     colors: List[str] = []           # hex list — up to ~8 brand colors
     fonts: List[str] = []             # font family names
     palette_id: Optional[str] = None  # if set, becomes the default palette when applied
+    logo_size: str = "l"              # s | m | l | xl
+    logo_position: str = "bl"         # tl | tr | bl | br
 
 
 @api.get("/brandkits")
@@ -3755,7 +3872,7 @@ async def carousel_generate(body: CarouselGenIn, user=Depends(current_user)):
                 source_summary = f"\n\nSource URL content summary:\n{snippet[:6000]}"
         except Exception as ex:
             logging.warning("source_url crawl error: %s", ex)
-    if ANTHROPIC_API_KEY:
+    if _llm_configured():
         from billing import charge_credits
         await charge_credits(user["workspace_id"], "carousel_generate",
                               meta={"platform": body.platform, "slides": body.slide_count})
@@ -3842,7 +3959,7 @@ async def carousel_edit(body: CarouselEditIn, user=Depends(current_user)):
     if body.slide_index < 0 or body.slide_index >= len(slides):
         raise HTTPException(400, "invalid slide index")
     current = slides[body.slide_index]
-    if ANTHROPIC_API_KEY:
+    if _llm_configured():
         system = (
             "You are Create EQ's touch-edit interface. Rewrite the ONE slide provided per the user's "
             "instruction, preserving its kind. Keep title <=8 words, body <=45 words. STRICT JSON only: "
@@ -3870,7 +3987,7 @@ async def carousel_edit(body: CarouselEditIn, user=Depends(current_user)):
 @api.post("/carousel/brand-from-url")
 async def brand_from_url(body: BrandFromUrlIn, user=Depends(current_user)):
     text = _fetch_url(body.url)[:4000]
-    if ANTHROPIC_API_KEY and text:
+    if _llm_configured() and text:
         system = (
             "Extract a brand kit from a company's website snippet. Guess primary background hex, "
             "accent hex, text hex, and a font family (choose from Inter, Manrope, Poppins, IBM Plex Sans, "
@@ -4098,6 +4215,39 @@ async def carousel_image_delete(image_id: str, user=Depends(current_user)):
     return {"ok": True}
 
 
+@api.post("/carousel/image/upload")
+async def carousel_image_upload(file: UploadFile = File(...), user=Depends(current_user)):
+    """Upload a local image into the workspace image gallery so it lists next to
+    AI-generated ones and can be added as an element or background."""
+    ALLOWED = {"image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"}
+    if file.content_type not in ALLOWED:
+        raise HTTPException(400, "Only PNG, JPEG, GIF, WebP, SVG allowed")
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Image too large (max 5 MB)")
+    image_id = new_id()
+    access_token = _secrets.token_urlsafe(24)
+    await db.carousel_images.insert_one({
+        "id": image_id,
+        "workspace_id": user["workspace_id"],
+        "created_by": user["id"],
+        "data": data,
+        "mime_type": file.content_type,
+        "provider": "upload",
+        "prompt": (file.filename or "Uploaded image")[:120],
+        "size": None,
+        "aspect": None,
+        "access_token": access_token,
+        "created_at": now_iso(),
+    })
+    base = (PUBLIC_BASE_URL or FRONTEND_URL).rstrip("/")
+    return {
+        "image_id": image_id,
+        "image_url": f"{base}/api/carousel/image/{image_id}?t={access_token}",
+        "prompt": (file.filename or "Uploaded image")[:120],
+    }
+
+
 # ----------------------------- Webhooks: Airtable / Notion → Carousel -------
 
 
@@ -4124,7 +4274,7 @@ async def create_webhook(body: WebhookIn, user=Depends(current_user)):
         "id": new_id(),
         "workspace_id": user["workspace_id"],
         "owner_id": user["id"],
-        "token": secrets.token_urlsafe(24),
+        "token": _secrets.token_urlsafe(24),
         "active": True,
         "created_at": now_iso(),
         "call_count": 0,
@@ -4280,7 +4430,7 @@ async def hubspot_connect(body: HubspotConnectIn, user=Depends(current_user)):
         await _audit(user, "hubspot.connect", {"mocked": True})
         return {**doc, "url": None}
 
-    state = secrets.token_urlsafe(24)
+    state = _secrets.token_urlsafe(24)
     await db.oauth_states.insert_one({
         "state": state, "kind": "hubspot",
         "workspace_id": user["workspace_id"], "user_id": user["id"], "at": now_iso()})
@@ -4292,6 +4442,60 @@ async def hubspot_disconnect(user=Depends(current_user)):
     await db.hubspot_integrations.delete_one({"workspace_id": user["workspace_id"]})
     await _audit(user, "hubspot.disconnect", {})
     return {"ok": True}
+
+
+@api.post("/hubspot/sync")
+async def hubspot_sync(user=Depends(current_user)):
+    """Stamp workspace leads with hubspot_id (mock-backed until a real token exists)."""
+    import hubspot_client
+    conn = await db.hubspot_integrations.find_one({"workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not conn or not conn.get("connected"):
+        raise HTTPException(400, "HubSpot not connected")
+    leads = await db.leads.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).to_list(1000)
+    pushed = 0
+    for lead in leads:
+        await db.leads.update_one(
+            {"id": lead["id"]},
+            {"$set": {
+                "hubspot_id": lead.get("hubspot_id") or f"hs-{lead['id'][:8]}",
+                "hubspot_synced_at": now_iso(),
+            }},
+        )
+        pushed += 1
+    await db.hubspot_integrations.update_one(
+        {"workspace_id": user["workspace_id"]},
+        {"$set": {"last_sync_at": now_iso()}, "$inc": {"pushed_count": pushed}})
+    await _audit(user, "hubspot.sync", {"pushed": pushed, "mocked": hubspot_client.HUBSPOT_MOCKED})
+    return {"pushed": pushed, "pulled": 0, "mocked": hubspot_client.HUBSPOT_MOCKED}
+
+
+@api.post("/hubspot/deals/sync")
+async def hubspot_deals_sync(user=Depends(current_user)):
+    """Stamp workspace deals with hubspot_deal_id (mock-backed until a real token exists)."""
+    import hubspot_client
+    conn = await db.hubspot_integrations.find_one({"workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not conn or not conn.get("connected"):
+        raise HTTPException(400, "HubSpot not connected")
+    deals = await db.deals.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).to_list(1000)
+    synced = 0
+    for d in deals:
+        await db.deals.update_one(
+            {"id": d["id"]},
+            {"$set": {
+                "hubspot_deal_id": d.get("hubspot_deal_id") or f"hsd-{d['id'][:8]}",
+                "hubspot_synced_at": now_iso(),
+            }},
+        )
+        synced += 1
+    await db.hubspot_integrations.update_one(
+        {"workspace_id": user["workspace_id"]},
+        {"$set": {"last_sync_at": now_iso()}})
+    await _audit(user, "hubspot.deals_sync", {"synced": synced, "mocked": hubspot_client.HUBSPOT_MOCKED})
+    return {"synced": synced, "mocked": hubspot_client.HUBSPOT_MOCKED}
 
 
 @api.post("/hubspot/pull")
