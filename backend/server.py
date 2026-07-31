@@ -6178,15 +6178,13 @@ async def mcp_oauth_consent_approve(body: McpConsentApproveIn, user=Depends(curr
         "resource": pending.get("resource"), "subject": user["id"],
     })
     final_redirect_url = _construct_redirect_uri(pending["redirect_uri"], code=code, state=pending.get("state"))
-    # Temporary diagnostic: "authorized but failed to connect" reports from
-    # Claude Desktop/claude.ai have no corresponding /token call in our logs
-    # afterward, so we can't yet tell whether this redirect ever reaches the
-    # client. Logging the exact computed URL here settles it on the next
-    # attempt without guessing. Safe to remove once the connect issue is closed.
-    logger.info(
-        "mcp.oauth.consent_approved client_id=%s redirect_base=%s final=%s",
-        pending["client_id"], pending["redirect_uri"], final_redirect_url,
-    )
+    # The "authorized but failed to connect" reports this used to chase are
+    # explained: the redirect and the /token exchange both always worked (the
+    # 200 is right there in the app log), and the failure was the MCP transport
+    # rejecting the deployed Host header with 421 — see _transport_security()
+    # in mcp_server.py. The URL logged here carried a live authorization code,
+    # so it goes rather than staying on as a permanent diagnostic.
+    logger.info("mcp.oauth.consent_approved client_id=%s scopes=%s", pending["client_id"], granted_scopes)
     await _audit(user, "mcp.oauth.consent_approved", {"client_id": pending["client_id"], "scopes": granted_scopes})
     return {"redirect_url": final_redirect_url}
 
