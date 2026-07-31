@@ -325,10 +325,10 @@ export default function CreateEQEditor() {
   const patchElement = useCallback((elId, patch) => {
     const m = gestureActive.current ? mutateLive : mutate;
     m((n) => {
-      const s = n.slides[activeSlide];
+      const s = n.slides[activeSlideRef.current];
       s.elements = s.elements.map((e) => (e.id === elId ? { ...e, ...patch } : e));
     });
-  }, [mutate, mutateLive, activeSlide]);
+  }, [mutate, mutateLive]);
   const addElement = (el) => {
     const withId = { ...el, id: newId() };
     mutate((n) => n.slides[activeSlide].elements.push(withId));
@@ -1403,22 +1403,22 @@ export default function CreateEQEditor() {
         subtitle={`${proj.slides.length} slide${proj.slides.length === 1 ? "" : "s"} · ${palette.name} palette`}
         right={
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => nav("/app/create-eq")} className="btn-ghost"><ChevronLeft size={14} /> Projects</button>
-            <button onClick={undo} title="Undo (Ctrl+Z)" data-testid="undo-btn" className="btn-ghost"><Undo2 size={14} /></button>
-            <button onClick={redo} title="Redo (Ctrl+Shift+Z)" data-testid="redo-btn" className="btn-ghost"><Redo2 size={14} /></button>
-            <button onClick={() => setViewMode(viewMode === "focus" ? "board" : "focus")} data-testid="view-mode-toggle" className="btn-ghost">
+            <button onClick={() => nav("/app/create-eq")} className="btn-ghost btn-sm"><ChevronLeft size={14} /> Projects</button>
+            <button onClick={undo} title="Undo (Ctrl+Z)" data-testid="undo-btn" className="btn-ghost btn-sm"><Undo2 size={14} /></button>
+            <button onClick={redo} title="Redo (Ctrl+Shift+Z)" data-testid="redo-btn" className="btn-ghost btn-sm"><Redo2 size={14} /></button>
+            <button onClick={() => setViewMode(viewMode === "focus" ? "board" : "focus")} data-testid="view-mode-toggle" className="btn-ghost btn-sm">
               {viewMode === "focus" ? <><LayoutGrid size={14} /> Board</> : <><Maximize2 size={14} /> Focus</>}
             </button>
-            <button onClick={() => setShowPreview(true)} data-testid="preview-open-btn" className="btn-secondary"><Play size={14} /> Preview</button>
-            <button onClick={() => setShowGenerateContent(true)} data-testid="generate-content-open" className="btn-secondary"><PenSquare size={14} /> Generate content</button>
-            <button onClick={() => setShowPanorama(true)} data-testid="panorama-open" className="btn-secondary"><Mountain size={14} /> Panorama</button>
-            <button onClick={() => setShowAiImage(true)} data-testid="ai-image-open" className="btn-secondary"><ImagePlus size={14} /> Generate image</button>
-            <button onClick={() => setShowStockPhotos(true)} data-testid="stock-photos-open" className="btn-secondary"><Search size={14} /> Stock photos</button>
-            <button onClick={() => setShowImageGallery(true)} data-testid="image-gallery-open" className="btn-secondary"><ImageIcon size={14} /> Images</button>
-            <button onClick={() => setShowBrandKit(true)} data-testid="brand-kit-open" className="btn-secondary"><Palette size={14} /> Brand kit</button>
-            <button onClick={exportSlidePng} data-testid="export-png-btn" className="btn-secondary"><Download size={14} /> PNG</button>
-            <button onClick={() => setShowPdfPicker(true)} disabled={busy} data-testid="export-pdf-btn" className="btn-secondary"><FileText size={14} /> PDF</button>
-            <button onClick={save} disabled={busy} data-testid="save-carousel-btn" className="btn-primary">
+            <button onClick={() => setShowPreview(true)} data-testid="preview-open-btn" className="btn-secondary btn-sm"><Play size={14} /> Preview</button>
+            <button onClick={() => setShowGenerateContent(true)} data-testid="generate-content-open" className="btn-secondary btn-sm"><PenSquare size={14} /> Generate content</button>
+            <button onClick={() => setShowPanorama(true)} data-testid="panorama-open" className="btn-secondary btn-sm"><Mountain size={14} /> Panorama</button>
+            <button onClick={() => setShowAiImage(true)} data-testid="ai-image-open" className="btn-secondary btn-sm"><ImagePlus size={14} /> Generate image</button>
+            <button onClick={() => setShowStockPhotos(true)} data-testid="stock-photos-open" className="btn-secondary btn-sm"><Search size={14} /> Stock photos</button>
+            <button onClick={() => setShowImageGallery(true)} data-testid="image-gallery-open" className="btn-secondary btn-sm"><ImageIcon size={14} /> Images</button>
+            <button onClick={() => setShowBrandKit(true)} data-testid="brand-kit-open" className="btn-secondary btn-sm"><Palette size={14} /> Brand kit</button>
+            <button onClick={exportSlidePng} data-testid="export-png-btn" className="btn-secondary btn-sm"><Download size={14} /> PNG</button>
+            <button onClick={() => setShowPdfPicker(true)} disabled={busy} data-testid="export-pdf-btn" className="btn-secondary btn-sm"><FileText size={14} /> PDF</button>
+            <button onClick={save} disabled={busy} data-testid="save-carousel-btn" className="btn-primary btn-sm">
               {busy ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : <><Save size={14} /> Save</>}
             </button>
           </div>
@@ -1426,7 +1426,7 @@ export default function CreateEQEditor() {
       />
 
       {viewMode === "focus" ? (
-        <div className="grid grid-cols-12 min-h-[calc(100vh-90px)] bg-neutral-100 overflow-x-auto">
+        <div className="grid grid-cols-12 h-[calc(100vh-90px)] bg-neutral-100 overflow-hidden">
           <aside className="col-span-2 border-r border-line bg-white overflow-y-auto">
             <LeftPanel
               onTemplate={(tpl) => applyTemplateToSlide(tpl)}
@@ -1504,7 +1504,7 @@ export default function CreateEQEditor() {
             />
           </aside>
 
-          <section ref={sectionRef} className="col-span-7 relative overflow-auto"
+          <section ref={sectionRef} className="col-span-7 min-h-0 relative overflow-auto"
             onDragOver={onCanvasDragOver} onDragLeave={onCanvasDragLeave} onDrop={onCanvasDrop}
             onContextMenu={onCanvasContextMenu}>
             {dropHint && (

@@ -199,8 +199,8 @@ export default function AppLayout() {
         <div className="lg:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40 animate-fade-in" onClick={closeSidebar} />
       )}
 
-      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 border-r border-line bg-surface flex flex-col transform transition-transform duration-300 ease-out ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
-        <div className="p-5 border-b border-line relative">
+      <aside className={`fixed lg:sticky lg:h-screen inset-y-0 left-0 z-50 w-64 border-r border-line bg-surface flex flex-col transform transition-transform duration-300 ease-out ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
+        <div className="p-4 border-b border-line relative">
           <button onClick={() => setOpen(!open)} data-testid="suite-switcher"
             className="w-full flex items-center gap-3 hover:bg-ash rounded-xl p-2 transition-colors">
             <div className="flex items-center justify-center">
@@ -234,10 +234,10 @@ export default function AppLayout() {
             </div>
           )}
         </div>
-        <div className="px-4 pt-3 flex items-center gap-2">
+        <div className="px-4 pt-2 flex items-center gap-2">
           <button onClick={() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
             data-testid="open-command-palette"
-            className="flex-1 flex items-center gap-2 px-3 py-2 text-caption text-ink-muted bg-ash hover:bg-line/40 rounded-xl transition-colors">
+            className="flex-1 flex items-center gap-2 px-3 py-1.5 text-caption text-ink-muted bg-ash hover:bg-line/40 rounded-xl transition-colors">
             <Search size={14} />
             <span className="flex-1 text-left">Search…</span>
             <kbd className="text-tiny font-mono">⌘K</kbd>
@@ -249,7 +249,7 @@ export default function AppLayout() {
           </button>
           <NotificationsCenter />
         </div>
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-thin">
+        <nav className="flex-1 min-h-0 p-4 space-y-1 overflow-y-auto scrollbar-thin">
           {currentAgent.nav.filter((n) => !n.orgAdminOnly || user?.role === "org_admin" || user?.is_admin).map((n) => (
             <NavLink
               key={n.to}
@@ -257,23 +257,23 @@ export default function AppLayout() {
               end={n.end}
               data-testid={n.tid}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 text-body font-display font-medium rounded-xl transition-all duration-200 ${
+                `flex items-center gap-3 px-3 py-2 text-body font-display font-medium rounded-xl transition-all duration-200 ${
                   isActive ? "bg-accent-soft text-accent" : "text-ink-muted hover:text-ink hover:bg-ash"
                 }`
               }
             >
-              <n.icon size={16} strokeWidth={1.75} />
+              <n.icon size={15} strokeWidth={1.75} />
               <span className="truncate">{n.label}</span>
             </NavLink>
           ))}
         </nav>
-        <div className="p-4 border-t border-line">
-          <div className="px-1 pb-3">
+        <div className="p-3 border-t border-line">
+          <div className="px-1 pb-2">
             <CreditPill />
           </div>
-          <div className="flex items-center gap-3 pt-3 border-t border-line">
+          <div className="flex items-center gap-3 pt-2 border-t border-line">
             <button onClick={() => nav("/settings")} title="Profile settings"
-              className="w-9 h-9 bg-ash text-ink flex items-center justify-center rounded-xl font-mono text-caption font-semibold shrink-0 overflow-hidden hover:opacity-80 transition-opacity">
+              className="w-8 h-8 bg-ash text-ink flex items-center justify-center rounded-xl font-mono text-caption font-semibold shrink-0 overflow-hidden hover:opacity-80 transition-opacity">
               {user?.avatar_url ? (
                 <img src={user.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               ) : (
@@ -281,7 +281,7 @@ export default function AppLayout() {
               )}
             </button>
             <button onClick={() => nav("/settings")} className="flex-1 min-w-0 text-left">
-              <div className="text-body font-display font-medium truncate">{user?.name}</div>
+              <div className="text-caption font-display font-medium truncate">{user?.name}</div>
               <div className="text-tiny text-ink-muted truncate">{user?.email}</div>
             </button>
             {user?.is_admin && (
@@ -324,7 +324,7 @@ export function PageHeader({ title, subtitle, right, badge }) {
     <div className="border-b border-line bg-surface/80 backdrop-blur-sm sticky top-0 z-10">
       {/* pl-16 below lg clears the fixed hamburger button (top-4 left-4, ~44px);
           actions stack under the title on phones instead of crushing it. */}
-      <div className="pl-16 pr-6 sm:pr-8 lg:pl-8 py-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+      <div className="pl-16 pr-6 sm:pr-8 lg:pl-8 py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2.5">
             <h1 className="text-xl sm:text-page-title font-display font-semibold truncate">{title}</h1>
