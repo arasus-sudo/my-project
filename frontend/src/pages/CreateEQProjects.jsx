@@ -69,8 +69,12 @@ export default function CreateEQProjects() {
   };
 
   const del = async (id) => {
-    if (!confirm("Delete carousel?")) return;
-    await api.delete(`/carousel/${id}`); load();
+    if (!confirm("Delete this project? This can't be undone.")) return;
+    try {
+      await api.delete(`/carousel/${id}`);
+      toast.success("Project deleted");
+      load();
+    } catch { toast.error("Could not delete project"); }
   };
 
   return (
@@ -294,7 +298,7 @@ function HistoryDrawer({ items, onClose, onDelete }) {
                           </span>
                         </Link>
                         <button onClick={() => onDelete(p.id)} data-testid={`carousel-delete-${p.id}`}
-                          className="text-neutral-300 hover:text-danger shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
+                          className="text-neutral-300 hover:text-danger shrink-0" title="Delete project"><Trash2 size={14} /></button>
                       </div>
                     );
                   })}
