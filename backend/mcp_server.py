@@ -17,12 +17,14 @@ enforced identically.
 import os
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Dict, List, Optional
+from urllib.parse import urlparse
 
 from fastapi import HTTPException
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import ProviderTokenVerifier
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import AnyHttpUrl
 
@@ -33,6 +35,51 @@ from mcp_auth import InnoiraOAuthProvider
 # calls far faster than a human ever would. Per-workspace (not per-client) so
 # it also catches a workspace that connected several AI clients at once.
 MCP_RATE_LIMIT_PER_MINUTE = int(os.environ.get("MCP_RATE_LIMIT_PER_MINUTE", "60"))
+
+# Extra Host/Origin values to accept on /mcp, comma-separated. Only needed if
+# the service is reached over a hostname that isn't derivable from
+# PUBLIC_BASE_URL (a custom domain, a second CNAME, a staging front door) —
+# the deployment's own hostname is always allowed automatically below.
+MCP_EXTRA_ALLOWED_HOSTS = os.environ.get("MCP_EXTRA_ALLOWED_HOSTS", "")
+MCP_EXTRA_ALLOWED_ORIGINS = os.environ.get("MCP_EXTRA_ALLOWED_ORIGINS", "")
+
+
+def _csv(value: str) -> List[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _transport_security(issuer_url: str) -> TransportSecuritySettings:
+    """Host/Origin allowlist for the /mcp endpoint.
+
+    FastMCP turns DNS-rebinding protection on automatically whenever its `host`
+    setting is a loopback address — and 127.0.0.1 is the default, which we never
+    override because we mount into an existing FastAPI app rather than letting
+    FastMCP bind a socket. The allowlist it picks in that case is localhost-only,
+    so every POST /mcp behind a real hostname is rejected with
+    421 "Invalid Host header". That failed in production while passing every
+    local test, since localhost is precisely the case the default allows.
+
+    Passing settings explicitly keeps the protection on but teaches it the
+    hostname this deployment actually answers to.
+    """
+    issuer_host = urlparse(issuer_url).netloc
+    hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
+    origins = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
+    if issuer_host:
+        # Both forms: the bare hostname (what a client sends on the default
+        # 443/80 port) and the wildcard-port form for any explicit :port.
+        hosts += [issuer_host, f"{issuer_host}:*"]
+        origins += [f"https://{issuer_host}", f"https://{issuer_host}:*"]
+    frontend = os.environ.get("FRONTEND_URL", "")
+    if frontend:
+        origins.append(frontend.rstrip("/"))
+    hosts += _csv(MCP_EXTRA_ALLOWED_HOSTS)
+    origins += _csv(MCP_EXTRA_ALLOWED_ORIGINS)
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=hosts,
+        allowed_origins=origins,
+    )
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
 SAFE_WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False)
@@ -135,6 +182,7 @@ def build_mcp_app(db, issuer_url: str, resource_server_url: str) -> FastMCP:
             resource_server_url=AnyHttpUrl(resource_server_url),
             required_scopes=["read"],
         ),
+        transport_security=_transport_security(issuer_url),
     )
 
     @mcp.tool(annotations=READ_ONLY)
