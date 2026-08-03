@@ -34,6 +34,11 @@ import PanoramaDrawer from "../components/creq/drawers/PanoramaDrawer";
 import PdfExportDialog, { EXPORT_QUALITIES } from "../components/creq/drawers/PdfExportDialog";
 import { newId, renderBackground, renderBackgroundImageCss, stripLocalKeys, elementBounds } from "../components/creq/utils";
 
+// Autosave cadence. This is a poll, not a debounce: the tick is cheap because
+// it exits immediately unless the document is actually dirty, so an idle editor
+// costs nothing while an active one is never more than this far from durable.
+const AUTOSAVE_INTERVAL_MS = 5000;
+
 /* ------------------------- Project load / hydrate ------------------------- */
 
 /** Convert one backend/LLM-drafted slide `{title,subtitle,body,cta}` into the
@@ -161,6 +166,8 @@ export default function CreateEQEditor() {
     setSelectedIds(id ? new Set([id]) : new Set());
   }, []);
   const [busy, setBusy] = useState(false);
+  const [savedAt, setSavedAt] = useState(null);
+  const [autosaveFailed, setAutosaveFailed] = useState(false);
   const [zoom, setZoom] = useState(0.38);
   const [brandKits, setBrandKits] = useState([]);
   const [showBrandKit, setShowBrandKit] = useState(false);
@@ -211,6 +218,11 @@ export default function CreateEQEditor() {
   // live without re-serialising the whole project on every frame.
   const gestureActive = useRef(false);
   const endGestureTimer = useRef(null);
+  // Autosave bookkeeping. dirtyRef is set by every mutation and cleared only by
+  // a completed save, so an untouched editor issues no requests; savingRef stops
+  // a slow save from overlapping the next tick.
+  const dirtyRef = useRef(false);
+  const savingRef = useRef(false);
 
   useEffect(() => {
     api.get(`/carousel/${id}`).then((r) => {
@@ -261,6 +273,9 @@ export default function CreateEQEditor() {
   const undo = useCallback(() => {
     const h = historyRef.current;
     if (!h.past.length) return;
+    // Undo/redo change the document too, so they must mark it dirty — otherwise
+    // undoing back to an earlier state would never be persisted.
+    dirtyRef.current = true;
     setProj((cur) => {
       if (!cur) return cur;
       h.future.push(JSON.stringify(cur));
@@ -270,6 +285,7 @@ export default function CreateEQEditor() {
   const redo = useCallback(() => {
     const h = historyRef.current;
     if (!h.future.length) return;
+    dirtyRef.current = true;
     setProj((cur) => {
       if (!cur) return cur;
       h.past.push(JSON.stringify(cur));
@@ -277,6 +293,7 @@ export default function CreateEQEditor() {
     });
   }, []);
   const mutate = useCallback((updater) => {
+    dirtyRef.current = true;
     setProj((cur) => {
       if (!cur) return cur;
       pushHistory(JSON.stringify(cur));
@@ -290,6 +307,7 @@ export default function CreateEQEditor() {
    * inside an active gesture (drag/resize/slider-sweep/typing) where history
    * was already captured once by beginGesture(). */
   const mutateLive = useCallback((updater) => {
+    dirtyRef.current = true;
     setProj((cur) => {
       if (!cur) return cur;
       const next = { ...cur, slides: cur.slides.map((s) => ({ ...s, elements: [...(s.elements || [])] })) };
@@ -1185,25 +1203,73 @@ export default function CreateEQEditor() {
   }, [mutate]);
 
   /* --- Save / export --- */
+
+  /** The actual PUT, shared by the Save button and the autosave loop. Kept
+   * separate from save() so autosave never touches `busy` — that flag disables
+   * the toolbar, and flickering it every few seconds would fight the user. */
+  const persist = useCallback(async () => {
+    if (!projRef.current || savingRef.current) return false;
+    savingRef.current = true;
+    try {
+      const snapshot = projRef.current;
+      const clean = stripLocalKeys(snapshot);
+      await api.put(`/carousel/${id}`, {
+        slides: clean.slides, brand: snapshot.brand, platform: snapshot.platform,
+        topic: snapshot.topic, palette_id: snapshot.palette_id, panorama: snapshot.panorama || null,
+        show_slide_numbers: !!snapshot.show_slide_numbers,
+        show_progress_dots: !!snapshot.show_progress_dots,
+        show_swipe_hint: !!snapshot.show_swipe_hint,
+        show_branding: !!snapshot.show_branding,
+        branding_size: snapshot.branding_size ?? null,
+        branding_color: snapshot.branding_color ?? null,
+        branding_opacity: snapshot.branding_opacity ?? null,
+      });
+      // Only clear the dirty flag if nothing changed while the request was in
+      // flight — otherwise an edit made mid-save would never be persisted.
+      if (projRef.current === snapshot) dirtyRef.current = false;
+      setSavedAt(Date.now());
+      return true;
+    } catch {
+      return false;
+    } finally {
+      savingRef.current = false;
+    }
+  }, [id]);
+
   const save = async () => {
     setBusy(true);
-    try {
-      const clean = stripLocalKeys(proj);
-      await api.put(`/carousel/${id}`, {
-        slides: clean.slides, brand: proj.brand, platform: proj.platform,
-        topic: proj.topic, palette_id: proj.palette_id, panorama: proj.panorama || null,
-        show_slide_numbers: !!proj.show_slide_numbers,
-        show_progress_dots: !!proj.show_progress_dots,
-        show_swipe_hint: !!proj.show_swipe_hint,
-        show_branding: !!proj.show_branding,
-        branding_size: proj.branding_size ?? null,
-        branding_color: proj.branding_color ?? null,
-        branding_opacity: proj.branding_opacity ?? null,
-      });
-      toast.success("Saved");
-    } catch { toast.error("Save failed"); }
-    finally { setBusy(false); }
+    const okSave = await persist();
+    if (okSave) toast.success("Saved");
+    else toast.error("Save failed");
+    setBusy(false);
   };
+
+  /** Autosave. Fires on a 5s tick but only when there is something to save and
+   * no save is already running, so an idle editor makes no requests at all.
+   * Skipped mid-gesture: a drag or slider sweep mutates on every frame, and
+   * persisting a half-finished drag just wastes a round-trip. */
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (!dirtyRef.current || savingRef.current || gestureActive.current) return;
+      persist().then((okAuto) => {
+        if (!okAuto) setAutosaveFailed(true);
+        else setAutosaveFailed(false);
+      });
+    }, AUTOSAVE_INTERVAL_MS);
+    return () => clearInterval(t);
+  }, [persist]);
+
+  // Last-chance guard: the 5s tick can still lose the final few seconds of work
+  // if the tab is closed right after an edit.
+  useEffect(() => {
+    const warn = (e) => {
+      if (!dirtyRef.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
 
   const renderSlideToDataUrl = (slideIdx, scale = 2) => new Promise((resolve, reject) => {
     // Live-render the slide off-screen via React, then rasterise with html2canvas.
@@ -1433,6 +1499,13 @@ export default function CreateEQEditor() {
             <button onClick={() => setShowBrandKit(true)} data-testid="brand-kit-open" className="btn-secondary btn-sm"><Palette size={14} /> Brand kit</button>
             <button onClick={exportSlidePng} data-testid="export-png-btn" className="btn-secondary btn-sm"><Download size={14} /> PNG</button>
             <button onClick={() => setShowPdfPicker(true)} disabled={busy} data-testid="export-pdf-btn" className="btn-secondary btn-sm"><FileText size={14} /> PDF</button>
+            <span className="text-tiny text-ink-muted whitespace-nowrap" data-testid="autosave-status">
+              {autosaveFailed
+                ? <span className="text-warning">Autosave failed — use Save</span>
+                : savedAt
+                ? `Saved ${new Date(savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                : ""}
+            </span>
             <button onClick={save} disabled={busy} data-testid="save-carousel-btn" className="btn-primary btn-sm">
               {busy ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : <><Save size={14} /> Save</>}
             </button>
@@ -1474,7 +1547,7 @@ export default function CreateEQEditor() {
                 else { addElement(built); }
               }}
               onApplyTheme={(theme) => {
-                if (theme.palette_id) setProj((p) => ({ ...p, palette_id: theme.palette_id }));
+                if (theme.palette_id) { dirtyRef.current = true; setProj((p) => ({ ...p, palette_id: theme.palette_id })); }
                 if (theme.bg) patchSlide({ bg: theme.bg });
                 if (theme.decoration) {
                   const d = theme.decoration;
@@ -1498,7 +1571,7 @@ export default function CreateEQEditor() {
               }}
               onAddBgPreset={(preset) => {
                 patchSlide({ bg: preset.bg });
-                if (preset.palette_id) setProj((p) => ({ ...p, palette_id: preset.palette_id }));
+                if (preset.palette_id) { dirtyRef.current = true; setProj((p) => ({ ...p, palette_id: preset.palette_id })); }
               }}
               onAddChart={(preset) => {
                 const el = { ...preset, x: 200, y: 300, color: "accent", id: newId() };
@@ -1653,6 +1726,7 @@ export default function CreateEQEditor() {
                       const fromIdx = Number(e.dataTransfer.getData("text/plain"));
                       const toIdx = i;
                       if (fromIdx === toIdx) return;
+                      dirtyRef.current = true; // reorder bypasses mutate()
                       setProj((prev) => {
                         const slides = [...prev.slides];
                         const [moved] = slides.splice(fromIdx, 1);
