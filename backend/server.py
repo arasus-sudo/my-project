@@ -4113,6 +4113,32 @@ async def carousel_platforms():
     return PLATFORM_DIMS
 
 
+# MUST stay above the /carousel/{pid} route below. Starlette matches routes in
+# registration order, so with {pid} first this literal path was captured as
+# pid="images" and every gallery load 404'd with "not found".
+@api.get("/carousel/images")
+async def carousel_images_list(user=Depends(current_user)):
+    """List all AI-generated images for the user's workspace."""
+    cursor = db.carousel_images.find(
+        {"workspace_id": user["workspace_id"]},
+        {"data": 0, "_id": 0},
+    ).sort("created_at", -1).limit(200)
+    items = await cursor.to_list(None)
+    base = (PUBLIC_BASE_URL or FRONTEND_URL).rstrip("/")
+    for item in items:
+        # Blob-backed rows serve straight from storage; rows written before
+        # blob storage existed keep the legacy proxy URL so old galleries
+        # don't break. thumb_url is what the grid should render — the full
+        # image is only fetched when the user opens it.
+        if item.get("blob_path"):
+            item["image_url"] = blob_storage.read_url(item["blob_path"])
+            item["thumb_url"] = blob_storage.read_url(item.get("thumb_path", "")) or item["image_url"]
+        else:
+            item["image_url"] = f"{base}/api/carousel/image/{item['id']}?t={item.get('access_token', '')}"
+            item["thumb_url"] = item["image_url"]
+    return items
+
+
 @api.get("/carousel/{pid}")
 async def carousel_get(pid: str, user=Depends(current_user)):
     doc = await db.carousels.find_one({"id": pid, "workspace_id": user["workspace_id"]}, {"_id": 0})
@@ -4405,29 +4431,6 @@ async def carousel_image_get(image_id: str, t: Optional[str] = None,
         media_type=doc.get("mime_type", "image/png"),
         headers={"Cache-Control": "public, max-age=31536000, immutable"},
     )
-
-
-@api.get("/carousel/images")
-async def carousel_images_list(user=Depends(current_user)):
-    """List all AI-generated images for the user's workspace."""
-    cursor = db.carousel_images.find(
-        {"workspace_id": user["workspace_id"]},
-        {"data": 0, "_id": 0},
-    ).sort("created_at", -1).limit(200)
-    items = await cursor.to_list(None)
-    base = (PUBLIC_BASE_URL or FRONTEND_URL).rstrip("/")
-    for item in items:
-        # Blob-backed rows serve straight from storage; rows written before
-        # blob storage existed keep the legacy proxy URL so old galleries
-        # don't break. thumb_url is what the grid should render — the full
-        # image is only fetched when the user opens it.
-        if item.get("blob_path"):
-            item["image_url"] = blob_storage.read_url(item["blob_path"])
-            item["thumb_url"] = blob_storage.read_url(item.get("thumb_path", "")) or item["image_url"]
-        else:
-            item["image_url"] = f"{base}/api/carousel/image/{item['id']}?t={item.get('access_token', '')}"
-            item["thumb_url"] = item["image_url"]
-    return items
 
 
 @api.delete("/carousel/image/{image_id}")
