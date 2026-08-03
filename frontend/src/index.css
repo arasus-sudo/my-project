@@ -241,3 +241,64 @@
   .animate-delay-200 { animation-delay: 0.2s; }
   .animate-delay-300 { animation-delay: 0.3s; }
 }
+
+/* ---- Tier 2 primitive states — docs/design-system.md §5.1, §2.9, §4.4 ----
+   Kept in CSS rather than inline style because they are pseudo-class states
+   (:hover/:active/:focus-visible) and keyframes, which inline style cannot
+   express. Every value still comes from a token. */
+@layer components {
+  /* §2.9: hover animates background only. §24.10 and the §2.9 RULE forbid
+     animating box-shadow on lists and rows — repaint cost. */
+  .ds-btn:hover:not(:disabled) { background-color: var(--btn-bg-hover); }
+
+  /* §6.1: active = scale(0.985) at --dur-instant. */
+  .ds-btn:active:not(:disabled) { transform: scale(0.985); }
+
+  /* §5.1: default focus is a 2px outline at 2px offset… */
+  .ds-btn:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+  }
+  /* …but on a FILLED button an outline disappears against the fill, so those
+     use the 3px ring instead (§5.1). */
+  .ds-btn[data-variant="primary"]:focus-visible,
+  .ds-btn[data-variant="intel"]:focus-visible,
+  .ds-btn[data-variant="danger"]:focus-visible {
+    outline: none;
+    box-shadow: var(--btn-ring);
+  }
+
+  .ds-btn--link:hover:not(:disabled) {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  /* §4.4: 700ms linear, inside buttons and inline refreshes only. */
+  .ds-spin { animation: ds-spin 700ms linear infinite; }
+  @keyframes ds-spin { to { transform: rotate(360deg); } }
+
+  /* §4.4: skeletons shimmer at 1400ms over --bg-active. */
+  .ds-skeleton {
+    background-color: var(--bg-active);
+    background-image: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.55) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    animation: ds-shimmer 1400ms linear infinite;
+  }
+  @keyframes ds-shimmer {
+    from { background-position: -120% 0; }
+    to   { background-position: 220% 0; }
+  }
+
+  /* §2.9 RULE: reduced motion drops transforms and the shimmer entirely. */
+  @media (prefers-reduced-motion: reduce) {
+    .ds-btn:active:not(:disabled) { transform: none; }
+    .ds-skeleton { animation: none; background-image: none; }
+    .ds-spin { animation-duration: 1600ms; }
+  }
+}
