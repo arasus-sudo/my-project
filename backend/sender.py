@@ -217,6 +217,58 @@ async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[
 
 
 # ----------------------------- Tick: drain queue --------------------------------
+class DailyCapReached(RuntimeError):
+    """Every connected mailbox has spent its daily cap.
+
+    Deliberately not an error: the row is pushed onto the next sending day
+    without consuming a retry attempt. Previously this surfaced as a generic
+    RuntimeError, which meant three ticks (six minutes) of hitting the cap
+    marked the queue row `failed` permanently — the campaign quietly dropped
+    every message past the cap instead of sending it the next day.
+    """
+
+
+def _campaign_window(campaign: Dict[str, Any]):
+    """(timezone, window_start, window_end) for a campaign, with defaults."""
+    try:
+        tz = ZoneInfo(campaign.get("timezone") or "UTC")
+    except Exception:
+        # dt_timezone.utc rather than ZoneInfo("UTC"): the usual reason the
+        # lookup failed is a missing tzdata, and that would fail again here.
+        tz = dt_timezone.utc
+    return (tz,
+            campaign.get("send_window_start", "09:00"),
+            campaign.get("send_window_end", "17:00"))
+
+
+async def _defer_row(row: Dict[str, Any], campaign: Dict[str, Any], now: datetime,
+                     reason: str, *, next_day: bool) -> str:
+    """Push a queue row to its next valid send slot, leaving it pending.
+
+    `next_day=True` skips the rest of today entirely (the daily cap is spent);
+    otherwise the row goes to the next open slot, which may still be today if
+    the window hasn't opened yet. Attempts are restored to their pre-claim
+    value so deferring never counts against the 3-attempt failure budget.
+    """
+    tz, win_start, win_end = _campaign_window(campaign)
+    now_local = now.astimezone(tz)
+    if next_day:
+        earliest = (now_local + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0)
+    else:
+        earliest = now_local
+    slot = _next_window_slot(earliest, win_start, win_end, tz, not_before=earliest)
+    slot_utc = slot.astimezone(dt_timezone.utc)
+    await db.send_queue.update_one({"id": row["id"]}, {"$set": {
+        "status": "pending",
+        "send_at": slot_utc.isoformat(),
+        "attempts": row.get("attempts", 0),
+        "deferred_reason": reason,
+        "deferred_at": now_iso(),
+    }})
+    return slot_utc.isoformat()
+
+
 async def run_send_tick(base_url: str = "") -> int:
     now = datetime.now(dt_timezone.utc)
 
@@ -246,6 +298,20 @@ async def run_send_tick(base_url: str = "") -> int:
             await db.send_queue.update_one({"id": row["id"]},
                                            {"$set": {"status": "cancelled", "error": "condition not met"}})
             log.info("run_send_tick: cancelled queue %s — condition not met", row["id"])
+            continue
+
+        # Re-check the send window at dispatch time, not just at enqueue time.
+        # send_at is computed when the campaign launches; if the queue then
+        # stalls (downtime, a paused scheduler, a long outage) every overdue row
+        # becomes due at once and would fire the instant the tick resumes —
+        # potentially at 3am or on a Saturday. Rows that are now outside the
+        # window roll forward to the next open slot instead of sending late.
+        tz, win_start, win_end = _campaign_window(campaign)
+        now_local = now.astimezone(tz)
+        next_slot = _next_window_slot(now_local, win_start, win_end, tz, not_before=now_local)
+        if next_slot > now_local + timedelta(seconds=1):
+            when = await _defer_row(row, campaign, now, "outside_send_window", next_day=False)
+            log.info("run_send_tick: deferred queue %s — outside send window, now %s", row["id"], when)
             continue
 
         channel = row.get("channel", "email")
@@ -280,6 +346,14 @@ async def run_send_tick(base_url: str = "") -> int:
                 log.warning("run_send_tick: unknown channel %s for %s", channel, row["id"])
                 await db.send_queue.update_one({"id": row["id"]}, {"$set": {"status": "failed", "error": f"unknown channel: {channel}"}})
                 continue
+        except DailyCapReached as cap_ex:
+            # Not a failure — the day's allowance is spent. Roll the row onto
+            # tomorrow's window with its attempt count untouched, so a campaign
+            # larger than the daily cap drains over successive days instead of
+            # burning three retries in six minutes and being marked failed.
+            when = await _defer_row(row, campaign, now, "daily_cap_reached", next_day=True)
+            log.info("run_send_tick: deferred queue %s to %s — %s", row["id"], when, cap_ex)
+            continue
         except Exception as ex:
             attempts = row.get("attempts", 0) + 1
             failed = attempts >= 3
@@ -359,6 +433,14 @@ async def _send_email(row: Dict[str, Any], lead: Dict[str, Any], base_url: str,
 
     mailbox = await _pick_mailbox(row["workspace_id"])
     if not mailbox:
+        # Two very different situations produce no mailbox, and conflating them
+        # is what used to destroy queued mail: every mailbox being at its daily
+        # cap is a normal, expected end to the sending day, while having no
+        # connected mailbox at all is a real misconfiguration.
+        connected = await db.mailboxes.count_documents(
+            {"workspace_id": row["workspace_id"], "status": "connected"})
+        if connected:
+            raise DailyCapReached(f"all {connected} mailbox(es) at daily cap")
         raise RuntimeError("no eligible mailbox")
 
     subject, html, text = _render(row, lead)
@@ -515,12 +597,27 @@ async def _send_linkedin_comment(row: Dict[str, Any], lead: Dict[str, Any]):
 
 
 # ----------------------------- Warmup progression -------------------------------
-def _warmup_daily_cap(day: int) -> int:
-    if day <= 7: return 5
-    if day <= 14: return 10
-    if day <= 21: return 20
-    if day <= 28: return 30
-    return 50
+# The cap rises by a fixed amount every warmup day and stops at the mailbox's
+# own `warmup_target` (set from its configured daily_cap when it was created).
+#
+# The previous curve stepped in week-long plateaus (5/10/20/30/50) and ignored
+# warmup_target entirely, so a mailbox configured for 200/day was capped at 50
+# forever and its own setting silently did nothing.
+WARMUP_START_CAP = 5
+WARMUP_DAILY_INCREMENT = 3
+WARMUP_DEFAULT_TARGET = 50
+
+
+def _warmup_daily_cap(day: int, target: int = WARMUP_DEFAULT_TARGET) -> int:
+    """Sends allowed on warmup day `day`, ramping toward `target`.
+
+    Day 1 = 5, then +3/day: 5, 8, 11 … reaching a 50 target on day 16. Never
+    returns less than 1 — a target of 0 would otherwise wedge the mailbox at a
+    cap nothing can satisfy.
+    """
+    target = max(1, int(target or WARMUP_DEFAULT_TARGET))
+    day = max(1, int(day or 1))
+    return max(1, min(target, WARMUP_START_CAP + (day - 1) * WARMUP_DAILY_INCREMENT))
 
 
 # ----------------------------- Condition evaluation -----------------------------
@@ -597,8 +694,10 @@ async def _mark_sent(mailbox: Dict[str, Any]):
         warmup_day = mailbox.get("warmup_day", 1)
         last_sent_date = mailbox.get("last_sent_date", "")
         if last_sent_date and last_sent_date != today:
-            new_day = min(warmup_day + 1, 30)
-            new_cap = _warmup_daily_cap(new_day)
+            # Ceiling is generous rather than 30 so the ramp can still reach a
+            # high warmup_target; the cap itself is clamped to the target below.
+            new_day = min(warmup_day + 1, 365)
+            new_cap = _warmup_daily_cap(new_day, mailbox.get("warmup_target", WARMUP_DEFAULT_TARGET))
             await db.mailboxes.update_one(
                 {"id": mailbox["id"]},
                 {"$set": {"warmup_day": new_day, "daily_cap": new_cap,
