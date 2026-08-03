@@ -1142,6 +1142,20 @@ export default function CreateEQEditor() {
         toast.success(sameSlide ? "Pasted" : "Pasted in place");
         return;
       }
+      // Bold the selected text element. Ctrl/Cmd+B is muscle memory in every
+      // editor; the panel's Bold button advertises it, so it has to exist.
+      // Remembers the previous weight so unbolding a 500 goes back to 500.
+      if (meta && (e.key === "b" || e.key === "B") && selectedId) {
+        const el = slide?.elements?.find((x) => x.id === selectedId);
+        if (el && el.type === "text") {
+          e.preventDefault();
+          const bold = (el.weight || 400) >= 700;
+          patchElement(el.id, bold
+            ? { weight: el.weight_before_bold || 400, weight_before_bold: null }
+            : { weight: 700, weight_before_bold: el.weight || 400 });
+          return;
+        }
+      }
       // Duplicate selected in-place.
       if (meta && (e.key === "d" || e.key === "D") && selectedId) {
         e.preventDefault();
@@ -1478,27 +1492,36 @@ export default function CreateEQEditor() {
   if (!proj) return <div className="p-6 sm:p-8 text-ink-muted">Loading…</div>;
 
   return (
-    <div>
+    // Fixed viewport shell. The editor is a three-pane app, not a scrolling
+    // page: the header sizes itself and the panes take whatever is left. This
+    // replaces a hardcoded h-[calc(100vh-90px)] on the grid below, which
+    // assumed the header was always exactly 90px tall — the moment the toolbar
+    // wrapped to a second row on a narrower screen, the panes overflowed the
+    // viewport and the slide toolbar at the bottom was pushed off-screen.
+    // AppLayout puts the nav in a left sidebar with no top bar, so the page
+    // genuinely owns the full viewport height here.
+    <div className="flex flex-col h-screen overflow-hidden">
+      <div className="shrink-0">
       <PageHeader
         title={proj.topic}
         subtitle={`${proj.slides.length} slide${proj.slides.length === 1 ? "" : "s"} · ${palette.name} palette`}
         right={
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => nav("/app/create-eq")} className="btn-ghost btn-sm"><ChevronLeft size={14} /> Projects</button>
+          <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto max-w-full">
+            <button onClick={() => nav("/app/create-eq")} className="btn-ghost btn-sm"><ChevronLeft size={14} /><span className="hidden 2xl:inline"> Projects</span></button>
             <button onClick={undo} title="Undo (Ctrl+Z)" data-testid="undo-btn" className="btn-ghost btn-sm"><Undo2 size={14} /></button>
             <button onClick={redo} title="Redo (Ctrl+Shift+Z)" data-testid="redo-btn" className="btn-ghost btn-sm"><Redo2 size={14} /></button>
-            <button onClick={() => setViewMode(viewMode === "focus" ? "board" : "focus")} data-testid="view-mode-toggle" className="btn-ghost btn-sm">
-              {viewMode === "focus" ? <><LayoutGrid size={14} /> Board</> : <><Maximize2 size={14} /> Focus</>}
+            <button onClick={() => setViewMode(viewMode === "focus" ? "board" : "focus")} title="Switch between board and focus view" data-testid="view-mode-toggle" className="btn-ghost btn-sm">
+              {viewMode === "focus" ? <><LayoutGrid size={14} /><span className="hidden 2xl:inline"> Board</span></> : <><Maximize2 size={14} /><span className="hidden 2xl:inline"> Focus</span></>}
             </button>
-            <button onClick={() => setShowPreview(true)} data-testid="preview-open-btn" className="btn-secondary btn-sm"><Play size={14} /> Preview</button>
-            <button onClick={() => setShowGenerateContent(true)} data-testid="generate-content-open" className="btn-secondary btn-sm"><PenSquare size={14} /> Generate content</button>
-            <button onClick={() => setShowPanorama(true)} data-testid="panorama-open" className="btn-secondary btn-sm"><Mountain size={14} /> Panorama</button>
-            <button onClick={() => setShowAiImage(true)} data-testid="ai-image-open" className="btn-secondary btn-sm"><ImagePlus size={14} /> Generate image</button>
-            <button onClick={() => setShowStockPhotos(true)} data-testid="stock-photos-open" className="btn-secondary btn-sm"><Search size={14} /> Stock photos</button>
-            <button onClick={() => setShowImageGallery(true)} data-testid="image-gallery-open" className="btn-secondary btn-sm"><ImageIcon size={14} /> Images</button>
-            <button onClick={() => setShowBrandKit(true)} data-testid="brand-kit-open" className="btn-secondary btn-sm"><Palette size={14} /> Brand kit</button>
-            <button onClick={exportSlidePng} data-testid="export-png-btn" className="btn-secondary btn-sm"><Download size={14} /> PNG</button>
-            <button onClick={() => setShowPdfPicker(true)} disabled={busy} data-testid="export-pdf-btn" className="btn-secondary btn-sm"><FileText size={14} /> PDF</button>
+            <button onClick={() => setShowPreview(true)} title="Preview deck" data-testid="preview-open-btn" className="btn-secondary btn-sm"><Play size={14} /><span className="hidden 2xl:inline"> Preview</span></button>
+            <button onClick={() => setShowGenerateContent(true)} title="Generate slide content with AI" data-testid="generate-content-open" className="btn-secondary btn-sm"><PenSquare size={14} /><span className="hidden 2xl:inline"> Generate content</span></button>
+            <button onClick={() => setShowPanorama(true)} title="Panorama background across slides" data-testid="panorama-open" className="btn-secondary btn-sm"><Mountain size={14} /><span className="hidden 2xl:inline"> Panorama</span></button>
+            <button onClick={() => setShowAiImage(true)} title="Generate an image with AI" data-testid="ai-image-open" className="btn-secondary btn-sm"><ImagePlus size={14} /><span className="hidden 2xl:inline"> Generate image</span></button>
+            <button onClick={() => setShowStockPhotos(true)} title="Search stock photos" data-testid="stock-photos-open" className="btn-secondary btn-sm"><Search size={14} /><span className="hidden 2xl:inline"> Stock photos</span></button>
+            <button onClick={() => setShowImageGallery(true)} title="Workspace image gallery" data-testid="image-gallery-open" className="btn-secondary btn-sm"><ImageIcon size={14} /><span className="hidden 2xl:inline"> Images</span></button>
+            <button onClick={() => setShowBrandKit(true)} title="Apply a brand kit" data-testid="brand-kit-open" className="btn-secondary btn-sm"><Palette size={14} /><span className="hidden 2xl:inline"> Brand kit</span></button>
+            <button onClick={exportSlidePng} title="Export current slide as PNG" data-testid="export-png-btn" className="btn-secondary btn-sm"><Download size={14} /><span className="hidden 2xl:inline"> PNG</span></button>
+            <button onClick={() => setShowPdfPicker(true)} disabled={busy} title="Export deck as PDF" data-testid="export-pdf-btn" className="btn-secondary btn-sm"><FileText size={14} /><span className="hidden 2xl:inline"> PDF</span></button>
             <span className="text-tiny text-ink-muted whitespace-nowrap" data-testid="autosave-status">
               {autosaveFailed
                 ? <span className="text-warning">Autosave failed — use Save</span>
@@ -1506,16 +1529,22 @@ export default function CreateEQEditor() {
                 ? `Saved ${new Date(savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
                 : ""}
             </span>
-            <button onClick={save} disabled={busy} data-testid="save-carousel-btn" className="btn-primary btn-sm">
+            <button onClick={save} disabled={busy} title="Save (autosaves every 5s)" data-testid="save-carousel-btn" className="btn-primary btn-sm">
               {busy ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : <><Save size={14} /> Save</>}
             </button>
           </div>
         }
       />
+      </div>
 
       {viewMode === "focus" ? (
-        <div className="grid grid-cols-12 h-[calc(100vh-90px)] bg-neutral-100 overflow-hidden">
-          <aside className="col-span-2 border-r border-line bg-white overflow-y-auto">
+        // Pane widths step with the viewport. The old fixed 2/7/3 gave the
+        // properties panel ~277px on a 1366px laptop (the sidebar takes 256 of
+        // it), which is too narrow for its own controls; below xl the side
+        // panes take a larger share and the canvas gives way, since the canvas
+        // is portrait and scales to height anyway.
+        <div className="grid grid-cols-12 flex-1 min-h-0 bg-neutral-100 overflow-hidden">
+          <aside className="col-span-3 lg:col-span-2 border-r border-line bg-white overflow-y-auto">
             <LeftPanel
               onTemplate={(tpl) => applyTemplateToSlide(tpl)}
               onStyle={(styleId, allSlides) => handleApplyStyle(styleId, allSlides)}
@@ -1592,7 +1621,7 @@ export default function CreateEQEditor() {
             />
           </aside>
 
-          <section ref={sectionRef} className="col-span-7 min-h-0 relative overflow-auto"
+          <section ref={sectionRef} className="col-span-5 lg:col-span-6 xl:col-span-7 min-h-0 relative overflow-auto"
             onDragOver={onCanvasDragOver} onDragLeave={onCanvasDragLeave} onDrop={onCanvasDrop}
             onContextMenu={onCanvasContextMenu}>
             {dropHint && (
@@ -1748,7 +1777,7 @@ export default function CreateEQEditor() {
             </div>
           </section>
 
-          <aside className="col-span-3 border-l border-line bg-white overflow-y-auto">
+          <aside className="col-span-4 lg:col-span-4 xl:col-span-3 border-l border-line bg-white overflow-y-auto">
             <RightPanel
               proj={proj} palette={palette} slide={slide} selected={selected} activeSlide={activeSlide}
               selectedCount={selectedIds.size}

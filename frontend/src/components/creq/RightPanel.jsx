@@ -1,7 +1,7 @@
 import { memo, useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import {
-  Copy, Trash2, Layers, Italic, AlignLeft, AlignCenter, AlignRight, PenLine, RotateCcw, Mountain,
+  Copy, Trash2, Layers, Italic, Bold, AlignLeft, AlignCenter, AlignRight, PenLine, RotateCcw, Mountain,
   FlipHorizontal2, FlipVertical2,
   AlignStartVertical, AlignCenterVertical, AlignEndVertical,
   AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
@@ -380,8 +380,22 @@ function RightPanel({
               </select></label>
           </div>
           <div className="flex gap-1">
-            <ToggleBtn active={el.italic} onClick={() => onEditElement({ italic: !el.italic })}><Italic size={14} /></ToggleBtn>
-            <ToggleBtn active={el.uppercase} onClick={() => onEditElement({ uppercase: !el.uppercase })}>ABC</ToggleBtn>
+            {/* Bold has always been reachable through the Weight dropdown, but
+                only as a number — the one formatting control every editor puts
+                a single button on. Toggles between the element's own weight and
+                700, remembering what it was so unbolding restores 500 rather
+                than snapping everything back to 400. */}
+            <ToggleBtn
+              active={(el.weight || 400) >= 700}
+              title="Bold (Ctrl+B)"
+              onClick={() => onEditElement(
+                (el.weight || 400) >= 700
+                  ? { weight: el.weight_before_bold || 400, weight_before_bold: null }
+                  : { weight: 700, weight_before_bold: el.weight || 400 })}>
+              <Bold size={14} />
+            </ToggleBtn>
+            <ToggleBtn active={el.italic} title="Italic" onClick={() => onEditElement({ italic: !el.italic })}><Italic size={14} /></ToggleBtn>
+            <ToggleBtn active={el.uppercase} title="Uppercase" onClick={() => onEditElement({ uppercase: !el.uppercase })}>ABC</ToggleBtn>
             <ToggleBtn active={el.align === "left"} onClick={() => onEditElement({ align: "left" })}><AlignLeft size={14} /></ToggleBtn>
             <ToggleBtn active={el.align === "center"} onClick={() => onEditElement({ align: "center" })}><AlignCenter size={14} /></ToggleBtn>
             <ToggleBtn active={el.align === "right"} onClick={() => onEditElement({ align: "right" })}><AlignRight size={14} /></ToggleBtn>
@@ -834,9 +848,10 @@ function RightPanel({
 
 export default memo(RightPanel);
 
-function ToggleBtn({ children, active, onClick }) {
+function ToggleBtn({ children, active, onClick, title }) {
   return (
-    <button onClick={onClick} className={`flex-1 py-1.5 rounded-md border text-caption ${active ? "bg-ink text-white border-ink" : "bg-white border-line hover:border-ink"}`}>
+    <button onClick={onClick} title={title} aria-pressed={!!active}
+      className={`flex-1 py-1.5 rounded-md border text-caption ${active ? "bg-ink text-white border-ink" : "bg-white border-line hover:border-ink"}`}>
       {children}
     </button>
   );
