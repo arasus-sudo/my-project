@@ -21,8 +21,15 @@ function DeckOverlay({ proj, slideIdx, palette }) {
       {showBranding && (
         <div style={{
           position: "absolute", left: 40, bottom: 40,
-          fontFamily: '"Inter", sans-serif', fontSize: 16, fontWeight: 500,
-          color: fg, opacity: 0.55, letterSpacing: "0.01em",
+          fontFamily: '"Inter", sans-serif',
+          // Size/colour/opacity are deck settings (RightPanel → Deck chrome).
+          // Falling back to the palette's text colour keeps it readable when a
+          // brand kit changes the background and no explicit colour was picked.
+          fontSize: proj.branding_size || 16,
+          fontWeight: 500,
+          color: proj.branding_color || fg,
+          opacity: proj.branding_opacity ?? 0.55,
+          letterSpacing: "0.01em",
         }}>
           Made with Innoira Agentic Suite
         </div>

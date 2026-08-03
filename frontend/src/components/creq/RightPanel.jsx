@@ -279,6 +279,40 @@ function RightPanel({
               &quot;Made with Innoira Agentic Suite&quot;
             </label>
           </div>
+
+          {/* The branding line is deck chrome, not a canvas element, so it can't
+              be selected and styled by clicking it. These give it the same size
+              and colour control an element would have. */}
+          {proj?.show_branding && (
+            <div className="mt-3 pl-6 space-y-2.5">
+              <div>
+                <label className="form-label block mb-1">Size · {proj?.branding_size || 16}px</label>
+                <input type="range" min={10} max={48} step={1}
+                  value={proj?.branding_size || 16} data-testid="deck-branding-size"
+                  onChange={(e) => onDeckSetting("branding_size", Number(e.target.value))}
+                  className="w-full" />
+              </div>
+              <div>
+                <label className="form-label block mb-1">Opacity · {Math.round((proj?.branding_opacity ?? 0.55) * 100)}%</label>
+                <input type="range" min={0.1} max={1} step={0.05}
+                  value={proj?.branding_opacity ?? 0.55} data-testid="deck-branding-opacity"
+                  onChange={(e) => onDeckSetting("branding_opacity", Number(e.target.value))}
+                  className="w-full" />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="form-label flex-1">Colour</label>
+                <input type="color" value={proj?.branding_color || "#FFFFFF"} data-testid="deck-branding-color"
+                  onChange={(e) => onDeckSetting("branding_color", e.target.value)}
+                  className="h-7 w-12 border border-line rounded cursor-pointer bg-transparent" />
+                {proj?.branding_color && (
+                  <button className="btn-ghost text-tiny py-0.5" data-testid="deck-branding-color-reset"
+                    onClick={() => onDeckSetting("branding_color", null)}>
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="text-caption text-ink-muted pt-4 border-t border-line">Click an element on the canvas to edit it. Drag to move. Press <span className="kbd">Del</span> to remove.</div>

@@ -3934,6 +3934,9 @@ async def carousel_update(pid: str, body: Dict[str, Any], user=Depends(current_u
     allowed = {k: v for k, v in body.items() if k in {
         "slides", "brand", "platform", "topic", "palette_id", "panorama",
         "show_slide_numbers", "show_progress_dots", "show_swipe_hint", "show_branding",
+        # Styling for the "Made with…" branding line. Must be listed here or the
+        # editor's controls appear to work and then silently reset on reload.
+        "branding_size", "branding_color", "branding_opacity",
     }}
     allowed["updated_at"] = now_iso()
     await db.carousels.update_one(

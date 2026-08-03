@@ -1099,7 +1099,11 @@ export default function CreateEQEditor() {
       if (meta && (e.key === "c" || e.key === "C") && selectedId) {
         const el = slide?.elements?.find((x) => x.id === selectedId);
         if (el) {
-          clipboardRef.current = JSON.parse(JSON.stringify(el));
+          // Remember which slide it came from: pasting onto a DIFFERENT slide
+          // must land at the identical position (that's how you keep a logo or
+          // footer aligned across a deck), while pasting onto the same slide
+          // needs an offset or the copy hides exactly behind the original.
+          clipboardRef.current = { el: JSON.parse(JSON.stringify(el)), fromSlide: activeSlide };
           toast.success("Copied");
         }
         e.preventDefault();
@@ -1108,11 +1112,16 @@ export default function CreateEQEditor() {
       // Paste from internal clipboard.
       if (meta && (e.key === "v" || e.key === "V") && clipboardRef.current) {
         e.preventDefault();
-        const src = clipboardRef.current;
-        const copy = { ...src, id: newId(), x: (src.x || 0) + 40, y: (src.y || 0) + 40 };
+        const { el: src, fromSlide } = clipboardRef.current;
+        const sameSlide = fromSlide === activeSlide;
+        const copy = {
+          ...src, id: newId(),
+          x: (src.x || 0) + (sameSlide ? 40 : 0),
+          y: (src.y || 0) + (sameSlide ? 40 : 0),
+        };
         mutate((n) => n.slides[activeSlide].elements.push(copy));
         selectSingle(copy.id);
-        toast.success("Pasted");
+        toast.success(sameSlide ? "Pasted" : "Pasted in place");
         return;
       }
       // Duplicate selected in-place.
@@ -1187,6 +1196,9 @@ export default function CreateEQEditor() {
         show_progress_dots: !!proj.show_progress_dots,
         show_swipe_hint: !!proj.show_swipe_hint,
         show_branding: !!proj.show_branding,
+        branding_size: proj.branding_size ?? null,
+        branding_color: proj.branding_color ?? null,
+        branding_opacity: proj.branding_opacity ?? null,
       });
       toast.success("Saved");
     } catch { toast.error("Save failed"); }
@@ -1326,7 +1338,10 @@ export default function CreateEQEditor() {
     bl: (d) => ({ x: 80, y: CANVAS.h - 80 - d.h }),
     br: (d) => ({ x: CANVAS.w - 80 - d.w, y: CANVAS.h - 80 - d.h }),
   };
-  const LOGO_DIMS = { s: { w: 120, h: 60 }, m: { w: 180, h: 90 }, l: { w: 240, h: 120 }, xl: { w: 360, h: 180 } };
+  // Doubled from the original 120/180/240/360 — the old sizes read as too
+  // small against the 1080×1350 canvas. XL is now 720 wide (two thirds of the
+  // canvas), so it is a deliberate full-bleed choice rather than a default.
+  const LOGO_DIMS = { s: { w: 240, h: 120 }, m: { w: 360, h: 180 }, l: { w: 480, h: 240 }, xl: { w: 720, h: 360 } };
   const applyBrandKit = async (kit) => {
     if (!kit) return;
     const reapply = kit._reapply_logo;
