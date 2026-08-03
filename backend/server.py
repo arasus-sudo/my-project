@@ -2650,6 +2650,35 @@ PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "")
 # Anthropic key (that used to make it impossible to use both providers).
 ANTHROPIC_API_KEY = ANTHROPIC_API_KEY_RAW or PERPLEXITY_API_KEY
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+
+# Create EQ is short-form text generation — slide copy, a one-slide rewrite, a
+# small brand-kit JSON — so it is pinned to the cheapest model instead of
+# following _resolve_provider's auto order, which routes to whichever key
+# happens to be set (Perplexity, in production). Haiku 4.5 is $1/$5 per 1M
+# tokens against $3/$15 for Sonnet 4.6.
+#
+# Two constraints on this pin, both load-bearing:
+#   * Haiku 4.5 rejects the `effort` parameter. _llm_chat_anthropic sends only
+#     model/max_tokens/system/messages today, so this is safe — adding effort to
+#     that shared path later would break Create EQ specifically.
+#   * Haiku 4.5's prompt-cache minimum is 4096 tokens, well above the other
+#     models', so these prompts will not cache. That is fine at this size, but
+#     don't assume caching applies if the system prompts grow.
+CREQ_LLM_PROVIDER = os.environ.get("CREATEEQ_LLM_PROVIDER", "anthropic")
+CREQ_LLM_MODEL = os.environ.get("CREATEEQ_LLM_MODEL", "claude-haiku-4-5")
+
+
+def _creq_llm_kwargs() -> Dict[str, Any]:
+    """Provider/model override for Create EQ's calls into _llm_chat.
+
+    Degrades to the default auto-routing when the pinned provider has no key
+    configured — pinning unconditionally would take a deployment that has only
+    a Perplexity or OpenAI key and turn every Create EQ generation into an auth
+    error, which is a worse outcome than running on a pricier model.
+    """
+    if CREQ_LLM_PROVIDER == "anthropic" and not ANTHROPIC_API_KEY_RAW:
+        return {}
+    return {"provider": CREQ_LLM_PROVIDER, "model": CREQ_LLM_MODEL}
 PERPLEXITY_MODEL = os.environ.get("PERPLEXITY_MODEL", "sonar-pro")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "auto").strip().lower()
@@ -3887,7 +3916,13 @@ async def carousel_generate(body: CarouselGenIn, user=Depends(current_user)):
         )
         user_text = f"Topic: {body.topic}{source_summary}"
         try:
-            resp = await _llm_chat(system, user_text, f"creq-gen-{user['id']}", user=user)
+            # Output is one JSON object per slide, so the ceiling scales with the
+            # deck rather than sitting at the shared 2048 default. This caps the
+            # worst case; it does not by itself reduce a normal response.
+            resp = await _llm_chat(
+                system, user_text, f"creq-gen-{user['id']}", user=user,
+                max_tokens=min(4096, 400 + body.slide_count * 200), **_creq_llm_kwargs(),
+            )
             parsed = _extract_json(resp)
             if parsed and parsed.get("slides"):
                 slides = parsed["slides"][: body.slide_count]
@@ -3970,7 +4005,11 @@ async def carousel_edit(body: CarouselEditIn, user=Depends(current_user)):
         )
         prompt = f"Slide: {json.dumps(current)}\nInstruction: {body.instruction}"
         try:
-            resp = await _llm_chat(system, prompt, f"creq-edit-{user['id']}", user=user)
+            # Rewrites exactly one slide — a few hundred tokens of JSON.
+            resp = await _llm_chat(
+                system, prompt, f"creq-edit-{user['id']}", user=user, max_tokens=600,
+                **_creq_llm_kwargs(),
+            )
             parsed = _extract_json(resp)
             if parsed:
                 for k in ("title", "subtitle", "body", "cta"):
@@ -3997,7 +4036,13 @@ async def brand_from_url(body: BrandFromUrlIn, user=Depends(current_user)):
             "Space Grotesk). Return STRICT JSON: {\"bg\":str,\"accent\":str,\"text\":str,\"font\":str,\"logo_text\":str}"
         )
         try:
-            resp = await _llm_chat(system, text, f"creq-brand-{user['id']}", user=user)
+            # Returns a five-field JSON object. The page text is fetched by
+            # _fetch_url above, so this needs extraction, not a search-grounded
+            # model — nothing is lost by moving it off Perplexity.
+            resp = await _llm_chat(
+                system, text, f"creq-brand-{user['id']}", user=user, max_tokens=400,
+                **_creq_llm_kwargs(),
+            )
             parsed = _extract_json(resp)
             if parsed:
                 return parsed
