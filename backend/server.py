@@ -55,6 +55,8 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 # be publicly reachable for tracking to work at all — on localhost it won't be.
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "")
 
+import blob_storage  # media lives in Azure Blob, not in Mongo documents
+
 # Error tracking — mocked-first like every other integration: off when
 # SENTRY_DSN is unset (local dev), active the moment a real DSN is added.
 SENTRY_DSN = os.environ.get("SENTRY_DSN", "")
@@ -4386,6 +4388,17 @@ async def carousel_image_get(image_id: str, t: Optional[str] = None,
     token_match = t and t == doc.get("access_token")
     if not authed and not token_match:
         raise HTTPException(403, "forbidden")
+    # Blob-backed images redirect to a signed URL instead of being proxied —
+    # streaming the bytes through this app is exactly what blob storage exists
+    # to avoid, and this route stays only so URLs already saved into decks and
+    # sent emails keep resolving.
+    if doc.get("blob_path"):
+        signed = blob_storage.read_url(doc["blob_path"])
+        if signed:
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(signed, status_code=307)
+    if not doc.get("data"):
+        raise HTTPException(404, "image bytes unavailable")
     from fastapi.responses import Response
     return Response(
         content=doc["data"],
@@ -4404,7 +4417,16 @@ async def carousel_images_list(user=Depends(current_user)):
     items = await cursor.to_list(None)
     base = (PUBLIC_BASE_URL or FRONTEND_URL).rstrip("/")
     for item in items:
-        item["image_url"] = f"{base}/api/carousel/image/{item['id']}?t={item.get('access_token', '')}"
+        # Blob-backed rows serve straight from storage; rows written before
+        # blob storage existed keep the legacy proxy URL so old galleries
+        # don't break. thumb_url is what the grid should render — the full
+        # image is only fetched when the user opens it.
+        if item.get("blob_path"):
+            item["image_url"] = blob_storage.read_url(item["blob_path"])
+            item["thumb_url"] = blob_storage.read_url(item.get("thumb_path", "")) or item["image_url"]
+        else:
+            item["image_url"] = f"{base}/api/carousel/image/{item['id']}?t={item.get('access_token', '')}"
+            item["thumb_url"] = item["image_url"]
     return items
 
 
@@ -4416,6 +4438,125 @@ async def carousel_image_delete(image_id: str, user=Depends(current_user)):
         raise HTTPException(404, "image not found")
     await db.carousel_images.delete_one({"id": image_id})
     return {"ok": True}
+
+
+async def _store_media(doc: Dict[str, Any], data: bytes, content_type: str,
+                       filename: str) -> bool:
+    """Put `data` in Blob and stamp blob_path/thumb_path onto `doc`.
+
+    Returns False when storage is unconfigured or the upload failed, which
+    tells the caller to keep the bytes in Mongo instead. Thumbnail failure is
+    not upload failure — SVG, video and decks have no Pillow thumbnail, and the
+    original is still perfectly usable.
+    """
+    if not blob_storage.BLOB_ENABLED:
+        return False
+    await blob_storage.ensure_container()
+    path = blob_storage.blob_path(doc["workspace_id"], doc["id"], filename)
+    if not await blob_storage.upload_bytes(path, data, content_type):
+        return False
+    doc["blob_path"] = path
+    doc["size_bytes"] = len(data)
+    thumb = blob_storage.make_thumbnail(data)
+    if thumb:
+        tdata, ttype = thumb
+        tpath = blob_storage.blob_path(doc["workspace_id"], doc["id"], "thumb.png")
+        if await blob_storage.upload_bytes(tpath, tdata, ttype):
+            doc["thumb_path"] = tpath
+    return True
+
+
+class MediaUploadUrlIn(BaseModel):
+    filename: str
+    content_type: str = "application/octet-stream"
+    kind: str = "image"  # image | video | presentation | file
+
+
+@api.post("/media/upload-url")
+async def media_upload_url(body: MediaUploadUrlIn, user=Depends(current_user)):
+    """Mint a direct-to-blob upload URL.
+
+    Large media must not be uploaded *through* this app — a single worker
+    streaming a video ties up the whole backend. The browser PUTs straight to
+    Blob with this URL, then calls /media/commit to register the asset.
+    """
+    if not blob_storage.BLOB_ENABLED:
+        raise HTTPException(503, "Media storage is not configured on this deployment.")
+    await blob_storage.ensure_container()
+    asset_id = new_id()
+    path = blob_storage.blob_path(user["workspace_id"], asset_id, body.filename)
+    url = blob_storage.write_sas_url(path)
+    if not url:
+        raise HTTPException(502, "Could not create an upload URL.")
+    return {
+        "asset_id": asset_id, "blob_path": path, "upload_url": url,
+        "method": "PUT",
+        # Azure rejects a block-blob PUT without this header.
+        "headers": {"x-ms-blob-type": "BlockBlob", "Content-Type": body.content_type},
+    }
+
+
+class MediaCommitIn(BaseModel):
+    asset_id: str
+    blob_path: str
+    filename: str = ""
+    content_type: str = "application/octet-stream"
+    kind: str = "image"
+    size_bytes: int = 0
+
+
+@api.post("/media/commit")
+async def media_commit(body: MediaCommitIn, user=Depends(current_user)):
+    """Register an asset the browser uploaded directly.
+
+    blob_path is re-derived from the caller's own workspace rather than trusted
+    from the request — otherwise a client could claim a path under someone
+    else's workspace prefix and register another tenant's asset.
+    """
+    expected_prefix = f"{user['workspace_id']}/{body.asset_id}/"
+    if not body.blob_path.startswith(expected_prefix):
+        raise HTTPException(400, "blob_path does not belong to this workspace/asset.")
+    doc = {
+        "id": body.asset_id, "workspace_id": user["workspace_id"],
+        "created_by": user["id"], "kind": body.kind,
+        "filename": body.filename, "mime_type": body.content_type,
+        "blob_path": body.blob_path, "size_bytes": body.size_bytes,
+        "created_at": now_iso(), "deleted_at": None,
+    }
+    await db.media_assets.insert_one(doc)
+    doc.pop("_id", None)
+    await _audit(user, "media.commit", {"asset_id": body.asset_id, "kind": body.kind})
+    return {**doc, **blob_storage.asset_urls(doc)}
+
+
+@api.get("/media")
+async def media_list(kind: str = "", limit: int = 100, user=Depends(current_user)):
+    """Gallery listing: metadata plus signed thumbnail URLs, never bytes."""
+    q: Dict[str, Any] = {"workspace_id": user["workspace_id"], "deleted_at": None}
+    if kind:
+        q["kind"] = kind
+    items = await db.media_assets.find(q, {"_id": 0}).sort("created_at", -1).to_list(min(limit, 500))
+    return [{**it, **blob_storage.asset_urls(it)} for it in items]
+
+
+@api.delete("/media/{asset_id}")
+async def media_delete(asset_id: str, purge: bool = False, user=Depends(current_user)):
+    """Soft-delete by default so an accidental delete is recoverable; `purge`
+    removes the blob for real."""
+    doc = await db.media_assets.find_one(
+        {"id": asset_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Asset not found")
+    if purge:
+        await blob_storage.delete_blob(doc.get("blob_path", ""))
+        await blob_storage.delete_blob(doc.get("thumb_path", ""))
+        await db.media_assets.delete_one({"id": asset_id, "workspace_id": user["workspace_id"]})
+    else:
+        await db.media_assets.update_one(
+            {"id": asset_id, "workspace_id": user["workspace_id"]},
+            {"$set": {"deleted_at": now_iso()}})
+    await _audit(user, "media.delete", {"asset_id": asset_id, "purge": purge})
+    return {"ok": True, "purged": purge}
 
 
 @api.post("/carousel/image/upload")
@@ -4430,11 +4571,10 @@ async def carousel_image_upload(file: UploadFile = File(...), user=Depends(curre
         raise HTTPException(400, "Image too large (max 5 MB)")
     image_id = new_id()
     access_token = _secrets.token_urlsafe(24)
-    await db.carousel_images.insert_one({
+    doc = {
         "id": image_id,
         "workspace_id": user["workspace_id"],
         "created_by": user["id"],
-        "data": data,
         "mime_type": file.content_type,
         "provider": "upload",
         "prompt": (file.filename or "Uploaded image")[:120],
@@ -4442,11 +4582,23 @@ async def carousel_image_upload(file: UploadFile = File(...), user=Depends(curre
         "aspect": None,
         "access_token": access_token,
         "created_at": now_iso(),
-    })
+    }
+    # Prefer Blob: the bytes then never travel back through this app, which is
+    # the whole point (one uvicorn worker serves everything). Falls back to
+    # storing bytes in Mongo when storage isn't configured, so an unconfigured
+    # deployment keeps working exactly as before.
+    stored = await _store_media(doc, data, file.content_type,
+                               file.filename or f"{image_id}.bin")
+    if not stored:
+        doc["data"] = data
+    await db.carousel_images.insert_one(doc)
     base = (PUBLIC_BASE_URL or FRONTEND_URL).rstrip("/")
+    image_url = (blob_storage.read_url(doc["blob_path"]) if doc.get("blob_path")
+                 else f"{base}/api/carousel/image/{image_id}?t={access_token}")
     return {
         "image_id": image_id,
-        "image_url": f"{base}/api/carousel/image/{image_id}?t={access_token}",
+        "image_url": image_url,
+        "thumb_url": blob_storage.read_url(doc.get("thumb_path", "")) or image_url,
         "prompt": (file.filename or "Uploaded image")[:120],
     }
 
