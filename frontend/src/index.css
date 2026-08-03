@@ -1,3 +1,7 @@
+/* Design system tokens — docs/design-system.md §2. Imported first so the
+   custom properties exist before any layer references them. */
+@import "./styles/tokens.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

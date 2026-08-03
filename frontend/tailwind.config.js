@@ -55,6 +55,52 @@ module.exports = {
       // not hex, for exactly that reason. Nothing here is a hardcoded color;
       // edit index.css to change the actual values.
       colors: {
+      // ---- DESIGN SYSTEM v1 (docs/design-system.md) ----------------------
+      // §21 is Tailwind v4 @theme syntax; this repo is on v3.4, so the tokens
+      // are mapped here and resolve to the same custom properties defined in
+      // src/styles/tokens.css. That keeps the dark theme a pure token swap.
+      //
+      // These are ADDED alongside the existing ink/bone/ash/line names rather
+      // than replacing them: tiers 2-3 (primitives, composites) do not exist
+      // yet, so overwriting the old names now would restyle 96 pages against
+      // components that have not been rebuilt. Old names are removed in the
+      // final migration step, not the first.
+      canvas:          "var(--bg-canvas)",
+      "ds-surface":    "var(--bg-surface)",
+      "surface-sunken":"var(--bg-surface-sunken)",
+      "surface-raised":"var(--bg-surface-raised)",
+      "ds-hover":      "var(--bg-hover)",
+      "ds-active":     "var(--bg-active)",
+      selected:        "var(--bg-selected)",
+      fg:              "var(--text-primary)",
+      "fg-secondary":  "var(--text-secondary)",
+      "fg-tertiary":   "var(--text-tertiary)",
+      "fg-inverse":    "var(--text-inverse)",
+      "line-subtle":   "var(--border-subtle)",
+      "line-default":  "var(--border-default)",
+      "line-strong":   "var(--border-strong)",
+      primary:         "var(--color-primary)",
+      "primary-hover": "var(--color-primary-hover)",
+      "primary-subtle":"var(--color-primary-subtle)",
+      "primary-border":"var(--color-primary-border)",
+      intel:           "var(--color-intel)",
+      "intel-subtle":  "var(--color-intel-subtle)",
+      "intel-border":  "var(--color-intel-border)",
+      success:         "var(--color-success)",
+      "success-subtle":"var(--color-success-subtle)",
+      "success-text":  "var(--color-success-text)",
+      warning:         "var(--color-warning)",
+      "warning-subtle":"var(--color-warning-subtle)",
+      "warning-text":  "var(--color-warning-text)",
+      risk:            "var(--color-risk)",
+      "risk-subtle":   "var(--color-risk-subtle)",
+      "risk-text":     "var(--color-risk-text)",
+      danger:          "var(--color-danger)",
+      "danger-subtle": "var(--color-danger-subtle)",
+      "danger-text":   "var(--color-danger-text)",
+      "chart-1": "var(--chart-1)", "chart-2": "var(--chart-2)", "chart-3": "var(--chart-3)",
+      "chart-4": "var(--chart-4)", "chart-5": "var(--chart-5)", "chart-6": "var(--chart-6)",
+
         bone: "rgb(var(--color-bone) / <alpha-value>)",
         ash: "rgb(var(--color-ash) / <alpha-value>)",
         line: "rgb(var(--color-line) / <alpha-value>)",

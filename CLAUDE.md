@@ -32,6 +32,29 @@ Do not treat this as a simple refactor. This is a full rewrite of the backend an
 
 ## Brand System (Innoira Agentic Suite) — apply to all frontend work
 
+**Superseded 2026-08-03 by `docs/design-system.md`.** That document is marked
+Binding and is now the single source of truth for all design decisions: tokens,
+typography, components, motion, copy and the §24 anti-pattern blocklist. Where
+this section and that document disagree, **the design system wins**. Known
+contradictions, all resolved in favour of the design system:
+
+  * Inter is no longer the body/UI face — §24.6 bans it outright. UI is Geist,
+    display is Plus Jakarta Sans.
+  * The accent is `#2563EB` (`--color-primary`), not `#3B82F6`.
+  * Neutrals are cool slate from `#0F1729`, not the warm ink/bone/ash scale.
+  * Radius may reach 16px on marketing panels (§2.7), not capped at 12px.
+  * "Intelligence" is a named violet surface (§4.5) with `sparkles` as its
+    canonical glyph (§3.3) — the previous blanket ban on AI iconography does
+    not apply to that fenced container.
+
+Migration is staged per §22 (foundations → primitives → composites → charts →
+domain → screens); until a surface has been migrated it still renders with the
+legacy tokens described below, which are kept only for that reason.
+
+<details>
+<summary>Legacy brand system (pre-2026-08-03) — kept for reference during migration</summary>
+
+
 **Superseded 2026-07-21.** The blue→purple gradient accent (adopted 2026-07-17, below) is
 retired in favor of a flat, enterprise-grade design system — an explicit, deliberate
 reversal, made to position the product against Linear/Stripe Dashboard/GitHub Enterprise/
@@ -69,6 +92,8 @@ on 2026-07-17 — the product briefly used a light UI with a **blue → purple g
 primary accent** (buttons, active/selected states, key bullet/icon accents), matching the
 Innoira wordmark's existing gradient. That gradient-primary-accent direction is itself now
 superseded by the flat enterprise system above.
+</details>
+
 </details>
 
 ## Migration Priorities (in order)
