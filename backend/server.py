@@ -1323,6 +1323,104 @@ async def campaign_queue(cid: str, user=Depends(current_user)):
 
 
 # ----------------------------- Campaign Personalization ----------------------------
+# Opt-in markers a user drops into a campaign step, following the same
+# {{token}} convention as the merge fields. They escalate how much of the email
+# the model writes:
+#
+#   {{personalized_opener}}  (original) — AI writes only the ice-breaker line;
+#                            the rest of the template is sent verbatim, and the
+#                            SAME opener is reused on every follow-up step.
+#   {{ai_subject}}  in the subject — AI writes a fresh subject for this step.
+#   {{ai_email}}    in the body    — AI rewrites the entire body for this step,
+#                                    keeping the template's intent, offer and
+#                                    CTA but producing new copy every time.
+#
+# Both new markers resolve per step, so a sequence no longer repeats itself.
+AI_EMAIL_TOKEN = "{{ai_email}}"
+AI_SUBJECT_TOKEN = "{{ai_subject}}"
+
+# The signature is appended by the sender, so anything the model writes must
+# stop at the CTA. campaign_engine.py enforces the same rule when it drafts
+# templates; breaking it here produces emails with two sign-offs.
+_NO_SIGNOFF_RULE = (
+    "NEVER write a sign-off, closing line, or signature — no 'Best regards', no "
+    "'[Your Name]', no title or company block. Stop at the call to action. The "
+    "system appends the signature separately."
+)
+
+
+async def _ai_write_step(*, step: Dict[str, Any], step_idx: int, total_steps: int,
+                         lead_context: Dict[str, Any], research_summary: str,
+                         campaign: Dict[str, Any], ai_meta: Dict[str, Any],
+                         prior_steps: List[Dict[str, str]], want_body: bool,
+                         want_subject: bool, user) -> Dict[str, str]:
+    """Write a fresh subject and/or body for one step of a sequence.
+
+    The template is passed as *intent* rather than text to fill in: the model
+    keeps its offer, angle and CTA but writes new copy grounded in the lead
+    research. Earlier steps of the same sequence are included so follow-ups
+    build on what was already said instead of restating it.
+    """
+    asks = []
+    if want_subject:
+        asks.append('"subject": "<new subject line>"')
+    if want_body:
+        asks.append('"body": "<the complete email body, plain text with \\n line breaks>"')
+
+    system = (
+        "You are Pitch EQ's cold-email writer. You are given a template that "
+        "defines the INTENT of one email in a sequence — its offer, angle and "
+        "call to action — plus real research on the recipient.\n"
+        "Rules:\n"
+        "1. Keep the template's intent, offer and CTA. Do NOT keep its wording — "
+        "write genuinely new copy for this specific person.\n"
+        "2. Ground every specific claim in the research provided. If the research "
+        "found nothing, write a strong email that makes NO specific claims about "
+        "them — never invent a trigger, metric, or event.\n"
+        "3. You may use the merge tokens {{first_name}}, {{last_name}}, {{company}} "
+        "and {{title}}; they are substituted when the email is sent.\n"
+        "4. Do not emit {{personalized_opener}}, {{ai_email}} or {{ai_subject}} — "
+        "you are replacing them.\n"
+        f"5. {_NO_SIGNOFF_RULE}\n"
+        "6. Return STRICT JSON only: {" + ", ".join(asks) + "}"
+    )
+
+    prior_txt = ""
+    if prior_steps:
+        prior_txt = "\n\nALREADY SENT EARLIER IN THIS SEQUENCE (do not repeat these angles or reuse their phrasing):\n"
+        for p in prior_steps:
+            prior_txt += f"- Step {p['step'] + 1} subject: {p.get('subject', '')}\n  body: {(p.get('body') or '')[:400]}\n"
+
+    day_note = f" (sent on day {step.get('day')})" if step.get("day") else ""
+    prompt = (
+        f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\n"
+        f"RESEARCH ON THE PERSON AND COMPANY:\n{research_summary}\n\n"
+        f"CAMPAIGN SERVICE: {ai_meta.get('service_name', campaign.get('goal', ''))}\n"
+        f"CAMPAIGN GOAL: {campaign.get('goal', '')}\n"
+        f"TONE: {campaign.get('tone', 'professional')}\n\n"
+        f"THIS IS EMAIL {step_idx + 1} OF {total_steps} IN THE SEQUENCE{day_note}.\n"
+        f"TEMPLATE SUBJECT (intent): {step.get('subject', '')}\n"
+        f"TEMPLATE BODY (intent):\n{step.get('body', '') or step.get('body_text', '')}\n"
+        f"{prior_txt}\n"
+        "Write this email for this specific lead."
+    )
+    raw = await _llm_chat(system, prompt, f"creq-step-{step_idx}-{lead_context.get('email', '')[:12]}",
+                          user=user, max_tokens=1200)
+    data = _extract_json(raw) or {}
+    out: Dict[str, str] = {}
+    if want_subject:
+        out["subject"] = (data.get("subject") or "").strip()
+    if want_body:
+        out["body"] = (data.get("body") or "").strip()
+    return out
+
+
+def _step_ai_modes(step: Dict[str, Any]) -> tuple:
+    """(wants_ai_body, wants_ai_subject) for a campaign step."""
+    body_src = f"{step.get('body', '')}{step.get('body_html', '')}{step.get('body_text', '')}"
+    return (AI_EMAIL_TOKEN in body_src, AI_SUBJECT_TOKEN in (step.get("subject") or ""))
+
+
 @api.post("/campaigns/{cid}/leads/{lead_id}/generate-email")
 async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(current_user)):
     """Research a lead via Perplexity, then draft a personalized cold email using
@@ -1400,17 +1498,74 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
         raise HTTPException(502, f"Opener generation failed: {ex}")
 
     opener_clean = (personalized_opener or "").strip()
-    template_body = step_template.get("body", "")
-    template_html = step_template.get("body_html", "")
-    merged_body = template_body.replace("{{personalized_opener}}", opener_clean)
-    merged_html = template_html.replace("{{personalized_opener}}", opener_clean) if template_html else ""
-    merged_body = re.sub(r"\n{3,}", "\n\n", merged_body)
 
+    # Resolve every step, not just the first. A step carrying {{ai_email}} or
+    # {{ai_subject}} gets its own generation pass so no two emails in the
+    # sequence are alike; anything else keeps the original opener-merge
+    # behaviour. Generated here rather than at send time because sender.py only
+    # enqueues personalization once it is "approved" — writing the copy later
+    # would mean approving one email and sending another.
+    resolved_steps: List[Dict[str, Any]] = []
+    prior_for_prompt: List[Dict[str, str]] = []
+    total_steps = len(campaign_steps) or 1
+    for idx, step in enumerate(campaign_steps):
+        if step.get("channel", "email") != "email":
+            continue
+        want_body, want_subject = _step_ai_modes(step)
+        s_subject = step.get("subject", "")
+        s_body = step.get("body", "") or step.get("body_text", "")
+        s_html = step.get("body_html", "")
+        mode = "template"
+
+        if want_body or want_subject:
+            try:
+                written = await _ai_write_step(
+                    step=step, step_idx=idx, total_steps=total_steps,
+                    lead_context=lead_context, research_summary=research_summary,
+                    campaign=campaign, ai_meta=ai_meta, prior_steps=prior_for_prompt,
+                    want_body=want_body, want_subject=want_subject, user=user,
+                )
+            except Exception as ex:
+                # One step failing must not lose the whole sequence — fall back
+                # to the template for this step and carry on.
+                logging.warning("ai step %s generation failed for lead %s: %s", idx, lead_id, ex)
+                written = {}
+            if want_subject and written.get("subject"):
+                s_subject = written["subject"]
+                mode = "ai_subject"
+            if want_body and written.get("body"):
+                s_body = written["body"]
+                # The model returns plain text, but raw \n has no meaning in
+                # HTML — sending it as the HTML part would collapse the whole
+                # email onto one line. Rebuild it through the same styled
+                # paragraph renderer the draft chain uses. Signature is passed
+                # empty on purpose: the sender appends it separately.
+                from draft_chain import to_html as _draft_to_html
+                paragraphs = [p.strip() for p in s_body.split("\n\n") if p.strip()]
+                s_html = _draft_to_html({"paragraphs": paragraphs}, "")
+                mode = "ai_email" if not want_subject else "ai_email+subject"
+            prior_for_prompt.append({"step": idx, "subject": s_subject, "body": s_body})
+        else:
+            s_body = s_body.replace("{{personalized_opener}}", opener_clean)
+            s_html = s_html.replace("{{personalized_opener}}", opener_clean) if s_html else ""
+            if opener_clean and "{{personalized_opener}}" in (step.get("body", "") or ""):
+                mode = "opener"
+
+        s_body = re.sub(r"\n{3,}", "\n\n", s_body)
+        resolved_steps.append({
+            "step": idx, "subject": s_subject, "body": s_body,
+            "body_html": s_html, "mode": mode,
+        })
+
+    first = resolved_steps[0] if resolved_steps else {}
     personalized = {
         "lead_id": lead_id,
-        "subject": step_template.get("subject", ""),
-        "body": merged_body,
-        "body_html": merged_html,
+        # Step 0 stays at the top level so the existing review UI and the
+        # send-queue path keep working unchanged.
+        "subject": first.get("subject", step_template.get("subject", "")),
+        "body": first.get("body", ""),
+        "body_html": first.get("body_html", ""),
+        "steps": resolved_steps,
         "personalized_opener": personalized_opener,
         "research": research,
         "status": "draft",

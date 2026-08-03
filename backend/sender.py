@@ -161,7 +161,21 @@ async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[
                 ab_subj = step.get("ab_variant_subject", "")
                 ab_body = step.get("ab_variant_body", "")
                 use_variant = bool(ab_subj or ab_body)
-                if step_idx == 0:
+                # Per-step content, when generate-email resolved this step (a
+                # step carrying {{ai_email}} / {{ai_subject}} is written fresh
+                # for this lead). Falls back to the original behaviour — step 0
+                # from the top-level record, later steps from the template with
+                # the one shared opener merged in — for records generated before
+                # per-step resolution existed.
+                resolved = next(
+                    (s for s in (personal.get("steps") or []) if s.get("step") == step_idx),
+                    None,
+                )
+                if resolved:
+                    subject = resolved.get("subject") or step.get("subject", "")
+                    body_text = resolved.get("body") or step.get("body_text") or step.get("body", "")
+                    body_html = resolved.get("body_html") or body_text
+                elif step_idx == 0:
                     subject = personal.get("subject", step.get("subject", ""))
                     body_html = personal.get("body_html", step.get("body_html") or step.get("body", ""))
                     body_text = personal.get("body", step.get("body_text") or step.get("body", ""))
