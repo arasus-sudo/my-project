@@ -29,6 +29,9 @@ from fastapi.responses import Response
 from server import db, now_iso, new_id, _llm_chat, _extract_json
 from voice_eq import _cascade_call_analyzed, _settle_call_billing
 from twilio_client import twilio_client
+from fish_audio_client import (
+    DEFAULT_FISH_MODEL, FISH_EXPRESSION_PROMPT, fish_tts, strip_expression_markers,
+)
 
 log = logging.getLogger(__name__)
 
@@ -406,9 +409,23 @@ async def google_media_stream(ws: WebSocket, token: str, call_id: str):
     stt_language = cfg.get("google_stt_language", "en-US")
     greeting_message = cfg.get("greeting_message", "")
 
+    # This relay serves both cascaded providers — `google_provider` and
+    # `twilio_fish` — which differ only in the synthesis hop. Expression markers
+    # are stripped for every engine except Fish, which is the only one that
+    # understands them; Google would otherwise read them aloud.
+    use_fish = agent.get("provider") == "twilio_fish"
+    fish_voice_id = cfg.get("fish_voice_id", "") or None
+    fish_model = cfg.get("fish_model", DEFAULT_FISH_MODEL)
+
+    if use_fish:
+        prompt += FISH_EXPRESSION_PROMPT
+
     async def _synthesize(text: str) -> Optional[str]:
         text = _strip_markdown(text)
-        return await _google_tts(text, google_voice, speaking_rate)
+        if use_fish:
+            return await fish_tts(text, reference_id=fish_voice_id, speed=speaking_rate,
+                                  model=fish_model, volume_db=float(cfg.get("volume_gain_db", 0.0)))
+        return await _google_tts(strip_expression_markers(text), google_voice, speaking_rate)
 
     # ── Lead context ────────────────────────────────────────────────────
     lead_info = call.get("metadata", {}).get("lead_snapshot", {})

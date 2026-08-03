@@ -113,10 +113,18 @@ const emptyAgent = () => ({
     crm_context_level: "full_lead",
     google_voice: "en-US-Studio-Q",
     google_stt_language: "en-US",
+    fish_voice_id: "",
+    fish_model: "s2.1-pro",
     greeting_message: "",
     volume_gain_db: 3.0,
   },
 });
+
+const FISH_MODELS = [
+  { id: "s2.1-pro", label: "S2.1 Pro — recommended" },
+  { id: "s2-pro", label: "S2 Pro" },
+  { id: "s1", label: "S1 (legacy)" },
+];
 
 const FRAMEWORKS = {
   BANT: [
@@ -143,6 +151,16 @@ export default function VoiceAgentBuilder() {
   const [busy, setBusy] = useState(false);
   const [inboundUrl, setInboundUrl] = useState("");
   const [copied, setCopied] = useState(false);
+  const [fishVoices, setFishVoices] = useState([]);
+
+  // Cloned voices are workspace-scoped, so this only ever lists voices this
+  // workspace supplied samples for.
+  useEffect(() => {
+    if (agent.provider !== "twilio_fish") return;
+    api.get("/voice-eq/fish/voices")
+      .then((r) => setFishVoices(r.data || []))
+      .catch(() => setFishVoices([]));
+  }, [agent.provider]);
 
   useEffect(() => {
     if (!id || id === "new") return;
@@ -251,10 +269,13 @@ export default function VoiceAgentBuilder() {
                     className="w-full border border-line px-3 py-2 rounded-lg">
                     <option value="twilio_openai">Twilio + OpenAI Realtime</option>
                     <option value="google_provider">Google Cloud (STT → Claude → TTS)</option>
+                    <option value="twilio_fish">Fish Audio (STT → Claude → cloned voice)</option>
                   </select>
                   <p className="text-tiny text-ink-muted mt-1">
                     {agent.provider === "google_provider"
                       ? "Split architecture: 50+ WaveNet/Studio voices, 30+ languages, Indian/British/Australian accents natively supported. Requires GOOGLE_API_KEY in .env."
+                      : agent.provider === "twilio_fish"
+                      ? "Split architecture with voice cloning — speaks in a voice your workspace supplied, and Claude adds word-level emphasis. Requires FISH_AUDIO_API_KEY and GOOGLE_API_KEY (speech recognition) in .env."
                       : "Low-latency end-to-end voice model. Limited to 8 OpenAI voices."}
                   </p>
                 </div>
@@ -424,8 +445,48 @@ export default function VoiceAgentBuilder() {
             ) : (
               <>
                 <div className="shadow-card rounded-2xl p-6 space-y-4">
-                  <div className="text-card-title font-display font-semibold">Google Cloud voice</div>
+                  <div className="text-card-title font-display font-semibold">
+                    {agent.provider === "twilio_fish" ? "Fish Audio voice" : "Google Cloud voice"}
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {agent.provider === "twilio_fish" ? (
+                      <>
+                        <div>
+                          <label className="form-label block mb-1">Voice</label>
+                          <select value={c.fish_voice_id || ""} onChange={(e) => patchConfig({ fish_voice_id: e.target.value })}
+                            className="w-full border border-line px-3 py-2 rounded-lg">
+                            <option value="">Fish Audio default voice</option>
+                            {fishVoices.map((v) => (
+                              <option key={v.fish_voice_id} value={v.fish_voice_id}>{v.title}</option>
+                            ))}
+                          </select>
+                          <p className="text-tiny text-ink-muted mt-1">
+                            {fishVoices.length
+                              ? "Voices cloned by this workspace."
+                              : "No cloned voices yet — upload samples in Voice Settings to add one."}
+                          </p>
+                        </div>
+                        <div>
+                          <label className="form-label block mb-1">Model</label>
+                          <select value={c.fish_model || "s2.1-pro"} onChange={(e) => patchConfig({ fish_model: e.target.value })}
+                            className="w-full border border-line px-3 py-2 rounded-lg">
+                            {FISH_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                          </select>
+                          <p className="text-tiny text-ink-muted mt-1">
+                            S2 models take inline emphasis cues; S1 is the older fixed-tag model.
+                          </p>
+                        </div>
+                        <div>
+                          <label className="form-label block mb-1">STT language</label>
+                          <select value={c.google_stt_language || "en-US"} onChange={(e) => patchConfig({ google_stt_language: e.target.value })}
+                            className="w-full border border-line px-3 py-2 rounded-lg">
+                            {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
+                          </select>
+                          <p className="text-tiny text-ink-muted mt-1">Speech recognition language code.</p>
+                        </div>
+                      </>
+                    ) : (
+                    <>
                     <div>
                       <label className="form-label block mb-1">Voice</label>
                       <select value={c.google_voice || "en-US-Wavenet-D"} onChange={(e) => {
@@ -458,6 +519,8 @@ export default function VoiceAgentBuilder() {
                       </select>
                       <p className="text-tiny text-ink-muted mt-1">Speech recognition language code.</p>
                     </div>
+                    </>
+                    )}
                   </div>
                   <div>
                     <label className="form-label block mb-1">Speaking speed · {c.speaking_speed.toFixed(1)}x</label>

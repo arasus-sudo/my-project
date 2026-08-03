@@ -13,17 +13,24 @@ import secrets
 import asyncio
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 
 from server import db, current_user, now_iso, new_id, _audit, _rate_ok, STAGES, _llm_chat, _extract_json, ANTHROPIC_API_KEY, _log_activity, require_role
 from twilio_client import twilio_client, TWILIO_MOCKED, TWILIO_FROM_NUMBER
 from openai_realtime_client import OPENAI_MOCKED, TELEPHONY_SAFE_VOICES, DEFAULT_VOICE
+from fish_audio_client import FISH_MOCKED, FISH_MODELS, DEFAULT_FISH_MODEL
 
 log = logging.getLogger(__name__)
 
 GOOGLE_MOCKED = not bool(os.environ.get("GOOGLE_API_KEY", ""))
+
+# Providers that run the split STT → Claude → TTS pipeline in
+# voice_google_provider.py, as opposed to OpenAI's single speech-to-speech
+# model. They share that module's TwiML routes and media-stream relay and
+# differ only in which engine synthesizes the reply.
+CASCADED_PROVIDERS = ("google_provider", "twilio_fish")
 
 voice_router = APIRouter(prefix="/voice-eq")
 voice_public_router = APIRouter()
@@ -74,6 +81,12 @@ class AgentConfig(BaseModel):
     # Google provider fields
     google_voice: str = "en-US-Studio-Q"
     google_stt_language: str = "en-US"
+
+    # Fish Audio provider fields. `fish_voice_id` is a Fish model id — either a
+    # voice from their library or one cloned from workspace-supplied samples via
+    # POST /voice-eq/fish/voices. Empty means Fish's default voice.
+    fish_voice_id: str = ""
+    fish_model: str = DEFAULT_FISH_MODEL
 
     # Custom greeting message (played immediately on call connect)
     greeting_message: str = ""
@@ -300,7 +313,9 @@ async def _place_call(*, workspace_id: str, agent: Dict[str, Any], lead: Dict[st
     from_number = await _pick_from_number(workspace_id)
 
     provider = agent.get("provider", "twilio_openai")
-    if TWILIO_MOCKED or OPENAI_MOCKED or (provider == "google_provider" and GOOGLE_MOCKED):
+    if (TWILIO_MOCKED or OPENAI_MOCKED
+            or (provider == "google_provider" and GOOGLE_MOCKED)
+            or (provider == "twilio_fish" and (GOOGLE_MOCKED or FISH_MOCKED))):
         call_doc = _blank_call_doc(
             workspace_id=workspace_id, lead=lead, agent_id=agent["id"],
             campaign_id=campaign_id, from_number=from_number, to_number=to_number,
@@ -325,7 +340,7 @@ async def _place_call(*, workspace_id: str, agent: Dict[str, Any], lead: Dict[st
     await db.calls.insert_one(call_doc)
     call_doc.pop("_id", None)
 
-    if provider == "google_provider":
+    if provider in CASCADED_PROVIDERS:
         twiml_url = f"{PUBLIC_BASE_URL}/api/hooks/voice-google-twiml/{ws_hook['token']}/{call_id}"
         status_callback_url = f"{PUBLIC_BASE_URL}/api/hooks/voice-google-status/{ws_hook['token']}/{call_id}"
     else:
@@ -343,8 +358,8 @@ async def _place_call(*, workspace_id: str, agent: Dict[str, Any], lead: Dict[st
     }
     await db.calls.update_one({"id": call_id}, {"$set": patch})
 
-    # Pre-generate greeting audio for Google provider (reduces first-audio latency)
-    if provider == "google_provider" and not result.get("mocked"):
+    # Pre-generate greeting audio for the cascaded providers (reduces first-audio latency)
+    if provider in CASCADED_PROVIDERS and not result.get("mocked"):
         asyncio.ensure_future(_pre_greeting_for_call(workspace_id, call_id, agent, lead))
 
     return {**call_doc, **patch, "mocked": result.get("mocked", TWILIO_MOCKED)}
@@ -371,9 +386,17 @@ async def _pre_greeting_for_call(workspace_id: str, call_id: str, agent: Dict[st
         if not greeting_text:
             return
         from voice_google_provider import _google_tts, store_greeting_audio
-        voice = cfg.get("google_voice", "en-US-Wavenet-D")
+        from fish_audio_client import fish_tts, strip_expression_markers
         rate = float(cfg.get("speaking_speed", 1.0))
-        audio = await _google_tts(greeting_text, voice, rate)
+        if agent.get("provider") == "twilio_fish":
+            audio = await fish_tts(
+                greeting_text, reference_id=cfg.get("fish_voice_id", "") or None, speed=rate,
+                model=cfg.get("fish_model", DEFAULT_FISH_MODEL),
+                volume_db=float(cfg.get("volume_gain_db", 0.0)),
+            )
+        else:
+            voice = cfg.get("google_voice", "en-US-Wavenet-D")
+            audio = await _google_tts(strip_expression_markers(greeting_text), voice, rate)
         if audio:
             store_greeting_audio(call_id, audio)
             log.info("Pre-generated greeting audio for call %s (%d chars → %d bytes)", call_id, len(greeting_text), len(audio))
@@ -597,6 +620,72 @@ async def list_response_styles():
 @voice_router.get("/languages")
 async def list_languages():
     return {"languages": LANGUAGES}
+
+
+# ---------------------------------------------------------------------------
+# Fish Audio voices (cloning)
+# ---------------------------------------------------------------------------
+
+@voice_router.get("/fish/models")
+async def list_fish_models():
+    return {"models": FISH_MODELS, "default": DEFAULT_FISH_MODEL, "mocked": FISH_MOCKED}
+
+
+@voice_router.get("/fish/voices")
+async def list_fish_voices(user=Depends(current_user)):
+    """Voices this workspace has cloned. Scoped to the workspace — a clone made
+    from one workspace's samples is never selectable by another."""
+    return await db.fish_voices.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+
+
+@voice_router.post("/fish/voices")
+async def create_fish_voice(
+    title: str = Form(...),
+    consent_confirmed: bool = Form(False),
+    transcript: Optional[str] = Form(None),
+    samples: List[UploadFile] = File(...),
+    user=Depends(require_role("org_admin", "campaign_manager")),
+):
+    """Clone a voice from uploaded samples and make it selectable on agents.
+
+    `consent_confirmed` is a required attestation, not a formality: cloning a
+    real person's voice needs that person's specific consent, and an outbound
+    call placed in a cloned voice is exactly the case where the absence of it
+    matters. The attestation and who made it are recorded in the audit log.
+    """
+    if not consent_confirmed:
+        raise HTTPException(
+            400,
+            "Confirm you have the speaker's consent to clone this voice before uploading.",
+        )
+    if FISH_MOCKED:
+        raise HTTPException(503, "Fish Audio is not configured on this deployment (FISH_AUDIO_API_KEY unset).")
+    if not samples:
+        raise HTTPException(400, "At least one audio sample is required.")
+
+    payload = []
+    for f in samples[:20]:
+        payload.append((f.filename or "sample.wav", await f.read(), transcript))
+        transcript = None  # a single supplied transcript only matches the first sample
+
+    from fish_audio_client import fish_create_voice_model
+    voice_id = await fish_create_voice_model(title=title, samples=payload)
+    if not voice_id:
+        raise HTTPException(502, "Fish Audio rejected the voice clone — check the samples and try again.")
+
+    doc = {
+        "id": new_id(), "workspace_id": user["workspace_id"], "fish_voice_id": voice_id,
+        "title": title, "created_by": user["id"], "created_at": now_iso(),
+        "consent_confirmed_by": user.get("email"),
+    }
+    await db.fish_voices.insert_one(doc)
+    doc.pop("_id", None)
+    await _audit(user, "voice_eq.fish_voice.clone",
+                 {"fish_voice_id": voice_id, "title": title, "samples": len(payload),
+                  "consent_confirmed_by": user.get("email")})
+    return doc
 
 
 # ---------------------------------------------------------------------------
