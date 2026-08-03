@@ -31,6 +31,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
+from urllib.parse import quote
 
 log = logging.getLogger(__name__)
 
@@ -52,6 +53,23 @@ THUMBNAIL_MAX_EDGE = 480
 
 _account_name: Optional[str] = None
 _account_key: Optional[str] = None
+
+
+def _blob_url(account: str, path: str, token: str) -> str:
+    """Assemble a blob URL, percent-encoding the path.
+
+    A blob name is allowed to contain spaces and commas — uploads keep the
+    user's original filename — but a URL is not. Concatenating the raw name
+    produced a URL the HTTP layer rejected outright ("URL can't contain control
+    characters"), so any image whose filename had a space failed to load while
+    clean names worked.
+
+    Only the URL is encoded; the SAS signature is computed over the RAW blob
+    name by generate_blob_sas, and Azure decodes the path before matching it.
+    Encoding before signing would invalidate every signature. `safe="/"` keeps
+    the path separators intact.
+    """
+    return f"https://{account}.blob.core.windows.net/{BLOB_CONTAINER}/{quote(path, safe='/')}?{token}"
 
 
 def _credentials() -> Tuple[Optional[str], Optional[str]]:
@@ -142,7 +160,7 @@ def read_url(path: str, ttl_minutes: int = READ_SAS_TTL_MINUTES) -> str:
             permission=BlobSasPermissions(read=True),
             expiry=datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes),
         )
-        return f"https://{name}.blob.core.windows.net/{BLOB_CONTAINER}/{path}?{token}"
+        return _blob_url(name, path, token)
     except Exception as ex:
         log.warning("blob: read_url failed for %s: %s", path, ex)
         return ""
@@ -167,7 +185,7 @@ def write_sas_url(path: str, ttl_minutes: int = WRITE_SAS_TTL_MINUTES) -> str:
             permission=BlobSasPermissions(create=True, write=True),
             expiry=datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes),
         )
-        return f"https://{name}.blob.core.windows.net/{BLOB_CONTAINER}/{path}?{token}"
+        return _blob_url(name, path, token)
     except Exception as ex:
         log.warning("blob: write_sas_url failed for %s: %s", path, ex)
         return ""
