@@ -380,6 +380,70 @@ def build_mcp_app(db, issuer_url: str, resource_server_url: str) -> FastMCP:
                                                       "via": "mcp", "client_id": user.get("_mcp_client_id")})
         return sig
 
+    # ------------------------- Create EQ (carousels) -------------------------
+    # Create EQ had no named tool at all, so a connected client saw nothing in
+    # its tool list that makes a carousel and would just report it couldn't —
+    # even though the routes are reachable via call_endpoint and the grant had
+    # the scope for it. Named tools are what make the capability discoverable.
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def list_carousels() -> List[Dict[str, Any]]:
+        """List every Create EQ carousel project in the connected workspace,
+        most recently updated first."""
+        user = await current_mcp_user(db)
+        from server import carousel_list as _carousel_list
+        return await _call(_carousel_list(user=user))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_carousel(project_id: str) -> Dict[str, Any]:
+        """Get one Create EQ carousel project by ID — all of its slides, plus
+        the brand kit and target platform."""
+        user = await current_mcp_user(db)
+        from server import carousel_get as _carousel_get
+        return await _call(_carousel_get(pid=project_id, user=user))
+
+    @mcp.tool(annotations=SAFE_WRITE)
+    async def create_carousel(
+        topic: str,
+        platform: str = "linkedin",
+        slide_count: int = 6,
+        tone: str = "confident, punchy",
+        source_url: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Generate a new Create EQ carousel from a topic — writes a full
+        Hook → Body → CTA slide narrative and saves it as a project, returning
+        the project with its slides. Optionally pass `source_url` to ground the
+        copy in a crawled page. Consumes the workspace's carousel_generate
+        credits. Inherently slow (crawl plus generation) — expect tens of
+        seconds, not a snappy response."""
+        user = await current_mcp_user(db)
+        require_scope(user, "write")
+        from server import CarouselGenIn, carousel_generate as _carousel_generate, _audit
+        project = await _call(_carousel_generate(
+            body=CarouselGenIn(topic=topic, platform=platform, slide_count=slide_count,
+                               tone=tone, source_url=source_url),
+            user=user,
+        ))
+        await _audit(user, "mcp.create_carousel", {"project_id": project.get("id"), "platform": platform,
+                                                     "via": "mcp", "client_id": user.get("_mcp_client_id")})
+        return project
+
+    @mcp.tool(annotations=SAFE_WRITE)
+    async def edit_carousel_slide(project_id: str, slide_index: int, instruction: str) -> Dict[str, Any]:
+        """Rewrite one slide of an existing carousel in place from a plain-language
+        instruction ("make the hook punchier", "add a supporting stat").
+        `slide_index` is 0-based."""
+        user = await current_mcp_user(db)
+        require_scope(user, "write")
+        from server import CarouselEditIn, carousel_edit as _carousel_edit, _audit
+        result = await _call(_carousel_edit(
+            body=CarouselEditIn(project_id=project_id, slide_index=slide_index, instruction=instruction),
+            user=user,
+        ))
+        await _audit(user, "mcp.edit_carousel_slide", {"project_id": project_id, "slide_index": slide_index,
+                                                         "via": "mcp", "client_id": user.get("_mcp_client_id")})
+        return result
+
     # ------------------------- Dangerous sends (require 'send' scope) --------
     # Real money and real outbound contact with real leads. Every tool here
     # requires the 'send' OAuth scope (only grantable by an org_admin/
@@ -549,7 +613,13 @@ def build_mcp_app(db, issuer_url: str, resource_server_url: str) -> FastMCP:
         import httpx
         from server import app, make_token, _audit
         token = make_token(user["id"], user["workspace_id"], ttl_hours=1 / 60)
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://internal") as client:
+        # httpx defaults to a 5s timeout, which silently made every LLM-backed
+        # endpoint in the long tail unreachable through this tool — carousel
+        # generation alone can deep-crawl 10 pages and then run a completion.
+        # The call is in-process (ASGITransport), so a generous ceiling costs
+        # nothing; it exists only to stop a wedged handler pinning the session.
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://internal",
+                                     timeout=httpx.Timeout(180.0, connect=10.0)) as client:
             resp = await client.request(
                 method, path, params=params,
                 json=body if method in ("POST", "PUT", "PATCH") else None,
