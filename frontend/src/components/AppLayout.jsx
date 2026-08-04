@@ -319,22 +319,46 @@ function ContentLoader() {
   );
 }
 
+/* PageHeader — docs/design-system.md §8.2.
+ * Row 1: heading-2 title + body-sm description, up to 4 right-aligned
+ * controls. Sticks to the top with --bg-canvas + --border-default after
+ * scroll — restyled onto tokens in place rather than as a parallel
+ * composite, since every page already imports this one. */
 export function PageHeader({ title, subtitle, right, badge }) {
   return (
-    <div className="border-b border-line bg-surface/80 backdrop-blur-sm sticky top-0 z-10">
+    <div
+      className="sticky top-0 z-10"
+      style={{ background: "var(--bg-canvas)", borderBottom: "1px solid var(--border-default)" }}
+    >
       {/* pl-16 below lg clears the fixed hamburger button (top-4 left-4, ~44px);
           actions stack under the title on phones instead of crushing it. */}
       <div className="pl-16 pr-6 sm:pr-8 lg:pl-8 py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-page-title font-display font-semibold truncate">{title}</h1>
+            <h1
+              className="truncate"
+              style={{ fontSize: 20, lineHeight: "26px", fontWeight: 600, letterSpacing: "-0.01em", color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}
+            >
+              {title}
+            </h1>
             {badge && (
-              <span className="badge-info">
-                <Info size={12} /> {badge}
+              <span
+                className="inline-flex items-center gap-1"
+                style={{
+                  height: 20, padding: "0 8px", borderRadius: "var(--radius-sm)",
+                  background: "var(--color-primary-subtle)", color: "var(--color-primary)",
+                  fontSize: 11.5, fontWeight: 500, fontFamily: "var(--font-ui)",
+                }}
+              >
+                <Info size={12} strokeWidth={1.5} aria-hidden="true" /> {badge}
               </span>
             )}
           </div>
-          {subtitle && <div className="text-caption text-ink-muted mt-1 truncate">{subtitle}</div>}
+          {subtitle && (
+            <div className="truncate" style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
+              {subtitle}
+            </div>
+          )}
         </div>
         {right && <div className="flex items-center gap-2.5 shrink-0 flex-wrap">{right}</div>}
       </div>
