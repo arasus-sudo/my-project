@@ -3,8 +3,10 @@ import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { Link } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
 import { SkeletonKpiGrid } from "../components/ui/loading-states";
+// §25: icons come from the closed list, never from lucide-react directly.
+import { ArrowRight, Send, Eye, MessageSquare, CalendarClock, Activity } from "../icons";
+import MetricCard from "../components/composites/MetricCard";
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
@@ -35,21 +37,38 @@ export default function Dashboard() {
         }
       />
       <div className="p-6 sm:p-8 space-y-6">
-        {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          {[
-            { k: "Sent", v: kpis.sent, sub: null },
-            { k: "Open rate", v: `${kpis.open_rate}%`, sub: `${kpis.opened} opens` },
-            { k: "Reply rate", v: `${kpis.reply_rate}%`, sub: `${kpis.replied} replies` },
-            { k: "Meetings", v: kpis.meetings, sub: `${kpis.meeting_rate}% booked` },
-            { k: "Clicks", v: kpis.clicked, sub: null },
-          ].map((c, i) => (
-            <div key={c.k} className="p-3 sm:p-6 bg-white shadow-card rounded-2xl">
-              <div className="ui-label">{c.k}</div>
-              <div className="text-section font-display font-bold mt-2 tracking-tighter truncate">{c.v}</div>
-              {c.sub && <div className="text-tiny text-ink-muted mt-1 font-mono">{c.sub}</div>}
-            </div>
-          ))}
+        {/* KPI strip — docs/design-system.md §15 step 2, built from §4.2
+            metric blocks. Every card now carries the label + icon + basis line
+            §1.4 requires; a bare number was an unfinished component.
+
+            No `delta` is passed because the analytics endpoint does not return
+            period-over-period figures yet. §4.2 wants one on every metric, but
+            §24.16 forbids inventing numbers, so the delta row is simply absent
+            until the API supplies a real comparison — see the note in
+            docs/design-system.md's implementation section.
+
+            §2.11: 4 columns at ≥1280, 2 at 768-1279, 1 below. */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+          <MetricCard
+            label="Sent" value={kpis.sent} icon={Send} tone="primary"
+            basis={`across ${counts?.campaigns ?? 0} campaigns`}
+          />
+          <MetricCard
+            label="Open rate" value={`${kpis.open_rate}%`} icon={Eye} tone="success"
+            basis={`${kpis.opened} opens`}
+          />
+          <MetricCard
+            label="Reply rate" value={`${kpis.reply_rate}%`} icon={MessageSquare} tone="success"
+            basis={`${kpis.replied} replies`}
+          />
+          <MetricCard
+            label="Meetings" value={kpis.meetings} icon={CalendarClock} tone="warning"
+            basis={`${kpis.meeting_rate}% booked`}
+          />
+          <MetricCard
+            label="Clicks" value={kpis.clicked} icon={Activity} tone="primary"
+            basis={`${kpis.sent ? Math.round((kpis.clicked / kpis.sent) * 100) : 0}% of sent`}
+          />
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
