@@ -86,18 +86,21 @@ module.exports = {
       intel:           "var(--color-intel)",
       "intel-subtle":  "var(--color-intel-subtle)",
       "intel-border":  "var(--color-intel-border)",
-      success:         "var(--color-success)",
-      "success-subtle":"var(--color-success-subtle)",
-      "success-text":  "var(--color-success-text)",
-      warning:         "var(--color-warning)",
-      "warning-subtle":"var(--color-warning-subtle)",
-      "warning-text":  "var(--color-warning-text)",
+      // NOTE: no top-level `success`/`warning`/`danger` keys here — those
+      // names are owned by the legacy palette below (`bg-success` etc.,
+      // ~93 existing call sites) via --legacy-success/-warning/-danger.
+      // Design-system components consume --color-success/-warning/-danger
+      // directly through inline style, never through these Tailwind
+      // utilities, so there is no collision left to resolve.
+      "ds-success-subtle":"var(--color-success-subtle)",
+      "ds-success-text":  "var(--color-success-text)",
+      "ds-warning-subtle":"var(--color-warning-subtle)",
+      "ds-warning-text":  "var(--color-warning-text)",
       risk:            "var(--color-risk)",
       "risk-subtle":   "var(--color-risk-subtle)",
       "risk-text":     "var(--color-risk-text)",
-      danger:          "var(--color-danger)",
-      "danger-subtle": "var(--color-danger-subtle)",
-      "danger-text":   "var(--color-danger-text)",
+      "ds-danger-subtle": "var(--color-danger-subtle)",
+      "ds-danger-text":   "var(--color-danger-text)",
       "chart-1": "var(--chart-1)", "chart-2": "var(--chart-2)", "chart-3": "var(--chart-3)",
       "chart-4": "var(--chart-4)", "chart-5": "var(--chart-5)", "chart-6": "var(--chart-6)",
 
@@ -122,9 +125,11 @@ module.exports = {
           from: "rgb(var(--color-accent) / <alpha-value>)",
           to: "rgb(var(--color-brand-to) / <alpha-value>)",
         },
-        success: { DEFAULT: "rgb(var(--color-success) / <alpha-value>)", soft: "rgb(var(--color-success) / 0.16)" },
-        warning: { DEFAULT: "rgb(var(--color-warning) / <alpha-value>)", soft: "rgb(var(--color-warning) / 0.16)" },
-        danger: { DEFAULT: "rgb(var(--color-danger) / <alpha-value>)", soft: "rgb(var(--color-danger) / 0.16)" },
+        // --legacy-success/-warning/-danger (renamed from --color-* to stop
+        // colliding with tokens.css's design-system tokens of the same name).
+        success: { DEFAULT: "rgb(var(--legacy-success) / <alpha-value>)", soft: "rgb(var(--legacy-success) / 0.16)" },
+        warning: { DEFAULT: "rgb(var(--legacy-warning) / <alpha-value>)", soft: "rgb(var(--legacy-warning) / 0.16)" },
+        danger: { DEFAULT: "rgb(var(--legacy-danger) / <alpha-value>)", soft: "rgb(var(--legacy-danger) / 0.16)" },
         info: { DEFAULT: "rgb(var(--color-accent) / <alpha-value>)", soft: "rgb(var(--color-accent-soft) / <alpha-value>)" },
         // Raised panel — the token every `bg-white`-as-card-surface call site
         // is swapped to during the page sweep (works correctly in both

@@ -28,9 +28,18 @@
     --color-accent-soft: 219 234 254;           /* #DBEAFE soft tint */
     --color-accent-foreground: 255 255 255;
     --color-brand-to: 109 94 245;              /* #6D5EF5 — deprecated gradient's "to" stop */
-    --color-success: 48 209 88;                /* #30D158 */
-    --color-warning: 255 159 10;               /* #FF9F0A */
-    --color-danger: 255 69 58;                 /* #FF453A */
+    /* Renamed from --color-success/-warning/-danger: those names collided
+       with tokens.css's design-system tokens of the same name, and since
+       both targeted :root, whichever CSS declaration came later in source
+       order won — silently breaking every tone="success/warning/danger"
+       component (IconSquare, StatusPill, MetricCard, InlineAlert,
+       ScoreGauge, chart summary rows) built against the design system.
+       These legacy RGB-triplet values are kept only for the pre-existing
+       `bg-success`/`text-warning`/`border-danger` Tailwind utilities used
+       across ~93 not-yet-migrated files (see tailwind.config.js). */
+    --legacy-success: 48 209 88;                /* #30D158 */
+    --legacy-warning: 255 159 10;               /* #FF9F0A */
+    --legacy-danger: 255 69 58;                 /* #FF453A */
     --color-surface: 255 255 255;              /* #FFFFFF card/panel bg */
     --color-surfacehover: 240 240 240;         /* #F0F0F0 */
     --color-sanguine-hover: 0 0 0;
