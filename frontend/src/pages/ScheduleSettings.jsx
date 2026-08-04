@@ -3,7 +3,13 @@ import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Save, Link2, Unlink, Mail, ChevronDown } from "lucide-react";
+import { Check, Link, Mail } from "../icons";
+import Card from "../components/composites/Card";
+import Button from "../components/primitives/Button";
+import Select from "../components/primitives/Select";
+import Checkbox from "../components/primitives/Checkbox";
+import Input from "../components/primitives/Input";
+import StatusPill from "../components/primitives/StatusPill";
 
 const TIMEZONES = [
   "UTC", "US/Eastern", "US/Central", "US/Mountain", "US/Pacific",
@@ -85,99 +91,82 @@ export default function ScheduleSettings() {
     } finally { setBusy(false); }
   };
 
-  if (!status || !availability) return <div className="p-10 text-ink-muted text-body">Loading…</div>;
+  if (!status || !availability) return <div className="p-10" style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Loading…</div>;
 
   return (
     <div>
       <PageHeader title="Schedule EQ Settings" subtitle="Calendar connection, email notifications, and working hours." />
-      <div className="animate-fade-in px-6 sm:px-8 max-w-2xl space-y-6">
-        <div className="shadow-card rounded-2xl p-6 sm:p-8">
+      <div className="animate-fade-in px-6 sm:px-8 py-6 max-w-2xl space-y-4">
+        <Card>
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div>
-              <div className="text-card-title font-display font-semibold flex items-center gap-2">
-                <Mail size={16} /> Email notifications
+              <div className="flex items-center gap-2" style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>
+                <Mail size={16} strokeWidth={1.5} aria-hidden="true" /> Email notifications
               </div>
-              <p className="text-caption text-ink-muted mt-1">
+              <p style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 4 }}>
                 {emailStatus?.mocked === false
-                  ? <>Live — confirmations, 24-hour reminders, reschedules and cancellations are sent from <span className="font-mono">{emailStatus.from}</span>, each with a calendar invite attached.</>
-                  : <>Test mode — every message is fully composed and recorded, but not delivered. Add a <span className="font-mono">RESEND_API_KEY</span> to send for real.</>}
+                  ? <>Live — confirmations, 24-hour reminders, reschedules and cancellations are sent from <span style={{ fontFamily: "var(--font-mono)" }}>{emailStatus.from}</span>, each with a calendar invite attached.</>
+                  : <>Test mode — every message is fully composed and recorded, but not delivered. Add a <span style={{ fontFamily: "var(--font-mono)" }}>RESEND_API_KEY</span> to send for real.</>}
               </p>
               {emailStatus && (
-                <p className="text-caption text-ink-muted mt-1.5">
+                <p style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 6 }}>
                   {emailStatus.sent_count} message{emailStatus.sent_count === 1 ? "" : "s"} composed so far.
                 </p>
               )}
             </div>
-            <span data-testid="email-status-chip"
-              className={`shrink-0 text-tiny font-mono uppercase tracking-wider px-2 py-1 rounded-full border ${
-                emailStatus?.mocked === false
-                  ? "border-success/30 bg-success/10 text-success"
-                  : "border-line bg-bone text-ink-muted"
-              }`}>
-              {emailStatus?.mocked === false ? "Live" : "Test mode"}
-            </span>
+            <StatusPill data-testid="email-status-chip" status={emailStatus?.mocked === false ? "Live" : "Test mode"} tone={emailStatus?.mocked === false ? "success" : "neutral"} className="shrink-0" />
           </div>
-        </div>
+        </Card>
 
-        <div className="shadow-card rounded-2xl p-6 sm:p-8">
+        <Card>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <div className="text-card-title font-display font-semibold">Google Calendar</div>
-              <p className="text-caption text-ink-muted mt-1">
+              <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>Google Calendar</div>
+              <p style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 4 }}>
                 {status.connected ? "Connected — real availability and calendar events are used." : status.mocked
                   ? "Test mode — availability is computed from your working hours only. Connect Google Calendar to sync real events."
                   : "Not connected."}
               </p>
             </div>
             {status.connected ? (
-              <button onClick={disconnect} data-testid="disconnect-google" className="btn-secondary"><Unlink size={14} /> Disconnect</button>
+              <Button variant="secondary" icon={Link} onClick={disconnect} data-testid="disconnect-google">Disconnect</Button>
             ) : (
-              <button onClick={connect} data-testid="connect-google" className="btn-primary"><Link2 size={14} /> Connect Google</button>
+              <Button variant="primary" icon={Link} onClick={connect} data-testid="connect-google">Connect Google</Button>
             )}
           </div>
-        </div>
+        </Card>
 
-        <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div className="text-card-title font-display font-semibold">Working hours</div>
-            <button onClick={saveAvailability} disabled={busy} data-testid="save-availability-btn" className="btn-primary text-caption self-start"><Save size={12} /> Save</button>
+        <Card>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2" style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>Working hours</div>
+            <Button variant="primary" size="sm" icon={Check} onClick={saveAvailability} isLoading={busy} data-testid="save-availability-btn" className="self-start">Save</Button>
           </div>
-          <div>
-            <label className="form-label block mb-1">Timezone</label>
-            <div className="relative">
-              <select value={availability.timezone} onChange={(e) => setAvailability({ ...availability, timezone: e.target.value })}
-                data-testid="availability-timezone"
-                className="w-full border border-line px-3 py-2 rounded-sm text-input text-ink font-mono appearance-none pr-8">
-                {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-              </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" size={14} />
-            </div>
-          </div>
-          <div className="space-y-2 pt-2">
+          <Select
+            label="Timezone" value={availability.timezone} onChange={(v) => setAvailability({ ...availability, timezone: v })} data-testid="availability-timezone"
+            options={TIMEZONES.map((tz) => ({ value: tz, label: tz }))}
+          />
+          <div className="space-y-2" style={{ marginTop: 16 }}>
             {DAYS.map((d) => {
               const active = !!availability.working_hours[d.key];
-              const window = availability.working_hours[d.key]?.[0] || { start: "09:00", end: "17:00" };
+              const win = availability.working_hours[d.key]?.[0] || { start: "09:00", end: "17:00" };
               return (
                 <div key={d.key} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                  <label className="form-label flex items-center gap-2 sm:w-32">
-                    <input type="checkbox" checked={active} onChange={() => toggleDay(d.key)} data-testid={`day-toggle-${d.key}`} />
-                    {d.label}
-                  </label>
+                  <div className="sm:w-32">
+                    <Checkbox label={d.label} checked={active} onChange={() => toggleDay(d.key)} data-testid={`day-toggle-${d.key}`} />
+                  </div>
                   {active && (
                     <>
-                      <input type="time" value={window.start} onChange={(e) => updateWindow(d.key, "start", e.target.value)}
-                        data-testid={`day-start-${d.key}`} className="border border-line px-2 py-1 rounded-sm text-input text-ink min-w-0" />
-                      <span className="text-ink-muted hidden sm:inline">to</span>
-                      <span className="text-ink-muted sm:hidden">—</span>
-                      <input type="time" value={window.end} onChange={(e) => updateWindow(d.key, "end", e.target.value)}
-                        data-testid={`day-end-${d.key}`} className="border border-line px-2 py-1 rounded-sm text-input text-ink min-w-0" />
+                      <Input size="sm" type="time" value={win.start} onChange={(e) => updateWindow(d.key, "start", e.target.value)} data-testid={`day-start-${d.key}`} className="min-w-0" />
+                      <span style={{ color: "var(--text-tertiary)", fontSize: 12.5 }} className="hidden sm:inline">to</span>
+                      <span style={{ color: "var(--text-tertiary)", fontSize: 12.5 }} className="sm:hidden">—</span>
+                      <Input size="sm" type="time" value={win.end} onChange={(e) => updateWindow(d.key, "end", e.target.value)} data-testid={`day-end-${d.key}`} className="min-w-0" />
                     </>
                   )}
                 </div>
               );
             })}
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );
