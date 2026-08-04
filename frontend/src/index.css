@@ -313,4 +313,35 @@
   .ds-input[aria-invalid="true"]:focus { box-shadow: var(--shadow-focus-danger); }
   .ds-input::placeholder { color: var(--text-tertiary); }
   .ds-input:disabled { cursor: not-allowed; }
+
+  /* §8.3: underline tabs. The 2px underline is a pseudo-element rather than
+     a border so it can sit flush with the shared container border below. */
+  .ds-tab { cursor: pointer; }
+  .ds-tab::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: -1px;
+    height: 2px;
+    background: transparent;
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+  .ds-tab[data-state="active"] { color: var(--text-primary); }
+  .ds-tab[data-state="active"]::after { background: var(--color-primary); }
+  .ds-tab:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  /* §11: row hover surfaces --bg-hover and fades in row actions (any
+     descendant opted in via .ds-row-action). No box-shadow — §24.10 bans
+     shadow animation on list/table rows. Background lives entirely in CSS
+     (never inline) so hover/selected can be ordinary cascade, not !important
+     (§24.19 bans it outright). */
+  .ds-table-row { background-color: transparent; }
+  .ds-table-row[data-selected="true"] { background-color: var(--bg-selected); }
+  .ds-table-row:hover:not([data-selected="true"]) { background-color: var(--bg-hover); }
+  .ds-row-action { opacity: 0; transition: opacity var(--dur-fast) var(--ease-out); }
+  .ds-table-row:hover .ds-row-action,
+  .ds-table-row:focus-within .ds-row-action { opacity: 1; }
 }
