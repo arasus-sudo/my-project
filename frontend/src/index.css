@@ -301,4 +301,16 @@
     .ds-skeleton { animation: none; background-image: none; }
     .ds-spin { animation-duration: 1600ms; }
   }
+
+  /* §7.1: text input hover/focus. Error state sets its own border colour
+     inline, so it deliberately does not reuse --border-focus here. */
+  .ds-input:hover:not(:disabled):not(:focus) { border-color: var(--border-strong); }
+  .ds-input:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: var(--shadow-focus);
+  }
+  .ds-input[aria-invalid="true"]:focus { box-shadow: var(--shadow-focus-danger); }
+  .ds-input::placeholder { color: var(--text-tertiary); }
+  .ds-input:disabled { cursor: not-allowed; }
 }

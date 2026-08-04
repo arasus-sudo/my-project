@@ -7,11 +7,19 @@ import { SkeletonKpiGrid } from "../components/ui/loading-states";
 // §25: icons come from the closed list, never from lucide-react directly.
 import { ArrowRight, Send, Eye, MessageSquare, CalendarClock, Activity } from "../icons";
 import MetricCard from "../components/composites/MetricCard";
+import SegmentedControl from "../components/primitives/SegmentedControl";
+
+const PERIODS = [
+  { value: 7, label: "7D" },
+  { value: 30, label: "30D" },
+  { value: 90, label: "90D" },
+];
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
-  const load = () => api.get("/dashboard").then((r) => setData(r.data));
-  useEffect(() => { load(); }, []);
+  const [days, setDays] = useState(30);
+  const load = (d) => api.get(`/dashboard?days=${d}`).then((r) => setData(r.data));
+  useEffect(() => { load(days); }, [days]);
 
   if (!data) {
     return (
@@ -36,9 +44,12 @@ export default function Dashboard() {
         title="Overview"
         subtitle={`Your outbound engine over the last ${periodDays} days.`}
         right={
-          <Link to="/app/campaigns/new" data-testid="new-campaign-cta" className="btn-primary">
-            New campaign <ArrowRight size={14} />
-          </Link>
+          <div className="flex items-center gap-3">
+            <SegmentedControl options={PERIODS} value={days} onChange={setDays} />
+            <Link to="/app/campaigns/new" data-testid="new-campaign-cta" className="btn-primary">
+              New campaign <ArrowRight size={14} />
+            </Link>
+          </div>
         }
       />
       <div className="p-6 sm:p-8 space-y-6">

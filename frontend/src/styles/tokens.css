@@ -135,6 +135,11 @@
   --ease-in-out:cubic-bezier(0.45, 0, 0.35, 1);
   --ease-spring:cubic-bezier(0.22, 1.2, 0.36, 1);
 
+  /* ---- Tooltip (§10.4): fixed dark regardless of theme, so it stays
+         legible against either canvas without a JS theme branch. ---- */
+  --tooltip-bg: #0F1729;
+  --tooltip-fg: #FFFFFF;
+
   /* ---- Z-index (§2.10) ---- */
   --z-base:0;
   --z-sticky:100;
@@ -207,6 +212,10 @@
   --color-neutral-status:       #A2ACC2;
   --color-neutral-status-subtle:#1B2338;
   --color-neutral-status-border:#242D45;
+
+  /* §10.4: on a dark canvas the tooltip inverts to light. */
+  --tooltip-bg: #EEF1F8;
+  --tooltip-fg: #0F1729;
 
   --chart-1: #6090FA;
   --chart-2: #957CF2;
