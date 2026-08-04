@@ -3,7 +3,12 @@ import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Loader2, ArrowDownToLine, PowerOff, Link2, ShieldCheck } from "lucide-react";
+import { Loader2, Download, Zap, Link } from "../icons";
+import Card from "../components/composites/Card";
+import InlineAlert from "../components/composites/InlineAlert";
+import IconSquare from "../components/primitives/IconSquare";
+import Button from "../components/primitives/Button";
+import Chip from "../components/primitives/Chip";
 
 export default function HubSpotSettings() {
   const [status, setStatus] = useState(null);
@@ -49,7 +54,7 @@ export default function HubSpotSettings() {
     } finally { setBusy(false); }
   };
 
-  if (!status) return <div className="p-4 sm:p-10 text-body text-ink-muted">Loading HubSpot status…</div>;
+  if (!status) return <div className="p-6 sm:p-10" style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Loading HubSpot status…</div>;
 
   const connected = status.connected;
   const mocked = status.mocked;
@@ -59,61 +64,60 @@ export default function HubSpotSettings() {
       <PageHeader title="HubSpot"
         subtitle="Pull HubSpot contacts as leads, and their emails/notes/calls into proposal research." />
 
-      <div className="p-6 sm:p-8 space-y-6 max-w-3xl">
-        <div className="card-flat shadow-card p-4 flex items-start gap-2.5 text-caption text-ink-tertiary">
-          <ShieldCheck size={16} className="text-ink-muted mt-0.5 shrink-0" />
-          <p>
-            {mocked
-              ? <>No HubSpot app is configured, so this runs in <strong>test mode</strong>: connecting works and returns sample contacts and engagements, but nothing contacts hubapi.com. Add <span className="font-mono">HUBSPOT_CLIENT_ID/SECRET/REDIRECT_URI</span> to go live.</>
-              : <>Live. Contacts you pull carry their HubSpot ID, so a proposal's Context Pack can include the emails, notes and calls logged against them in HubSpot.</>}
-          </p>
-        </div>
+      <div className="p-6 sm:p-8 space-y-4 max-w-3xl">
+        <InlineAlert tone={mocked ? "warning" : "success"} title={mocked ? "Test mode" : "Live"}>
+          {mocked
+            ? <>No HubSpot app is configured, so connecting works and returns sample contacts and engagements, but nothing contacts hubapi.com. Add <span style={{ fontFamily: "var(--font-mono)" }}>HUBSPOT_CLIENT_ID/SECRET/REDIRECT_URI</span> to go live.</>
+            : <>Contacts you pull carry their HubSpot ID, so a proposal's Context Pack can include the emails, notes and calls logged against them in HubSpot.</>}
+        </InlineAlert>
 
         {!connected ? (
-          <div className="card-flat shadow-card p-4 sm:p-6 space-y-4" data-testid="hubspot-connect-card">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-ink/10 flex items-center justify-center"><Link2 size={16} /></div>
+          <Card data-testid="hubspot-connect-card">
+            <div className="flex items-center gap-3" style={{ marginBottom: 16 }}>
+              <IconSquare icon={Link} tone="primary" size={44} />
               <div>
-                <div className="text-card-title font-display font-semibold">Connect HubSpot</div>
-                <div className="text-caption text-ink-muted">
+                <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>Connect HubSpot</div>
+                <div style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>
                   {mocked ? "Test mode — no redirect." : "You'll be sent to HubSpot to authorise read access."}
                 </div>
               </div>
             </div>
-            <button onClick={doConnect} disabled={busy} data-testid="hubspot-connect-btn" className="btn-primary disabled:opacity-60">
-              {busy ? <><Loader2 size={14} className="animate-spin" /> Connecting…</> : <><Link2 size={14} /> Connect HubSpot</>}
-            </button>
-          </div>
+            <Button variant="primary" icon={Link} onClick={doConnect} isLoading={busy} data-testid="hubspot-connect-btn">
+              Connect HubSpot
+            </Button>
+          </Card>
         ) : (
           <>
-            <div className="card-flat shadow-card p-4 sm:p-6 space-y-3" data-testid="hubspot-status-card">
+            <Card data-testid="hubspot-status-card">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center">
-                  <div className="w-2.5 h-2.5 rounded-full bg-success" />
-                </div>
+                <IconSquare icon={Zap} tone="success" size={44} />
                 <div className="flex-1">
-                  <div className="text-card-title font-display font-semibold flex items-center gap-2">
+                  <div className="flex items-center gap-2" style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>
                     Connected
-                    {mocked && <span className="pill">test mode</span>}
+                    {mocked && <Chip label="Test mode" />}
                   </div>
-                  {status.portal_id && <div className="text-caption text-ink-muted font-mono">Portal: {status.portal_id}</div>}
+                  {status.portal_id && <div className="tnum" style={{ fontSize: 12, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>Portal: {status.portal_id}</div>}
                 </div>
-                <button onClick={doDisconnect} disabled={busy} data-testid="hubspot-disconnect-btn" className="btn-ghost text-caption text-ink ml-auto shrink-0">
-                  <PowerOff size={12} /> Disconnect
-                </button>
+                <Button variant="tertiary" size="sm" onClick={doDisconnect} isLoading={busy} data-testid="hubspot-disconnect-btn" className="shrink-0">
+                  Disconnect
+                </Button>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-line">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border-subtle)" }}>
                 <Stat label="Contacts pulled" value={status.pulled_count || 0} />
                 <Stat label="Last sync" value={status.last_sync_at ? new Date(status.last_sync_at).toLocaleString() : "—"} small />
               </div>
-            </div>
+            </Card>
 
             <button onClick={pull} disabled={busy} data-testid="hubspot-pull-contacts"
-              className="text-left p-3 sm:p-4 rounded-2xl border border-line bg-white shadow-card hover:shadow-card-hover transition-colors disabled:opacity-50 w-full flex items-start gap-3">
-              <div className="w-9 h-9 rounded-full bg-ink/10 flex items-center justify-center shrink-0"><ArrowDownToLine size={16} /></div>
+              className="text-left w-full flex items-start gap-3 transition-colors"
+              style={{ padding: 20, borderRadius: "var(--radius-xl)", border: "1px solid var(--border-default)", background: "var(--bg-surface)", boxShadow: "var(--shadow-xs)", opacity: busy ? 0.6 : 1 }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-surface)")}
+            >
+              <IconSquare icon={Download} tone="primary" size={36} />
               <div>
-                <div className="text-body font-medium">Pull contacts from HubSpot</div>
-                <div className="text-caption text-ink-muted mt-1">
+                <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>Pull contacts from HubSpot</div>
+                <div style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 2 }}>
                   Import new HubSpot contacts as leads (deduped by email). Their engagements become available to Proposal EQ.
                 </div>
               </div>
@@ -128,8 +132,12 @@ export default function HubSpotSettings() {
 function Stat({ label, value, small }) {
   return (
     <div>
-      <div className="ui-label">{label}</div>
-      <div className={`mt-1 font-display font-bold ${small ? "text-caption font-mono font-normal text-ink-secondary" : "text-2xl"}`}>{value}</div>
+      <div style={{ fontSize: 11, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
+      <div className="tnum" style={{
+        marginTop: 4, fontFamily: small ? "var(--font-mono)" : "var(--font-display)",
+        fontWeight: small ? 400 : 700, fontSize: small ? 12.5 : 22,
+        color: small ? "var(--text-secondary)" : "var(--text-primary)",
+      }}>{value}</div>
     </div>
   );
 }
