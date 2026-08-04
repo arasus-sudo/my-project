@@ -122,25 +122,6 @@ export default function Dashboard() {
             </ul>
           </Card>
         </div>
-
-        <Card title="Outbound funnel">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[
-              { k: "Sent", v: kpis.sent, w: 100 },
-              { k: "Opened", v: kpis.opened, w: kpis.sent ? (kpis.opened / kpis.sent) * 100 : 0 },
-              { k: "Replied", v: kpis.replied, w: kpis.sent ? (kpis.replied / kpis.sent) * 100 : 0 },
-              { k: "Meetings", v: kpis.meetings, w: kpis.sent ? (kpis.meetings / kpis.sent) * 100 : 0 },
-            ].map((s) => (
-              <div key={s.k}>
-                <div style={{ fontSize: 11.5, color: "var(--text-tertiary)", fontFamily: "var(--font-ui)" }}>{s.k}</div>
-                <div className="tnum truncate" style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)", fontFamily: "var(--font-display)", marginTop: 2 }}>{s.v}</div>
-                <div style={{ marginTop: 8, height: 8, borderRadius: "var(--radius-full)", background: "var(--bg-active)", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${Math.max(2, s.w)}%`, borderRadius: "var(--radius-full)", background: "var(--color-primary)" }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
       </div>
     </div>
   );
