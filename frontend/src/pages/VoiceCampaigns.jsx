@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
 import { api, isCreditError } from "../lib/api";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Play, Pause, Plus, Trash2 } from "lucide-react";
+import { Play, Pause, Plus, Trash2, PhoneCall } from "../icons";
+import Table from "../components/composites/Table";
+import { EmptyState } from "../components/composites/EmptyState";
+import Button from "../components/primitives/Button";
+import StatusPill from "../components/primitives/StatusPill";
 
 export default function VoiceCampaigns() {
+  const nav = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -21,78 +26,73 @@ export default function VoiceCampaigns() {
     catch { toast.error("Pause failed"); }
   };
   const remove = async (id) => {
-    if (!confirm("Delete this voice campaign?")) return;
+    if (!window.confirm("Delete this voice campaign?")) return;
     try { await api.delete(`/voice-eq/campaigns/${id}`); toast.success("Deleted"); load(); }
     catch { toast.error("Delete failed"); }
   };
+
+  const columns = [
+    {
+      key: "name", label: "Campaign",
+      render: (c) => (
+        <div>
+          <Link to={`/app/voice-eq/campaigns/${c.id}`} style={{ fontWeight: 500, color: "var(--text-primary)" }}>{c.name}</Link>
+          <div className="tnum" style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>
+            {c.lead_ids?.length || 0} leads · {c.send_window_start}–{c.send_window_end} {c.timezone}
+          </div>
+        </div>
+      ),
+    },
+    { key: "status", label: "Status", render: (c) => <StatusPill status={c.status} /> },
+    { key: "calls", label: "Calls", align: "right", numeric: true, render: (c) => c.stats?.calls_placed || 0 },
+    { key: "connected", label: "Connected", align: "right", numeric: true, render: (c) => c.stats?.connected || 0 },
+    { key: "qualified", label: "Qualified", align: "right", numeric: true, render: (c) => c.stats?.qualified || 0 },
+    { key: "minutes", label: "Minutes", align: "right", numeric: true, render: (c) => c.stats?.total_minutes || 0 },
+    {
+      key: "actions", label: "", align: "right",
+      render: (c) => (
+        <div className="flex items-center justify-end gap-1 ds-row-action">
+          {c.status === "active" ? (
+            <RowAction title="Pause" icon={Pause} onClick={() => pause(c.id)} />
+          ) : (
+            <RowAction title="Launch" icon={Play} onClick={() => launch(c.id)} hoverColor="var(--color-primary)" />
+          )}
+          <RowAction title="Delete" icon={Trash2} onClick={() => remove(c.id)} hoverColor="var(--color-danger)" />
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div>
       <PageHeader
         title="Voice Campaigns"
         subtitle="Dial a lead list with a voice agent, respecting call windows and timezone."
-        right={<Link to="/app/voice-eq/campaigns/new" className="btn-primary"><Plus size={14} /> New campaign</Link>}
+        right={<Link to="/app/voice-eq/campaigns/new"><Button variant="primary" icon={Plus}>New campaign</Button></Link>}
       />
-      <div className="animate-fade-in px-6 sm:px-8">
-        {loading ? <div className="text-ink-muted text-body">Loading…</div> : items.length === 0 ? (
-          <div className="shadow-card rounded-2xl p-10 text-center">
-            <div className="text-section font-display font-semibold">No voice campaigns yet</div>
-            <p className="text-body text-ink-muted mt-2">Pick an agent and a lead list to start dialing.</p>
-            <Link to="/app/voice-eq/campaigns/new" className="btn-primary mt-6 inline-flex">Create campaign</Link>
-          </div>
+      <div className="animate-fade-in px-6 sm:px-8 py-6">
+        {loading ? (
+          <div style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Loading…</div>
+        ) : items.length === 0 ? (
+          <EmptyState icon={PhoneCall} title="No voice campaigns yet" description="Pick an agent and a lead list to start dialing." actionLabel="Create campaign" onAction={() => nav("/app/voice-eq/campaigns/new")} />
         ) : (
-          <div className="shadow-card rounded-2xl border border-line bg-white overflow-x-auto">
-            <table className="w-full text-table">
-              <thead>
-                <tr className="border-b border-line">
-                  <th className="table-header text-left p-4">Campaign</th>
-                  <th className="table-header text-left p-4">Status</th>
-                  <th className="table-header text-right p-4">Calls</th>
-                  <th className="table-header text-right p-4">Connected</th>
-                  <th className="table-header text-right p-4">Qualified</th>
-                  <th className="table-header text-right p-4">Minutes</th>
-                  <th className="p-4"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((c) => (
-                  <tr key={c.id} className="border-b border-line hover:bg-surfacehover transition-colors duration-150">
-                    <td className="p-4">
-                      <Link to={`/app/voice-eq/campaigns/${c.id}`} className="font-medium hover:text-sanguine">{c.name}</Link>
-                      <div className="text-tiny text-ink-muted font-mono">{c.lead_ids?.length || 0} leads · {c.send_window_start}–{c.send_window_end} {c.timezone}</div>
-                    </td>
-                    <td className="p-4"><StatusBadge status={c.status} /></td>
-                    <td className="p-4 text-right font-mono">{c.stats?.calls_placed || 0}</td>
-                    <td className="p-4 text-right font-mono">{c.stats?.connected || 0}</td>
-                    <td className="p-4 text-right font-mono">{c.stats?.qualified || 0}</td>
-                    <td className="p-4 text-right font-mono">{c.stats?.total_minutes || 0}</td>
-                    <td className="p-4 text-right flex items-center justify-end gap-1">
-                      {c.status === "active" ? (
-                        <button onClick={() => pause(c.id)} className="btn-ghost text-caption"><Pause size={12} />Pause</button>
-                      ) : (
-                        <button onClick={() => launch(c.id)} className="btn-ghost text-caption text-sanguine"><Play size={12} />Launch</button>
-                      )}
-                      <button onClick={() => remove(c.id)} className="btn-ghost text-caption text-ink-muted hover:text-danger"><Trash2 size={12} /></button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table columns={columns} rows={items} rowKey={(c) => c.id} />
         )}
       </div>
     </div>
   );
 }
 
-function StatusBadge({ status }) {
-  const map = {
-    draft: "text-ink-tertiary border-neutral-300",
-    active: "text-success border-success",
-    paused: "text-warning border-warning",
-    completed: "text-ink-muted border-line",
-  };
+function RowAction({ title, icon: Icon, onClick, hoverColor = "var(--text-primary)" }) {
   return (
-    <span className={`ui-label inline-block px-2 py-1 border ${map[status] || map.draft}`}>{status}</span>
+    <button
+      type="button" title={title} onClick={onClick}
+      className="inline-grid place-items-center transition-colors"
+      style={{ width: 26, height: 26, borderRadius: "var(--radius-sm)", color: "var(--text-tertiary)" }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-active)"; e.currentTarget.style.color = hoverColor; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-tertiary)"; }}
+    >
+      <Icon size={14} strokeWidth={1.5} aria-hidden="true" />
+    </button>
   );
 }

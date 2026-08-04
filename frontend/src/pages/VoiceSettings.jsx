@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Plus, ShieldOff } from "lucide-react";
+import { Plus, Lock } from "../icons";
+import Card from "../components/composites/Card";
+import Button from "../components/primitives/Button";
+import Input from "../components/primitives/Input";
+import StatusPill from "../components/primitives/StatusPill";
 
 export default function VoiceSettings() {
   const [usage, setUsage] = useState(null);
@@ -42,64 +46,61 @@ export default function VoiceSettings() {
   return (
     <div>
       <PageHeader title="Voice EQ Settings" subtitle="Twilio + OpenAI connection, phone numbers, usage, and compliance." />
-      <div className="animate-fade-in px-6 sm:px-8 max-w-3xl space-y-6">
-        <div className="shadow-card rounded-2xl p-6 sm:p-8">
+      <div className="animate-fade-in px-6 sm:px-8 py-6 max-w-3xl space-y-4">
+        <Card>
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-card-title font-display font-semibold">Twilio + OpenAI Realtime</div>
-              <p className="text-caption text-ink-muted mt-1">
+              <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>Twilio + OpenAI Realtime</div>
+              <p style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 4 }}>
                 {usage?.mocked
                   ? "Test mode — calls run against a simulator. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, OPENAI_API_KEY, and a Twilio number to place live calls."
                   : "Live — calls are placed through your Twilio account, answered by an OpenAI Realtime voice."}
               </p>
             </div>
-            <span className={`ui-label px-2 py-1 border ${usage?.mocked ? "text-warning border-warning" : "text-success border-success"}`}>
-              {usage?.mocked ? "Test mode" : "Live"}
-            </span>
+            <StatusPill status={usage?.mocked ? "Test mode" : "Live"} tone={usage?.mocked ? "warning" : "success"} />
           </div>
-        </div>
+        </Card>
 
-        <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-3">
-          <div className="text-card-title font-display font-semibold">Usage</div>
+        <Card title="Usage">
           {usage ? (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Stat label="Total calls" value={usage.total_calls} />
               <Stat label="Minutes used" value={usage.total_minutes} />
               <Stat label="Est. cost" value={`$${(usage.total_cost_cents / 100).toFixed(2)}`} />
             </div>
-          ) : <div className="text-body text-ink-muted">Loading…</div>}
-        </div>
+          ) : <div style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Loading…</div>}
+        </Card>
 
-        <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-3">
-          <div className="text-card-title font-display font-semibold">Phone numbers</div>
+        <Card title="Phone numbers">
           {numbers.length === 0 ? (
-            <p className="text-body text-ink-muted">No numbers connected yet — import a number to place calls from your own caller ID.</p>
+            <p style={{ fontSize: 13, color: "var(--text-tertiary)" }}>No numbers connected yet — import a number to place calls from your own caller ID.</p>
           ) : (
-            <div className="space-y-1">
-              {numbers.map((n) => (
-                <div key={n.id} className="text-body font-mono flex items-center justify-between border-b border-line py-1.5 last:border-0">
-                  <span>{n.phone_number}</span>
-                  <span className="text-ink-muted">{n.nickname}</span>
+            <div className="space-y-0">
+              {numbers.map((n, i) => (
+                <div key={n.id} className="tnum flex items-center justify-between"
+                  style={{ padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-subtle)" : "none", fontSize: 13, fontFamily: "var(--font-mono)" }}>
+                  <span style={{ color: "var(--text-primary)" }}>{n.phone_number}</span>
+                  <span style={{ color: "var(--text-tertiary)" }}>{n.nickname}</span>
                 </div>
               ))}
             </div>
           )}
-          <form onSubmit={importNumber} className="flex flex-col sm:flex-row gap-2">
-            <input value={newNumber} onChange={(e) => setNewNumber(e.target.value)} placeholder="+14155551234"
-              className="flex-1 border border-line px-3 py-2 rounded-sm text-input" />
-            <button type="submit" disabled={busy} className="btn-secondary"><Plus size={14} /> Import</button>
+          <form onSubmit={importNumber} className="flex flex-col sm:flex-row gap-2" style={{ marginTop: 12 }}>
+            <Input value={newNumber} onChange={(e) => setNewNumber(e.target.value)} placeholder="+14155551234" className="flex-1" />
+            <Button type="submit" variant="secondary" icon={Plus} isLoading={busy}>Import</Button>
           </form>
-        </div>
+        </Card>
 
-        <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-3">
-          <div className="flex items-center gap-2 text-card-title font-display font-semibold"><ShieldOff size={16} /> Do-not-call list</div>
-          <p className="text-caption text-ink-muted mt-1">Numbers here are skipped by click-to-call and campaign launches.</p>
+        <Card>
+          <div className="flex items-center gap-2" style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>
+            <Lock size={16} strokeWidth={1.5} aria-hidden="true" /> Do-not-call list
+          </div>
+          <p style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 4, marginBottom: 12 }}>Numbers here are skipped by click-to-call and campaign launches.</p>
           <form onSubmit={addDnc} className="flex flex-col sm:flex-row gap-2">
-            <input value={dncPhone} onChange={(e) => setDncPhone(e.target.value)} placeholder="+14155551234"
-              className="flex-1 border border-line px-3 py-2 rounded-sm text-input" />
-            <button type="submit" className="btn-secondary">Add</button>
+            <Input value={dncPhone} onChange={(e) => setDncPhone(e.target.value)} placeholder="+14155551234" className="flex-1" />
+            <Button type="submit" variant="secondary">Add</Button>
           </form>
-        </div>
+        </Card>
       </div>
     </div>
   );
@@ -108,8 +109,8 @@ export default function VoiceSettings() {
 function Stat({ label, value }) {
   return (
     <div>
-      <div className="ui-label">{label}</div>
-      <div className="text-page-title font-display font-semibold">{value}</div>
+      <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
+      <div className="tnum" style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)", fontFamily: "var(--font-display)", marginTop: 4 }}>{value}</div>
     </div>
   );
 }

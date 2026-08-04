@@ -42,6 +42,7 @@ export {
   Upload,            // Import
   Share2,            // Share
   Play,              // Run
+  Pause,             // Pause a running campaign/process
   RotateCcw,         // Reset
   RefreshCw,         // Sync
   Check,             // Confirm
