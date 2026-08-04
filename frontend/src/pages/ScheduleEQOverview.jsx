@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
-import { CalendarRange, CalendarCheck, UserX, Clock } from "lucide-react";
+import { CalendarRange, CalendarCheck, User, Clock, AlertTriangle } from "../icons";
+import MetricCard from "../components/composites/MetricCard";
+import Card from "../components/composites/Card";
+import { EmptyState } from "../components/composites/EmptyState";
 
 export default function ScheduleEQOverview() {
+  const nav = useNavigate();
   const [eventTypes, setEventTypes] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,54 +30,42 @@ export default function ScheduleEQOverview() {
         title="Schedule EQ"
         subtitle="Calendly-style booking — real availability, lead qualifying, no-show risk, meeting prep."
       />
-      <div className="animate-fade-in px-6 sm:px-8 space-y-6">
+      <div className="animate-fade-in px-6 sm:px-8 py-6 space-y-6">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatCard icon={CalendarRange} label="Event types" value={loading ? "—" : eventTypes.length} />
-          <StatCard icon={CalendarCheck} label="Upcoming meetings" value={loading ? "—" : upcoming.length} />
-          <StatCard icon={UserX} label="No-shows" value={loading ? "—" : noShows.length} />
-          <StatCard icon={Clock} label="Avg. no-show risk" value={loading ? "—" : `${avgRisk}%`} />
+          <MetricCard label="Event types" value={loading ? "—" : eventTypes.length} icon={CalendarRange} tone="primary" />
+          <MetricCard label="Upcoming meetings" value={loading ? "—" : upcoming.length} icon={CalendarCheck} tone="success" />
+          <MetricCard label="No-shows" value={loading ? "—" : noShows.length} icon={User} tone="risk" />
+          <MetricCard label="Avg. no-show risk" value={loading ? "—" : `${avgRisk}%`} icon={Clock} tone="warning" />
         </div>
 
         {!loading && eventTypes.length === 0 && (
-          <div className="shadow-card rounded-2xl p-10 text-center">
-            <div className="text-section font-display font-semibold">Create your first event type</div>
-            <p className="text-body text-ink-muted mt-2">Set your availability, then publish a public booking link.</p>
-            <Link to="/app/schedule-eq/event-types" className="btn-primary mt-6 inline-flex">Create event type</Link>
-          </div>
+          <EmptyState
+            icon={CalendarRange}
+            title="Create your first event type"
+            description="Set your availability, then publish a public booking link."
+            actionLabel="Create event type"
+            onAction={() => nav("/app/schedule-eq/event-types")}
+          />
         )}
 
         {!loading && upcoming.length > 0 && (
-          <div className="shadow-card rounded-2xl border border-line bg-white overflow-x-auto">
-            <div className="p-4 border-b border-line text-card-title font-display font-semibold">Upcoming meetings</div>
-            <table className="w-full text-table">
-              <tbody>
-                {upcoming.slice(0, 8).map((b) => (
-                  <tr key={b.id} className="border-b border-line last:border-0">
-                    <td className="p-3">{b.guest_name}</td>
-                    <td className="p-3 text-ink-tertiary">{b.event_type?.name}</td>
-                    <td className="p-3 text-tiny text-ink-muted">{(b.start_at || "").slice(0, 16).replace("T", " ")}</td>
-                    <td className="p-3 text-right text-tiny">
-                      {b.no_show_risk_score >= 50 && <span className="text-warning">⚠ risk {b.no_show_risk_score}%</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Card title="Upcoming meetings" padding="compact" bodyClassName="-mx-5 -mb-5">
+            {upcoming.slice(0, 8).map((b, i) => (
+              <div key={b.id} className="flex items-center justify-between"
+                style={{ padding: "10px 20px", borderTop: i > 0 ? "1px solid var(--border-subtle)" : "none", fontSize: 13 }}>
+                <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{b.guest_name}</span>
+                <span style={{ color: "var(--text-tertiary)" }}>{b.event_type?.name}</span>
+                <span className="tnum" style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{(b.start_at || "").slice(0, 16).replace("T", " ")}</span>
+                {b.no_show_risk_score >= 50 ? (
+                  <span className="inline-flex items-center gap-1" style={{ fontSize: 11, color: "var(--color-warning-text)" }}>
+                    <AlertTriangle size={12} strokeWidth={1.5} aria-hidden="true" /> risk {b.no_show_risk_score}%
+                  </span>
+                ) : <span />}
+              </div>
+            ))}
+          </Card>
         )}
       </div>
-    </div>
-  );
-}
-
-function StatCard({ icon: Icon, label, value }) {
-  return (
-    <div className="shadow-card rounded-2xl p-4">
-      <div className="flex items-center gap-2 text-ink-muted">
-        <Icon size={14} />
-        <span className="ui-label">{label}</span>
-      </div>
-      <div className="text-page-title font-display font-semibold mt-1">{value}</div>
     </div>
   );
 }

@@ -128,6 +128,8 @@ export {
   History,           // Activity log
   CalendarDays,      // Date
   Timer,             // Duration / SLA
+  CalendarRange,     // Event type / schedule
+  CalendarCheck,     // Confirmed booking
 
   // ---- Tinted-square tone examples (§3.2) ----
   Database,          // Primary tone: data

@@ -537,7 +537,7 @@ Keep this table authoritative; do not pick synonyms per screen.
 `check-circle-2` Success · `alert-triangle` Warning · `alert-circle` Error · `info` Info · `circle-dashed` Pending · `loader-2` Loading (spin) · `shield-check` Secure · `lock` Auth · `eye` / `eye-off` Visibility
 
 **Time**
-`clock` Time/Recency · `history` Activity log · `calendar-days` Date · `timer` Duration/SLA
+`clock` Time/Recency · `history` Activity log · `calendar-days` Date · `timer` Duration/SLA · `calendar-range` Event type / schedule · `calendar-check` Confirmed booking
 
 `RULE:` `trending-up` in green means good; in a churn/loss metric a rising line is bad — use `trending-up` with `--color-danger`, never a downward glyph. Direction = data, color = judgment.
 

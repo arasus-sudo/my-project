@@ -2,15 +2,13 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { X, UserX, Info } from "lucide-react";
+import { User, Info, CalendarCheck } from "../icons";
 import { SkeletonTableRows } from "../components/ui/loading-states";
-
-const STATUS_COLOR = {
-  confirmed: "text-success border-success",
-  cancelled: "text-ink-muted border-neutral-300",
-  no_show: "text-danger border-danger",
-  completed: "text-ink-muted border-line",
-};
+import Table from "../components/composites/Table";
+import { EmptyState } from "../components/composites/EmptyState";
+import { Modal, ModalContent } from "../components/composites/Modal";
+import StatusPill from "../components/primitives/StatusPill";
+import Button from "../components/primitives/Button";
 
 export default function Bookings() {
   const [items, setItems] = useState([]);
@@ -31,85 +29,55 @@ export default function Bookings() {
     setDetail(null); load();
   };
 
+  const columns = [
+    { key: "guest", label: "Guest", render: (b) => <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{b.guest_name}</span> },
+    { key: "event_type", label: "Event type", render: (b) => <span style={{ color: "var(--text-tertiary)" }}>{b.event_type?.name}</span> },
+    { key: "when", label: "When", render: (b) => <span className="tnum" style={{ fontSize: 11.5, color: "var(--text-tertiary)" }}>{(b.start_at || "").slice(0, 16).replace("T", " ")}</span> },
+    { key: "status", label: "Status", render: (b) => <StatusPill status={b.status} tone={b.status === "no_show" ? "danger" : undefined} /> },
+    { key: "risk", label: "No-show risk", align: "right", numeric: true, render: (b) => b.no_show_risk_score != null ? `${b.no_show_risk_score}%` : "—" },
+  ];
+
   return (
     <div>
       <PageHeader title="Bookings" subtitle="Every meeting booked through Schedule EQ." />
-      <div className="animate-fade-in px-6 sm:px-8">
+      <div className="animate-fade-in px-6 sm:px-8 py-6">
         {loading ? (
-          <div className="shadow-card rounded-2xl border border-line bg-white overflow-x-auto">
-            <table className="w-full text-table">
-              <thead>
-                <tr className="border-b border-line">
-                  <th className="table-header text-left p-3">Guest</th>
-                  <th className="table-header text-left p-3">Event type</th>
-                  <th className="table-header text-left p-3">When</th>
-                  <th className="table-header text-left p-3">Status</th>
-                  <th className="table-header text-right p-3">No-show risk</th>
-                </tr>
-              </thead>
-              <tbody><SkeletonTableRows rows={5} cols={5} /></tbody>
-            </table>
+          <div style={{ padding: 16, borderRadius: "var(--radius-xl)", border: "1px solid var(--border-default)", background: "var(--bg-surface)" }}>
+            <table className="w-full"><tbody><SkeletonTableRows rows={5} cols={5} /></tbody></table>
           </div>
         ) : items.length === 0 ? (
-          <div className="shadow-card rounded-2xl p-10 text-center text-body text-ink-muted">No bookings yet.</div>
+          <EmptyState icon={CalendarCheck} title="No bookings yet" description="Meetings booked through your event types will appear here." />
         ) : (
-          <div className="shadow-card rounded-2xl border border-line bg-white overflow-x-auto">
-            <table className="w-full text-table">
-              <thead>
-                <tr className="border-b border-line">
-                  <th className="table-header text-left p-3">Guest</th>
-                  <th className="table-header text-left p-3">Event type</th>
-                  <th className="table-header text-left p-3">When</th>
-                  <th className="table-header text-left p-3">Status</th>
-                  <th className="table-header text-right p-3">No-show risk</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((b) => (
-                  <tr key={b.id} onClick={() => setDetail(b)} data-testid={`booking-row-${b.id}`}
-                    className="border-b border-line hover:bg-surfacehover cursor-pointer transition-colors duration-150">
-                    <td className="p-3 font-medium">{b.guest_name}</td>
-                    <td className="p-3 text-ink-tertiary">{b.event_type?.name}</td>
-                    <td className="p-3 text-tiny text-ink-muted">{(b.start_at || "").slice(0, 16).replace("T", " ")}</td>
-                    <td className="p-3"><span className={`ui-label inline-block px-2 py-0.5 border ${STATUS_COLOR[b.status] || STATUS_COLOR.confirmed}`}>{b.status}</span></td>
-                    <td className="p-3 text-right font-mono text-tiny">
-                      {b.no_show_risk_score != null ? `${b.no_show_risk_score}%` : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table columns={columns} rows={items} rowKey={(b) => b.id} onRowClick={(b) => setDetail(b)} />
         )}
       </div>
 
-      {detail && (
-        <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50" onClick={(e) => e.target === e.currentTarget && setDetail(null)}>
-          <div className="bg-white border border-line p-4 sm:p-6 rounded-2xl w-full max-w-md space-y-3">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-section font-display font-semibold">{detail.guest_name}</div>
-                <div className="text-tiny text-ink-muted font-mono">{detail.guest_email}</div>
-              </div>
-              <button onClick={() => setDetail(null)} className="text-ink-muted hover:text-ink"><X size={16} /></button>
+      <Modal open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
+        {detail && (
+          <ModalContent
+            size="sm"
+            title={detail.guest_name}
+            subtitle={detail.guest_email}
+            footer={detail.status === "confirmed" && (
+              <>
+                <Button variant="secondary" icon={User} onClick={() => markNoShow(detail.id)} data-testid="mark-no-show-btn">Mark no-show</Button>
+                <Button variant="danger-subtle" onClick={() => cancel(detail.id)} data-testid="cancel-booking-btn">Cancel</Button>
+              </>
+            )}
+          >
+            <div className="space-y-3">
+              <div style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{detail.event_type?.name} · {(detail.start_at || "").slice(0, 16).replace("T", " ")}</div>
+              {detail.meet_link && <a href={detail.meet_link} target="_blank" rel="noreferrer" className="block" style={{ fontSize: 13, color: "var(--text-link)" }}>Join video call</a>}
+              {detail.prep_brief && (
+                <div className="flex gap-2" style={{ background: "var(--bg-surface-sunken)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", padding: 12, fontSize: 13 }}>
+                  <Info size={14} strokeWidth={1.5} aria-hidden="true" className="shrink-0 mt-0.5" style={{ color: "var(--text-tertiary)" }} />
+                  <span style={{ color: "var(--text-secondary)" }}>{detail.prep_brief}</span>
+                </div>
+              )}
             </div>
-            <div className="text-body text-ink-tertiary">{detail.event_type?.name} · {(detail.start_at || "").slice(0, 16).replace("T", " ")}</div>
-            {detail.meet_link && <a href={detail.meet_link} target="_blank" rel="noreferrer" className="text-body text-ink hover:underline block">Join video call</a>}
-            {detail.prep_brief && (
-              <div className="bg-surfacehover p-3 rounded-sm text-body flex gap-2">
-                <Info size={14} className="shrink-0 mt-0.5 text-ink-muted" />
-                <span>{detail.prep_brief}</span>
-              </div>
-            )}
-            {detail.status === "confirmed" && (
-              <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => markNoShow(detail.id)} data-testid="mark-no-show-btn" className="btn-secondary text-caption"><UserX size={12} /> Mark no-show</button>
-                <button onClick={() => cancel(detail.id)} data-testid="cancel-booking-btn" className="btn-secondary text-caption text-danger">Cancel</button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+          </ModalContent>
+        )}
+      </Modal>
     </div>
   );
 }
