@@ -3306,14 +3306,17 @@ async def dashboard(days: int = 30, user=Depends(current_user)):
     def c(t): return sum(1 for e in events if e["type"] == t)
     sent, opened, clicked, replied, mtg = c("sent"), c("opened"), c("clicked"), c("replied"), c("meeting_booked")
 
-    # per-day trend (last 7 days)
-    days = {}
+    # per-day trend (last 7 days). Named distinctly from the outer `days`
+    # (the window-length int used below for period.label) — this used to
+    # shadow it, so the dashboard rendered "vs previous {...trend dict...}
+    # days" instead of "vs previous 30 days".
+    daily = {}
     for e in events:
         d = e["at"][:10]
-        days.setdefault(d, {"sent": 0, "opened": 0, "replied": 0})
-        if e["type"] in days[d]:
-            days[d][e["type"]] += 1
-    trend = [{"date": k, **v} for k, v in sorted(days.items())][-7:]
+        daily.setdefault(d, {"sent": 0, "opened": 0, "replied": 0})
+        if e["type"] in daily[d]:
+            daily[d][e["type"]] += 1
+    trend = [{"date": k, **v} for k, v in sorted(daily.items())][-7:]
 
     def _kpis(evs):
         n = lambda t: sum(1 for e in evs if e["type"] == t)

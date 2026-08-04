@@ -236,8 +236,8 @@ export default function AppLayout() {
               className="shrink-0" style={{ color: "var(--text-tertiary)", transition: "transform var(--dur-fast) var(--ease-out)", transform: open ? "rotate(180deg)" : "rotate(0deg)" }} />
           </button>
           {open && (
-            <div className="absolute left-3 right-3 top-full mt-1 overflow-hidden animate-scale-in origin-top"
-              style={{ background: "var(--bg-surface-raised)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", zIndex: "var(--z-dropdown)", padding: 4 }}
+            <div className="absolute left-3 right-3 top-full mt-1 overflow-y-auto scrollbar-thin animate-scale-in origin-top"
+              style={{ background: "var(--bg-surface-raised)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", zIndex: "var(--z-dropdown)", padding: 4, maxHeight: "calc(100vh - 100px)" }}
             >
               {AGENTS.map((a) => {
                 const active = a.k === currentAgent.k;
