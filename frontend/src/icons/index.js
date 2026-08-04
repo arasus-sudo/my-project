@@ -46,6 +46,7 @@ export {
   RefreshCw,         // Sync
   Check,             // Confirm
   X,                 // Dismiss
+  Archive,           // Archive
   MoreHorizontal,    // Row overflow
   MoreVertical,      // Card overflow
   ExternalLink,      // Opens a new context
