@@ -1,16 +1,21 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
-import { ChevronLeft, ChevronRight, Clock, CheckCircle, XCircle, Loader2, Send, Trash2, Search, X, ListOrdered } from "lucide-react";
+import { Clock, CheckCircle2, AlertCircle, RefreshCw, Send, Trash2, Search, ListChecks } from "../icons";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import Table, { TableFooter } from "../components/composites/Table";
+import { EmptyState, EmptyFilteredState } from "../components/composites/EmptyState";
+import Input from "../components/primitives/Input";
+import Button from "../components/primitives/Button";
+import StatusPill from "../components/primitives/StatusPill";
 
 const STATUS_META = {
-  pending: { label: "Pending", icon: Clock, cls: "text-warning" },
-  sending: { label: "Sending", icon: Loader2, cls: "text-accent" },
-  sent: { label: "Sent", icon: CheckCircle, cls: "text-success" },
-  failed: { label: "Failed", icon: XCircle, cls: "text-danger" },
-  cancelled: { label: "Cancelled", icon: XCircle, cls: "text-ink-muted" },
+  pending: { icon: Clock, tone: "warning" },
+  sending: { icon: RefreshCw, tone: "primary", spin: true },
+  sent: { icon: CheckCircle2, tone: "success" },
+  failed: { icon: AlertCircle, tone: "danger" },
+  cancelled: { icon: AlertCircle, tone: "neutral" },
 };
 
 export default function CampaignQueue() {
@@ -18,7 +23,7 @@ export default function CampaignQueue() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
-  const [selected, setSelected] = useState(new Set());
+  const [selected, setSelected] = useState([]);
   const [deleting, setDeleting] = useState(false);
   const [selectN, setSelectN] = useState("");
   const perPage = 25;
@@ -28,51 +33,41 @@ export default function CampaignQueue() {
     if (search) params.set("search", search);
     api.get(`/queue?${params}`).then((r) => {
       setData(r.data);
-      setSelected(new Set());
+      setSelected([]);
     });
   }, [page, search]);
 
   useEffect(() => { load(); }, [load]);
 
-  const totalPages = data ? Math.ceil(data.total / perPage) : 0;
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / perPage)) : 1;
 
   const toggleSelect = (id) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+    setSelected((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   };
 
-  const selectAll = () => {
-    if (!data) return;
-    if (selected.size === data.rows.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(data.rows.map((r) => r.id)));
-    }
+  const selectAll = (checked) => {
+    setSelected(checked && data ? data.rows.map((r) => r.id) : []);
   };
 
   const selectFirstN = async () => {
     const n = parseInt(selectN, 10);
-    if (!n || n < 1) return;
-    if (!data) return;
+    if (!n || n < 1 || !data) return;
     try {
       const params = {};
       if (search) params.search = search;
       const { data: allData } = await api.get("/queue/all-ids", { params });
-      setSelected(new Set((allData.ids || []).slice(0, n)));
+      setSelected((allData.ids || []).slice(0, n));
     } catch {
-      setSelected(new Set(data.rows.slice(0, n).map((r) => r.id)));
+      setSelected(data.rows.slice(0, n).map((r) => r.id));
     }
   };
 
   const deleteSelected = async () => {
-    if (selected.size === 0) return;
+    if (selected.length === 0) return;
     setDeleting(true);
     try {
-      await api.post("/queue/delete", { ids: Array.from(selected) });
-      toast.success(`Deleted ${selected.size} queue item(s)`);
+      await api.post("/queue/delete", { ids: selected });
+      toast.success(`Deleted ${selected.length} queue item(s)`);
       load();
     } catch {
       toast.error("Delete failed — check the server logs");
@@ -86,124 +81,89 @@ export default function CampaignQueue() {
     setSearch(searchInput);
   };
 
+  const columns = [
+    {
+      key: "lead", label: "Lead",
+      render: (r) => (
+        <Link to={`/app/campaigns/${r.campaign_id}`}>
+          <div style={{ fontWeight: 500, color: "var(--text-primary)" }}>{r.lead_name || r.lead_id?.slice(0, 8)}</div>
+          {r.lead_email && <div className="tnum" style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>{r.lead_email}</div>}
+          {r.lead_company && <div style={{ fontSize: 10.5, color: "var(--text-tertiary)" }}>{r.lead_company}</div>}
+        </Link>
+      ),
+    },
+    { key: "campaign", label: "Campaign", render: (r) => <span style={{ color: "var(--text-secondary)" }}>{r.campaign_name || "—"}</span> },
+    { key: "subject", label: "Subject", maxWidth: 200, render: (r) => r.subject || "—" },
+    {
+      key: "status", label: "Status",
+      render: (r) => {
+        const meta = STATUS_META[r.status] || STATUS_META.pending;
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            <meta.icon size={12} strokeWidth={1.5} aria-hidden="true" className={meta.spin ? "ds-spin" : undefined} style={{ color: `var(--color-${meta.tone === "neutral" ? "neutral-status" : meta.tone})` }} />
+            <StatusPill status={r.status} tone={meta.tone} />
+          </span>
+        );
+      },
+    },
+    {
+      key: "scheduled", label: "Scheduled",
+      render: (r) => <span className="tnum" style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-mono)", fontSize: 11.5 }}>{r.send_at ? new Date(r.send_at).toLocaleString() : "—"}</span>,
+    },
+  ];
+
   return (
     <div className="animate-fade-in">
       <PageHeader title="Send Queue" subtitle="Emails scheduled to go out, listed chronologically." />
-      <div className="px-6 sm:px-8 pb-6 space-y-4">
+      <div className="px-6 sm:px-8 py-6 space-y-4">
         <div className="flex items-center gap-2 flex-wrap">
           <form onSubmit={handleSearch} className="flex items-center gap-2">
-            <div className="relative flex-1 max-w-sm">
-              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
-              <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Search by name, email, subject, campaign, or queue ID..."
-                className="inp pl-7 text-tiny w-full" />
-              {searchInput && (
-                <button type="button" onClick={() => { setSearchInput(""); setSearch(""); setPage(1); }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink">
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-            <button type="submit" className="btn-secondary text-[11px]"><Search size={11} /> Search</button>
-            {search && <span className="text-tiny text-ink-muted font-mono">Filtered: "{search}"</span>}
+            <Input
+              leadingIcon={Search} size="sm" value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search by name, email, subject, campaign, or queue ID…"
+              className="w-80"
+            />
+            <Button type="submit" variant="secondary" size="sm" icon={Search}>Search</Button>
+            {search && <span className="tnum" style={{ fontSize: 11.5, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>Filtered: "{search}"</span>}
           </form>
           <div className="flex items-center gap-1.5 ml-auto">
-            <div className="flex items-center gap-1">
-              <input value={selectN} onChange={(e) => setSelectN(e.target.value.replace(/\D/, ""))}
-                placeholder="N" className="inp text-tiny w-12 text-center font-mono" />
-              <button onClick={selectFirstN} disabled={!selectN || parseInt(selectN) < 1}
-                className="btn-ghost text-[11px] flex items-center gap-1 disabled:opacity-40">
-                <ListOrdered size={10} /> Select {selectN || "N"}
-              </button>
-            </div>
+            <Input size="sm" value={selectN} onChange={(e) => setSelectN(e.target.value.replace(/\D/g, ""))} placeholder="N" className="w-16" />
+            <Button variant="tertiary" size="sm" icon={ListChecks} onClick={selectFirstN} isDisabled={!selectN || parseInt(selectN, 10) < 1}>
+              Select {selectN || "N"}
+            </Button>
           </div>
         </div>
 
         {!data ? (
-          <div className="text-center py-12 text-ink-muted text-tiny">Loading...</div>
+          <div className="text-center py-12" style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Loading…</div>
         ) : data.rows.length === 0 ? (
-          <div className="text-center py-12 text-ink-muted">
-            <Send size={24} className="mx-auto mb-2 opacity-40" />
-            <div className="text-tiny font-medium">{search ? "No matching queued emails" : "No queued emails"}</div>
-            <p className="text-tiny mt-1">{search ? "Try a different search term." : "Emails appear here once a campaign is launched."}</p>
-          </div>
+          search ? (
+            <EmptyFilteredState query={search} onClear={() => { setSearch(""); setSearchInput(""); setPage(1); }} />
+          ) : (
+            <EmptyState icon={Send} title="No queued emails" description="Emails appear here once a campaign is launched." />
+          )
         ) : (
           <>
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
-                <div className="text-tiny text-ink-muted font-mono">{data.total} queued</div>
-                {selected.size > 0 && (
-                  <button onClick={deleteSelected} disabled={deleting}
-                    className="btn-ghost text-[11px] text-danger flex items-center gap-1">
-                    {deleting ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
-                    Delete {selected.size}
-                  </button>
+                <span className="tnum" style={{ fontSize: 11.5, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>{data.total} queued</span>
+                {selected.length > 0 && (
+                  <Button variant="danger-subtle" size="xs" icon={Trash2} onClick={deleteSelected} isLoading={deleting}>
+                    Delete {selected.length}
+                  </Button>
                 )}
               </div>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}
-                  className="btn-ghost text-[11px] px-1.5 py-0.5 disabled:opacity-30"><ChevronLeft size={12} /></button>
-                <span className="text-[11px] font-mono text-ink-muted">{page}/{totalPages}</span>
-                <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-                  className="btn-ghost text-[11px] px-1.5 py-0.5 disabled:opacity-30"><ChevronRight size={12} /></button>
-              </div>
             </div>
-            <div className="shadow-card rounded-lg bg-white overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-line text-[10.5px] font-mono text-ink-muted uppercase tracking-wider">
-                    <th className="px-3 py-2 w-10">
-                      <input type="checkbox" checked={data.rows.length > 0 && selected.size === data.rows.length}
-                        onChange={selectAll} title="Select all on this page" />
-                    </th>
-                    <th className="text-left px-3 py-2 font-normal">Lead</th>
-                    <th className="text-left px-3 py-2 font-normal">Campaign</th>
-                    <th className="text-left px-3 py-2 font-normal">Subject</th>
-                    <th className="text-left px-3 py-2 font-normal">Status</th>
-                    <th className="text-left px-3 py-2 font-normal">Scheduled</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.rows.map((r) => {
-                    const meta = STATUS_META[r.status] || STATUS_META.pending;
-                    const Icon = meta.icon;
-                    return (
-                      <tr key={r.id} className={`border-b border-line text-body ${selected.has(r.id) ? "bg-accent-soft/30" : "hover:bg-surfacehover"}`}>
-                        <td className="px-3 py-2">
-                          <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} />
-                        </td>
-                        <td className="px-3 py-2">
-                          <Link to={`/app/campaigns/${r.campaign_id}`} className="hover:text-accent">
-                            <span className="font-medium">{r.lead_name || r.lead_id?.slice(0, 8)}</span>
-                            {r.lead_email && <div className="text-tiny text-ink-muted font-mono">{r.lead_email}</div>}
-                            {r.lead_company && <div className="text-[10px] text-ink-muted">{r.lead_company}</div>}
-                          </Link>
-                        </td>
-                        <td className="px-3 py-2 text-ink-secondary">{r.campaign_name || "—"}</td>
-                        <td className="px-3 py-2 text-ink-secondary max-w-[200px] truncate font-mono text-tiny">{r.subject || "—"}</td>
-                        <td className="px-3 py-2">
-                          <span className={`inline-flex items-center gap-1 text-tiny font-mono ${meta.cls}`}>
-                            <Icon size={10} className={r.status === "sending" ? "animate-spin" : ""} /> {meta.label}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-tiny font-mono text-ink-muted">
-                          {r.send_at ? new Date(r.send_at).toLocaleString() : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="text-tiny text-ink-muted font-mono">Page {page} of {totalPages}</div>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}
-                  className="btn-ghost text-[11px] px-1.5 py-0.5 disabled:opacity-30"><ChevronLeft size={12} /> Prev</button>
-                <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-                  className="btn-ghost text-[11px] px-1.5 py-0.5 disabled:opacity-30">Next <ChevronRight size={12} /></button>
-              </div>
-            </div>
+            <Table
+              columns={columns}
+              rows={data.rows}
+              rowKey={(r) => r.id}
+              selectable
+              selected={selected}
+              onSelectRow={toggleSelect}
+              onSelectAll={selectAll}
+            />
+            <TableFooter page={page} pageCount={totalPages} total={data.total} pageSize={perPage} onPageChange={setPage} />
           </>
         )}
       </div>
