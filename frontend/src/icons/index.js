@@ -89,8 +89,11 @@ export {
   Link,              // URL
   Linkedin,          // LinkedIn profile/company link
   Tag,               // Segment
+  Tags,              // Multiple tags / tag group
   IdCard,            // Profile
   Briefcase,         // Deal
+  Image,             // Static image / photo content
+  Video,             // Video content
 
   // ---- Metrics & analytics ----
   DollarSign,        // Value / revenue
