@@ -8,6 +8,7 @@ import { SkeletonTableRows } from "../components/ui/loading-states";
 import Table from "../components/composites/Table";
 import { EmptyState } from "../components/composites/EmptyState";
 import StatusPill from "../components/primitives/StatusPill";
+import Select from "../components/primitives/Select";
 
 export default function Campaigns() {
   const nav = useNavigate();
@@ -172,18 +173,19 @@ export default function Campaigns() {
                 <ChevronDown size={12} className="ml-1" />
               </button>
               {createOpen && (
-                <div className="absolute right-0 top-full mt-1 bg-white border border-line rounded-xl shadow-card z-50 py-1 min-w-[180px]"
+                <div className="absolute right-0 top-full mt-1 z-50 py-1 min-w-[180px]"
+                  style={{ background: "var(--bg-surface-raised)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-md)" }}
                   onMouseLeave={() => setCreateOpen(false)}>
                   <button onClick={() => { setCreateOpen(false); nav("/app/campaigns/new"); }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-body hover:bg-ash text-left">
+                    className="w-full flex items-center gap-2 px-3 py-2 text-body hover:bg-ds-hover text-left">
                     <FileJson size={14} /> Blank campaign
                   </button>
                   <button onClick={() => { setCreateOpen(false); openTemplatePicker(); }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-body hover:bg-ash text-left">
+                    className="w-full flex items-center gap-2 px-3 py-2 text-body hover:bg-ds-hover text-left">
                     <LayoutTemplate size={14} /> From template
                   </button>
                   <button onClick={() => { setCreateOpen(false); nav("/app/campaigns/wizard"); }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-body hover:bg-ash text-left">
+                    className="w-full flex items-center gap-2 px-3 py-2 text-body hover:bg-ds-hover text-left">
                     <Workflow size={14} /> AI Wizard
                   </button>
                 </div>
@@ -194,10 +196,10 @@ export default function Campaigns() {
       />
       <div className="animate-fade-in px-6 sm:px-8">
         {loading ? (
-          <div className="card-floating p-4 border border-line bg-white overflow-x-auto rounded-2xl">
+          <div className="card-floating p-4 overflow-x-auto rounded-2xl" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)" }}>
             <table className="w-full text-table min-w-[900px]">
               <thead>
-                <tr className="border-b border-line">
+                <tr style={{ borderBottom: "1px solid var(--border-default)" }}>
                   <th className="table-header text-left p-4">Campaign</th>
                   <th className="table-header text-left p-4">Status</th>
                   <th className="table-header text-right p-4">Leads</th>
@@ -215,33 +217,52 @@ export default function Campaigns() {
           <div className="flex gap-6">
             <div className="w-48 shrink-0 space-y-1">
               <div className="flex items-center justify-between mb-2">
-                <span className="ui-label">Folders</span>
-                <button onClick={() => setFolderModal(true)} className="text-tiny text-primary hover:underline">+</button>
+                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", fontFamily: "var(--font-ui)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Folders</span>
+                <button onClick={() => setFolderModal(true)} style={{ fontSize: 11, color: "var(--text-link)" }}>+</button>
               </div>
               <button onClick={() => setFolderFilter("")}
-                className={`w-full text-left px-2 py-1.5 rounded-sm text-caption transition-colors ${!folderFilter ? "bg-ink text-white" : "hover:bg-ash"}`}>
+                className="w-full text-left px-2 py-1.5 text-caption transition-colors"
+                style={{
+                  borderRadius: "var(--radius-sm)",
+                  background: !folderFilter ? "var(--color-primary)" : "transparent",
+                  color: !folderFilter ? "#FFFFFF" : "var(--text-primary)",
+                }}
+                onMouseEnter={(e) => { if (folderFilter) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { if (folderFilter) e.currentTarget.style.background = "transparent"; }}
+              >
                 All campaigns
               </button>
               {folders.map((f) => (
                 <button key={f.id} onClick={() => setFolderFilter(f.id)}
-                  className={`w-full text-left px-2 py-1.5 rounded-sm text-caption transition-colors flex items-center gap-2 ${folderFilter === f.id ? "bg-ink text-white" : "hover:bg-ash"}`}>
+                  className="w-full text-left px-2 py-1.5 text-caption transition-colors flex items-center gap-2"
+                  style={{
+                    borderRadius: "var(--radius-sm)",
+                    background: folderFilter === f.id ? "var(--color-primary)" : "transparent",
+                    color: folderFilter === f.id ? "#FFFFFF" : "var(--text-primary)",
+                  }}
+                  onMouseEnter={(e) => { if (folderFilter !== f.id) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                  onMouseLeave={(e) => { if (folderFilter !== f.id) e.currentTarget.style.background = "transparent"; }}
+                >
                   <Folder size={12} /> {f.name}
                 </button>
               ))}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-4">
-                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-                  className="border border-line px-2 py-1.5 rounded-sm text-caption">
-                  <option value="">All statuses</option>
-                  <option value="draft">Draft</option>
-                  <option value="active">Active</option>
-                  <option value="paused">Paused</option>
-                  <option value="completed">Completed</option>
-                  <option value="archived">Archived</option>
-                  <option value="quarantined">Quarantined</option>
-                </select>
-                <span className="text-tiny text-ink-muted font-mono">{filtered.length} campaign{filtered.length === 1 ? "" : "s"}</span>
+                <Select
+                  size="sm" value={statusFilter} onChange={setStatusFilter} placeholder="All statuses"
+                  options={[
+                    { value: "", label: "All statuses" },
+                    { value: "draft", label: "Draft" },
+                    { value: "active", label: "Active" },
+                    { value: "paused", label: "Paused" },
+                    { value: "completed", label: "Completed" },
+                    { value: "archived", label: "Archived" },
+                    { value: "quarantined", label: "Quarantined" },
+                  ]}
+                  className="w-40"
+                />
+                <span className="tnum" style={{ fontSize: 11.5, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>{filtered.length} campaign{filtered.length === 1 ? "" : "s"}</span>
               </div>
 
               {filtered.length === 0 ? (
