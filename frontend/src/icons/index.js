@@ -36,6 +36,7 @@ export {
   // ---- Actions ----
   Plus,              // Add / Create
   Pencil,            // Edit
+  PenSquare,         // Compose / draft (long-form content, distinct from row Edit)
   Trash2,            // Delete
   Copy,              // Duplicate
   Download,          // Export
