@@ -5,6 +5,9 @@ import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import { Play, Pause, Plus, Workflow, Trash2, Copy, FileJson, LayoutTemplate, ChevronDown, X, Archive, CheckCircle, Folder, BarChart3, AlertTriangle, Check, Loader2, Users, TrendingUp, Sparkles, Activity } from "lucide-react";
 import { SkeletonTableRows } from "../components/ui/loading-states";
+import Table from "../components/composites/Table";
+import { EmptyState } from "../components/composites/EmptyState";
+import StatusPill from "../components/primitives/StatusPill";
 
 export default function Campaigns() {
   const nav = useNavigate();
@@ -242,133 +245,19 @@ export default function Campaigns() {
               </div>
 
               {filtered.length === 0 ? (
-                <div className="shadow-card p-10 text-center rounded-2xl">
-                  <div className="text-section font-display font-semibold">No campaigns yet</div>
-                  <p className="text-body text-ink-muted mt-2">Create your first sequence to start booking meetings.</p>
-                  <div className="flex items-center justify-center gap-3 mt-6">
-                    <button onClick={() => nav("/app/campaigns/new")} className="btn-primary">Blank campaign</button>
-                    <button onClick={openTemplatePicker} className="btn-secondary">From template</button>
-                    <button onClick={() => nav("/app/campaigns/wizard")} className="btn-secondary">AI Wizard</button>
-                  </div>
-                </div>
+                <EmptyState
+                  icon={Workflow}
+                  title="No campaigns yet"
+                  description="Create your first sequence to start booking meetings."
+                  actionLabel="Blank campaign"
+                  onAction={() => nav("/app/campaigns/new")}
+                />
               ) : (
-                <div className="card-floating border border-line bg-white overflow-x-auto rounded-2xl">
-                  <table className="w-full text-table min-w-[900px]">
-                    <thead>
-                      <tr className="border-b border-line bg-ash/50">
-                        <th className="table-header text-left p-3">Campaign</th>
-                        <th className="table-header text-left p-3">Status</th>
-                        <th className="table-header text-right p-3">Leads</th>
-                        <th className="table-header text-right p-3">Sent</th>
-                        <th className="table-header text-right p-3">Open</th>
-                        <th className="table-header text-right p-3">Reply</th>
-                        <th className="table-header text-right p-3">Meetings</th>
-                        <th className="p-3"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map((c) => (
-                        <tr key={c.id} className="border-b border-line hover:bg-surfacehover transition-colors duration-150">
-                          <td className="p-3">
-                            <Link to={`/app/campaigns/${c.id}`} data-testid={`campaign-row-${c.id}`}
-                              className="font-medium text-body hover:text-accent">{c.name}</Link>
-                            <div className="text-tiny text-ink-muted font-mono mt-0.5">
-                              {c.step_count || 0} steps · {c.duration_days || 0}d
-                              {c.tags?.length > 0 && c.tags.map((t) => <span key={t} className="ml-2 px-1.5 py-0.5 rounded-sm bg-ash text-ink-muted text-tiny">{t}</span>)}
-                            </div>
-                          </td>
-                          <td className="p-3">
-                            <span className="flex items-center gap-1.5">
-                              <StatusBadge status={c.status} />
-                              {c.stats?.sent > 0 && (
-                                <span className={`inline-block w-1.5 h-1.5 rounded-full ${
-                                  (c.stats?.bounced || 0) > 0 && ((c.stats?.bounced || 0) / c.stats.sent) > 0.05 ? "bg-danger" :
-                                  (c.stats?.open_rate || 0) < 15 ? "bg-warning" : "bg-success"
-                                }`} title={
-                                  (c.stats?.bounced || 0) > 0 && ((c.stats?.bounced || 0) / c.stats.sent) > 0.05 ? "High bounce rate" :
-                                  (c.stats?.open_rate || 0) < 15 ? "Low open rate" : "Healthy"
-                                } />
-                              )}
-                            </span>
-                          </td>
-                          <td className="p-3 text-right font-mono text-body">{c.lead_count || 0}</td>
-                          <td className="p-3 text-right font-mono text-body">{c.stats?.sent || 0}</td>
-                          <td className="p-3 text-right font-mono text-body">
-                            {c.stats?.opened || 0}
-                            {c.stats?.sent > 0 && <span className="text-ink-muted text-tiny ml-1">({c.stats?.open_rate || 0}%)</span>}
-                          </td>
-                          <td className="p-3 text-right font-mono text-body">
-                            {c.stats?.replied || 0}
-                            {c.stats?.sent > 0 && <span className="text-ink-muted text-tiny ml-1">({c.stats?.reply_rate || 0}%)</span>}
-                          </td>
-                          <td className="p-3 text-right font-mono text-body">{c.stats?.meetings || 0}</td>
-                          <td className="p-3 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              {c.status === "draft" && (
-                                <button onClick={() => runPreflight(c.id)}
-                                  className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Launch">
-                                  <Play size={14} />
-                                </button>
-                              )}
-                              {c.status === "active" && (
-                                <button onClick={() => pause(c.id)}
-                                  className="p-1.5 text-ink-muted hover:text-warning rounded hover:bg-ash" title="Pause">
-                                  <Pause size={14} />
-                                </button>
-                              )}
-                              {c.status === "paused" && (
-                                <button onClick={() => runPreflight(c.id)}
-                                  className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Resume">
-                                  <Play size={14} />
-                                </button>
-                              )}
-                              {c.status === "active" && (
-                                <button onClick={() => complete(c.id)}
-                                  className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Mark completed">
-                                  <CheckCircle size={14} />
-                                </button>
-                              )}
-                              {["draft", "paused", "completed"].includes(c.status) && (
-                                <button onClick={() => archive(c.id)}
-                                  className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Archive">
-                                  <Archive size={14} />
-                                </button>
-                              )}
-                              <button onClick={() => duplicate(c)}
-                                className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Duplicate">
-                                <Copy size={14} />
-                              </button>
-                              <button onClick={() => saveTemplate(c)}
-                                className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Save as template">
-                                <LayoutTemplate size={14} />
-                              </button>
-                              <button onClick={() => openFunnel(c.id)}
-                                className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Funnel analytics">
-                                <TrendingUp size={14} />
-                              </button>
-                              <button onClick={() => openOptimize(c.id)}
-                                className="p-1.5 text-ink-muted hover:text-primary rounded hover:bg-ash" title="AI Optimize">
-                                <Sparkles size={14} />
-                              </button>
-                              <button onClick={() => openContacts(c.id)}
-                                className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="Contact states">
-                                <Users size={14} />
-                              </button>
-                              <button onClick={() => nav(`/app/campaigns/${c.id}/ab-test`)}
-                                className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash" title="A/B test results">
-                                <BarChart3 size={14} />
-                              </button>
-                              <button onClick={() => remove(c.id)}
-                                className="p-1.5 text-ink-muted hover:text-danger rounded hover:bg-ash" title="Delete">
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <Table
+                  columns={campaignColumns({ nav, runPreflight, pause, complete, archive, duplicate, saveTemplate, openFunnel, openOptimize, openContacts, remove })}
+                  rows={filtered}
+                  rowKey={(c) => c.id}
+                />
               )}
             </div>
           </div>
@@ -703,19 +592,86 @@ export default function Campaigns() {
   );
 }
 
-function StatusBadge({ status }) {
-  const map = {
-    draft: "bg-neutral-100 text-ink-muted border-line",
-    active: "bg-success/10 text-success border-success/30",
-    paused: "bg-warning/10 text-warning border-warning/30",
-    completed: "bg-ink/5 text-ink-muted border-line",
-    archived: "bg-ink/5 text-ink-muted border-line opacity-60",
-    quarantined: "bg-danger/10 text-danger border-danger/30",
-  };
+/* Column set for the campaigns Table (docs/design-system.md §11) — a
+ * factory rather than a module-level constant since the actions column
+ * needs closures over this page's handlers (pause/archive/duplicate/etc). */
+function campaignColumns({ nav, runPreflight, pause, complete, archive, duplicate, saveTemplate, openFunnel, openOptimize, openContacts, remove }) {
+  return [
+    {
+      key: "name", label: "Campaign",
+      render: (c) => (
+        <div>
+          <Link to={`/app/campaigns/${c.id}`} data-testid={`campaign-row-${c.id}`}
+            style={{ fontWeight: 500, color: "var(--text-primary)" }}>
+            {c.name}
+          </Link>
+          <div className="tnum" style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)", marginTop: 2 }}>
+            {c.step_count || 0} steps · {c.duration_days || 0}d
+            {c.tags?.length > 0 && c.tags.map((t) => (
+              <span key={t} className="ml-2" style={{ padding: "1px 6px", borderRadius: "var(--radius-sm)", background: "var(--bg-active)", color: "var(--text-tertiary)" }}>{t}</span>
+            ))}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "status", label: "Status",
+      render: (c) => {
+        const bounceHigh = (c.stats?.bounced || 0) > 0 && (c.stats.bounced / c.stats.sent) > 0.05;
+        const openLow = (c.stats?.open_rate || 0) < 15;
+        const healthTone = bounceHigh ? "var(--color-danger)" : openLow ? "var(--color-warning)" : "var(--color-success)";
+        const healthTitle = bounceHigh ? "High bounce rate" : openLow ? "Low open rate" : "Healthy";
+        return (
+          <span className="flex items-center gap-1.5">
+            <StatusPill status={c.status} />
+            {c.stats?.sent > 0 && <span title={healthTitle} style={{ width: 6, height: 6, borderRadius: "var(--radius-full)", background: healthTone }} />}
+          </span>
+        );
+      },
+    },
+    { key: "leads", label: "Leads", align: "right", numeric: true, render: (c) => c.lead_count || 0 },
+    { key: "sent", label: "Sent", align: "right", numeric: true, render: (c) => c.stats?.sent || 0 },
+    {
+      key: "opened", label: "Open", align: "right", numeric: true,
+      render: (c) => <>{c.stats?.opened || 0}{c.stats?.sent > 0 && <span style={{ color: "var(--text-tertiary)", fontSize: 11, marginLeft: 4 }}>({c.stats?.open_rate || 0}%)</span>}</>,
+    },
+    {
+      key: "replied", label: "Reply", align: "right", numeric: true,
+      render: (c) => <>{c.stats?.replied || 0}{c.stats?.sent > 0 && <span style={{ color: "var(--text-tertiary)", fontSize: 11, marginLeft: 4 }}>({c.stats?.reply_rate || 0}%)</span>}</>,
+    },
+    { key: "meetings", label: "Meetings", align: "right", numeric: true, render: (c) => c.stats?.meetings || 0 },
+    {
+      key: "actions", label: "", align: "right",
+      render: (c) => (
+        <div className="flex items-center justify-end gap-1 ds-row-action">
+          {c.status === "draft" && <RowAction title="Launch" icon={Play} onClick={() => runPreflight(c.id)} />}
+          {c.status === "active" && <RowAction title="Pause" icon={Pause} onClick={() => pause(c.id)} hoverColor="var(--color-warning)" />}
+          {c.status === "paused" && <RowAction title="Resume" icon={Play} onClick={() => runPreflight(c.id)} />}
+          {c.status === "active" && <RowAction title="Mark completed" icon={CheckCircle} onClick={() => complete(c.id)} />}
+          {["draft", "paused", "completed"].includes(c.status) && <RowAction title="Archive" icon={Archive} onClick={() => archive(c.id)} />}
+          <RowAction title="Duplicate" icon={Copy} onClick={() => duplicate(c)} />
+          <RowAction title="Save as template" icon={LayoutTemplate} onClick={() => saveTemplate(c)} />
+          <RowAction title="Funnel analytics" icon={TrendingUp} onClick={() => openFunnel(c.id)} />
+          <RowAction title="AI Optimize" icon={Sparkles} onClick={() => openOptimize(c.id)} hoverColor="var(--color-primary)" />
+          <RowAction title="Contact states" icon={Users} onClick={() => openContacts(c.id)} />
+          <RowAction title="A/B test results" icon={BarChart3} onClick={() => nav(`/app/campaigns/${c.id}/ab-test`)} />
+          <RowAction title="Delete" icon={Trash2} onClick={() => remove(c.id)} hoverColor="var(--color-danger)" />
+        </div>
+      ),
+    },
+  ];
+}
+
+function RowAction({ title, icon: Icon, onClick, hoverColor = "var(--text-primary)" }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-tiny font-medium border ${map[status] || map.draft}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${status === "active" ? "bg-success animate-pulse" : status === "paused" ? "bg-warning" : status === "quarantined" ? "bg-danger" : status === "completed" || status === "archived" ? "bg-ink-muted" : "bg-ink-muted"}`} />
-      {status}
-    </span>
+    <button
+      type="button" title={title} onClick={(e) => { e.stopPropagation(); onClick(); }}
+      className="inline-grid place-items-center transition-colors"
+      style={{ width: 26, height: 26, borderRadius: "var(--radius-sm)", color: "var(--text-tertiary)" }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-active)"; e.currentTarget.style.color = hoverColor; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-tertiary)"; }}
+    >
+      <Icon size={14} strokeWidth={1.5} aria-hidden="true" />
+    </button>
   );
 }
