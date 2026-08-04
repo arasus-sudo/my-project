@@ -7,6 +7,7 @@ import { SkeletonKpiGrid } from "../components/ui/loading-states";
 // §25: icons come from the closed list, never from lucide-react directly.
 import { ArrowRight, Send, Eye, MessageSquare, CalendarClock, Activity } from "../icons";
 import MetricCard from "../components/composites/MetricCard";
+import Card from "../components/composites/Card";
 import SegmentedControl from "../components/primitives/SegmentedControl";
 
 const PERIODS = [
@@ -93,8 +94,7 @@ export default function Dashboard() {
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
-          <div className="md:col-span-2 card-flat shadow-card p-6 sm:p-8">
-            <div className="ui-label mb-4">Activity over time</div>
+          <Card title="Activity over time" className="md:col-span-2">
             <LineChart
               height={256}
               data={trend.map((d) => ({ ...d, label: d.date }))}
@@ -104,30 +104,27 @@ export default function Dashboard() {
                 { key: "replied", label: "Replied" },
               ]}
             />
-          </div>
+          </Card>
 
-          <div className="card-flat shadow-card p-6 sm:p-8">
-            <div className="ui-label mb-4">Workspace</div>
-            <ul className="divide-y divide-line">
+          <Card title="Workspace">
+            <ul>
               {[
                 ["Campaigns", counts.campaigns],
                 ["Active", counts.active_campaigns],
                 ["Leads", counts.leads],
                 ["Mailboxes", counts.mailboxes],
               ].map(([k, v]) => (
-                <li key={k} className="flex justify-between py-3">
-                  <span className="text-body text-ink-tertiary">{k}</span>
-                  <span className="text-subheading font-display font-bold">{v}</span>
+                <li key={k} className="flex justify-between items-center tnum" style={{ padding: "12px 0", borderBottom: "1px solid var(--border-subtle)" }}>
+                  <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{k}</span>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", fontFamily: "var(--font-display)" }}>{v}</span>
                 </li>
               ))}
             </ul>
-          </div>
+          </Card>
         </div>
 
-        {/* Funnel */}
-        <div className="card-flat shadow-card p-6 sm:p-8">
-          <div className="ui-label mb-4">Outbound funnel</div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <Card title="Outbound funnel">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
               { k: "Sent", v: kpis.sent, w: 100 },
               { k: "Opened", v: kpis.opened, w: kpis.sent ? (kpis.opened / kpis.sent) * 100 : 0 },
@@ -135,15 +132,15 @@ export default function Dashboard() {
               { k: "Meetings", v: kpis.meetings, w: kpis.sent ? (kpis.meetings / kpis.sent) * 100 : 0 },
             ].map((s) => (
               <div key={s.k}>
-                <div className="ui-label">{s.k}</div>
-                <div className="text-section font-display font-bold mt-1 truncate">{s.v}</div>
-                <div className="mt-2 h-2 bg-line rounded-full overflow-hidden">
-                  <div className="h-full bg-accent" style={{ width: `${Math.max(2, s.w)}%` }} />
+                <div style={{ fontSize: 11.5, color: "var(--text-tertiary)", fontFamily: "var(--font-ui)" }}>{s.k}</div>
+                <div className="tnum truncate" style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)", fontFamily: "var(--font-display)", marginTop: 2 }}>{s.v}</div>
+                <div style={{ marginTop: 8, height: 8, borderRadius: "var(--radius-full)", background: "var(--bg-active)", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${Math.max(2, s.w)}%`, borderRadius: "var(--radius-full)", background: "var(--color-primary)" }} />
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );
