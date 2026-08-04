@@ -633,14 +633,14 @@ export default function CampaignBuilder() {
       <PageHeader
         title={
           <input value={name} onChange={(e) => setName(e.target.value)} data-testid="campaign-name-input"
-            className="bg-transparent border-0 border-b border-transparent hover:border-line focus:border-ink focus:outline-none font-display font-semibold text-card-title w-full" />
+            className="bg-transparent border-0 border-b border-transparent hover:border-line-default focus:border-primary focus:outline-none font-display font-semibold text-card-title w-full" />
         }
         subtitle={`Goal: ${goal}`}
         badge="EQ Editor"
         right={
           <div className="flex items-center gap-2">
             {status !== "draft" && (
-              <span className="text-tiny font-mono px-2 py-1 rounded-lg border border-line text-ink-muted">{status}</span>
+              <span className="text-tiny font-mono px-2 py-1 rounded-lg border border-line-default text-fg-tertiary">{status}</span>
             )}
             <button data-testid="save-campaign" onClick={save} disabled={busy} className="btn-secondary"><Save size={12} /> Save</button>
             {id && (
@@ -677,42 +677,42 @@ export default function CampaignBuilder() {
       {id && leadStats.total > 0 && (
         <div className="px-3 sm:px-4 pt-2 flex items-center gap-3 flex-wrap" data-testid="assigned-leads-stat">
           <div className="flex items-baseline gap-1.5">
-            <span className="text-tiny font-mono text-ink-muted">Leads</span>
+            <span className="text-tiny font-mono text-fg-tertiary">Leads</span>
             <span className="text-caption font-semibold">{leadStats.total}</span>
           </div>
           <div className="flex items-center gap-1.5 text-tiny font-mono">
             {leadStats.approved > 0 && <span className="text-success">{leadStats.approved}✓</span>}
             {leadStats.rejected > 0 && <span className="text-danger">{leadStats.rejected}✗</span>}
             {leadStats.draft > 0 && <span className="text-warning">{leadStats.draft}~</span>}
-            {leadStats.ungenerated > 0 && <span className="text-ink-muted">{leadStats.ungenerated} pending</span>}
+            {leadStats.ungenerated > 0 && <span className="text-fg-tertiary">{leadStats.ungenerated} pending</span>}
           </div>
         </div>
       )}
       {/* Campaign Type Toggle */}
       <div className="px-3 sm:px-4 pt-2 pb-1.5 flex items-center gap-3">
         <div className="ui-label shrink-0">Campaign type</div>
-        <div className="flex items-center gap-1 bg-bone border border-line rounded-xl p-0.5">
+        <div className="flex items-center gap-1 bg-canvas border border-line-default rounded-xl p-0.5">
           <button onClick={() => setCampaignType("ai")}
-            className={`px-3 py-1.5 rounded-lg text-caption font-medium transition-colors ${campaignType === "ai" ? "bg-ink text-white shadow-sm" : "text-ink-muted hover:text-ink"}`}>
+            className={`px-3 py-1.5 rounded-lg text-caption font-medium transition-colors ${campaignType === "ai" ? "bg-primary text-white shadow-sm" : "text-fg-tertiary hover:text-fg"}`}>
             AI Campaign <span className="text-tiny opacity-70">(personal openers)</span>
           </button>
           <button onClick={() => setCampaignType("template")}
-            className={`px-3 py-1.5 rounded-lg text-caption font-medium transition-colors ${campaignType === "template" ? "bg-ink text-white shadow-sm" : "text-ink-muted hover:text-ink"}`}>
+            className={`px-3 py-1.5 rounded-lg text-caption font-medium transition-colors ${campaignType === "template" ? "bg-primary text-white shadow-sm" : "text-fg-tertiary hover:text-fg"}`}>
             Template <span className="text-tiny opacity-70">(basic merge fields)</span>
           </button>
         </div>
       </div>
 
       {/* Build / Review & Send tabs */}
-      <div className="px-3 sm:px-4 border-b border-line">
+      <div className="px-3 sm:px-4 border-b border-line-default">
         <div className="flex gap-1 overflow-x-auto">
           <button onClick={() => setReviewMode(false)} data-testid="build-tab"
-            className={`px-4 py-2 text-body font-medium font-display border-b-2 transition-colors whitespace-nowrap shrink-0 ${!reviewMode ? "border-ink text-ink" : "border-transparent text-ink-muted hover:text-ink"}`}>
+            className={`px-4 py-2 text-body font-medium font-display border-b-2 transition-colors whitespace-nowrap shrink-0 ${!reviewMode ? "border-primary text-primary" : "border-transparent text-fg-tertiary hover:text-fg"}`}>
             <PenSquare size={14} className="inline mr-1.5" /> Build
           </button>
           <button onClick={() => setReviewMode(true)} disabled={leadStats.total === 0} data-testid="toggle-preview"
             title={leadStats.total === 0 ? "Add at least one lead to preview generated emails" : ""}
-            className={`px-4 py-2 text-body font-medium font-display border-b-2 transition-colors whitespace-nowrap shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${reviewMode ? "border-ink text-ink" : "border-transparent text-ink-muted hover:text-ink"}`}>
+            className={`px-4 py-2 text-body font-medium font-display border-b-2 transition-colors whitespace-nowrap shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${reviewMode ? "border-primary text-primary" : "border-transparent text-fg-tertiary hover:text-fg"}`}>
             <Eye size={14} className="inline mr-1.5" /> Preview
           </button>
         </div>
@@ -745,7 +745,7 @@ export default function CampaignBuilder() {
       ) : (
         <div className="flex flex-col md:flex-row min-h-[calc(100vh-190px)]">
           {/* Rail */}
-          <aside className="w-full md:w-56 shrink-0 flex md:flex-col gap-1 overflow-x-auto md:overflow-visible px-3 sm:px-4 md:px-3 py-2 md:py-4 border-b md:border-b-0 md:border-r border-line md:sticky md:top-20 md:self-start">
+          <aside className="w-full md:w-56 shrink-0 flex md:flex-col gap-1 overflow-x-auto md:overflow-visible px-3 sm:px-4 md:px-3 py-2 md:py-4 border-b md:border-b-0 md:border-r border-line-default md:sticky md:top-20 md:self-start">
             <RailBtn active={railSection === "sequence"} onClick={() => setRailSection("sequence")} icon={<LayoutTemplate size={14} />} label="Sequence" testid="rail-sequence" />
             <RailBtn active={railSection === "audience"} onClick={() => setRailSection("audience")} icon={<Search size={14} />} label="Audience" testid="rail-audience" />
             <RailBtn active={railSection === "sending"} onClick={() => setRailSection("sending")} icon={<Send size={14} />} label="Sending" testid="rail-sending" />
@@ -753,7 +753,7 @@ export default function CampaignBuilder() {
             <RailBtn active={railSection === "basics"} onClick={() => setRailSection("basics")} icon={<Flag size={14} />} label="Basics" testid="rail-basics" />
           </aside>
 
-          <div className="flex-1 min-w-0 p-3 sm:p-4 bg-bone">
+          <div className="flex-1 min-w-0 p-3 sm:p-4 bg-canvas">
             {railSection === "sequence" ? (
               <div className={`grid grid-cols-1 gap-3 ${showEqPanel ? "lg:grid-cols-[1fr_288px]" : ""}`}>
                 <div className="min-w-0">
@@ -764,7 +764,7 @@ export default function CampaignBuilder() {
                   <EqPanel eq={eq} setShowEqPanel={setShowEqPanel} />
                 ) : (
                   <button onClick={() => setShowEqPanel(true)}
-                    className="hidden lg:flex items-start justify-center pt-2 text-ink-muted hover:text-ink transition-colors" title="Show EQ panel">
+                    className="hidden lg:flex items-start justify-center pt-2 text-fg-tertiary hover:text-fg transition-colors" title="Show EQ panel">
                     <ChevronLeft size={14} />
                   </button>
                 )}
@@ -822,7 +822,7 @@ export default function CampaignBuilder() {
 function RailBtn({ active, onClick, icon, label, testid }) {
   return (
     <button onClick={onClick} data-testid={testid}
-      className={`shrink-0 md:w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl text-body font-display transition-colors whitespace-nowrap ${active ? "bg-ink text-white" : "hover:bg-neutral-100 text-ink-secondary"}`}>
+      className={`shrink-0 md:w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl text-body font-display transition-colors whitespace-nowrap ${active ? "bg-primary text-white" : "hover:bg-neutral-100 text-fg-secondary"}`}>
       {icon}
       {label}
     </button>
@@ -834,11 +834,11 @@ function RailBtn({ active, onClick, icon, label, testid }) {
 function CollapsibleCard({ title, testid, defaultOpen = true, className = "max-w-lg", children }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className={`shadow-card rounded-2xl bg-white ${className}`}>
+    <div className={`shadow-card rounded-2xl bg-ds-surface ${className}`}>
       <div className="flex items-center justify-between px-4 sm:px-5 py-3 cursor-pointer select-none"
         onClick={() => setOpen((v) => !v)} data-testid={testid}>
-        <div className="text-tiny font-mono text-ink-muted">{title}</div>
-        <button className="text-ink-muted hover:text-ink transition-colors" title={open ? "Collapse" : "Expand"}>
+        <div className="text-tiny font-mono text-fg-tertiary">{title}</div>
+        <button className="text-fg-tertiary hover:text-fg transition-colors" title={open ? "Collapse" : "Expand"}>
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
       </div>
@@ -855,12 +855,12 @@ function BasicsSection({ goal, setGoal, folderId, setFolderId, folders, campaign
           <label className="form-label">Goal</label>
           <input value={goal} onChange={(e) => setGoal(e.target.value)} data-testid="goal-input"
             placeholder="e.g. Book 15-minute intro calls"
-            className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1" />
+            className="w-full border border-line-default px-3 py-2 rounded-lg text-input mt-1" />
         </div>
         <div>
           <label className="form-label">Folder</label>
           <select value={folderId} onChange={(e) => setFolderId(e.target.value)}
-            className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1">
+            className="w-full border border-line-default px-3 py-2 rounded-lg text-input mt-1">
             <option value="">No folder</option>
             {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
           </select>
@@ -869,7 +869,7 @@ function BasicsSection({ goal, setGoal, folderId, setFolderId, folders, campaign
           <label className="form-label">Tags (comma-separated)</label>
           <input value={campaignTags} onChange={(e) => setCampaignTags(e.target.value)}
             placeholder="e.g. outbound, q4, ae-target"
-            className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1" />
+            className="w-full border border-line-default px-3 py-2 rounded-lg text-input mt-1" />
         </div>
       </div>
     </CollapsibleCard>
@@ -884,22 +884,22 @@ function SendingSection({ sendWindowStart, setSendWindowStart, sendWindowEnd, se
           <div>
             <label className="form-label">Start</label>
             <input type="time" value={sendWindowStart} onChange={(e) => setSendWindowStart(e.target.value)}
-              className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1" />
+              className="w-full border border-line-default px-3 py-2 rounded-lg text-input mt-1" />
           </div>
           <div>
             <label className="form-label">End</label>
             <input type="time" value={sendWindowEnd} onChange={(e) => setSendWindowEnd(e.target.value)}
-              className="w-full border border-line px-3 py-2 rounded-lg text-input mt-1" />
+              className="w-full border border-line-default px-3 py-2 rounded-lg text-input mt-1" />
           </div>
         </div>
         <div>
           <label className="form-label">Timezone</label>
           <div className="relative mt-1">
             <select value={timezone} onChange={(e) => setTimezone(e.target.value)}
-              className="w-full border border-line px-3 py-2 rounded-lg text-input font-mono appearance-none pr-8">
+              className="w-full border border-line-default px-3 py-2 rounded-lg text-input font-mono appearance-none pr-8">
               {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
             </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" size={14} />
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-tertiary pointer-events-none" size={14} />
           </div>
         </div>
       </div>
@@ -920,21 +920,21 @@ function SignatureSection({ includeSignature, setIncludeSignature, signatures, s
           <div className="flex items-center gap-1.5">
             {signatures.length > 0 ? (
               <select value={signatureId} onChange={(e) => setSignatureId(e.target.value)} data-testid="signature-select"
-                className="flex-1 min-w-0 border border-line rounded-lg px-3 py-2 text-input bg-white">
+                className="flex-1 min-w-0 border border-line-default rounded-lg px-3 py-2 text-input bg-ds-surface">
                 <option value="">Choose a signature…</option>
                 {signatures.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             ) : (
-              <div className="flex-1 text-caption text-ink-muted">No signatures yet.</div>
+              <div className="flex-1 text-caption text-fg-tertiary">No signatures yet.</div>
             )}
             <button onClick={onNewSignature} title="New signature" data-testid="new-signature-btn"
-              className="shrink-0 p-2 border border-line rounded-lg text-ink-muted hover:text-ink hover:bg-ash transition-colors">
+              className="shrink-0 p-2 border border-line-default rounded-lg text-fg-tertiary hover:text-fg hover:bg-ds-hover transition-colors">
               <Plus size={14} />
             </button>
             <button
               onClick={() => { if (signatureId && window.confirm("Delete this signature?")) deleteSignature(signatureId); }}
               disabled={!signatureId} title="Delete signature" data-testid="delete-signature-btn"
-              className="shrink-0 p-2 border border-line rounded-lg text-ink-muted hover:text-danger hover:bg-ash transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+              className="shrink-0 p-2 border border-line-default rounded-lg text-fg-tertiary hover:text-danger hover:bg-ds-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
               <Trash2 size={14} />
             </button>
           </div>
@@ -957,7 +957,7 @@ function AudienceSection({
       {leadLists.length > 0 && (
         <div className="mb-2">
           <select value={selectedListId} onChange={(e) => setSelectedListId(e.target.value)}
-            className="w-full border border-line rounded-lg px-2 py-1.5 text-caption font-mono bg-white">
+            className="w-full border border-line-default rounded-lg px-2 py-1.5 text-caption font-mono bg-ds-surface">
             <option value="">All lists</option>
             {leadLists.map((lst) => (
               <option key={lst.id} value={lst.id}>{lst.name} ({lst.lead_count || (lst.lead_ids || []).length})</option>
@@ -969,26 +969,26 @@ function AudienceSection({
         <div className="flex flex-wrap gap-1 mb-2">
           {allTags.map((t) => (
             <button key={t} onClick={() => setSelectedTags((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t])}
-              className={`text-tiny px-1.5 py-0.5 rounded-full border ${selectedTags.includes(t) ? "bg-primary/10 border-primary text-primary" : "border-line text-ink-muted hover:border-neutral-300"}`}>
+              className={`text-tiny px-1.5 py-0.5 rounded-full border ${selectedTags.includes(t) ? "bg-primary/10 border-primary text-primary" : "border-line-default text-fg-tertiary hover:border-neutral-300"}`}>
               {t}
             </button>
           ))}
           {selectedTags.length > 0 && (
-            <button onClick={() => setSelectedTags([])} className="text-tiny text-ink-muted hover:text-ink">
+            <button onClick={() => setSelectedTags([])} className="text-tiny text-fg-tertiary hover:text-fg">
               <X size={12} />
             </button>
           )}
         </div>
       )}
       <div className="relative mb-2">
-        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
+        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-tertiary pointer-events-none" />
         <input value={leadSearch} onChange={(e) => setLeadSearch(e.target.value)}
           placeholder="Search leads..."
-          className="w-full border border-line rounded-xl pl-7 pr-3 py-1.5 text-tiny font-mono" />
+          className="w-full border border-line-default rounded-xl pl-7 pr-3 py-1.5 text-tiny font-mono" />
       </div>
-      <div className="border border-line rounded-xl max-h-[420px] overflow-y-auto">
+      <div className="border border-line-default rounded-xl max-h-[420px] overflow-y-auto">
         {paginatedLeads.map((l) => (
-          <label key={l.id} className="flex items-start gap-1.5 px-2 py-1.5 border-b border-line last:border-b-0 text-tiny cursor-pointer hover:bg-surfacehover transition-colors duration-150">
+          <label key={l.id} className="flex items-start gap-1.5 px-2 py-1.5 border-b border-line-default last:border-b-0 text-tiny cursor-pointer hover:bg-surfacehover transition-colors duration-150">
             <input type="checkbox" className="mt-0.5 w-3 h-3"
               checked={selectedLeads.includes(l.id)}
               onChange={(e) => setSelectedLeads(e.target.checked ? [...selectedLeads, l.id] : selectedLeads.filter((x) => x !== l.id))}
@@ -996,12 +996,12 @@ function AudienceSection({
             />
             <div className="flex-1 min-w-0">
               <div className="font-medium text-caption truncate">{l.first_name} {l.last_name}</div>
-              <div className="text-ink-muted truncate">{l.company}{l.title ? ` · ${l.title}` : ""}</div>
-              <div className="text-ink-disabled font-mono truncate">{l.email}</div>
+              <div className="text-fg-tertiary truncate">{l.company}{l.title ? ` · ${l.title}` : ""}</div>
+              <div className="text-fg-tertiary font-mono truncate">{l.email}</div>
               {(l.tags?.length > 0 || l.campaign_names?.length > 0) && (
                 <div className="flex flex-wrap gap-1 mt-0.5">
                   {l.tags?.map((t) => (
-                    <span key={t} className="font-mono bg-ink/5 text-ink-muted px-1.5 py-0.5 rounded-full">{t}</span>
+                    <span key={t} className="font-mono bg-ink/5 text-fg-tertiary px-1.5 py-0.5 rounded-full">{t}</span>
                   ))}
                   {l.campaign_names?.map((cn) => (
                     <span key={cn} className="font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{cn}</span>
@@ -1012,22 +1012,22 @@ function AudienceSection({
           </label>
         ))}
         {filteredLeads.length === 0 && (
-          <div className="text-caption text-ink-muted text-center py-6">No leads match the selected filters</div>
+          <div className="text-caption text-fg-tertiary text-center py-6">No leads match the selected filters</div>
         )}
         {filteredLeads.length > 0 && (
-          <div className="flex items-center justify-between px-2 py-1.5 border-t border-line bg-bone text-tiny text-ink-muted">
+          <div className="flex items-center justify-between px-2 py-1.5 border-t border-line-default bg-canvas text-tiny text-fg-tertiary">
             <span>
               {(leadPickerPage - 1) * pageSize + 1}–{Math.min(leadPickerPage * pageSize, filteredLeads.length)} of {filteredLeads.length}
             </span>
             <div className="flex items-center gap-1">
               <button onClick={() => setLeadPickerPage((p) => Math.max(1, p - 1))} disabled={leadPickerPage <= 1}
                 data-testid="lead-picker-prev"
-                className="p-1 rounded hover:bg-ash disabled:opacity-30 disabled:hover:bg-transparent text-ink-muted hover:text-ink transition-colors">
+                className="p-1 rounded hover:bg-ds-hover disabled:opacity-30 disabled:hover:bg-transparent text-fg-tertiary hover:text-fg transition-colors">
                 <ChevronLeft size={13} />
               </button>
               <button onClick={() => setLeadPickerPage((p) => Math.min(leadPickerTotalPages, p + 1))} disabled={leadPickerPage >= leadPickerTotalPages}
                 data-testid="lead-picker-next"
-                className="p-1 rounded hover:bg-ash disabled:opacity-30 disabled:hover:bg-transparent text-ink-muted hover:text-ink transition-colors">
+                className="p-1 rounded hover:bg-ds-hover disabled:opacity-30 disabled:hover:bg-transparent text-fg-tertiary hover:text-fg transition-colors">
                 <ChevronRight size={13} />
               </button>
             </div>
@@ -1035,16 +1035,16 @@ function AudienceSection({
         )}
       </div>
       <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-        <button onClick={() => setSelectedLeads(filteredLeads.map((l) => l.id))} className="text-tiny text-ink hover:underline" data-testid="select-all-leads">All ({filteredLeads.length})</button>
-        <button onClick={() => setSelectedLeads([])} className="text-tiny text-ink-muted hover:underline" data-testid="deselect-all-leads">None</button>
-        <span className="text-tiny text-ink-muted">|</span>
+        <button onClick={() => setSelectedLeads(filteredLeads.map((l) => l.id))} className="text-tiny text-fg hover:underline" data-testid="select-all-leads">All ({filteredLeads.length})</button>
+        <button onClick={() => setSelectedLeads([])} className="text-tiny text-fg-tertiary hover:underline" data-testid="deselect-all-leads">None</button>
+        <span className="text-tiny text-fg-tertiary">|</span>
         <input type="number" min={1} placeholder="N"
           data-testid="select-n-input"
-          className="w-10 border border-line rounded px-1 py-0.5 text-tiny text-center"
+          className="w-10 border border-line-default rounded px-1 py-0.5 text-tiny text-center"
           onKeyDown={(e) => { if (e.key === "Enter") selectFirstN(e.target); }} />
         <button onClick={() => selectFirstN(document.querySelector('[data-testid="select-n-input"]'))}
-          className="text-tiny text-ink-muted hover:text-ink hover:underline">Select</button>
-        <label className="flex items-center gap-1 text-tiny text-ink-muted cursor-pointer ml-0.5">
+          className="text-tiny text-fg-tertiary hover:text-fg hover:underline">Select</button>
+        <label className="flex items-center gap-1 text-tiny text-fg-tertiary cursor-pointer ml-0.5">
           <input type="checkbox" checked={selectFromAll} onChange={(e) => setSelectFromAll(e.target.checked)} className="w-2.5 h-2.5" />
           All matching
         </label>
@@ -1057,7 +1057,7 @@ function AudienceSection({
       )}
 
       {leadStats.total > 0 && (
-        <div className="mt-2 p-2 bg-bone rounded-xl border border-line space-y-1">
+        <div className="mt-2 p-2 bg-canvas rounded-xl border border-line-default space-y-1">
           <label className="flex items-center gap-1.5 text-tiny font-medium cursor-pointer">
             <input type="checkbox" checked={phasedGeneration}
               onChange={(e) => setPhasedGeneration(e.target.checked)} className="w-3 h-3" />
@@ -1065,17 +1065,17 @@ function AudienceSection({
           </label>
           {phasedGeneration && (
             <div className="space-y-1.5 ml-4">
-              <label className="flex items-center gap-1.5 text-tiny text-ink-muted">
+              <label className="flex items-center gap-1.5 text-tiny text-fg-tertiary">
                 <span>Batch:</span>
                 <input type="number" min={1} max={500} value={batchSize}
                   onChange={(e) => setBatchSize(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                  className="w-14 border border-line rounded px-1 py-0.5 text-tiny text-center" />
+                  className="w-14 border border-line-default rounded px-1 py-0.5 text-tiny text-center" />
               </label>
               {batchStatus && batchStatus.phased && (
                 <div className="space-y-1">
                   <div className="flex items-center justify-between text-tiny">
-                    <span className="text-ink-muted">Batch {batchStatus.current_batch}/{batchStatus.total_batches}</span>
-                    <span className="text-ink-muted">
+                    <span className="text-fg-tertiary">Batch {batchStatus.current_batch}/{batchStatus.total_batches}</span>
+                    <span className="text-fg-tertiary">
                       {Object.values(batchStatus.batches || {}).reduce((s, b) => s + b.approved, 0)}/{batchStatus.total_leads}
                     </span>
                   </div>
@@ -1105,19 +1105,19 @@ function ChannelEditor({ step, updateStep }) {
     <>
       {(step.channel || "email") === "email" && (
         <>
-          <div className="text-tiny font-mono text-ink-muted mb-1">Subject</div>
+          <div className="text-tiny font-mono text-fg-tertiary mb-1">Subject</div>
           <input value={step.subject} onChange={(e) => updateStep({ subject: e.target.value })}
             data-testid="editor-subject"
-            className="w-full text-caption font-medium border-0 border-b border-line py-1.5 focus:outline-none focus:border-ink bg-transparent"
+            className="w-full text-caption font-medium border-0 border-b border-line-default py-1.5 focus:outline-none focus:border-primary bg-transparent"
             placeholder="Quick idea for {{company}}" />
           <div className="mt-2 flex items-center justify-between">
-            <div className="text-tiny font-mono text-ink-muted">Body</div>
+            <div className="text-tiny font-mono text-fg-tertiary">Body</div>
             <div className="flex items-center gap-2">
-              <label className="text-tiny text-ink-muted font-mono">day</label>
+              <label className="text-tiny text-fg-tertiary font-mono">day</label>
               <input type="number" min={0} value={step.day}
                 onChange={(e) => updateStep({ day: Number(e.target.value) })}
                 data-testid="editor-day"
-                className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
+                className="w-14 border border-line-default px-1.5 py-0.5 rounded font-mono text-tiny text-fg" />
             </div>
           </div>
           <div className="mt-1.5">
@@ -1129,84 +1129,84 @@ function ChannelEditor({ step, updateStep }) {
 
       {(step.channel || "") === "phone_call" && (
         <>
-          <div className="text-tiny font-mono text-ink-muted mb-0.5">Call Script</div>
-          <p className="text-tiny text-ink-muted mb-1">{'{{'}first_name{'}}'}, {'{{'}company{'}}'}, and other merge fields will be filled automatically.</p>
+          <div className="text-tiny font-mono text-fg-tertiary mb-0.5">Call Script</div>
+          <p className="text-tiny text-fg-tertiary mb-1">{'{{'}first_name{'}}'}, {'{{'}company{'}}'}, and other merge fields will be filled automatically.</p>
           <textarea value={step.script || ""} onChange={(e) => updateStep({ script: e.target.value })}
-            rows={4} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
+            rows={4} className="w-full border border-line-default px-2 py-1.5 rounded font-mono text-tiny text-fg"
             placeholder="Hi {{first_name}}, this is [Your Name] from {{company}}... (write your call script with {{merge_fields}})" />
           <div className="mt-1.5 flex items-center gap-2">
-            <label className="text-tiny text-ink-muted font-mono">day</label>
+            <label className="text-tiny text-fg-tertiary font-mono">day</label>
             <input type="number" min={0} value={step.day}
               onChange={(e) => updateStep({ day: Number(e.target.value) })}
-              className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
+              className="w-14 border border-line-default px-1.5 py-0.5 rounded font-mono text-tiny text-fg" />
           </div>
         </>
       )}
 
       {(step.channel || "") === "sms" && (
         <>
-          <div className="text-tiny font-mono text-ink-muted mb-0.5">SMS Body</div>
-          <p className="text-tiny text-ink-muted mb-1">Short message. Merge fields supported: {'{{'}first_name{'}}'}, {'{{'}company{'}}'}, etc.</p>
+          <div className="text-tiny font-mono text-fg-tertiary mb-0.5">SMS Body</div>
+          <p className="text-tiny text-fg-tertiary mb-1">Short message. Merge fields supported: {'{{'}first_name{'}}'}, {'{{'}company{'}}'}, etc.</p>
           <textarea value={step.body || ""} onChange={(e) => updateStep({ body: e.target.value })}
-            rows={2} maxLength={160} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
+            rows={2} maxLength={160} className="w-full border border-line-default px-2 py-1.5 rounded font-mono text-tiny text-fg"
             placeholder="Hi {{first_name}}, quick reminder about {{company}}..." />
-          <div className="text-tiny text-ink-muted mt-0.5">{(step.body || "").length}/160 characters</div>
+          <div className="text-tiny text-fg-tertiary mt-0.5">{(step.body || "").length}/160 characters</div>
           <div className="mt-1.5 flex items-center gap-2">
-            <label className="text-tiny text-ink-muted font-mono">day</label>
+            <label className="text-tiny text-fg-tertiary font-mono">day</label>
             <input type="number" min={0} value={step.day}
               onChange={(e) => updateStep({ day: Number(e.target.value) })}
-              className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
+              className="w-14 border border-line-default px-1.5 py-0.5 rounded font-mono text-tiny text-fg" />
           </div>
         </>
       )}
 
       {(step.channel || "") === "whatsapp" && (
         <>
-          <div className="text-tiny font-mono text-ink-muted mb-0.5">WhatsApp Message</div>
-          <p className="text-tiny text-ink-muted mb-1">Merge fields supported. Keep it conversational.</p>
+          <div className="text-tiny font-mono text-fg-tertiary mb-0.5">WhatsApp Message</div>
+          <p className="text-tiny text-fg-tertiary mb-1">Merge fields supported. Keep it conversational.</p>
           <textarea value={step.body || ""} onChange={(e) => updateStep({ body: e.target.value })}
-            rows={3} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
+            rows={3} className="w-full border border-line-default px-2 py-1.5 rounded font-mono text-tiny text-fg"
             placeholder="Hi {{first_name}}, wanted to share something relevant for {{company}}..." />
           <div className="mt-1.5 flex items-center gap-2">
-            <label className="text-tiny text-ink-muted font-mono">day</label>
+            <label className="text-tiny text-fg-tertiary font-mono">day</label>
             <input type="number" min={0} value={step.day}
               onChange={(e) => updateStep({ day: Number(e.target.value) })}
-              className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
+              className="w-14 border border-line-default px-1.5 py-0.5 rounded font-mono text-tiny text-fg" />
           </div>
         </>
       )}
 
       {(step.channel || "") === "linkedin_message" && (
         <>
-          <div className="text-tiny font-mono text-ink-muted mb-0.5">LinkedIn Message</div>
-          <p className="text-tiny text-ink-muted mb-1">This will be marked as a manual task — LinkedIn Messages require sending via LinkedIn.com</p>
+          <div className="text-tiny font-mono text-fg-tertiary mb-0.5">LinkedIn Message</div>
+          <p className="text-tiny text-fg-tertiary mb-1">This will be marked as a manual task — LinkedIn Messages require sending via LinkedIn.com</p>
           <textarea value={step.linkedin_message || step.body || ""} onChange={(e) => updateStep({ linkedin_message: e.target.value })}
-            rows={3} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
+            rows={3} className="w-full border border-line-default px-2 py-1.5 rounded font-mono text-tiny text-fg"
             placeholder="Hi {{first_name}}, noticed {{company}}'s recent work on..." />
           <div className="mt-1.5 flex items-center gap-2">
-            <label className="text-tiny text-ink-muted font-mono">day</label>
+            <label className="text-tiny text-fg-tertiary font-mono">day</label>
             <input type="number" min={0} value={step.day}
               onChange={(e) => updateStep({ day: Number(e.target.value) })}
-              className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
+              className="w-14 border border-line-default px-1.5 py-0.5 rounded font-mono text-tiny text-fg" />
           </div>
         </>
       )}
 
       {(step.channel || "") === "linkedin_comment" && (
         <>
-          <div className="text-tiny font-mono text-ink-muted mb-0.5">Post URL to comment on</div>
+          <div className="text-tiny font-mono text-fg-tertiary mb-0.5">Post URL to comment on</div>
           <input value={step.linkedin_post_url || ""} onChange={(e) => updateStep({ linkedin_post_url: e.target.value })}
-            className="w-full border border-line px-2 py-1.5 rounded text-tiny text-ink"
+            className="w-full border border-line-default px-2 py-1.5 rounded text-tiny text-fg"
             placeholder="https://www.linkedin.com/posts/..." />
-          <div className="text-tiny font-mono text-ink-muted mt-1.5 mb-0.5">Comment text</div>
+          <div className="text-tiny font-mono text-fg-tertiary mt-1.5 mb-0.5">Comment text</div>
           <textarea value={step.linkedin_comment_text || step.body || ""} onChange={(e) => updateStep({ linkedin_comment_text: e.target.value })}
-            rows={3} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
+            rows={3} className="w-full border border-line-default px-2 py-1.5 rounded font-mono text-tiny text-fg"
             placeholder="Great insight, {{first_name}}! I'd add that..." />
           <div className="mt-1.5 flex items-center gap-2">
-            <label className="text-tiny text-ink-muted font-mono">day</label>
+            <label className="text-tiny text-fg-tertiary font-mono">day</label>
             <input type="number" min={0} value={step.day}
               onChange={(e) => updateStep({ day: Number(e.target.value) })}
-              className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
+              className="w-14 border border-line-default px-1.5 py-0.5 rounded font-mono text-tiny text-fg" />
           </div>
         </>
       )}
@@ -1217,16 +1217,16 @@ function ChannelEditor({ step, updateStep }) {
             <AlertTriangle size={12} />
             <span className="text-tiny font-medium">Manual action required</span>
           </div>
-          <p className="text-tiny text-ink-muted mb-1.5">LinkedIn doesn't allow automating connection requests. The lead's LinkedIn URL will be shown so you can connect manually.</p>
-          <div className="text-tiny font-mono text-ink-muted mb-0.5">Connection note (optional)</div>
+          <p className="text-tiny text-fg-tertiary mb-1.5">LinkedIn doesn't allow automating connection requests. The lead's LinkedIn URL will be shown so you can connect manually.</p>
+          <div className="text-tiny font-mono text-fg-tertiary mb-0.5">Connection note (optional)</div>
           <textarea value={step.linkedin_connection_note || step.body || ""} onChange={(e) => updateStep({ linkedin_connection_note: e.target.value })}
-            rows={2} className="w-full border border-line px-2 py-1.5 rounded font-mono text-tiny text-ink"
+            rows={2} className="w-full border border-line-default px-2 py-1.5 rounded font-mono text-tiny text-fg"
             placeholder="Hi {{first_name}}, I've been following {{company}}'s work..." />
           <div className="mt-1.5 flex items-center gap-2">
-            <label className="text-tiny text-ink-muted font-mono">day</label>
+            <label className="text-tiny text-fg-tertiary font-mono">day</label>
             <input type="number" min={0} value={step.day}
               onChange={(e) => updateStep({ day: Number(e.target.value) })}
-              className="w-14 border border-line px-1.5 py-0.5 rounded font-mono text-tiny text-ink" />
+              className="w-14 border border-line-default px-1.5 py-0.5 rounded font-mono text-tiny text-fg" />
           </div>
         </>
       )}
@@ -1243,13 +1243,13 @@ function SequenceSection({ steps, activeStep, setActiveStep, addStep, removeStep
           {steps.map((s, i) => (
             <div key={s._key || i} className="flex items-center shrink-0">
               <div onClick={() => setActiveStep(i)} data-testid={`step-${i}`}
-                className={`text-left px-3 py-2 border rounded-xl transition-colors duration-150 min-w-[140px] cursor-pointer ${i === activeStep ? "border-ink bg-surfacehover" : "border-line hover:bg-surfacehover"}`}>
+                className={`text-left px-3 py-2 border rounded-xl transition-colors duration-150 min-w-[140px] cursor-pointer ${i === activeStep ? "border-primary bg-surfacehover" : "border-line-default hover:bg-surfacehover"}`}>
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-ink-muted">
+                  <div className="flex items-center gap-1.5 text-fg-tertiary">
                     {channelIcons[s.channel || "email"] || <Mail size={12} />}
                     <span className="text-tiny font-mono">Step {i + 1}</span>
                   </div>
-                  <span className="text-tiny font-mono text-ink-muted">day {s.day}</span>
+                  <span className="text-tiny font-mono text-fg-tertiary">day {s.day}</span>
                 </div>
                 <div className="text-caption font-medium mt-0.5 truncate max-w-[160px]">{s.subject || CHANNELS.find((c) => c.key === (s.channel || "email"))?.label || "Email"}</div>
                 {i > 0 && s.condition && s.condition !== "always" && (
@@ -1257,14 +1257,14 @@ function SequenceSection({ steps, activeStep, setActiveStep, addStep, removeStep
                     s.condition === "if_no_reply" ? "bg-warning/10 text-warning" :
                     s.condition === "if_replied" ? "bg-success/10 text-success" :
                     s.condition === "if_opened_no_reply" ? "bg-accent-soft text-primary" :
-                    "bg-neutral-100 text-ink-muted"
+                    "bg-neutral-100 text-fg-tertiary"
                   }`}>
                     {s.condition.replace("if_", "").replace(/_/g, " ")}
                   </div>
                 )}
                 {steps.length > 1 && (
                   <button onClick={(e) => { e.stopPropagation(); removeStep(i); }} data-testid={`remove-step-${i}`}
-                    className="block text-tiny text-ink-muted hover:text-danger mt-1">
+                    className="block text-tiny text-fg-tertiary hover:text-danger mt-1">
                     <Trash2 size={10} className="inline" /> remove
                   </button>
                 )}
@@ -1277,23 +1277,23 @@ function SequenceSection({ steps, activeStep, setActiveStep, addStep, removeStep
       </CollapsibleCard>
 
       <CollapsibleCard title="Draft editor" testid="collapse-sequence-editor" className="">
-        <div className="flex items-center gap-1 mb-3 pb-3 border-b border-line flex-wrap">
-          <div className="text-tiny font-mono text-ink-muted shrink-0">Channel</div>
+        <div className="flex items-center gap-1 mb-3 pb-3 border-b border-line-default flex-wrap">
+          <div className="text-tiny font-mono text-fg-tertiary shrink-0">Channel</div>
           <div className="flex flex-wrap gap-0.5">
             {CHANNELS.map((ch) => {
               const active = (step.channel || "email") === ch.key;
               return (
                 <button key={ch.key} onClick={() => updateStep({ channel: ch.key })}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-tiny font-medium transition-colors ${active ? "bg-ink text-white" : "bg-ash text-ink-muted hover:text-ink"}`}>
+                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-tiny font-medium transition-colors ${active ? "bg-primary text-white" : "bg-ds-active text-fg-tertiary hover:text-fg"}`}>
                   {channelIcons[ch.key]} {ch.label}
                 </button>
               );
             })}
           </div>
           <div className="flex items-center gap-1 ml-auto">
-            <label className="text-tiny text-ink-muted font-mono">Condition</label>
+            <label className="text-tiny text-fg-tertiary font-mono">Condition</label>
             <select value={step.condition || "always"} onChange={(e) => updateStep({ condition: e.target.value })}
-              className="border border-line px-1.5 py-1 rounded text-tiny font-mono bg-white">
+              className="border border-line-default px-1.5 py-1 rounded text-tiny font-mono bg-ds-surface">
               <option value="always">Always send</option>
               <option value="if_no_reply">If no reply</option>
               <option value="if_opened_no_reply">If opened, no reply</option>
@@ -1312,13 +1312,13 @@ function SequenceSection({ steps, activeStep, setActiveStep, addStep, removeStep
 
 function EqPanel({ eq, setShowEqPanel }) {
   return (
-    <aside className="w-full lg:w-72 shrink-0 shadow-card rounded-2xl bg-white p-4 sm:p-5 relative self-start">
+    <aside className="w-full lg:w-72 shrink-0 shadow-card rounded-2xl bg-ds-surface p-4 sm:p-5 relative self-start">
       <button onClick={() => setShowEqPanel(false)}
-        className="absolute top-3 right-3 w-4 h-4 flex items-center justify-center rounded hover:bg-bone text-ink-muted hover:text-ink transition-colors"
+        className="absolute top-3 right-3 w-4 h-4 flex items-center justify-center rounded hover:bg-ds-hover text-fg-tertiary hover:text-fg transition-colors"
         title="Hide EQ panel">
         <ChevronRight size={12} />
       </button>
-      <div className="ui-label text-ink">EQ Score</div>
+      <div className="ui-label text-fg">EQ Score</div>
       <div className="font-mono text-2xl sm:text-3xl font-bold tracking-tight mt-1"
         style={{ color: eq ? (eq.overall > 70 ? "#212025" : eq.overall > 40 ? "#5A5A63" : "#B33636") : "#8A8B86" }}>
         {eq?.overall ?? "—"}
@@ -1334,7 +1334,7 @@ function EqPanel({ eq, setShowEqPanel }) {
           <div key={k}>
             <div className="flex justify-between text-caption">
               <span className="ui-label">{k}</span>
-              <span className="font-mono text-ink-secondary">{v}</span>
+              <span className="font-mono text-fg-secondary">{v}</span>
             </div>
             <div className="h-1 mt-1 bg-line rounded-full overflow-hidden">
               <div className="h-full bg-accent" style={{ width: `${v}%` }} />
@@ -1343,10 +1343,10 @@ function EqPanel({ eq, setShowEqPanel }) {
         ))}
       </div>
       <div className="mt-6 ui-label mb-1.5">Hints</div>
-      <ul className="space-y-2 text-caption text-ink-secondary">
+      <ul className="space-y-2 text-caption text-fg-secondary">
         {eq?.hints?.length ? eq.hints.map((h) => (
           <li key={h} className="border-l-2 border-sanguine pl-2">{h}</li>
-        )) : <li className="text-ink-muted">Looking sharp. Send it.</li>}
+        )) : <li className="text-fg-tertiary">Looking sharp. Send it.</li>}
       </ul>
     </aside>
   );
@@ -1355,14 +1355,14 @@ function EqPanel({ eq, setShowEqPanel }) {
 function SignatureModal({ onClose, signatureName, setSignatureName, signatureHtml, setSignatureHtml, savingSignature, onCreate }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-lg shadow-card p-5 w-full max-w-xl mx-4" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-ds-surface rounded-lg shadow-card p-5 w-full max-w-xl mx-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <div className="text-subheading font-display font-semibold">Create Signature</div>
           <button onClick={onClose} className="btn-ghost text-caption">Close</button>
         </div>
         <div className="space-y-2">
           <input value={signatureName} onChange={(e) => setSignatureName(e.target.value)}
-            className="w-full border border-line rounded-lg px-3 py-1.5 text-caption"
+            className="w-full border border-line-default rounded-lg px-3 py-1.5 text-caption"
             placeholder="Signature name (e.g. My Standard Signature)" />
           <RichEmailEditor
             value={signatureHtml}
@@ -1370,9 +1370,9 @@ function SignatureModal({ onClose, signatureName, setSignatureName, signatureHtm
             placeholder="Paste or compose your signature here — add images, links, and formatting..."
           />
           {signatureHtml && (
-            <div className="bg-bone border border-line rounded-lg p-3 text-caption">
-              <div className="text-tiny font-mono uppercase text-ink-muted mb-1">Preview</div>
-              <div className="border-t border-line pt-2 mt-1 signature-preview" dangerouslySetInnerHTML={{ __html: signatureHtml }} />
+            <div className="bg-canvas border border-line-default rounded-lg p-3 text-caption">
+              <div className="text-tiny font-mono uppercase text-fg-tertiary mb-1">Preview</div>
+              <div className="border-t border-line-default pt-2 mt-1 signature-preview" dangerouslySetInnerHTML={{ __html: signatureHtml }} />
             </div>
           )}
           <div className="flex justify-end gap-2">
@@ -1411,32 +1411,32 @@ function ReviewAndSendView({
   const rail = reviewEmails.length > 0 && (
     reviewCollapsed.leadRail ? (
       <button onClick={() => setReviewCollapsed((prev) => ({ ...prev, leadRail: false }))}
-        className="shadow-card rounded-lg bg-white overflow-hidden flex items-center justify-center py-6 cursor-pointer hover:bg-surfacehover transition-colors"
+        className="shadow-card rounded-lg bg-ds-surface overflow-hidden flex items-center justify-center py-6 cursor-pointer hover:bg-surfacehover transition-colors"
         title="Expand leads panel">
-        <ChevronRight size={13} className="text-ink-muted" />
+        <ChevronRight size={13} className="text-fg-tertiary" />
       </button>
     ) : (
-    <div className="shadow-card rounded-lg bg-white overflow-hidden flex flex-col max-h-[calc(100vh-280px)]">
-      <div className="px-2.5 py-1.5 border-b border-line flex items-center justify-between cursor-pointer" onClick={() => setReviewCollapsed((prev) => ({ ...prev, leadRail: !prev.leadRail }))}>
+    <div className="shadow-card rounded-lg bg-ds-surface overflow-hidden flex flex-col max-h-[calc(100vh-280px)]">
+      <div className="px-2.5 py-1.5 border-b border-line-default flex items-center justify-between cursor-pointer" onClick={() => setReviewCollapsed((prev) => ({ ...prev, leadRail: !prev.leadRail }))}>
         <div className="flex items-center gap-1">
-          <ChevronLeft size={11} className="text-ink-muted" />
-          <span className="text-[11px] font-mono text-ink-muted">Leads</span>
+          <ChevronLeft size={11} className="text-fg-tertiary" />
+          <span className="text-[11px] font-mono text-fg-tertiary">Leads</span>
         </div>
         <input type="checkbox" onClick={(e) => e.stopPropagation()}
           checked={selectedReview.length === reviewEmails.length}
           onChange={(e) => setSelectedReview(e.target.checked ? reviewEmails.map((l) => l.id) : [])}
           title="Select all" />
       </div>
-      <div className="px-2.5 py-1 border-b border-line flex items-center gap-2">
+      <div className="px-2.5 py-1 border-b border-line-default flex items-center gap-2">
         <input type="range" min={0} max={Math.max(0, reviewEmails.length - 1)} value={reviewIndex}
           onChange={(e) => setReviewIndex(Number(e.target.value))}
-          className="flex-1 h-0.5 accent-ink cursor-pointer" />
-        <span className="text-[10.5px] text-ink-muted font-mono shrink-0">{reviewIndex + 1}/{reviewEmails.length}</span>
+          className="flex-1 h-0.5 accent-primary cursor-pointer" />
+        <span className="text-[10.5px] text-fg-tertiary font-mono shrink-0">{reviewIndex + 1}/{reviewEmails.length}</span>
       </div>
       <div className="overflow-y-auto flex-1">
         {reviewEmails.map((l, i) => (
           <div key={l.id}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 border-b border-line cursor-pointer hover:bg-surfacehover transition-colors ${i === reviewIndex ? "bg-accent-soft" : ""}`}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 border-b border-line-default cursor-pointer hover:bg-surfacehover transition-colors ${i === reviewIndex ? "bg-accent-soft" : ""}`}
             onClick={() => setReviewIndex(i)}>
             <input type="checkbox" onClick={(e) => e.stopPropagation()}
               checked={selectedReview.includes(l.id)} onChange={() => toggleReviewSelected(l.id)} />
@@ -1452,14 +1452,14 @@ function ReviewAndSendView({
   return (
     <div className="px-2.5 sm:px-3 py-2 space-y-2">
       {campaignLeads.length > 0 && (
-        <div className="shadow-card rounded-lg bg-white">
+        <div className="shadow-card rounded-lg bg-ds-surface">
           <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 flex-wrap">
             {selectedReview.length === 0 ? (
               <>
-                <div className="text-[11px] text-ink-muted">
-                  <span className="font-medium text-ink">{leadStats.approved}</span> approved · {" "}
-                  <span className="font-medium text-ink">{leadStats.rejected}</span> rejected · {" "}
-                  <span className="font-medium text-ink">{leadStats.total - leadStats.reviewed}</span> awaiting review
+                <div className="text-[11px] text-fg-tertiary">
+                  <span className="font-medium text-fg">{leadStats.approved}</span> approved · {" "}
+                  <span className="font-medium text-fg">{leadStats.rejected}</span> rejected · {" "}
+                  <span className="font-medium text-fg">{leadStats.total - leadStats.reviewed}</span> awaiting review
                   <button onClick={dismissAllEmails} disabled={leadStats.total === 0}
                     className="ml-2 text-danger/50 hover:text-danger underline decoration-dotted underline-offset-2">
                     Delete all
@@ -1485,7 +1485,7 @@ function ReviewAndSendView({
                 <span className="text-[11px] font-medium">{selectedReview.length} selected</span>
                 <div className="flex items-center gap-1.5">
                   <button onClick={() => setSelectedReview([])}
-                    className="btn-ghost text-[11px] text-ink-muted">Clear</button>
+                    className="btn-ghost text-[11px] text-fg-tertiary">Clear</button>
                   <button onClick={() => bulkSetReviewStatus("rejected")}
                     className="btn-ghost text-[11px]" data-testid="bulk-reject">
                     <Flag size={10} /> Reject selected
@@ -1509,14 +1509,14 @@ function ReviewAndSendView({
         {!current ? (
           <>
             {rail}
-            <div className="shadow-card rounded-lg bg-white p-8 text-center">
+            <div className="shadow-card rounded-lg bg-ds-surface p-8 text-center">
               {genProgress ? (
                 <>
-                  <Loader2 size={14} className="animate-spin mx-auto text-ink-muted mb-2" />
+                  <Loader2 size={14} className="animate-spin mx-auto text-fg-tertiary mb-2" />
                   <div className="text-tiny font-medium">
                     Generating personalized emails… {genProgress.done}/{genProgress.total || "?"}
                   </div>
-                  <div className="text-tiny text-ink-muted mt-1">This updates live — no need to refresh.</div>
+                  <div className="text-tiny text-fg-tertiary mt-1">This updates live — no need to refresh.</div>
                   {genProgress.total > 0 && (
                     <div className="h-1 max-w-xs mx-auto mt-3 bg-line rounded-full overflow-hidden">
                       <div className="h-full bg-accent transition-all duration-500" style={{ width: `${Math.min(100, (genProgress.done / genProgress.total) * 100)}%` }} />
@@ -1525,11 +1525,11 @@ function ReviewAndSendView({
                 </>
               ) : (
                 <>
-                  <Mail size={14} className="mx-auto text-ink-disabled mb-2" />
-                  <div className="text-tiny font-medium text-ink-muted">
+                  <Mail size={14} className="mx-auto text-fg-tertiary mb-2" />
+                  <div className="text-tiny font-medium text-fg-tertiary">
                     {leadStats.total === 0 ? "No leads assigned yet" : "Select a lead to preview"}
                   </div>
-                  <p className="text-tiny text-ink-muted mt-1 max-w-sm mx-auto">
+                  <p className="text-tiny text-fg-tertiary mt-1 max-w-sm mx-auto">
                     {leadStats.total === 0
                       ? "Assign leads from the Audience section — every lead previews with your template's merge fields filled in, even before you generate."
                       : "Pick a lead from the list on the left to see its preview."}
@@ -1542,32 +1542,32 @@ function ReviewAndSendView({
           <>
             {rail}
             {/* Preview - always expanded, takes remaining space */}
-            <div className="shadow-card rounded-lg bg-white">
+            <div className="shadow-card rounded-lg bg-ds-surface">
               {steps.length > 1 && (
-                <div className="px-2.5 py-1.5 border-b border-line flex items-center gap-1.5 flex-wrap" data-testid="preview-step-tabs">
-                  <span className="text-[10.5px] text-ink-muted font-mono mr-0.5">STEP</span>
+                <div className="px-2.5 py-1.5 border-b border-line-default flex items-center gap-1.5 flex-wrap" data-testid="preview-step-tabs">
+                  <span className="text-[10.5px] text-fg-tertiary font-mono mr-0.5">STEP</span>
                   {steps.map((s, i) => (
                     <button key={i} onClick={() => changePreviewStep(i)}
                       data-testid={`preview-step-${i}`}
                       title={s?.subject || `Step ${i + 1}`}
-                      className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${i === previewStep ? "border-ink bg-surfacehover font-medium" : "border-line text-ink-muted hover:bg-surfacehover"}`}>
+                      className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${i === previewStep ? "border-primary bg-surfacehover font-medium" : "border-line-default text-fg-tertiary hover:bg-surfacehover"}`}>
                       {i + 1}
-                      <span className="text-[10px] text-ink-muted ml-1 font-mono">
+                      <span className="text-[10px] text-fg-tertiary ml-1 font-mono">
                         {s?.day ? `+${s.day}d` : "d0"}
                       </span>
                     </button>
                   ))}
                   {previewStep > 0 && (
-                    <span className="text-[10px] text-ink-muted ml-1">
+                    <span className="text-[10px] text-fg-tertiary ml-1">
                       Follow-up — shows this step's template with each lead's opener applied.
                     </span>
                   )}
                 </div>
               )}
-              <div className="px-2.5 py-1.5 border-b border-line flex items-center justify-between gap-2">
+              <div className="px-2.5 py-1.5 border-b border-line-default flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1 min-w-0">
                   <button onClick={prevReview} disabled={reviewIndex === 0} className="btn-ghost text-[11px] px-1 py-0.5 disabled:opacity-30"><ChevronLeft size={10} /></button>
-                  <span className="text-[10.5px] text-ink-muted font-mono shrink-0">{reviewIndex + 1}/{reviewEmails.length}</span>
+                  <span className="text-[10.5px] text-fg-tertiary font-mono shrink-0">{reviewIndex + 1}/{reviewEmails.length}</span>
                   <button onClick={nextReview} disabled={reviewIndex >= reviewEmails.length - 1} className="btn-ghost text-[11px] px-1 py-0.5 disabled:opacity-30"><ChevronRight size={10} /></button>
                   <span className="text-[11px] truncate max-w-[120px] font-medium ml-1">{current.first_name} {current.last_name}</span>
                   <span className={`text-[10px] font-mono px-1 py-0.5 rounded-full shrink-0 ${current.email_status === "approved" ? "bg-success/10 text-success" : current.email_status === "rejected" ? "bg-danger/10 text-danger" : "bg-warning/10 text-warning"}`}>
@@ -1596,13 +1596,13 @@ function ReviewAndSendView({
               </div>
               <div className="p-2.5 space-y-1.5 max-h-[calc(100vh-280px)] overflow-y-auto">
                   {!isTemplate && editingOpener?.leadId === current.id && (
-                    <div className="bg-bone border border-line rounded-xl p-2.5 space-y-1.5">
-                      <div className="text-[11px] font-mono text-ink-muted">
+                    <div className="bg-canvas border border-line-default rounded-xl p-2.5 space-y-1.5">
+                      <div className="text-[11px] font-mono text-fg-tertiary">
                         {current.personalized_opener ? "Edit personalized opener" : "Write an opener"}
                       </div>
                       <textarea value={editingOpener.opener} onChange={(e) => setEditingOpener({ ...editingOpener, opener: e.target.value })}
                         rows={2} placeholder="A one-line hook personal to this lead…"
-                        className="w-full border border-line px-2 py-1 rounded-lg text-tiny font-sans" />
+                        className="w-full border border-line-default px-2 py-1 rounded-lg text-tiny font-sans" />
                       <div className="flex justify-end gap-2">
                         <button onClick={() => setEditingOpener(null)} className="btn-secondary text-[11px]">Cancel</button>
                         <button onClick={() => saveOpener(current.id, editingOpener.opener)} disabled={!editingOpener.opener?.trim()} className="btn-primary text-[11px]"><Check size={11} /> Save</button>
@@ -1611,27 +1611,27 @@ function ReviewAndSendView({
                   )}
                   <div>
                     <div className="flex items-center justify-between mb-0.5">
-                      <div className="text-[10.5px] text-ink-muted font-mono">SUBJECT</div>
+                      <div className="text-[10.5px] text-fg-tertiary font-mono">SUBJECT</div>
                       <button onClick={() => setMailboxView(!mailboxView)}
-                        className="text-[10.5px] text-ink-muted hover:text-ink flex items-center gap-1 transition-colors">
+                        className="text-[10.5px] text-fg-tertiary hover:text-fg flex items-center gap-1 transition-colors">
                         {mailboxView ? <Edit2 size={10} /> : <Eye size={10} />}
                         {mailboxView ? "Edit view" : "Mailbox view"}
                       </button>
                     </div>
-                    <div className="text-tiny font-semibold font-mono text-ink-secondary border border-line rounded-xl px-2.5 py-1.5">
+                    <div className="text-tiny font-semibold font-mono text-fg-secondary border border-line-default rounded-xl px-2.5 py-1.5">
                       {fillMergeFields(current.email_subject || "(no subject)", current)}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10.5px] text-ink-muted mb-0.5 font-mono">BODY</div>
+                    <div className="text-[10.5px] text-fg-tertiary mb-0.5 font-mono">BODY</div>
                     {mailboxView ? (
-                      <div className="border border-line rounded-xl bg-white overflow-hidden">
-                        <div className="text-tiny text-ink-muted px-3 py-1.5 border-b border-line space-y-0.5 font-mono">
-                          <div><span className="font-medium text-ink">From:</span> {name || "PitchEQ"}</div>
-                          <div><span className="font-medium text-ink">To:</span> {current.email || "lead@example.com"}</div>
-                          <div><span className="font-medium text-ink">Date:</span> {new Date().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</div>
+                      <div className="border border-line-default rounded-xl bg-ds-surface overflow-hidden">
+                        <div className="text-tiny text-fg-tertiary px-3 py-1.5 border-b border-line-default space-y-0.5 font-mono">
+                          <div><span className="font-medium text-fg">From:</span> {name || "PitchEQ"}</div>
+                          <div><span className="font-medium text-fg">To:</span> {current.email || "lead@example.com"}</div>
+                          <div><span className="font-medium text-fg">Date:</span> {new Date().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</div>
                         </div>
-                        <div className="p-2.5 text-tiny text-ink leading-relaxed prose-email">
+                        <div className="p-2.5 text-tiny text-fg leading-relaxed prose-email">
                           {current.email_body_html ? (
                             <div dangerouslySetInnerHTML={{ __html: fillMergeFields(current.email_body_html, current) + (activeSignatureHtml ? "<br><br>" + activeSignatureHtml : "") }} />
                           ) : (
@@ -1643,16 +1643,16 @@ function ReviewAndSendView({
                         </div>
                       </div>
                     ) : (
-                      <div className="max-h-96 overflow-y-auto text-tiny text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line rounded-xl p-2.5 bg-white prose-email">
+                      <div className="max-h-96 overflow-y-auto text-tiny text-fg-secondary whitespace-pre-wrap font-sans leading-relaxed border border-line-default rounded-xl p-2.5 bg-ds-surface prose-email">
                         {current.email_body || current.email_body_html ? (
                           <div dangerouslySetInnerHTML={{ __html: fillMergeFields(current.email_body_html || current.email_body?.replace(/\n/g, "<br>") || "", current) + (activeSignatureHtml ? "<br><br>" + activeSignatureHtml : "") }} />
                         ) : (
-                          <div className="text-ink-muted italic">No content</div>
+                          <div className="text-fg-tertiary italic">No content</div>
                         )}
                       </div>
                     )}
                     {activeSignatureHtml && (
-                      <div className="flex items-center gap-1 text-[10.5px] text-ink-muted mt-1">
+                      <div className="flex items-center gap-1 text-[10.5px] text-fg-tertiary mt-1">
                         <Signature size={10} /> Signature included in preview
                       </div>
                     )}
@@ -1662,7 +1662,7 @@ function ReviewAndSendView({
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 pt-2 border-t border-line">
+                  <div className="flex items-center gap-2 pt-2 border-t border-line-default">
                     {isTemplate ? (
                       current.email_status === "approved" ? (
                         <>
@@ -1677,7 +1677,7 @@ function ReviewAndSendView({
                       )
                     ) : (
                       !current.personalized ? (
-                        <span className="text-tiny text-ink-muted">Write an opener above (or generate with AI) to enable approval.</span>
+                        <span className="text-tiny text-fg-tertiary">Write an opener above (or generate with AI) to enable approval.</span>
                       ) : current.email_status === "approved" ? (
                         <>
                           <span className="flex items-center gap-1 text-tiny text-success font-medium"><Check size={11} /> Approved</span>
@@ -1691,7 +1691,7 @@ function ReviewAndSendView({
                       )
                     )}
                     {current.personalized && (
-                      <button onClick={() => deleteLeadEmail(current.id)} className="btn-ghost text-tiny text-ink-muted hover:text-danger ml-auto flex items-center gap-1"><Trash2 size={11} /> Remove</button>
+                      <button onClick={() => deleteLeadEmail(current.id)} className="btn-ghost text-tiny text-fg-tertiary hover:text-danger ml-auto flex items-center gap-1"><Trash2 size={11} /> Remove</button>
                     )}
                   </div>
               </div>
