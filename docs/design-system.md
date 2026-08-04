@@ -522,7 +522,7 @@ Keep this table authoritative; do not pick synonyms per screen.
 `search` Search · `filter` Filters · `arrow-up-down` Sort · `calendar` Date range · `sliders-horizontal` Advanced/Columns · `layout-grid` Grid view · `list` List view
 
 **Communication**
-`mail` Email · `phone` Call · `message-square` Message/Notes · `calendar-clock` Schedule · `send` Send · `file-text` Document/Proposal · `sticky-note` Note · `paperclip` Attachment
+`mail` Email · `phone` Call · `phone-call` Active/answered call · `phone-outgoing` Outbound call placed · `message-square` Message/Notes · `calendar-clock` Schedule · `send` Send · `file-text` Document/Proposal · `sticky-note` Note · `paperclip` Attachment
 
 **Records & entities**
 `building-2` Company · `user` Person · `map-pin` Location · `globe` Website · `link` URL · `tag` Segment · `id-card` Profile · `briefcase` Deal · `linkedin` LinkedIn profile/company link
@@ -531,7 +531,7 @@ Keep this table authoritative; do not pick synonyms per screen.
 `dollar-sign` Value/Revenue · `percent` Rate · `target` Goal/Quota · `trending-up` Positive trend · `trending-down` Negative trend · `activity` Activity volume · `pie-chart` Distribution · `gauge` Health/Score · `line-chart` Trend
 
 **Intelligence**
-`sparkles` Assisted default · `brain` Insight/model · `wand-2` Generate · `lightbulb` Recommendation · `crosshair` Scoring · `zap` Automation
+`sparkles` Assisted default · `brain` Insight/model · `wand-2` Generate · `lightbulb` Recommendation · `crosshair` Scoring · `zap` Automation · `bot` AI agent/persona entity (the calling agent itself, distinct from `sparkles`' generic "AI touched this" marker)
 
 **Status & feedback**
 `check-circle-2` Success · `alert-triangle` Warning · `alert-circle` Error · `info` Info · `circle-dashed` Pending · `loader-2` Loading (spin) · `shield-check` Secure · `lock` Auth · `eye` / `eye-off` Visibility

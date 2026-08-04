@@ -70,6 +70,8 @@ export {
   // ---- Communication ----
   Mail,
   Phone,
+  PhoneCall,         // Active / answered call
+  PhoneOutgoing,     // Outbound call placed
   MessageSquare,     // Message / notes
   CalendarClock,     // Schedule
   Send,
@@ -106,6 +108,7 @@ export {
   Lightbulb,         // Recommendation
   Crosshair,         // Scoring
   Zap,               // Automation
+  Bot,               // AI agent / persona entity
 
   // ---- Status & feedback ----
   CheckCircle2,      // Success

@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
-import { Bot, PhoneCall, PhoneOutgoing, Clock } from "lucide-react";
+import { Bot, PhoneCall, PhoneOutgoing, Clock } from "../icons";
+import MetricCard from "../components/composites/MetricCard";
+import Card from "../components/composites/Card";
+import { EmptyState } from "../components/composites/EmptyState";
+import StatusPill from "../components/primitives/StatusPill";
+import Button from "../components/primitives/Button";
 
 export default function VoiceEQOverview() {
+  const nav = useNavigate();
   const [agents, setAgents] = useState([]);
   const [calls, setCalls] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,54 +32,38 @@ export default function VoiceEQOverview() {
         title="Voice EQ"
         subtitle="AI calling agent — reads leads from the CRM, places calls, qualifies, and updates the pipeline."
       />
-      <div className="animate-fade-in px-6 sm:px-8 space-y-6">
+      <div className="animate-fade-in px-6 sm:px-8 py-6 space-y-6">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatCard icon={Bot} label="Voice agents" value={loading ? "—" : agents.length} />
-          <StatCard icon={PhoneOutgoing} label="Calls today" value={loading ? "—" : callsToday.length} />
-          <StatCard icon={PhoneCall} label="Connect rate" value={loading ? "—" : `${connectRate}%`} />
-          <StatCard icon={Clock} label="Minutes used" value={loading ? "—" : totalMinutes} />
+          <MetricCard label="Voice agents" value={loading ? "—" : agents.length} icon={Bot} tone="primary" />
+          <MetricCard label="Calls today" value={loading ? "—" : callsToday.length} icon={PhoneOutgoing} tone="primary" />
+          <MetricCard label="Connect rate" value={loading ? "—" : `${connectRate}%`} icon={PhoneCall} tone="success" />
+          <MetricCard label="Minutes used" value={loading ? "—" : totalMinutes} icon={Clock} tone="warning" />
         </div>
 
         {!loading && agents.length === 0 && (
-          <div className="shadow-card rounded-2xl p-10 text-center">
-            <div className="text-section font-display font-semibold">Set up your first calling agent</div>
-            <p className="text-body text-ink-muted mt-2">Define a persona, pick a voice, and start calling leads from your CRM.</p>
-            <Link to="/app/voice-eq/agents/new" className="btn-primary mt-6 inline-flex">Create voice agent</Link>
-          </div>
+          <EmptyState
+            icon={Bot}
+            title="Set up your first calling agent"
+            description="Define a persona, pick a voice, and start calling leads from your CRM."
+            actionLabel="Create voice agent"
+            onAction={() => nav("/app/voice-eq/agents/new")}
+          />
         )}
 
         {!loading && calls.length > 0 && (
-          <div className="shadow-card rounded-2xl border border-line bg-white">
-            <div className="p-4 border-b border-line text-card-title font-display font-semibold">Recent calls</div>
-            <div className="overflow-x-auto">
-            <table className="w-full text-table">
-              <tbody>
-                {calls.slice(0, 8).map((c) => (
-                  <tr key={c.id} className="border-b border-line last:border-0">
-                    <td className="p-3">{c.lead ? `${c.lead.first_name} ${c.lead.last_name || ""}` : c.to_number}</td>
-                    <td className="p-3 font-mono text-tiny text-ink-muted">{c.to_number}</td>
-                    <td className="p-3 text-ink-tertiary">{c.status}</td>
-                    <td className="p-3 text-right text-tiny text-ink-muted">{(c.created_at || "").slice(0, 16).replace("T", " ")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+          <Card title="Recent calls" padding="compact" bodyClassName="-mx-5 -mb-5">
+            {calls.slice(0, 8).map((c, i) => (
+              <div key={c.id} className="flex items-center justify-between"
+                style={{ padding: "10px 20px", borderTop: i > 0 ? "1px solid var(--border-subtle)" : "none", fontSize: 13 }}>
+                <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{c.lead ? `${c.lead.first_name} ${c.lead.last_name || ""}` : c.to_number}</span>
+                <span className="tnum" style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--text-tertiary)" }}>{c.to_number}</span>
+                <StatusPill status={c.status} />
+                <span className="tnum" style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{(c.created_at || "").slice(0, 16).replace("T", " ")}</span>
+              </div>
+            ))}
+          </Card>
         )}
       </div>
-    </div>
-  );
-}
-
-function StatCard({ icon: Icon, label, value }) {
-  return (
-    <div className="shadow-card rounded-2xl p-4">
-      <div className="flex items-center gap-2 text-ink-muted">
-        <Icon size={14} />
-        <span className="ui-label">{label}</span>
-      </div>
-      <div className="text-page-title font-display font-semibold mt-1">{value}</div>
     </div>
   );
 }
