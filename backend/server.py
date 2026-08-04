@@ -3244,9 +3244,57 @@ async def delete_queue_items(body: Dict[str, Any], user=Depends(current_user)):
     result = await db.send_queue.delete_many({"id": {"$in": ids}, "workspace_id": user["workspace_id"]})
     return {"deleted": result.deleted_count}
 
+def _pct_change(current: float, previous: float) -> Optional[float]:
+    """Percent change, or None when it cannot honestly be expressed.
+
+    A change from zero has no percentage (it is an infinite increase), and the
+    design system forbids inventing a number to fill the slot — see §24.16 and
+    §4.2 in docs/design-system.md. Returning None makes the UI omit the delta
+    row rather than print a fabricated one.
+    """
+    if not previous:
+        return None
+    return round((current - previous) / previous * 100, 1)
+
+
+def _pp_change(current: float, previous: float) -> Optional[float]:
+    """Percentage-POINT change, for metrics that are themselves percentages.
+
+    An open rate moving 20% -> 25% is +5.0 points, not +25%. Reporting the
+    percent change of a percentage is a classic dashboard lie, so rates get
+    this and counts get _pct_change.
+    """
+    if previous is None or current is None:
+        return None
+    return round(current - previous, 1)
+
+
 @api.get("/dashboard")
-async def dashboard(user=Depends(current_user)):
+async def dashboard(days: int = 30, user=Depends(current_user)):
+    """Workspace KPIs for a rolling window, with the previous equal-length
+    window alongside so every metric can carry the comparison §4.2 requires.
+
+    `days` bounds the headline figures. `kpis_all_time` keeps the lifetime
+    totals this endpoint used to return on its own, so nothing that depended on
+    them loses data — but the headline numbers are now windowed, because a
+    lifetime total with a "vs last month" delta beside it describes nothing.
+    """
     wid = user["workspace_id"]
+    days = max(1, min(int(days or 30), 365))
+    now = datetime.now(timezone.utc)
+    cur_start = (now - timedelta(days=days)).isoformat()
+    prev_start = (now - timedelta(days=days * 2)).isoformat()
+
+    # `at` is an ISO-8601 UTC string, so lexicographic >= is chronological.
+    # Querying from prev_start rather than loading the whole collection keeps
+    # this bounded as a workspace ages — the old code capped at 20k events and
+    # silently truncated beyond that.
+    windowed = await db.events.find(
+        {"workspace_id": wid, "at": {"$gte": prev_start}}, {"_id": 0}
+    ).to_list(50000)
+    cur_events = [e for e in windowed if e.get("at", "") >= cur_start]
+    prev_events = [e for e in windowed if e.get("at", "") < cur_start]
+
     events = await db.events.find({"workspace_id": wid}, {"_id": 0}).to_list(20000)
     campaigns_count = await db.campaigns.count_documents({"workspace_id": wid})
     leads_count = await db.leads.count_documents({"workspace_id": wid})
@@ -3267,8 +3315,37 @@ async def dashboard(user=Depends(current_user)):
             days[d][e["type"]] += 1
     trend = [{"date": k, **v} for k, v in sorted(days.items())][-7:]
 
+    def _kpis(evs):
+        n = lambda t: sum(1 for e in evs if e["type"] == t)
+        s, o, cl, r, m = n("sent"), n("opened"), n("clicked"), n("replied"), n("meeting_booked")
+        return {
+            "sent": s, "opened": o, "clicked": cl, "replied": r, "meetings": m,
+            "open_rate": round((o / s * 100) if s else 0, 1),
+            "reply_rate": round((r / s * 100) if s else 0, 1),
+            "meeting_rate": round((m / s * 100) if s else 0, 1),
+        }
+
+    cur, prev = _kpis(cur_events), _kpis(prev_events)
+    # Counts compare as percent change; rates compare as percentage POINTS.
+    deltas = {
+        **{k: _pct_change(cur[k], prev[k]) for k in ("sent", "opened", "clicked", "replied", "meetings")},
+        **{k: _pp_change(cur[k], prev[k]) for k in ("open_rate", "reply_rate", "meeting_rate")},
+    }
+
     return {
-        "kpis": {
+        "kpis": cur,
+        "kpis_previous": prev,
+        "deltas": deltas,
+        # The unit tells the UI which suffix to render, so a percentage-point
+        # move is never mislabelled as a percentage.
+        "delta_units": {
+            "sent": "%", "opened": "%", "clicked": "%", "replied": "%", "meetings": "%",
+            "open_rate": "pp", "reply_rate": "pp", "meeting_rate": "pp",
+        },
+        "period": {"days": days, "label": f"vs previous {days} days"},
+        # Lifetime totals, preserved so nothing that relied on the old
+        # all-time behaviour silently loses its numbers.
+        "kpis_all_time": {
             "sent": sent, "opened": opened, "clicked": clicked, "replied": replied,
             "meetings": mtg,
             "open_rate": round((opened / sent * 100) if sent else 0, 1),

@@ -23,13 +23,18 @@ export default function Dashboard() {
       </div>
     );
   }
-  const { kpis, counts, trend } = data;
+  const { kpis, counts, trend, deltas, delta_units: units = {}, period } = data;
+  // §4.2: a delta is meaningless without the window it is measured against,
+  // and the headline figures are now that window rather than all-time — so the
+  // page has to say so out loud.
+  const window_ = period?.label || "vs previous period";
+  const periodDays = period?.days || 30;
 
   return (
     <div className="animate-fade-in">
       <PageHeader
         title="Overview"
-        subtitle="Your outbound engine at a glance."
+        subtitle={`Your outbound engine over the last ${periodDays} days.`}
         right={
           <Link to="/app/campaigns/new" data-testid="new-campaign-cta" className="btn-primary">
             New campaign <ArrowRight size={14} />
@@ -51,22 +56,27 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
           <MetricCard
             label="Sent" value={kpis.sent} icon={Send} tone="primary"
+            delta={deltas?.sent} deltaSuffix={units.sent} comparison={window_}
             basis={`across ${counts?.campaigns ?? 0} campaigns`}
           />
           <MetricCard
             label="Open rate" value={`${kpis.open_rate}%`} icon={Eye} tone="success"
+            delta={deltas?.open_rate} deltaSuffix={units.open_rate} comparison={window_}
             basis={`${kpis.opened} opens`}
           />
           <MetricCard
             label="Reply rate" value={`${kpis.reply_rate}%`} icon={MessageSquare} tone="success"
+            delta={deltas?.reply_rate} deltaSuffix={units.reply_rate} comparison={window_}
             basis={`${kpis.replied} replies`}
           />
           <MetricCard
             label="Meetings" value={kpis.meetings} icon={CalendarClock} tone="warning"
+            delta={deltas?.meetings} deltaSuffix={units.meetings} comparison={window_}
             basis={`${kpis.meeting_rate}% booked`}
           />
           <MetricCard
             label="Clicks" value={kpis.clicked} icon={Activity} tone="primary"
+            delta={deltas?.clicked} deltaSuffix={units.clicked} comparison={window_}
             basis={`${kpis.sent ? Math.round((kpis.clicked / kpis.sent) * 100) : 0}% of sent`}
           />
         </div>
