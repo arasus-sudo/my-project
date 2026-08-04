@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { SkeletonKpiGrid, SkeletonCards } from "../components/ui/loading-states";
-import { Send, Eye, MessageSquare, CalendarClock, AlertTriangle, Layers } from "../icons";
+import { Send, Eye, MessageSquare, CalendarClock, AlertTriangle, Table as TableIcon } from "../icons";
 import MetricCard from "../components/composites/MetricCard";
 import Card from "../components/composites/Card";
 import StatusPill from "../components/primitives/StatusPill";
@@ -43,7 +43,7 @@ export default function Analytics() {
           <MetricCard label="Meetings" value={t.total_meetings || 0} icon={CalendarClock} tone="warning" />
           <MetricCard label="Bounced" value={t.total_bounced || 0} icon={AlertTriangle} tone="risk"
             basis={t.total_sent ? `${Math.round(t.total_bounced / t.total_sent * 100)}% of sent` : undefined} />
-          <MetricCard label="Campaigns" value={t.campaign_count || 0} icon={Layers} tone="primary" />
+          <MetricCard label="Campaigns" value={t.campaign_count || 0} icon={TableIcon} tone="primary" />
         </div>
 
         <div>

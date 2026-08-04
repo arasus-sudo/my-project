@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import {
-  CheckCircle2, XCircle, Plus, RefreshCw, Link2, Trash2, AlertTriangle, Mail,
+  CheckCircle2, AlertCircle, Plus, RefreshCw, Link, Trash2, AlertTriangle, Mail,
 } from "../icons";
 import Card from "../components/composites/Card";
 import { EmptyState } from "../components/composites/EmptyState";
@@ -137,7 +137,7 @@ export default function Mailboxes() {
               </div>
 
               {!connected && (
-                <Button variant="primary" size="md" icon={Link2} onClick={() => connect(m.id)} data-testid={`connect-${m.id}`} className="w-full justify-center mt-4">
+                <Button variant="primary" size="md" icon={Link} onClick={() => connect(m.id)} data-testid={`connect-${m.id}`} className="w-full justify-center mt-4">
                   Authorise sending
                 </Button>
               )}
@@ -167,7 +167,7 @@ export default function Mailboxes() {
                           borderRadius: "var(--radius-lg)", padding: 10,
                         }}>
                         <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", textTransform: "uppercase" }}>{k}</div>
-                        {ok ? <CheckCircle2 size={16} strokeWidth={1.5} aria-hidden="true" className="inline mt-1" /> : <XCircle size={16} strokeWidth={1.5} aria-hidden="true" className="inline mt-1" />}
+                        {ok ? <CheckCircle2 size={16} strokeWidth={1.5} aria-hidden="true" className="inline mt-1" /> : <AlertCircle size={16} strokeWidth={1.5} aria-hidden="true" className="inline mt-1" />}
                       </div>
                     );
                   })}
