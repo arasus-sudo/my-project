@@ -525,7 +525,7 @@ Keep this table authoritative; do not pick synonyms per screen.
 `mail` Email · `phone` Call · `message-square` Message/Notes · `calendar-clock` Schedule · `send` Send · `file-text` Document/Proposal · `sticky-note` Note · `paperclip` Attachment
 
 **Records & entities**
-`building-2` Company · `user` Person · `map-pin` Location · `globe` Website · `link` URL · `tag` Segment · `id-card` Profile · `briefcase` Deal
+`building-2` Company · `user` Person · `map-pin` Location · `globe` Website · `link` URL · `tag` Segment · `id-card` Profile · `briefcase` Deal · `linkedin` LinkedIn profile/company link
 
 **Metrics & analytics**
 `dollar-sign` Value/Revenue · `percent` Rate · `target` Goal/Quota · `trending-up` Positive trend · `trending-down` Negative trend · `activity` Activity volume · `pie-chart` Distribution · `gauge` Health/Score · `line-chart` Trend

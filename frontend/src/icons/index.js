@@ -83,6 +83,7 @@ export {
   MapPin,            // Location
   Globe,             // Website
   Link,              // URL
+  Linkedin,          // LinkedIn profile/company link
   Tag,               // Segment
   IdCard,            // Profile
   Briefcase,         // Deal
