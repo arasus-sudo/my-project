@@ -53,6 +53,7 @@ export {
   ChevronRight,      // Drill-in
   ChevronDown,       // Disclosure (§7.3 select trigger)
   ArrowRight,        // Forward / link-out in copy
+  ArrowLeft,         // Back navigation
 
   // ---- Filtering & search ----
   Search,

@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Plus, Archive, GripVertical } from "lucide-react";
+import { Plus, Archive, GripVertical } from "../icons";
+import Card from "../components/composites/Card";
+import { EmptyState } from "../components/composites/EmptyState";
+import Button from "../components/primitives/Button";
+import Input from "../components/primitives/Input";
+import Select from "../components/primitives/Select";
 
 const TYPE_LABEL = { text: "Text", number: "Number", date: "Date", select: "Dropdown" };
 
@@ -52,70 +57,64 @@ export default function CustomFieldsSettings() {
       <PageHeader
         title="Custom fields"
         subtitle="Add workspace-specific fields to leads — renewal date, product interest, referral source, whatever your process needs."
-        right={
-          <button onClick={() => setCreating((c) => !c)} className="btn-primary text-caption">
-            <Plus size={14} /> New field
-          </button>
-        }
+        right={<Button variant="primary" icon={Plus} onClick={() => setCreating((c) => !c)}>New field</Button>}
       />
       <div className="px-6 sm:px-8 py-6 space-y-6 max-w-2xl">
         {creating && (
-          <div className="shadow-card p-4 rounded-2xl bg-white space-y-3">
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Field name (e.g. Renewal date)" data-testid="new-field-name"
-              className="w-full border border-line px-3 py-2 rounded-xl text-input" />
-            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}
-              data-testid="new-field-type" className="w-full border border-line px-3 py-2 rounded-xl text-input">
-              {Object.entries(TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
+          <Card className="space-y-3">
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Field name (e.g. Renewal date)" data-testid="new-field-name" />
+            <Select
+              value={form.type} onChange={(v) => setForm({ ...form, type: v })} data-testid="new-field-type"
+              options={Object.entries(TYPE_LABEL).map(([v, l]) => ({ value: v, label: l }))}
+            />
             {form.type === "select" && (
-              <input value={form.options} onChange={(e) => setForm({ ...form, options: e.target.value })}
-                placeholder="Options, comma-separated (e.g. Small, Medium, Large)"
-                className="w-full border border-line px-3 py-2 rounded-xl text-input" />
+              <Input value={form.options} onChange={(e) => setForm({ ...form, options: e.target.value })} placeholder="Options, comma-separated (e.g. Small, Medium, Large)" />
             )}
             <div className="flex gap-2">
-              <button onClick={create} disabled={!form.name.trim()} data-testid="create-field-btn"
-                className="btn-primary text-caption disabled:opacity-50">Create</button>
-              <button onClick={() => setCreating(false)} className="btn-secondary text-caption">Cancel</button>
+              <Button variant="primary" onClick={create} isDisabled={!form.name.trim()} data-testid="create-field-btn">Create</Button>
+              <Button variant="secondary" onClick={() => setCreating(false)}>Cancel</Button>
             </div>
-          </div>
+          </Card>
         )}
 
         {loading ? (
-          <p className="text-caption text-ink-muted">Loading…</p>
+          <p style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Loading…</p>
         ) : active.length === 0 ? (
-          <div className="shadow-card p-6 rounded-2xl bg-white text-center text-caption text-ink-muted">
-            No custom fields yet. Add one to start collecting workspace-specific data on leads.
-          </div>
+          <EmptyState icon={Plus} title="No custom fields yet" description="Add one to start collecting workspace-specific data on leads." actionLabel="New field" onAction={() => setCreating(true)} />
         ) : (
           <div className="space-y-2">
             {active.map((f) => (
-              <div key={f.id} data-testid={`field-${f.key}`}
-                className="shadow-card p-3 rounded-xl flex items-center justify-between gap-3 bg-white">
-                <div className="flex items-center gap-2 min-w-0">
-                  <GripVertical size={14} className="text-ink-disabled shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-body font-medium truncate">{f.name}</div>
-                    <div className="text-caption text-ink-muted">
-                      {TYPE_LABEL[f.type] || f.type}
-                      {f.type === "select" && f.options?.length > 0 && ` · ${f.options.join(", ")}`}
+              <Card key={f.id} data-testid={`field-${f.key}`} padding="compact">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <GripVertical size={14} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--text-tertiary)", flexShrink: 0 }} />
+                    <div className="min-w-0">
+                      <div className="truncate" style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text-primary)" }}>{f.name}</div>
+                      <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                        {TYPE_LABEL[f.type] || f.type}
+                        {f.type === "select" && f.options?.length > 0 && ` · ${f.options.join(", ")}`}
+                      </div>
                     </div>
                   </div>
+                  <button onClick={() => archive(f.id)} className="inline-flex items-center gap-1 shrink-0 transition-colors"
+                    style={{ fontSize: 12, color: "var(--text-tertiary)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-danger)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-tertiary)")}
+                  >
+                    <Archive size={12} strokeWidth={1.5} aria-hidden="true" /> Archive
+                  </button>
                 </div>
-                <button onClick={() => archive(f.id)} className="text-caption text-ink-muted hover:text-danger shrink-0">
-                  <Archive size={12} className="inline mr-1" /> Archive
-                </button>
-              </div>
+              </Card>
             ))}
           </div>
         )}
 
         {archived.length > 0 && (
           <div>
-            <div className="ui-label mb-2">Archived</div>
+            <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>Archived</div>
             <div className="space-y-1">
               {archived.map((f) => (
-                <div key={f.id} className="text-caption text-ink-muted px-3 py-2">
+                <div key={f.id} style={{ fontSize: 12.5, color: "var(--text-tertiary)", padding: "8px 12px" }}>
                   {f.name} — {TYPE_LABEL[f.type] || f.type}
                 </div>
               ))}
