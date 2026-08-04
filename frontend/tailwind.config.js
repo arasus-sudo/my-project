@@ -161,7 +161,19 @@ module.exports = {
         ring: "rgb(var(--color-ink) / <alpha-value>)",
         background: "rgb(var(--color-bone) / <alpha-value>)",
         foreground: "rgb(var(--color-ink) / <alpha-value>)",
-        primary: { DEFAULT: "rgb(var(--color-ink) / <alpha-value>)", foreground: "rgb(var(--color-bone) / <alpha-value>)" },
+        // Renamed from "primary": that key collided with the design-system
+        // "primary" token above (line ~82, var(--color-primary), the blue
+        // accent) — same class of bug as the success/warning/danger
+        // collision fixed earlier. This one is worse: it silently shadowed
+        // the blue accent EVERYWHERE bg-primary/text-primary is used in
+        // real pages (CampaignBuilder, CRM, LeadDetail, LeadLists,
+        // Campaigns), rendering selected states, links and progress fills
+        // as this ink-black instead of blue — the "old theme" the user
+        // reported in the campaign editor. Only components/ui/* (the
+        // unused shadcn scaffold — confirmed zero imports from any actual
+        // page) relied on the old meaning, so those were repointed here
+        // instead of the widely-used real one.
+        "shadcn-primary": { DEFAULT: "rgb(var(--color-ink) / <alpha-value>)", foreground: "rgb(var(--color-bone) / <alpha-value>)" },
         secondary: { DEFAULT: "rgb(var(--color-ash) / <alpha-value>)", foreground: "rgb(var(--color-ink) / <alpha-value>)" },
         muted: { DEFAULT: "rgb(var(--color-surface) / <alpha-value>)", foreground: "rgb(var(--color-ink-muted) / <alpha-value>)" },
         popover: { DEFAULT: "rgb(var(--color-surface) / <alpha-value>)", foreground: "rgb(var(--color-ink) / <alpha-value>)" },

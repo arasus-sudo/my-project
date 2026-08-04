@@ -29,8 +29,12 @@ const Toaster = ({
         classNames: {
           title: "font-medium",
           description: "text-caption",
+          // bg-primary/text-primary-foreground used to resolve through the
+          // (now-fixed) colliding legacy "primary" key. That key is gone,
+          // so this uses the CSS var directly rather than reintroducing a
+          // Tailwind color alias just for one button.
           actionButton:
-            "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
+            "group-[.toast]:bg-[var(--color-primary)] group-[.toast]:text-white",
           cancelButton:
             "group-[.toast]:bg-muted group-[.toast]:text-ink-muted",
         },
