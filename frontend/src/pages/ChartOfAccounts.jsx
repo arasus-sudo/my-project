@@ -87,7 +87,7 @@ export default function ChartOfAccounts() {
               <Input required label="Account name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
             <Select label="Type" value={form.account_type} onChange={(v) => setForm({ ...form, account_type: v })} options={TYPE_OPTIONS} />
-            <Input label="Category" hint="e.g. cash_and_bank, accounts_receivable" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+            <Input label="Category" help="e.g. cash_and_bank, accounts_receivable" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
             <Input as="textarea" rows={3} label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </form>
         </ModalContent>

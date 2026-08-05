@@ -74,9 +74,9 @@ export default function WhatsAppContacts() {
           }
         >
           <form id="whatsapp-contact-form" onSubmit={save} className="space-y-3">
-            <Input label="Name" hint="Optional" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Input label="Name" help="Optional" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <Input required label="Phone number" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            <Input label="Tags" hint="Comma-separated" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
+            <Input label="Tags" help="Comma-separated" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
           </form>
         </ModalContent>
       </Modal>

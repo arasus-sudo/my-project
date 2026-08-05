@@ -160,10 +160,10 @@ export default function SocialSetup() {
               </div>
             </div>
             <div style={{ marginTop: 24 }}>
-              <Input label="Website or profile URL" hint="Optional" value={url} onChange={(e) => setUrl(e.target.value)} data-testid="social-setup-url" placeholder="https://yoursite.com" />
+              <Input label="Website or profile URL" help="Optional" value={url} onChange={(e) => setUrl(e.target.value)} data-testid="social-setup-url" placeholder="https://yoursite.com" />
             </div>
             <div style={{ marginTop: 24 }}>
-              <Input as="textarea" rows={3} label="Or describe what you do" hint="If no URL" value={inputText} onChange={(e) => setInputText(e.target.value)}
+              <Input as="textarea" rows={3} label="Or describe what you do" help="If no URL" value={inputText} onChange={(e) => setInputText(e.target.value)}
                 data-testid="social-setup-text" placeholder="e.g. I'm a fitness coach helping busy professionals build sustainable habits." />
             </div>
             <Button variant="primary" trailingIcon={ArrowRight} onClick={analyze} isLoading={busy}

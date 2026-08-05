@@ -110,7 +110,7 @@ export default function PostComposer() {
             <Input as="textarea" rows={3} label="Topic" value={topic} onChange={(e) => setTopic(e.target.value)}
               placeholder="e.g. Announcing our new AI calling agent, Voice EQ" data-testid="post-topic" />
             <Input label="Tone" value={tone} onChange={(e) => setTone(e.target.value)} data-testid="post-tone" />
-            <Input label="First comment" hint="Optional" value={firstComment} onChange={(e) => setFirstComment(e.target.value)}
+            <Input label="First comment" help="Optional" value={firstComment} onChange={(e) => setFirstComment(e.target.value)}
               placeholder="Posted automatically right after this goes live — e.g. extra hashtags or a link" data-testid="post-first-comment" />
             <Button variant="primary" icon={PenSquare} onClick={generate} isLoading={busy} data-testid="generate-post-btn" className="w-full justify-center">
               {busy ? "Drafting…" : "Generate draft"}

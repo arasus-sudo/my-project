@@ -82,7 +82,7 @@ export default function WhatsAppBroadcasts() {
             <Input required label="Broadcast name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <Select required label="Template" value={form.template_id} onChange={(v) => setForm({ ...form, template_id: v })}
               options={[{ value: "", label: "Select approved template" }, ...templates.map((t) => ({ value: t.id, label: t.name }))]} />
-            <Input label="Contact IDs" hint="Comma-separated" value={form.contact_ids} onChange={(e) => setForm({ ...form, contact_ids: e.target.value })} />
+            <Input label="Contact IDs" help="Comma-separated" value={form.contact_ids} onChange={(e) => setForm({ ...form, contact_ids: e.target.value })} />
             <Input type="datetime-local" label="Scheduled for" value={form.scheduled_at} onChange={(e) => setForm({ ...form, scheduled_at: e.target.value })} />
           </form>
         </ModalContent>

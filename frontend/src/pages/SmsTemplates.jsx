@@ -66,8 +66,8 @@ export default function SmsTemplates() {
         >
           <form id="sms-template-form" onSubmit={save} className="space-y-3">
             <Input required label="Template name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            <Input as="textarea" rows={4} required label="Message body" hint="Supports {{var}} placeholders" value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} />
-            <Input label="Tags" hint="Comma-separated" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
+            <Input as="textarea" rows={4} required label="Message body" help="Supports {{var}} placeholders" value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} />
+            <Input label="Tags" help="Comma-separated" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
           </form>
         </ModalContent>
       </Modal>

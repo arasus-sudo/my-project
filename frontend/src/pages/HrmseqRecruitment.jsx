@@ -136,7 +136,7 @@ export default function HrmseqRecruitment() {
             </div>
             <Input required type="email" label="Email" value={candForm.email} onChange={(e) => setCandForm({ ...candForm, email: e.target.value })} />
             <Input label="Phone" value={candForm.phone} onChange={(e) => setCandForm({ ...candForm, phone: e.target.value })} />
-            <Input as="textarea" rows={4} label="Resume text" hint="For AI scoring" value={candForm.resume_text} onChange={(e) => setCandForm({ ...candForm, resume_text: e.target.value })} />
+            <Input as="textarea" rows={4} label="Resume text" help="For AI scoring" value={candForm.resume_text} onChange={(e) => setCandForm({ ...candForm, resume_text: e.target.value })} />
           </form>
         </ModalContent>
       </Modal>
