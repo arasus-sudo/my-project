@@ -86,7 +86,11 @@ Return STRICT JSON ONLY with this exact schema:
   "use_cases": ["Use case 1", "Use case 2", "..."],
   "case_studies": ["Hypothetical case study scenario 1", "Scenario 2"],
   "attachments": []
-}"""
+}
+
+Every string value must be plain text: no markdown (no **bold**, no _italic_, no bullet
+markers, no headings), and no citation or footnote markers like [1] or [12] — this text
+is rendered directly in a UI, not a research report."""
 
 SERVICE_IMPROVE_SYSTEM = """You are a Senior Competitive Intelligence Analyst.
 
@@ -118,7 +122,11 @@ Return STRICT JSON ONLY with this exact schema:
   "keywords": ["additional keywords"],
   "competitors": ["expanded competitor list"],
   "improvements": ["Summary of key improvements made"]
-}"""
+}
+
+Every string value must be plain text: no markdown (no **bold**, no _italic_, no bullet
+markers, no headings), and no citation or footnote markers like [1] or [12] — this text
+is rendered directly in a UI, not a research report."""
 
 
 async def _ai_generate_service(input_text: str, industry: Optional[str] = None) -> Dict[str, Any]:
@@ -129,7 +137,7 @@ async def _ai_generate_service(input_text: str, industry: Optional[str] = None) 
     parsed = _extract_json(raw)
     if not parsed:
         raise RuntimeError("AI returned invalid JSON for service generation")
-    return parsed
+    return _strip_markdown_and_citations(parsed)
 
 
 async def _ai_improve_service(service: Dict[str, Any], competitors_info: str = "") -> Dict[str, Any]:
@@ -140,7 +148,26 @@ async def _ai_improve_service(service: Dict[str, Any], competitors_info: str = "
     parsed = _extract_json(raw)
     if not parsed:
         raise RuntimeError("AI returned invalid JSON for service improvement")
-    return parsed
+    return _strip_markdown_and_citations(parsed)
+
+
+_CITATION_RE = re.compile(r"\[\d{1,3}\]")
+_MD_BOLD_ITALIC_RE = re.compile(r"(\*\*\*|\*\*|\*|___|__|_)")
+
+
+def _strip_markdown_and_citations(value: Any) -> Any:
+    """AI-generated copy is rendered as plain text in the UI, not through a
+    markdown parser — strip markdown emphasis markers and research-style
+    citation brackets ("[7]") so they don't show up literally on screen."""
+    if isinstance(value, str):
+        cleaned = _CITATION_RE.sub("", value)
+        cleaned = _MD_BOLD_ITALIC_RE.sub("", cleaned)
+        return re.sub(r" {2,}", " ", cleaned).strip()
+    if isinstance(value, list):
+        return [_strip_markdown_and_citations(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _strip_markdown_and_citations(v) for k, v in value.items()}
+    return value
 
 
 async def _fetch_competitor_info(urls: List[str]) -> str:
