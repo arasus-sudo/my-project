@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Plus, Upload } from "lucide-react";
+import { Plus } from "../icons";
+import Card from "../components/composites/Card";
+import { EmptyState } from "../components/composites/EmptyState";
+import { Modal, ModalContent } from "../components/composites/Modal";
+import Chip from "../components/primitives/Chip";
+import Input from "../components/primitives/Input";
+import Button from "../components/primitives/Button";
 
 export default function SmsContacts() {
   const [items, setItems] = useState([]);
@@ -33,42 +39,47 @@ export default function SmsContacts() {
   return (
     <div>
       <PageHeader title="SMS Contacts" subtitle="Manage your SMS contact list."
-        right={<button onClick={() => setModal(true)} className="btn-primary"><Plus size={14} /> Add contact</button>}
+        right={<Button variant="primary" icon={Plus} onClick={() => setModal(true)}>Add contact</Button>}
       />
-      <div className="animate-fade-in px-6 sm:px-8">
-        {items.length === 0 && <div className="text-body text-ink-muted">No contacts yet.</div>}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.map((c) => (
-            <div key={c.id} className="bg-white border border-line rounded-2xl p-5">
-              <div className="text-card-title font-display font-semibold">{c.name || c.phone}</div>
-              <div className="text-caption text-ink-muted mt-1">{c.phone}</div>
-              {c.opted_out && <span className="text-tiny text-danger">Opted out</span>}
-              {c.tags?.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">{c.tags.map((tg) => <span key={tg} className="pill">{tg}</span>)}</div>
-              )}
-              <button onClick={() => toggleOptOut(c.id, c.opted_out)} className="mt-3 text-caption text-accent hover:underline">
-                {c.opted_out ? "Re-subscribe" : "Opt out"}
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-      {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="text-card-title font-display font-semibold mb-4">Add Contact</div>
-            <form onSubmit={save} className="space-y-4">
-              <input className="inp w-full" placeholder="Name (optional)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <input className="inp w-full" placeholder="Phone number" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
-              <input className="inp w-full" placeholder="Tags (comma-separated)" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary">Save</button>
-              </div>
-            </form>
+      <div className="animate-fade-in px-6 sm:px-8 py-6">
+        {items.length === 0 ? (
+          <EmptyState title="No contacts yet" description="Add contacts to start sending SMS broadcasts."
+            actionLabel="Add contact" onAction={() => setModal(true)} />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {items.map((c) => (
+              <Card key={c.id}>
+                <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>{c.name || c.phone}</div>
+                <div className="tnum" style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 4 }}>{c.phone}</div>
+                {c.opted_out && <div style={{ fontSize: 11, color: "var(--color-danger)", marginTop: 6 }}>Opted out</div>}
+                {c.tags?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5" style={{ marginTop: 10 }}>{c.tags.map((tg) => <Chip key={tg} label={tg} />)}</div>
+                )}
+                <button onClick={() => toggleOptOut(c.id, c.opted_out)} style={{ marginTop: 12, fontSize: 12, color: "var(--text-link)" }}>
+                  {c.opted_out ? "Re-subscribe" : "Opt out"}
+                </button>
+              </Card>
+            ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      <Modal open={modal} onOpenChange={setModal}>
+        <ModalContent size="sm" title="Add Contact"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setModal(false)}>Cancel</Button>
+              <Button variant="primary" type="submit" form="sms-contact-form">Save</Button>
+            </>
+          }
+        >
+          <form id="sms-contact-form" onSubmit={save} className="space-y-3">
+            <Input label="Name" hint="Optional" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Input required label="Phone number" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <Input label="Tags" hint="Comma-separated" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
+          </form>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

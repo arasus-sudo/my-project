@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "../icons";
+import Card from "../components/composites/Card";
+import { EmptyState } from "../components/composites/EmptyState";
+import { Modal, ModalContent } from "../components/composites/Modal";
+import Chip from "../components/primitives/Chip";
+import Input from "../components/primitives/Input";
+import Button from "../components/primitives/Button";
 
 export default function SmsTemplates() {
   const [items, setItems] = useState([]);
@@ -26,37 +32,45 @@ export default function SmsTemplates() {
   return (
     <div>
       <PageHeader title="SMS Templates" subtitle="Reusable message templates for broadcasts."
-        right={<button onClick={() => setModal(true)} className="btn-primary"><Plus size={14} /> New template</button>}
+        right={<Button variant="primary" icon={Plus} onClick={() => setModal(true)}>New template</Button>}
       />
-      <div className="animate-fade-in px-6 sm:px-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {items.length === 0 && <div className="col-span-full text-body text-ink-muted">No templates yet.</div>}
-        {items.map((t) => (
-          <div key={t.id} className="bg-white border border-line rounded-2xl p-5">
-            <div className="text-card-title font-display font-semibold">{t.name}</div>
-            <div className="text-caption text-ink-muted mt-3 line-clamp-4 whitespace-pre-wrap font-mono">{t.body}</div>
-            {t.tags?.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-1">{t.tags.map((tg) => <span key={tg} className="pill">{tg}</span>)}</div>
-            )}
-            <button onClick={() => del(t.id)} className="mt-4 text-caption text-danger hover:underline"><Trash2 size={12} className="inline" /> delete</button>
+      <div className="animate-fade-in px-6 sm:px-8 py-6">
+        {items.length === 0 ? (
+          <EmptyState title="No templates yet" description="Reusable templates you send from later, in a broadcast." />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {items.map((t) => (
+              <Card key={t.id}>
+                <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>{t.name}</div>
+                <div className="line-clamp-4 whitespace-pre-wrap" style={{ fontSize: 12, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)", marginTop: 10 }}>{t.body}</div>
+                {t.tags?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5" style={{ marginTop: 12 }}>{t.tags.map((tg) => <Chip key={tg} label={tg} />)}</div>
+                )}
+                <button onClick={() => del(t.id)} style={{ marginTop: 16, fontSize: 12, color: "var(--color-danger)" }} className="inline-flex items-center gap-1">
+                  <Trash2 size={12} strokeWidth={1.5} aria-hidden="true" /> Delete
+                </button>
+              </Card>
+            ))}
           </div>
-        ))}
+        )}
       </div>
-      {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="text-card-title font-display font-semibold mb-4">New SMS Template</div>
-            <form onSubmit={save} className="space-y-4">
-              <input className="inp w-full" placeholder="Template name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-              <textarea className="inp w-full h-24" placeholder="Message body (supports {{var}} placeholders)" value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} required />
-              <input className="inp w-full" placeholder="Tags (comma-separated)" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary">Save</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+
+      <Modal open={modal} onOpenChange={setModal}>
+        <ModalContent size="sm" title="New SMS Template"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setModal(false)}>Cancel</Button>
+              <Button variant="primary" type="submit" form="sms-template-form">Save</Button>
+            </>
+          }
+        >
+          <form id="sms-template-form" onSubmit={save} className="space-y-3">
+            <Input required label="Template name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Input as="textarea" rows={4} required label="Message body" hint="Supports {{var}} placeholders" value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} />
+            <Input label="Tags" hint="Comma-separated" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
+          </form>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }
