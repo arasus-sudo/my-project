@@ -42,6 +42,7 @@ export {
   Download,          // Export
   Upload,            // Import
   Share2,            // Share
+  LogOut,            // Sign out
   Play,              // Run
   Pause,             // Pause a running campaign/process
   RotateCcw,         // Reset
