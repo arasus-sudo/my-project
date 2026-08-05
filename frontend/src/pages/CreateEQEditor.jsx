@@ -1307,7 +1307,7 @@ export default function CreateEQEditor() {
             {proj.slides[slideIdx].bg_img && <div style={renderBackgroundImageCss(proj.slides[slideIdx])} />}
             <PanoramaLayer panorama={proj.panorama} slideIdx={slideIdx} totalSlides={proj.slides.length} />
             {proj.slides[slideIdx].elements.map((el) => (
-              <ElementRender key={el.id} el={el} palette={palette} onPointerDown={() => {}} />
+              <ElementRender key={el.id} el={el} palette={palette} onPointerDown={() => {}} isExport />
             ))}
             <DeckOverlay proj={proj} slideIdx={slideIdx} palette={palette} />
           </>
