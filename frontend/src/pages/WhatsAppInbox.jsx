@@ -2,12 +2,16 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Bot, UserCheck, AlertTriangle } from "lucide-react";
+import { Bot, User, AlertTriangle } from "../icons";
+import { EmptyState } from "../components/composites/EmptyState";
+import StatusPill from "../components/primitives/StatusPill";
+import Input from "../components/primitives/Input";
+import Button from "../components/primitives/Button";
 
 const STATUS_META = {
-  needs_human: { label: "Needs human", cls: "text-danger bg-danger/10", icon: AlertTriangle },
-  bot_paused: { label: "Human handling", cls: "text-accent bg-accent/10", icon: UserCheck },
-  bot_active: { label: "Bot active", cls: "text-success bg-success/10", icon: Bot },
+  needs_human: { label: "Needs human", tone: "danger", icon: AlertTriangle },
+  bot_paused: { label: "Human handling", tone: "primary", icon: User },
+  bot_active: { label: "Bot active", tone: "success", icon: Bot },
 };
 
 function conversationStatus(c) {
@@ -62,48 +66,58 @@ export default function WhatsAppInbox() {
     <div className="h-screen flex flex-col animate-fade-in">
       <PageHeader title="WhatsApp Inbox" subtitle="24-hour session-based messaging." />
       <div className="flex-1 flex min-h-0">
-        <div className="w-80 border-r border-line bg-white overflow-y-auto">
+        <div className="overflow-y-auto" style={{ width: 320, borderRight: "1px solid var(--border-default)", background: "var(--bg-surface)" }}>
           {conversations.map((c) => {
             const meta = conversationStatus(c);
             const last = (c.messages || [])[c.messages?.length - 1];
+            const isActive = active?.id === c.id;
             return (
-              <div key={c.id} className={`p-4 border-b border-line cursor-pointer hover:bg-ash ${active?.id === c.id ? "bg-ash" : ""}`} onClick={() => setActive(c)}>
-                <div className="text-body font-medium">{c.phone}</div>
-                <div className="text-caption text-ink-muted truncate">{last?.body}</div>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`text-tiny px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${meta.cls}`}>
-                    <meta.icon size={10} /> {meta.label}
-                  </span>
+              <button key={c.id} onClick={() => setActive(c)}
+                className="w-full text-left block transition-colors"
+                style={{
+                  padding: 16, borderBottom: "1px solid var(--border-subtle)",
+                  background: isActive ? "var(--bg-selected)" : "transparent",
+                  borderLeft: isActive ? "2px solid var(--color-primary)" : "2px solid transparent",
+                }}
+                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+              >
+                <div style={{ fontWeight: 500, color: "var(--text-primary)", fontSize: 13.5 }}>{c.phone}</div>
+                <div className="truncate" style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 2 }}>{last?.body}</div>
+                <div style={{ marginTop: 6 }}>
+                  <StatusPill status={meta.label} tone={meta.tone} icon={meta.icon} />
                 </div>
-              </div>
+              </button>
             );
           })}
-          {conversations.length === 0 && <div className="p-4 text-body text-ink-muted">No conversations yet.</div>}
+          {conversations.length === 0 && (
+            <EmptyState icon={Bot} title="No conversations yet" description="WhatsApp sessions will appear here." className="py-10" />
+          )}
         </div>
-        <div className="flex-1 flex flex-col bg-white">
+        <div className="flex-1 flex flex-col" style={{ background: "var(--bg-surface)" }}>
           {active ? (
             <>
-              <div className="border-b border-line px-4 py-2.5 flex items-center justify-between">
-                <div className="text-body font-medium">{active.phone}</div>
+              <div className="flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-default)", padding: "10px 16px" }}>
+                <div style={{ fontWeight: 500, color: "var(--text-primary)", fontSize: 13.5 }}>{active.phone}</div>
                 <div className="flex items-center gap-2">
-                  {(() => { const meta = conversationStatus(active); return (
-                    <span className={`text-tiny px-2 py-1 rounded-full inline-flex items-center gap-1 ${meta.cls}`}>
-                      <meta.icon size={11} /> {meta.label}
-                    </span>
-                  ); })()}
+                  {(() => { const meta = conversationStatus(active); return <StatusPill status={meta.label} tone={meta.tone} icon={meta.icon} />; })()}
                   {active.bot_paused && (
-                    <button onClick={resumeBot} disabled={resuming} data-testid="resume-bot-btn" className="btn-ghost text-caption">
+                    <Button variant="tertiary" size="sm" onClick={resumeBot} isLoading={resuming} data-testid="resume-bot-btn">
                       {resuming ? "Resuming…" : "Resume bot"}
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div className="flex-1 overflow-y-auto space-y-3" style={{ padding: 16 }}>
                 {active.messages?.map((m, i) => (
                   <div key={m.id || i} className={`flex ${m.direction === "agent" ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-lg p-3 rounded-2xl text-body ${m.direction === "agent" ? "bg-accent text-white" : "bg-ash"}`}>
+                    <div className="max-w-lg" style={{
+                      padding: 12, borderRadius: "var(--radius-lg)", fontSize: 13.5,
+                      background: m.direction === "agent" ? "var(--color-primary)" : "var(--bg-surface-sunken)",
+                      color: m.direction === "agent" ? "#fff" : "var(--text-primary)",
+                    }}>
                       {m.body}
-                      <div className="text-tiny mt-1 opacity-70">
+                      <div className="tnum" style={{ fontSize: 11, marginTop: 4, opacity: 0.7 }}>
                         {m.at?.slice(11, 16)}{m.automated ? " · bot" : ""}
                       </div>
                     </div>
@@ -111,22 +125,22 @@ export default function WhatsAppInbox() {
                 ))}
               </div>
               {canReply ? (
-                <div className="border-t border-line p-4">
+                <div style={{ borderTop: "1px solid var(--border-default)", padding: 16 }}>
                   <div className="flex gap-2">
-                    <input className="inp flex-1" placeholder="Type your reply..." value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendReply()} />
-                    <button onClick={sendReply} disabled={sending || !reply.trim()} className="btn-primary">Send</button>
+                    <Input className="flex-1" placeholder="Type your reply..." value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendReply()} />
+                    <Button variant="primary" onClick={sendReply} isDisabled={sending || !reply.trim()} isLoading={sending}>Send</Button>
                   </div>
                   {!active.bot_paused && (
-                    <p className="text-tiny text-ink-muted mt-1.5">Replying will pause the automated agent for this conversation.</p>
+                    <p style={{ fontSize: 11.5, color: "var(--text-tertiary)", marginTop: 6 }}>Replying will pause the automated agent for this conversation.</p>
                   )}
                 </div>
               ) : (
-                <div className="border-t border-line p-4 text-caption text-ink-muted text-center">
+                <div className="text-center" style={{ borderTop: "1px solid var(--border-default)", padding: 16, fontSize: 12.5, color: "var(--text-tertiary)" }}>
                   Session closed — use a template to re-open the conversation.
                 </div>
               )}
             </>
-          ) : <div className="flex-1 flex items-center justify-center text-body text-ink-muted">Select a conversation</div>}
+          ) : <div className="flex-1 flex items-center justify-center" style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Select a conversation</div>}
         </div>
       </div>
     </div>
