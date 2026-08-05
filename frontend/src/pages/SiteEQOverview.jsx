@@ -1,10 +1,15 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
-import { Globe, MessageCircle, Users, TrendingUp } from "lucide-react";
+import { Globe, MessageSquare, Users, TrendingUp } from "../icons";
+import Card from "../components/composites/Card";
+import MetricCard from "../components/composites/MetricCard";
+import { EmptyState } from "../components/composites/EmptyState";
+import StatusPill from "../components/primitives/StatusPill";
 
 export default function SiteEQOverview() {
+  const nav = useNavigate();
   const [sites, setSites] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,58 +25,40 @@ export default function SiteEQOverview() {
         title="Site EQ"
         subtitle="An AI chat widget for your website — answers from your own content, hands off to a human when it can't."
       />
-      <div className="animate-fade-in px-6 sm:px-8 space-y-6">
+      <div className="animate-fade-in px-6 sm:px-8 py-6 space-y-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatCard icon={Globe} label="Sites" value={loading ? "—" : sites.length} />
-          <StatCard icon={MessageCircle} label="Conversations" value={loading ? "—" : analytics?.total_conversations ?? 0} />
-          <StatCard icon={TrendingUp} label="Resolution rate" value={loading ? "—" : `${analytics?.resolution_rate ?? 0}%`} />
-          <StatCard icon={Users} label="Leads captured" value={loading ? "—" : analytics?.leads_captured ?? 0} />
+          <MetricCard icon={Globe} label="Sites" value={loading ? "—" : sites.length} />
+          <MetricCard icon={MessageSquare} label="Conversations" value={loading ? "—" : analytics?.total_conversations ?? 0} />
+          <MetricCard icon={TrendingUp} label="Resolution rate" value={loading ? "—" : `${analytics?.resolution_rate ?? 0}%`} />
+          <MetricCard icon={Users} label="Leads captured" value={loading ? "—" : analytics?.leads_captured ?? 0} />
         </div>
 
         {!loading && sites.length === 0 && (
-          <div className="shadow-card rounded-2xl p-10 text-center">
-            <div className="text-section font-display font-semibold">Add your first site</div>
-            <p className="text-caption text-ink-muted mt-2">Crawl a website into a knowledge base, then embed the chat widget.</p>
-            <Link to="/app/site-eq/sites" className="btn-primary mt-6 inline-flex">Add a site</Link>
-          </div>
+          <EmptyState icon={Globe} title="Add your first site" description="Crawl a website into a knowledge base, then embed the chat widget."
+            actionLabel="Add a site" onAction={() => nav("/app/site-eq/sites")} />
         )}
 
         {!loading && sites.length > 0 && (
-          <div className="shadow-card rounded-2xl border border-line bg-white">
-            <div className="p-4 border-b border-line text-card-title font-display font-semibold">Your sites</div>
+          <Card title="Your sites" padding="compact" bodyClassName="-mx-5">
             <div className="overflow-x-auto">
-              <table className="w-full text-table">
+              <table className="w-full" style={{ fontSize: 13 }}>
                 <tbody>
                   {sites.map((s) => (
-                    <tr key={s.id} className="border-b border-line last:border-0">
-                      <td className="p-3 font-medium">{s.name}</td>
-                      <td className="p-3 font-mono text-caption text-ink-muted">{s.domain}</td>
-                      <td className="p-3 text-ink-tertiary">{s.pages_crawled} pages</td>
-                      <td className="p-3 text-right">
-                        <span className={`ui-label px-2 py-0.5 border rounded-full ${s.status === "ready" ? "text-success border-success" : s.status === "crawling" ? "text-warning border-warning" : "text-ink-muted border-line"}`}>
-                          {s.status}
-                        </span>
+                    <tr key={s.id} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                      <td style={{ padding: "10px 20px", fontWeight: 500, color: "var(--text-primary)" }}>{s.name}</td>
+                      <td className="tnum" style={{ padding: "10px 0", fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--text-tertiary)" }}>{s.domain}</td>
+                      <td style={{ padding: "10px 0", color: "var(--text-tertiary)" }}>{s.pages_crawled} pages</td>
+                      <td style={{ padding: "10px 20px", textAlign: "right" }}>
+                        <StatusPill status={s.status} tone={s.status === "ready" ? "success" : s.status === "crawling" ? "warning" : "neutral"} />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
+          </Card>
         )}
       </div>
-    </div>
-  );
-}
-
-function StatCard({ icon: Icon, label, value }) {
-  return (
-    <div className="shadow-card rounded-2xl p-4">
-      <div className="flex items-center gap-2 text-ink-muted">
-        <Icon size={14} />
-        <span className="ui-label">{label}</span>
-      </div>
-      <div className="text-section font-display font-bold mt-1">{value}</div>
     </div>
   );
 }
