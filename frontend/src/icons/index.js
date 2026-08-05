@@ -141,6 +141,7 @@ export {
   // ---- Tinted-square tone examples (§3.2) ----
   Database,          // Primary tone: data
   Table,             // Primary tone: records
+  Receipt,           // Billing / expense record
   Folder,            // Neutral tone: files
   Flame,             // Risk tone: urgency
 

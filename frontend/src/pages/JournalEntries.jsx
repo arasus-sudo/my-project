@@ -2,7 +2,14 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, X } from "../icons";
+import Card from "../components/composites/Card";
+import { TableFooter } from "../components/composites/Table";
+import { EmptyState } from "../components/composites/EmptyState";
+import { Modal, ModalContent } from "../components/composites/Modal";
+import Input from "../components/primitives/Input";
+import Select from "../components/primitives/Select";
+import Button from "../components/primitives/Button";
 
 export default function JournalEntries() {
   const [data, setData] = useState({ items: [], total: 0, page: 1 });
@@ -41,79 +48,92 @@ export default function JournalEntries() {
   };
 
   const totalPages = Math.ceil(data.total / 25);
+  const accountOptions = [{ value: "", label: "Select account" }, ...accounts.map((a) => ({ value: a.id, label: `${a.code} - ${a.name}` }))];
 
   return (
     <div>
       <PageHeader title="Journal Entries" subtitle="Record financial transactions with enforced double-entry balance."
-        right={<button onClick={() => setModal(true)} className="btn-primary"><Plus size={14} /> New entry</button>}
+        right={<Button variant="primary" icon={Plus} onClick={() => setModal(true)}>New entry</Button>}
       />
-      <div className="animate-fade-in px-6 sm:px-8 space-y-4">
-        {data.items.length === 0 && <div className="text-body text-ink-muted">No journal entries yet.</div>}
-        {data.items.map((e) => (
-          <div key={e.id} className="bg-white border border-line rounded-2xl p-5">
-            <div className="flex items-center justify-between">
-              <div className="text-card-title font-display font-semibold">{e.memo || "Journal entry"}</div>
-              <div className="font-mono font-bold">${e.total?.toFixed(2)}</div>
-            </div>
-            <div className="text-caption text-ink-muted mt-1">{e.date} {e.reference ? `· ${e.reference}` : ""}</div>
-            <table className="w-full mt-3 text-body">
-              <thead><tr className="text-left"><th className="table-header pb-1">Account</th><th className="table-header pb-1 text-right">Debit</th><th className="table-header pb-1 text-right">Credit</th></tr></thead>
-              <tbody>
-                {e.lines.map((l, i) => (
-                  <tr key={i} className="border-t border-line">
-                    <td className="py-1">{l.account_name || l.account_code || l.account_id}</td>
-                    <td className="py-1 text-right font-mono">{l.debit > 0 ? `$${l.debit.toFixed(2)}` : ""}</td>
-                    <td className="py-1 text-right font-mono">{l.credit > 0 ? `$${l.credit.toFixed(2)}` : ""}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2">
-            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="btn-secondary"><ChevronLeft size={14} /></button>
-            <span className="text-body text-ink-muted">Page {page} of {totalPages}</span>
-            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="btn-secondary"><ChevronRight size={14} /></button>
-          </div>
+      <div className="animate-fade-in px-6 sm:px-8 py-6 space-y-4">
+        {data.items.length === 0 ? (
+          <EmptyState title="No journal entries yet" description="Post a journal entry to start your ledger."
+            actionLabel="New entry" onAction={() => setModal(true)} />
+        ) : (
+          <>
+            {data.items.map((e) => (
+              <Card key={e.id}>
+                <div className="flex items-center justify-between">
+                  <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>{e.memo || "Journal entry"}</div>
+                  <div className="tnum" style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--text-primary)" }}>${e.total?.toFixed(2)}</div>
+                </div>
+                <div style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 4 }}>{e.date} {e.reference ? `· ${e.reference}` : ""}</div>
+                <table className="w-full" style={{ marginTop: 12, fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left", paddingBottom: 4, fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)" }}>Account</th>
+                      <th style={{ textAlign: "right", paddingBottom: 4, fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)" }}>Debit</th>
+                      <th style={{ textAlign: "right", paddingBottom: 4, fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)" }}>Credit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {e.lines.map((l, i) => (
+                      <tr key={i} style={{ borderTop: "1px solid var(--border-subtle)" }}>
+                        <td style={{ padding: "4px 0", color: "var(--text-primary)" }}>{l.account_name || l.account_code || l.account_id}</td>
+                        <td className="tnum" style={{ padding: "4px 0", textAlign: "right", fontFamily: "var(--font-mono)" }}>{l.debit > 0 ? `$${l.debit.toFixed(2)}` : ""}</td>
+                        <td className="tnum" style={{ padding: "4px 0", textAlign: "right", fontFamily: "var(--font-mono)" }}>{l.credit > 0 ? `$${l.credit.toFixed(2)}` : ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+            ))}
+            {totalPages > 1 && (
+              <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-xl)" }}>
+                <TableFooter page={page} pageCount={totalPages} total={data.total} pageSize={25} onPageChange={setPage} />
+              </div>
+            )}
+          </>
         )}
       </div>
-      {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 overflow-y-auto py-8" onClick={() => setModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-2xl mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="text-card-title font-display font-semibold mb-4">New Journal Entry</div>
-            <form onSubmit={save} className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
-                <input className="inp" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required />
-                <input className="inp" placeholder="Memo" value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} />
-                <input className="inp" placeholder="Reference" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} />
+
+      <Modal open={modal} onOpenChange={setModal}>
+        <ModalContent size="lg" title="New Journal Entry"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setModal(false)}>Cancel</Button>
+              <Button variant="primary" type="submit" form="je-form" isLoading={posting}>{posting ? "Posting…" : "Post entry"}</Button>
+            </>
+          }
+        >
+          <form id="je-form" onSubmit={save} className="space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <Input required type="date" label="Date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+              <Input label="Memo" value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} />
+              <Input label="Reference" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>Lines (must balance)</span>
+                <button type="button" onClick={addLine} style={{ fontSize: 12, color: "var(--text-link)" }}>+ Add line</button>
               </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="ui-label">Lines (must balance)</span>
-                  <button type="button" onClick={addLine} className="text-caption text-accent hover:underline">+ Add line</button>
+              {form.lines.map((l, i) => (
+                <div key={i} className="flex gap-2 items-start">
+                  <Select required value={l.account_id} onChange={(v) => updLine(i, "account_id", v)} options={accountOptions} className="flex-1" />
+                  <Input type="number" step="0.01" placeholder="Debit" value={l.debit} onChange={(e) => updLine(i, "debit", e.target.value)} className="w-24" />
+                  <Input type="number" step="0.01" placeholder="Credit" value={l.credit} onChange={(e) => updLine(i, "credit", e.target.value)} className="w-24" />
+                  <Input placeholder="Memo" value={l.memo} onChange={(e) => updLine(i, "memo", e.target.value)} className="w-32" />
+                  {form.lines.length > 1 && (
+                    <button type="button" onClick={() => remLine(i)} style={{ color: "var(--color-danger)", marginTop: 10 }}>
+                      <X size={14} strokeWidth={1.5} aria-hidden="true" />
+                    </button>
+                  )}
                 </div>
-                {form.lines.map((l, i) => (
-                  <div key={i} className="flex gap-2 items-start">
-                    <select className="inp flex-1" value={l.account_id} onChange={(e) => updLine(i, "account_id", e.target.value)} required>
-                      <option value="">Select account</option>
-                      {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
-                    </select>
-                    <input className="inp w-24" type="number" step="0.01" placeholder="Debit" value={l.debit} onChange={(e) => updLine(i, "debit", e.target.value)} />
-                    <input className="inp w-24" type="number" step="0.01" placeholder="Credit" value={l.credit} onChange={(e) => updLine(i, "credit", e.target.value)} />
-                    <input className="inp w-32" placeholder="Memo" value={l.memo} onChange={(e) => updLine(i, "memo", e.target.value)} />
-                    {form.lines.length > 1 && <button type="button" onClick={() => remLine(i)} className="text-danger text-caption mt-2">X</button>}
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" disabled={posting} className="btn-primary">{posting ? "Posting…" : "Post entry"}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+              ))}
+            </div>
+          </form>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

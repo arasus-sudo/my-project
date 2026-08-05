@@ -2,7 +2,18 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, X } from "../icons";
+import Card from "../components/composites/Card";
+import { TableFooter } from "../components/composites/Table";
+import { EmptyState } from "../components/composites/EmptyState";
+import { Modal, ModalContent } from "../components/composites/Modal";
+import StatusPill from "../components/primitives/StatusPill";
+import Input from "../components/primitives/Input";
+import Select from "../components/primitives/Select";
+import Button from "../components/primitives/Button";
+
+const STATUS_TONE = { draft: "neutral", sent: "warning", paid: "success", overdue: "danger", partially_paid: "warning", cancelled: "neutral" };
+const STATUS_META = { draft: "Draft", sent: "Sent", paid: "Paid", overdue: "Overdue", partially_paid: "Partial", cancelled: "Cancelled" };
 
 export default function AccountingInvoices() {
   const [data, setData] = useState({ items: [], total: 0, page: 1 });
@@ -58,78 +69,85 @@ export default function AccountingInvoices() {
     finally { setPayingId(null); }
   };
 
-  const STATUS_META = { draft: "Draft", sent: "Sent", paid: "Paid", overdue: "Overdue", partially_paid: "Partial", cancelled: "Cancelled" };
-
   const totalPages = Math.ceil(data.total / 25);
+  const customerOptions = [{ value: "", label: "Select customer" }, ...customers.map((c) => ({ value: c.id, label: c.name }))];
 
   return (
     <div>
       <PageHeader title="Invoices" subtitle="Create and manage AR invoices."
-        right={<button onClick={() => setModal(true)} className="btn-primary"><Plus size={14} /> New invoice</button>}
+        right={<Button variant="primary" icon={Plus} onClick={() => setModal(true)}>New invoice</Button>}
       />
-      <div className="animate-fade-in px-6 sm:px-8 space-y-4">
-        {data.items.length === 0 && <div className="text-body text-ink-muted">No invoices yet.</div>}
-        {data.items.map((inv) => (
-          <div key={inv.id} className="bg-white border border-line rounded-2xl p-5 flex items-center justify-between">
-            <div>
-              <div className="text-card-title font-display font-semibold">{inv.invoice_number}</div>
-              <div className="text-caption text-ink-muted">{customers.find(c => c.id === inv.customer_id)?.name || "—"} · Total: ${inv.total?.toFixed(2)}</div>
-              <div className="text-caption text-ink-muted">Due: {inv.due_date || "—"} · Paid: ${inv.amount_paid?.toFixed(2)}</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className={`text-tiny px-2 py-0.5 rounded-full border ${inv.status === "paid" ? "text-success border-success/30" : inv.status === "draft" ? "text-ink-muted border-line" : "text-warning border-warning"}`}>{STATUS_META[inv.status]}</span>
-              {inv.status === "draft" && <button onClick={() => sendInvoice(inv.id)} className="btn-secondary">Send</button>}
-              {inv.status === "sent" && <button onClick={() => recordPayment(inv.id)} disabled={payingId === inv.id} className="btn-primary">{payingId === inv.id ? "Recording…" : "Record payment"}</button>}
-            </div>
-          </div>
-        ))}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2">
-            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="btn-secondary"><ChevronLeft size={14} /></button>
-            <span className="text-body text-ink-muted">Page {page} of {totalPages}</span>
-            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="btn-secondary"><ChevronRight size={14} /></button>
-          </div>
+      <div className="animate-fade-in px-6 sm:px-8 py-6 space-y-3">
+        {data.items.length === 0 ? (
+          <EmptyState title="No invoices yet" description="Create an invoice to start billing customers."
+            actionLabel="New invoice" onAction={() => setModal(true)} />
+        ) : (
+          <>
+            {data.items.map((inv) => (
+              <Card key={inv.id}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>{inv.invoice_number}</div>
+                    <div style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 4 }}>{customers.find(c => c.id === inv.customer_id)?.name || "—"} · Total: ${inv.total?.toFixed(2)}</div>
+                    <div style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>Due: {inv.due_date || "—"} · Paid: ${inv.amount_paid?.toFixed(2)}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <StatusPill status={STATUS_META[inv.status]} tone={STATUS_TONE[inv.status]} />
+                    {inv.status === "draft" && <Button variant="secondary" onClick={() => sendInvoice(inv.id)}>Send</Button>}
+                    {inv.status === "sent" && <Button variant="primary" onClick={() => recordPayment(inv.id)} isLoading={payingId === inv.id}>{payingId === inv.id ? "Recording…" : "Record payment"}</Button>}
+                  </div>
+                </div>
+              </Card>
+            ))}
+            {totalPages > 1 && (
+              <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-xl)" }}>
+                <TableFooter page={page} pageCount={totalPages} total={data.total} pageSize={25} onPageChange={setPage} />
+              </div>
+            )}
+          </>
         )}
       </div>
-      {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 overflow-y-auto py-8" onClick={() => setModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-2xl mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="text-card-title font-display font-semibold mb-4">New Invoice</div>
-            <form onSubmit={save} className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
-                <select className="inp" value={form.customer_id} onChange={(e) => setForm({ ...form, customer_id: e.target.value })} required>
-                  <option value="">Select customer</option>
-                  {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                <input className="inp" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-                <input className="inp" type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+
+      <Modal open={modal} onOpenChange={setModal}>
+        <ModalContent size="lg" title="New Invoice"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setModal(false)}>Cancel</Button>
+              <Button variant="primary" type="submit" form="invoice-form">Create invoice</Button>
+            </>
+          }
+        >
+          <form id="invoice-form" onSubmit={save} className="space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <Select required value={form.customer_id} onChange={(v) => setForm({ ...form, customer_id: v })} options={customerOptions} />
+              <Input type="date" label="Date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+              <Input type="date" label="Due date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>Line items</span>
+                <button type="button" onClick={addLine} style={{ fontSize: 12, color: "var(--text-link)" }}>+ Add line</button>
               </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="ui-label">Line items</span>
-                  <button type="button" onClick={addLine} className="text-caption text-accent hover:underline">+ Add line</button>
+              {form.lines.map((l, i) => (
+                <div key={i} className="flex gap-2 items-start">
+                  <Input required placeholder="Description" value={l.description} onChange={(e) => updLine(i, "description", e.target.value)} className="flex-[2]" />
+                  <Input type="number" step="1" placeholder="Qty" value={l.quantity} onChange={(e) => updLine(i, "quantity", e.target.value)} className="w-20" />
+                  <Input required type="number" step="0.01" placeholder="Unit price" value={l.unit_price} onChange={(e) => updLine(i, "unit_price", e.target.value)} className="w-28" />
+                  {form.lines.length > 1 && (
+                    <button type="button" onClick={() => remLine(i)} style={{ color: "var(--color-danger)", marginTop: 10 }}>
+                      <X size={14} strokeWidth={1.5} aria-hidden="true" />
+                    </button>
+                  )}
                 </div>
-                {form.lines.map((l, i) => (
-                  <div key={i} className="flex gap-2 items-start">
-                    <input className="inp flex-[2]" placeholder="Description" value={l.description} onChange={(e) => updLine(i, "description", e.target.value)} required />
-                    <input className="inp w-20" type="number" step="1" placeholder="Qty" value={l.quantity} onChange={(e) => updLine(i, "quantity", e.target.value)} />
-                    <input className="inp w-28" type="number" step="0.01" placeholder="Unit price" value={l.unit_price} onChange={(e) => updLine(i, "unit_price", e.target.value)} required />
-                    {form.lines.length > 1 && <button type="button" onClick={() => remLine(i)} className="text-danger text-caption mt-2">X</button>}
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <input className="inp" type="number" step="0.1" placeholder="Tax rate %" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} />
-                <textarea className="inp" placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-              </div>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary">Create invoice</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Input type="number" step="0.1" label="Tax rate %" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} />
+              <Input label="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            </div>
+          </form>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

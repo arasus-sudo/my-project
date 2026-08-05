@@ -502,7 +502,7 @@ Tone assignment is **semantic, not decorative**:
 | Primary (blue) | Data, records, pipeline, reporting | `database`, `bar-chart-3`, `layout-dashboard`, `table` |
 | Intel (violet) | Machine-generated / assisted | `sparkles`, `brain`, `wand-2`, `target` |
 | Success (green) | Growth, wins, conversion, secure | `trending-up`, `check-circle-2`, `shield-check`, `users` |
-| Warning (amber) | Revenue, currency, attention | `dollar-sign`, `bell`, `clock` |
+| Warning (amber) | Revenue, currency, attention | `dollar-sign`, `bell`, `clock`, `receipt` |
 | Risk (orange) | Speed, urgency, quick actions | `zap`, `flame`, `timer` |
 | Neutral | Settings, files, generic | `settings`, `file-text`, `folder` |
 
