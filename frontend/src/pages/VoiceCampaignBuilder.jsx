@@ -3,7 +3,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Save, Play, Pause } from "lucide-react";
+import { Check, Play, Pause } from "../icons";
+import Card from "../components/composites/Card";
+import Button from "../components/primitives/Button";
+import Input from "../components/primitives/Input";
+import Select from "../components/primitives/Select";
+import StatusPill from "../components/primitives/StatusPill";
 
 const TIMEZONES = [
   "UTC", "US/Eastern", "US/Central", "US/Mountain", "US/Pacific",
@@ -115,84 +120,59 @@ export default function VoiceCampaignBuilder() {
         subtitle="Dial a lead list with a voice agent, respecting call windows and timezone."
         right={
           <div className="flex gap-2">
-            {status !== "active" && (
-              <button onClick={save} disabled={busy} className="btn-secondary">
-                <Save size={14} /> Save
-              </button>
-            )}
+            {status !== "active" && <Button variant="secondary" icon={Check} onClick={save} isLoading={busy}>Save</Button>}
             {status === "active" ? (
-              <button onClick={pause} disabled={busy} className="btn-primary">
-                <Pause size={14} /> Pause
-              </button>
+              <Button variant="primary" icon={Pause} onClick={pause} isLoading={busy}>Pause</Button>
             ) : (
-              <button onClick={launch} disabled={busy || id === "new"} className="btn-primary disabled:opacity-50">
-                <Play size={14} /> Launch
-              </button>
+              <Button variant="primary" icon={Play} onClick={launch} isLoading={busy} isDisabled={id === "new"}>Launch</Button>
             )}
           </div>
         }
       />
-      <div className="animate-fade-in px-6 sm:px-8 max-w-4xl space-y-6">
-        <div className="shadow-card rounded-2xl p-6 sm:p-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="sm:col-span-2">
-            <label className="form-label block mb-1">Campaign name</label>
-            <input value={campaign.name} onChange={(e) => setCampaign({ ...campaign, name: e.target.value })}
-              className="w-full border border-line px-3 py-2 rounded-sm" />
+      <div className="animate-fade-in px-6 sm:px-8 py-6 max-w-4xl space-y-4">
+        <Card>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input className="sm:col-span-2" label="Campaign name" value={campaign.name} onChange={(e) => setCampaign({ ...campaign, name: e.target.value })} />
+            <Select
+              label="Voice agent" value={campaign.agent_id} onChange={(v) => setCampaign({ ...campaign, agent_id: v })} placeholder="Select an agent…"
+              options={agents.map((a) => ({ value: a.id, label: a.name }))}
+            />
+            <Input type="number" min={1} label="Max concurrent calls" value={campaign.max_concurrent_calls}
+              onChange={(e) => setCampaign({ ...campaign, max_concurrent_calls: Number(e.target.value) || 1 })} />
+            <Input type="time" label="Call window start" value={campaign.send_window_start} onChange={(e) => setCampaign({ ...campaign, send_window_start: e.target.value })} />
+            <Input type="time" label="Call window end" value={campaign.send_window_end} onChange={(e) => setCampaign({ ...campaign, send_window_end: e.target.value })} />
+            <Select
+              label="Timezone" value={campaign.timezone} onChange={(v) => setCampaign({ ...campaign, timezone: v })}
+              options={TIMEZONES.map((tz) => ({ value: tz, label: tz }))}
+            />
           </div>
-          <div>
-            <label className="form-label block mb-1">Voice agent</label>
-            <select value={campaign.agent_id} onChange={(e) => setCampaign({ ...campaign, agent_id: e.target.value })}
-              className="w-full border border-line px-3 py-2 rounded-sm">
-              <option value="">Select an agent…</option>
-              {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="form-label block mb-1">Max concurrent calls</label>
-            <input type="number" min={1} value={campaign.max_concurrent_calls}
-              onChange={(e) => setCampaign({ ...campaign, max_concurrent_calls: Number(e.target.value) || 1 })}
-              className="w-full border border-line px-3 py-2 rounded-sm" />
-          </div>
-          <div>
-            <label className="form-label block mb-1">Call window start</label>
-            <input type="time" value={campaign.send_window_start} onChange={(e) => setCampaign({ ...campaign, send_window_start: e.target.value })}
-              className="w-full border border-line px-3 py-2 rounded-sm" />
-          </div>
-          <div>
-            <label className="form-label block mb-1">Call window end</label>
-            <input type="time" value={campaign.send_window_end} onChange={(e) => setCampaign({ ...campaign, send_window_end: e.target.value })}
-              className="w-full border border-line px-3 py-2 rounded-sm" />
-          </div>
-          <div>
-            <label className="form-label block mb-1">Timezone</label>
-            <select value={campaign.timezone} onChange={(e) => setCampaign({ ...campaign, timezone: e.target.value })}
-              className="w-full border border-line px-3 py-2 rounded-sm">
-              {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-            </select>
-          </div>
-        </div>
+        </Card>
 
-        <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-3">
-          <div className="flex items-center justify-between">
+        <Card>
+          <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
             <div>
-              <div className="text-card-title font-display font-semibold">Leads to call</div>
-              <p className="text-caption text-ink-muted">{campaign.lead_ids.length} selected · only leads with a phone number can be called.</p>
+              <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>Leads to call</div>
+              <p style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>{campaign.lead_ids.length} selected · only leads with a phone number can be called.</p>
             </div>
-            <button onClick={selectAllCallable} className="btn-ghost text-caption">Select all callable</button>
+            <Button variant="tertiary" size="sm" onClick={selectAllCallable}>Select all callable</Button>
           </div>
-          <div className="border border-line max-h-80 overflow-y-auto">
+          <div style={{ border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", maxHeight: 320, overflowY: "auto" }}>
             {callableLeads.length === 0 ? (
-              <div className="p-4 text-body text-ink-muted">No leads with a phone number yet — add one from the Leads page.</div>
-            ) : callableLeads.map((l) => (
-              <label key={l.id} className="flex items-center gap-3 px-3 py-2 border-b border-line last:border-0 hover:bg-surfacehover cursor-pointer transition-colors duration-150">
+              <div style={{ padding: 16, fontSize: 13, color: "var(--text-tertiary)" }}>No leads with a phone number yet — add one from the Leads page.</div>
+            ) : callableLeads.map((l, i) => (
+              <label key={l.id} className="flex items-center gap-3 cursor-pointer transition-colors"
+                style={{ padding: "8px 12px", borderTop: i > 0 ? "1px solid var(--border-subtle)" : "none" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
                 <input type="checkbox" checked={campaign.lead_ids.includes(l.id)} onChange={() => toggleLead(l.id)} />
-                <span className="flex-1 text-body">{l.first_name} {l.last_name}</span>
-                <span className="text-tiny font-mono text-ink-muted">{l.phone}</span>
-                {l.dnc && <span className="ui-label text-danger">DNC</span>}
+                <span className="flex-1" style={{ fontSize: 13, color: "var(--text-primary)" }}>{l.first_name} {l.last_name}</span>
+                <span className="tnum" style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--text-tertiary)" }}>{l.phone}</span>
+                {l.dnc && <StatusPill status="DNC" tone="danger" />}
               </label>
             ))}
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

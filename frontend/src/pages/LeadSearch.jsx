@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api, isCreditError } from "../lib/api";
 import { toast } from "sonner";
-import { Search, Bot, X, ChevronLeft, ChevronRight, SlidersHorizontal, Loader2, Wallet, Lightbulb, List, Tags, Flag, Megaphone } from "lucide-react";
+import { Search, Sparkles, X, SlidersHorizontal, Loader2, DollarSign, Lightbulb } from "../icons";
 import { PageHeader } from "../components/AppLayout";
 import LeadSearchFilters from "../components/lead-search/LeadSearchFilters";
 import LeadSearchTable from "../components/lead-search/LeadSearchTable";
@@ -9,6 +9,8 @@ import LeadPreviewPanel from "../components/lead-search/LeadPreviewPanel";
 import LeadListsPanel from "../components/lead-search/LeadListsPanel";
 import AddToListDropdown from "../components/lead-search/AddToListDropdown";
 import BulkActions from "../components/lead-search/BulkActions";
+import Button from "../components/primitives/Button";
+import { EmptyState } from "../components/composites/EmptyState";
 
 const AI_EXAMPLES = [
   "Find CTOs at SaaS companies in Berlin with 50-200 employees",
@@ -237,52 +239,64 @@ export default function LeadSearch() {
   const isBusy = searchBusy || aiBusy;
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-bone">
+    <div className="h-screen flex flex-col overflow-hidden" style={{ background: "var(--bg-canvas)" }}>
       {/* Global header */}
-      <div className="shrink-0 bg-white border-b border-line">
+      <div className="shrink-0" style={{ background: "var(--bg-surface)", borderBottom: "1px solid var(--border-default)" }}>
         <div className="px-5 py-3 flex items-center justify-between">
           <div>
-            <h1 className="font-display font-semibold text-subheading">Lead Search</h1>
-            <p className="text-caption text-ink-muted">Find and prospect leads across multiple data providers</p>
+            <h1 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>Lead Search</h1>
+            <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Find and prospect leads across multiple data providers</p>
           </div>
           <div className="flex items-center gap-3">
             {creditBalance !== null && (
-              <div className="flex items-center gap-1.5 text-caption text-ink-muted font-mono bg-ash rounded-full px-3 py-1.5 border border-line">
-                <Wallet size={12} /> {creditBalance} credits
+              <div className="tnum flex items-center gap-1.5" style={{
+                fontSize: 12, color: "var(--text-secondary)", fontFamily: "var(--font-mono)",
+                background: "var(--bg-surface-sunken)", borderRadius: "var(--radius-full)", padding: "6px 12px", border: "1px solid var(--border-default)",
+              }}>
+                <DollarSign size={12} strokeWidth={1.5} aria-hidden="true" /> {creditBalance} credits
               </div>
             )}
-            <button onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="btn-secondary text-caption py-1.5 px-3">
-              <SlidersHorizontal size={14} /> {sidebarOpen ? "Hide Filters" : "Show Filters"}
-            </button>
+            <Button variant="secondary" size="sm" icon={SlidersHorizontal} onClick={() => setSidebarOpen(!sidebarOpen)}>
+              {sidebarOpen ? "Hide filters" : "Show filters"}
+            </Button>
           </div>
         </div>
 
         {/* Global AI search bar */}
         <div className="px-5 pb-3">
           <div className="relative">
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted flex items-center gap-1.5">
-              <Bot size={16} className="text-accent" />
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+              <Sparkles size={16} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--color-intel)" }} />
             </div>
             <input value={query} onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") aiSearch(); }}
               placeholder='AI Search — e.g. "CTOs at SaaS startups in Berlin, 50-200 employees, mobile numbers"'
-              className="w-full pl-10 pr-36 py-3 border border-line rounded-xl text-input bg-ash/30 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent placeholder:text-ink-muted/50" />
+              className="ds-input w-full"
+              style={{
+                paddingLeft: 40, paddingRight: 148, height: 46, borderRadius: "var(--radius-lg)",
+                border: "1px solid var(--color-intel-border)", background: "var(--bg-surface)", fontSize: 14,
+              }} />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1.5">
               <button onClick={() => setShowAiExamples(!showAiExamples)}
-                className="btn-ghost text-caption py-1.5 px-2 text-ink-muted"><Lightbulb size={14} /></button>
-              <button onClick={aiSearch} disabled={aiBusy || !query.trim()}
-                className="btn-primary text-caption py-1.5 px-3 disabled:opacity-50 flex items-center gap-1.5">
-                {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
-                {aiBusy ? "Analyzing…" : "AI Search"}
+                className="inline-grid place-items-center" style={{ width: 30, height: 30, borderRadius: "var(--radius-md)", color: "var(--text-tertiary)" }}>
+                <Lightbulb size={14} strokeWidth={1.5} aria-hidden="true" />
               </button>
+              <Button variant="intel" size="sm" icon={aiBusy ? undefined : Search} isLoading={aiBusy} isDisabled={!query.trim()} onClick={aiSearch}>
+                {aiBusy ? "Analyzing…" : "AI Search"}
+              </Button>
             </div>
           </div>
           {showAiExamples && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {AI_EXAMPLES.map((ex, i) => (
                 <button key={i} onClick={() => { setQuery(ex); setShowAiExamples(false); }}
-                  className="text-caption bg-white border border-line rounded-full px-2.5 py-1 hover:border-accent hover:text-accent transition-colors">
+                  className="transition-colors" style={{
+                    fontSize: 12, background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+                    borderRadius: "var(--radius-full)", padding: "4px 10px", color: "var(--text-secondary)",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--color-intel-border)"; e.currentTarget.style.color = "var(--color-intel)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+                >
                   {ex}
                 </button>
               ))}
@@ -293,17 +307,17 @@ export default function LeadSearch() {
 
       {/* Parsed AI filters banner */}
       {parsedFilters && (
-        <div className="shrink-0 px-5 py-2 bg-blue-50/50 border-b border-blue-200 flex items-center gap-2">
-          <SlidersHorizontal size={12} className="text-blue-500" />
-          <span className="text-caption text-blue-700 font-medium">AI parsed your query — filters applied below</span>
-          <button onClick={() => setParsedFilters(null)} className="ml-auto text-blue-400 hover:text-blue-600"><X size={12} /></button>
+        <div className="shrink-0 px-5 py-2 flex items-center gap-2" style={{ background: "var(--color-intel-subtle)", borderBottom: "1px solid var(--color-intel-border)" }}>
+          <SlidersHorizontal size={12} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--color-intel)" }} />
+          <span style={{ fontSize: 12, fontWeight: 500, color: "var(--color-intel)" }}>AI parsed your query — filters applied below</span>
+          <button onClick={() => setParsedFilters(null)} className="ml-auto" style={{ color: "var(--color-intel)" }}><X size={12} strokeWidth={1.5} aria-hidden="true" /></button>
         </div>
       )}
 
       {/* Main 3-column layout */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Filter Sidebar */}
-        <div className={`${sidebarOpen ? "w-72" : "w-0"} transition-all duration-200 overflow-hidden border-r border-line shrink-0`}>
+        <div className={`${sidebarOpen ? "w-72" : "w-0"} transition-all duration-200 overflow-hidden shrink-0`} style={{ borderRight: "1px solid var(--border-default)" }}>
           {sidebarOpen && (
             <div className="p-3 space-y-4 overflow-y-auto h-full">
               <LeadListsPanel onLoadList={loadList} activeListId={activeListId} />
@@ -332,31 +346,29 @@ export default function LeadSearch() {
         </div>
 
         {/* Center: Results */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white">
+        <div className="flex-1 flex flex-col min-w-0" style={{ background: "var(--bg-surface)" }}>
           {/* Bulk action bar */}
           {selCount > 0 && (
-            <div className="shrink-0 px-4 py-2 border-b border-line bg-accent/5 flex items-center gap-3">
-              <span className="text-body font-medium">{selCount} selected</span>
-              <button onClick={importToCrm} className="btn-primary text-caption py-1.5">Import to CRM</button>
+            <div className="shrink-0 px-4 py-2 flex items-center gap-3" style={{ borderBottom: "1px solid var(--border-default)", background: "var(--color-primary-subtle)" }}>
+              <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text-primary)" }}>{selCount} selected</span>
+              <Button variant="primary" size="sm" onClick={importToCrm}>Import to CRM</Button>
               <BulkActions
                 leadIds={results.filter((_, i) => selected.has(i)).map((r) => r.id).filter(Boolean)}
                 onDone={() => { loadCredits(); setSelected(new Set()); }} />
               <AddToListDropdown
                 leadIds={results.filter((_, i) => selected.has(i)).map((r) => r.id || r.email).filter(Boolean)}
                 onDone={() => setSelected(new Set())} />
-              <button onClick={() => { results.filter((_, i) => selected.has(i)).forEach((l) => revealContact(l, "email")); }}
-                className="btn-secondary text-caption py-1.5 flex items-center gap-1"><Mail size={12} /> Reveal Emails</button>
-              <button onClick={() => { results.filter((_, i) => selected.has(i)).forEach((l) => revealContact(l, "phone")); }}
-                className="btn-secondary text-caption py-1.5 flex items-center gap-1"><Phone size={12} /> Reveal Phones</button>
-              <button onClick={() => setSelected(new Set())} className="btn-ghost text-caption py-1.5 ml-auto text-ink-muted">Clear</button>
+              <Button variant="secondary" size="sm" icon={Mail} onClick={() => { results.filter((_, i) => selected.has(i)).forEach((l) => revealContact(l, "email")); }}>Reveal emails</Button>
+              <Button variant="secondary" size="sm" icon={Phone} onClick={() => { results.filter((_, i) => selected.has(i)).forEach((l) => revealContact(l, "phone")); }}>Reveal phones</Button>
+              <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())} className="ml-auto">Clear</Button>
             </div>
           )}
 
           {isBusy && !hasResults ? (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
-                <Loader2 size={24} className="animate-spin text-accent mx-auto mb-3" />
-                <p className="text-caption text-ink-muted">{aiBusy ? "AI is analyzing your request…" : "Searching across providers…"}</p>
+                <Loader2 size={24} className="animate-spin mx-auto mb-3" style={{ color: "var(--color-primary)" }} />
+                <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{aiBusy ? "AI is analyzing your request…" : "Searching across providers…"}</p>
               </div>
             </div>
           ) : hasResults ? (
@@ -371,22 +383,18 @@ export default function LeadSearch() {
             />
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <div className="text-center max-w-md">
-                <div className="w-14 h-14 bg-ash rounded-2xl flex items-center justify-center mx-auto mb-4 border border-line">
-                  <Search size={24} className="text-ink-muted" />
-                </div>
-                <h3 className="font-display font-semibold text-subheading mb-1">Find your next leads</h3>
-                <p className="text-caption text-ink-muted">
-                  Use the <strong>AI search</strong> bar above for natural language queries, or open the <strong>filters panel</strong> to build a precise search.
-                </p>
-              </div>
+              <EmptyState
+                icon={Search}
+                title="Find your next leads"
+                description="Use the AI search bar above for natural language queries, or open the filters panel to build a precise search."
+              />
             </div>
           )}
         </div>
 
         {/* Right: Preview Panel */}
         {previewLead && (
-          <div className="w-80 shrink-0 border-l border-line">
+          <div className="w-80 shrink-0" style={{ borderLeft: "1px solid var(--border-default)" }}>
             <LeadPreviewPanel
               lead={previewLead}
               onClose={() => setPreviewLead(null)}

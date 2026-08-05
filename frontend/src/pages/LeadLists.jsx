@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Plus, Trash2, Edit2, Check, X, Save, ArrowLeft, Upload, Download, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X, ArrowLeft, Upload, Download, ChevronDown, ChevronRight } from "../icons";
 import LeadListImportDrawer from "./LeadListImportDrawer";
 import { SkeletonTableRows } from "../components/ui/loading-states";
+import { EmptyState } from "../components/composites/EmptyState";
+import { TableFooter } from "../components/composites/Table";
+import Button from "../components/primitives/Button";
+import Input from "../components/primitives/Input";
+import Select from "../components/primitives/Select";
 
 export default function LeadLists() {
+  const nav = useNavigate();
   const [lists, setLists] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState("");
@@ -130,74 +136,62 @@ export default function LeadLists() {
         subtitle="Organize leads into lists that any agent can reference."
         right={
           <div className="flex items-center gap-2">
-            <Link to="/app/crm" className="btn-secondary text-caption"><ArrowLeft size={14} /> CRM</Link>
-            <button onClick={() => setImporter({ mode: "new-list" })} data-testid="upload-leads-btn" className="btn-secondary text-tiny">
-              <Upload size={12} /> Upload leads
-            </button>
-            <button onClick={() => setCreating(true)} className="btn-primary text-tiny">
-              <Plus size={12} /> New List
-            </button>
+            <Button variant="secondary" icon={ArrowLeft} onClick={() => nav("/app/crm")}>CRM</Button>
+            <Button variant="secondary" size="sm" icon={Upload} onClick={() => setImporter({ mode: "new-list" })} data-testid="upload-leads-btn">Upload leads</Button>
+            <Button variant="primary" size="sm" icon={Plus} onClick={() => setCreating(true)}>New list</Button>
           </div>
         }
       />
-      <div className="animate-fade-in px-6 sm:px-8 space-y-2">
+      <div className="animate-fade-in px-6 sm:px-8 py-6 space-y-3">
         {creating && (
-          <div className="shadow-card p-3 rounded-2xl bg-white space-y-2 border border-primary/20">
-            <input value={newName} onChange={(e) => setNewName(e.target.value)}
-              placeholder="List name" className="w-full border border-line px-2 py-1.5 rounded-sm text-caption" autoFocus />
-            <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)}
-              placeholder="Description (optional)" className="w-full border border-line px-2 py-1.5 rounded-sm text-caption" />
+          <div className="space-y-2" style={{ padding: 16, borderRadius: "var(--radius-xl)", background: "var(--bg-surface)", border: "1px solid var(--color-primary-border)", boxShadow: "var(--shadow-xs)" }}>
+            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="List name" autoFocus />
+            <Input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Description (optional)" />
             <div className="flex gap-2">
-              <button onClick={create} disabled={!newName.trim()} className="btn-primary text-tiny"><Save size={11} /> Save</button>
-              <button onClick={() => setCreating(false)} className="btn-secondary text-tiny">Cancel</button>
+              <Button variant="primary" size="sm" icon={Check} onClick={create} isDisabled={!newName.trim()}>Save</Button>
+              <Button variant="secondary" size="sm" onClick={() => setCreating(false)}>Cancel</Button>
             </div>
           </div>
         )}
 
         {lists.length === 0 && !creating && (
-          <div className="shadow-card p-8 text-center text-caption text-ink-muted rounded-2xl bg-white">
-            No lead lists yet. Create one to group leads for campaigns, voice calling, or anything else.
-          </div>
+          <EmptyState icon={Plus} title="No lead lists yet" description="Create one to group leads for campaigns, voice calling, or anything else." actionLabel="New list" onAction={() => setCreating(true)} />
         )}
 
         {lists.map((l) => {
           const isExpanded = expandedId === l.id;
-          const totalPages = Math.ceil(listTotal / listPageSize);
+          const totalPages = Math.max(1, Math.ceil(listTotal / listPageSize));
           return (
-            <div key={l.id} className="shadow-card rounded-2xl bg-white overflow-hidden">
+            <div key={l.id} style={{ borderRadius: "var(--radius-xl)", background: "var(--bg-surface)", border: "1px solid var(--border-default)", boxShadow: "var(--shadow-xs)", overflow: "hidden" }}>
               <div
                 onClick={() => expand(l.id)}
-                className="px-3 py-2.5 border-b border-line flex items-center justify-between cursor-pointer hover:bg-ash transition-colors"
+                className="flex items-center justify-between cursor-pointer transition-colors"
+                style={{ padding: "12px 16px", borderBottom: isExpanded ? "1px solid var(--border-default)" : "none" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 {editingId === l.id ? (
                   <div className="flex-1 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                    <input value={editName} onChange={(e) => setEditName(e.target.value)}
-                      className="border border-line px-2 py-1 rounded-sm text-caption flex-1" autoFocus />
-                    <input value={editDesc} onChange={(e) => setEditDesc(e.target.value)}
-                      className="border border-line px-2 py-1 rounded-sm text-caption flex-1" placeholder="Description" />
-                    <button onClick={() => update(l.id)} className="text-success hover:text-success/80"><Check size={14} /></button>
-                    <button onClick={() => setEditingId(null)} className="text-ink-muted hover:text-ink"><X size={14} /></button>
+                    <Input size="sm" value={editName} onChange={(e) => setEditName(e.target.value)} className="flex-1" autoFocus />
+                    <Input size="sm" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder="Description" className="flex-1" />
+                    <button onClick={() => update(l.id)} style={{ color: "var(--color-success)" }}><Check size={16} strokeWidth={1.5} aria-hidden="true" /></button>
+                    <button onClick={() => setEditingId(null)} style={{ color: "var(--text-tertiary)" }}><X size={16} strokeWidth={1.5} aria-hidden="true" /></button>
                   </div>
                 ) : (
                   <>
                     <div className="flex items-center gap-2">
-                      {isExpanded ? <ChevronDown size={14} className="text-ink-muted shrink-0" /> : <ChevronRight size={14} className="text-ink-muted shrink-0" />}
+                      {isExpanded ? <ChevronDown size={14} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--text-tertiary)", flexShrink: 0 }} /> : <ChevronRight size={14} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--text-tertiary)", flexShrink: 0 }} />}
                       <div>
-                        <div className="text-body font-medium">{l.name}</div>
-                        {l.description && <div className="text-tiny text-ink-muted">{l.description}</div>}
-                        <div className="text-tiny text-ink-muted font-mono">{l.lead_ids?.length || 0} leads</div>
+                        <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text-primary)" }}>{l.name}</div>
+                        {l.description && <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{l.description}</div>}
+                        <div className="tnum" style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>{l.lead_ids?.length || 0} leads</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-                      <button onClick={() => setImporter({ mode: "existing-list", listId: l.id })} title="Upload leads into this list"
-                        data-testid={`upload-into-list-${l.id}`}
-                        className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash"><Upload size={12} /></button>
-                      <button onClick={() => exportList(l)} title="Export CSV" data-testid={`export-list-${l.id}`}
-                        className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash"><Download size={12} /></button>
-                      <button onClick={() => { setEditingId(l.id); setEditName(l.name); setEditDesc(l.description || ""); }}
-                        className="p-1.5 text-ink-muted hover:text-ink rounded hover:bg-ash"><Edit2 size={12} /></button>
-                      <button onClick={() => remove(l.id)}
-                        className="p-1.5 text-ink-muted hover:text-danger rounded hover:bg-ash"><Trash2 size={12} /></button>
+                      <IconAction icon={Upload} title="Upload leads into this list" onClick={() => setImporter({ mode: "existing-list", listId: l.id })} data-testid={`upload-into-list-${l.id}`} />
+                      <IconAction icon={Download} title="Export CSV" onClick={() => exportList(l)} data-testid={`export-list-${l.id}`} />
+                      <IconAction icon={Pencil} title="Rename" onClick={() => { setEditingId(l.id); setEditName(l.name); setEditDesc(l.description || ""); }} />
+                      <IconAction icon={Trash2} title="Delete" onClick={() => remove(l.id)} hoverColor="var(--color-danger)" />
                     </div>
                   </>
                 )}
@@ -205,58 +199,42 @@ export default function LeadLists() {
 
               {isExpanded && (
                 <div>
-                  <div className="px-3 py-1.5 border-b border-line flex items-center gap-2 bg-ash/50">
-                    <input value={listSearch} onChange={(e) => searchInList(l.id, e.target.value)}
-                      placeholder="Search leads in this list…"
-                      className="flex-1 border border-line px-2 py-1 rounded-sm text-tiny focus:outline-none focus:border-ink" />
-                    <select value={listPageSize} onChange={(e) => changeListPageSize(l.id, parseInt(e.target.value, 10))}
-                      className="border border-line px-2 py-1 rounded-sm text-tiny">
-                      <option value="25">25 / page</option>
-                      <option value="50">50 / page</option>
-                      <option value="100">100 / page</option>
-                    </select>
+                  <div className="flex items-center gap-2" style={{ padding: "8px 12px", borderBottom: "1px solid var(--border-default)", background: "var(--bg-surface-sunken)" }}>
+                    <Input size="sm" value={listSearch} onChange={(e) => searchInList(l.id, e.target.value)} placeholder="Search leads in this list…" className="flex-1" />
+                    <Select
+                      size="sm" value={String(listPageSize)} onChange={(v) => changeListPageSize(l.id, parseInt(v, 10))}
+                      options={[{ value: "25", label: "25 / page" }, { value: "50", label: "50 / page" }, { value: "100", label: "100 / page" }]}
+                      className="w-28"
+                    />
                   </div>
                   {listLoading ? (
-                    <div className="p-2">
-                      <table className="w-full text-table">
-                        <thead><tr className="border-b border-line"><th className="table-header text-left p-1.5 text-tiny">Lead</th><th className="table-header text-left p-1.5 text-tiny">Company</th><th /></tr></thead>
+                    <div style={{ padding: 8 }}>
+                      <table className="w-full">
+                        <thead><tr style={{ borderBottom: "1px solid var(--border-default)" }}><th className="table-header text-left" style={{ padding: 6, fontSize: 11 }}>Lead</th><th className="table-header text-left" style={{ padding: 6, fontSize: 11 }}>Company</th><th /></tr></thead>
                         <tbody><SkeletonTableRows rows={5} cols={3} /></tbody>
                       </table>
                     </div>
                   ) : listLeads.length === 0 ? (
-                    <div className="p-4 text-center text-tiny text-ink-muted">No leads in this list{listSearch ? " matching your search" : ""}.</div>
+                    <div className="text-center" style={{ padding: 16, fontSize: 12, color: "var(--text-tertiary)" }}>No leads in this list{listSearch ? " matching your search" : ""}.</div>
                   ) : (
                     <div>
-                      {listLeads.map((lead) => {
-                        const inList = true;
-                        return (
-                          <div key={lead.id}
-                            className="flex items-center gap-2 px-3 py-1.5 hover:bg-ash border-b border-line/50 last:border-b-0 text-tiny">
-                            <input type="checkbox" checked={inList}
-                              onChange={() => toggleLead(l.id, lead.id, inList)} />
-                            <div className="flex-1 min-w-0 flex items-center gap-2">
-                              <span className="font-medium">{lead.first_name} {lead.last_name}</span>
-                              <span className="text-ink-muted">{lead.company || ""}</span>
-                              <span className="text-ink-disabled font-mono">{lead.email}</span>
-                            </div>
-                            <Link to={`/app/crm/leads/${lead.id}`}
-                              className="text-tiny text-primary hover:underline font-mono">View</Link>
+                      {listLeads.map((lead) => (
+                        <div key={lead.id}
+                          className="flex items-center gap-2 transition-colors"
+                          style={{ padding: "8px 16px", borderBottom: "1px solid var(--border-subtle)", fontSize: 12 }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        >
+                          <input type="checkbox" checked onChange={() => toggleLead(l.id, lead.id, true)} />
+                          <div className="flex-1 min-w-0 flex items-center gap-2">
+                            <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{lead.first_name} {lead.last_name}</span>
+                            <span style={{ color: "var(--text-tertiary)" }}>{lead.company || ""}</span>
+                            <span className="tnum" style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>{lead.email}</span>
                           </div>
-                        );
-                      })}
-                      <div className="flex items-center justify-between px-3 py-1.5 border-t border-line">
-                        <span className="text-tiny text-ink-muted">
-                          {listTotal} lead{listTotal === 1 ? "" : "s"} · page {listPage} of {totalPages || 1}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <button disabled={listPage <= 1}
-                            onClick={() => changeListPage(l.id, listPage - 1)}
-                            className="btn-secondary text-tiny px-1.5 py-0.5 disabled:opacity-30">Prev</button>
-                          <button disabled={listPage >= totalPages}
-                            onClick={() => changeListPage(l.id, listPage + 1)}
-                            className="btn-secondary text-tiny px-1.5 py-0.5 disabled:opacity-30">Next</button>
+                          <Link to={`/app/crm/leads/${lead.id}`} className="tnum" style={{ fontSize: 11.5, color: "var(--text-link)", fontFamily: "var(--font-mono)" }}>View</Link>
                         </div>
-                      </div>
+                      ))}
+                      <TableFooter page={listPage} pageCount={totalPages} total={listTotal} pageSize={listPageSize} onPageChange={(p) => changeListPage(l.id, p)} />
                     </div>
                   )}
                 </div>
@@ -275,5 +253,18 @@ export default function LeadLists() {
         />
       )}
     </div>
+  );
+}
+
+function IconAction({ icon: Icon, title, onClick, hoverColor = "var(--text-primary)", ...rest }) {
+  return (
+    <button onClick={onClick} title={title} {...rest}
+      className="inline-grid place-items-center transition-colors"
+      style={{ width: 26, height: 26, borderRadius: "var(--radius-sm)", color: "var(--text-tertiary)" }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-active)"; e.currentTarget.style.color = hoverColor; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-tertiary)"; }}
+    >
+      <Icon size={12} strokeWidth={1.5} aria-hidden="true" />
+    </button>
   );
 }

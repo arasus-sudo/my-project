@@ -1,3 +1,7 @@
+/* Design system tokens — docs/design-system.md §2. Imported first so the
+   custom properties exist before any layer references them. */
+@import "./styles/tokens.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -24,9 +28,18 @@
     --color-accent-soft: 219 234 254;           /* #DBEAFE soft tint */
     --color-accent-foreground: 255 255 255;
     --color-brand-to: 109 94 245;              /* #6D5EF5 — deprecated gradient's "to" stop */
-    --color-success: 48 209 88;                /* #30D158 */
-    --color-warning: 255 159 10;               /* #FF9F0A */
-    --color-danger: 255 69 58;                 /* #FF453A */
+    /* Renamed from --color-success/-warning/-danger: those names collided
+       with tokens.css's design-system tokens of the same name, and since
+       both targeted :root, whichever CSS declaration came later in source
+       order won — silently breaking every tone="success/warning/danger"
+       component (IconSquare, StatusPill, MetricCard, InlineAlert,
+       ScoreGauge, chart summary rows) built against the design system.
+       These legacy RGB-triplet values are kept only for the pre-existing
+       `bg-success`/`text-warning`/`border-danger` Tailwind utilities used
+       across ~93 not-yet-migrated files (see tailwind.config.js). */
+    --legacy-success: 48 209 88;                /* #30D158 */
+    --legacy-warning: 255 159 10;               /* #FF9F0A */
+    --legacy-danger: 255 69 58;                 /* #FF453A */
     --color-surface: 255 255 255;              /* #FFFFFF card/panel bg */
     --color-surfacehover: 240 240 240;         /* #F0F0F0 */
     --color-sanguine-hover: 0 0 0;
@@ -236,4 +249,108 @@
   .animate-delay-100 { animation-delay: 0.1s; }
   .animate-delay-200 { animation-delay: 0.2s; }
   .animate-delay-300 { animation-delay: 0.3s; }
+}
+
+/* ---- Tier 2 primitive states — docs/design-system.md §5.1, §2.9, §4.4 ----
+   Kept in CSS rather than inline style because they are pseudo-class states
+   (:hover/:active/:focus-visible) and keyframes, which inline style cannot
+   express. Every value still comes from a token. */
+@layer components {
+  /* §2.9: hover animates background only. §24.10 and the §2.9 RULE forbid
+     animating box-shadow on lists and rows — repaint cost. */
+  .ds-btn:hover:not(:disabled) { background-color: var(--btn-bg-hover); }
+
+  /* §6.1: active = scale(0.985) at --dur-instant. */
+  .ds-btn:active:not(:disabled) { transform: scale(0.985); }
+
+  /* §5.1: default focus is a 2px outline at 2px offset… */
+  .ds-btn:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+  }
+  /* …but on a FILLED button an outline disappears against the fill, so those
+     use the 3px ring instead (§5.1). */
+  .ds-btn[data-variant="primary"]:focus-visible,
+  .ds-btn[data-variant="intel"]:focus-visible,
+  .ds-btn[data-variant="danger"]:focus-visible {
+    outline: none;
+    box-shadow: var(--btn-ring);
+  }
+
+  .ds-btn--link:hover:not(:disabled) {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  /* §4.4: 700ms linear, inside buttons and inline refreshes only. */
+  .ds-spin { animation: ds-spin 700ms linear infinite; }
+  @keyframes ds-spin { to { transform: rotate(360deg); } }
+
+  /* §4.4: skeletons shimmer at 1400ms over --bg-active. */
+  .ds-skeleton {
+    background-color: var(--bg-active);
+    background-image: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.55) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    animation: ds-shimmer 1400ms linear infinite;
+  }
+  @keyframes ds-shimmer {
+    from { background-position: -120% 0; }
+    to   { background-position: 220% 0; }
+  }
+
+  /* §2.9 RULE: reduced motion drops transforms and the shimmer entirely. */
+  @media (prefers-reduced-motion: reduce) {
+    .ds-btn:active:not(:disabled) { transform: none; }
+    .ds-skeleton { animation: none; background-image: none; }
+    .ds-spin { animation-duration: 1600ms; }
+  }
+
+  /* §7.1: text input hover/focus. Error state sets its own border colour
+     inline, so it deliberately does not reuse --border-focus here. */
+  .ds-input:hover:not(:disabled):not(:focus) { border-color: var(--border-strong); }
+  .ds-input:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: var(--shadow-focus);
+  }
+  .ds-input[aria-invalid="true"]:focus { box-shadow: var(--shadow-focus-danger); }
+  .ds-input::placeholder { color: var(--text-tertiary); }
+  .ds-input:disabled { cursor: not-allowed; }
+
+  /* §8.3: underline tabs. The 2px underline is a pseudo-element rather than
+     a border so it can sit flush with the shared container border below. */
+  .ds-tab { cursor: pointer; }
+  .ds-tab::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: -1px;
+    height: 2px;
+    background: transparent;
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+  .ds-tab[data-state="active"] { color: var(--text-primary); }
+  .ds-tab[data-state="active"]::after { background: var(--color-primary); }
+  .ds-tab:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  /* §11: row hover surfaces --bg-hover and fades in row actions (any
+     descendant opted in via .ds-row-action). No box-shadow — §24.10 bans
+     shadow animation on list/table rows. Background lives entirely in CSS
+     (never inline) so hover/selected can be ordinary cascade, not !important
+     (§24.19 bans it outright). */
+  .ds-table-row { background-color: transparent; }
+  .ds-table-row[data-selected="true"] { background-color: var(--bg-selected); }
+  .ds-table-row:hover:not([data-selected="true"]) { background-color: var(--bg-hover); }
+  .ds-row-action { opacity: 0; transition: opacity var(--dur-fast) var(--ease-out); }
+  .ds-table-row:hover .ds-row-action,
+  .ds-table-row:focus-within .ds-row-action { opacity: 1; }
 }

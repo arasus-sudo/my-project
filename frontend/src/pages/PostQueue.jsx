@@ -3,18 +3,24 @@ import { useSearchParams } from "react-router-dom";
 import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { CheckCircle2, Send, Trash2, X, XCircle, Pencil, Save } from "lucide-react";
+import { CheckCircle2, Send, Trash2, AlertCircle, Pencil, Check } from "../icons";
 import { SkeletonTableRows } from "../components/ui/loading-states";
+import Table from "../components/composites/Table";
+import { EmptyState } from "../components/composites/EmptyState";
+import { Modal, ModalContent } from "../components/composites/Modal";
+import StatusPill from "../components/primitives/StatusPill";
+import Button from "../components/primitives/Button";
+import Input from "../components/primitives/Input";
 
-const STATUS_COLOR = {
-  draft: "text-ink-muted border-neutral-300",
-  scheduled: "text-info border-info",
-  pending_approval: "text-warning border-warning",
-  approved: "text-accent border-accent",
-  publishing: "text-accent border-accent",
-  published: "text-success border-success",
-  rejected: "text-danger border-danger",
-  publish_failed: "text-danger border-danger",
+const STATUS_TONE = {
+  draft: "neutral",
+  scheduled: "primary",
+  pending_approval: "warning",
+  approved: "primary",
+  publishing: "primary",
+  published: "success",
+  rejected: "danger",
+  publish_failed: "danger",
 };
 
 const STATUS_LABEL = {
@@ -87,174 +93,126 @@ export default function PostQueue() {
     setDetail(data); setEditing(false); load();
   };
 
+  const columns = [
+    { key: "platform", label: "Platform", render: (p) => <span className="capitalize" style={{ color: "var(--text-tertiary)" }}>{p.platform}</span> },
+    { key: "headline", label: "Headline", render: (p) => <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{p.headline}</span> },
+    { key: "scheduled", label: "Scheduled", render: (p) => <span className="tnum" style={{ fontSize: 11.5, color: "var(--text-tertiary)" }}>{p.scheduled_for ? p.scheduled_for.slice(0, 10) : "—"}</span> },
+    {
+      key: "status", label: "Status", render: (p) => (
+        <div className="flex items-center gap-1">
+          <StatusPill status={STATUS_LABEL[p.status] || p.status} tone={STATUS_TONE[p.status]} />
+          {p.content_type === "video" && p.video_status && p.video_status !== "ready" && (
+            <StatusPill status={p.video_status === "processing" ? "generating video" : p.video_status} tone={p.video_status === "failed" ? "danger" : "warning"} />
+          )}
+        </div>
+      ),
+    },
+    { key: "engagement", label: "Engagement", align: "right", render: (p) => <span className="tnum" style={{ fontSize: 11.5, color: "var(--text-tertiary)" }}>{p.engagement ? `${p.engagement.likes}♥ ${p.engagement.comments}💬` : "—"}</span> },
+  ];
+
   return (
     <div>
       <PageHeader title="Queue" subtitle="Every draft, scheduled, pending-approval, approved, and published post." />
-      <div className="animate-fade-in px-6 sm:px-8">
+      <div className="animate-fade-in px-6 sm:px-8 py-6">
         {loading ? (
-          <div className="card-floating p-4 border border-line bg-white overflow-x-auto">
-            <table className="w-full text-table">
-              <thead>
-                <tr className="border-b border-line">
-                  <th className="table-header text-left p-3">Platform</th>
-                  <th className="table-header text-left p-3">Headline</th>
-                  <th className="table-header text-left p-3">Scheduled</th>
-                  <th className="table-header text-left p-3">Status</th>
-                  <th className="table-header text-right p-3">Engagement</th>
-                </tr>
-              </thead>
-              <tbody><SkeletonTableRows rows={5} cols={5} /></tbody>
-            </table>
+          <div style={{ padding: 16, borderRadius: "var(--radius-xl)", border: "1px solid var(--border-default)", background: "var(--bg-surface)" }}>
+            <table className="w-full"><tbody><SkeletonTableRows rows={5} cols={5} /></tbody></table>
           </div>
         ) : posts.length === 0 ? (
-          <div className="shadow-card p-6 sm:p-10 text-center text-body text-ink-muted rounded-2xl">No posts yet.</div>
+          <EmptyState title="No posts yet" description="Drafted posts will appear here once you compose one." />
         ) : (
-          <div className="card-floating p-4 border border-line bg-white overflow-x-auto">
-            <table className="w-full text-table">
-              <thead>
-                <tr className="border-b border-line">
-                  <th className="table-header text-left p-3">Platform</th>
-                  <th className="table-header text-left p-3">Headline</th>
-                  <th className="table-header text-left p-3">Scheduled</th>
-                  <th className="table-header text-left p-3">Status</th>
-                  <th className="table-header text-right p-3">Engagement</th>
-                </tr>
-              </thead>
-              <tbody>
-                {posts.map((p) => (
-                  <tr key={p.id} onClick={() => openDetail(p)} data-testid={`post-row-${p.id}`}
-                    className="border-b border-line hover:bg-surfacehover cursor-pointer transition-colors duration-150">
-                    <td className="p-3 capitalize text-ink-muted">{p.platform}</td>
-                    <td className="p-3 font-medium">{p.headline}</td>
-                    <td className="p-3 text-tiny text-ink-muted font-mono">{p.scheduled_for ? p.scheduled_for.slice(0, 10) : "—"}</td>
-                    <td className="p-3">
-                      <span className={`ui-label inline-block px-2 py-0.5 border ${STATUS_COLOR[p.status] || STATUS_COLOR.draft}`}>
-                        {STATUS_LABEL[p.status] || p.status}
-                      </span>
-                      {p.content_type === "video" && p.video_status && p.video_status !== "ready" && (
-                        <span className={`ui-label inline-block px-2 py-0.5 border ml-1 ${p.video_status === "failed" ? "text-danger border-danger" : "text-warning border-warning"}`}>
-                          {p.video_status === "processing" ? "generating video" : p.video_status}
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 text-right font-mono text-tiny">
-                      {p.engagement ? `${p.engagement.likes}♥ ${p.engagement.comments}💬` : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table columns={columns} rows={posts} rowKey={(p) => p.id} onRowClick={openDetail} />
         )}
       </div>
 
-      {detail && (
-        <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50 p-4" onClick={(e) => e.target === e.currentTarget && setDetail(null)}>
-          <div className="bg-white border border-line p-6 sm:p-8 rounded-2xl w-full max-w-lg space-y-3 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-start justify-between">
-              <div className="min-w-0">
-                <div className="ui-label capitalize">{detail.platform} · {detail.content_type || "static"}</div>
+      <Modal open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
+        {detail && (
+          <ModalContent
+            size="md"
+            title={detail.headline}
+            subtitle={`${detail.platform} · ${detail.content_type || "static"}`}
+            footer={editing ? (
+              <>
+                <Button variant="secondary" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
+                <Button variant="primary" size="sm" icon={Check} onClick={saveEdit} data-testid="save-post-btn">Save</Button>
+              </>
+            ) : (
+              <>
+                {detail.status !== "published" && (
+                  <Button variant="secondary" size="sm" icon={Pencil} onClick={startEdit} data-testid="edit-post-btn">Edit</Button>
+                )}
+                {(detail.status === "draft" || detail.status === "pending_approval" || detail.status === "scheduled") &&
+                  !(detail.content_type === "video" && detail.video_status === "processing") && (
+                  <>
+                    <Button variant="secondary" size="sm" icon={CheckCircle2} onClick={() => approve(detail.id)} data-testid="approve-post-btn">Approve</Button>
+                    <Button variant="danger-subtle" size="sm" icon={AlertCircle} onClick={() => reject(detail.id)} data-testid="reject-post-btn">Reject</Button>
+                  </>
+                )}
+                {(detail.status === "approved" || detail.status === "publish_failed") && (
+                  <Button variant="primary" size="sm" icon={Send} onClick={() => publish(detail.id)} data-testid="publish-post-btn">Publish now</Button>
+                )}
+                {detail.status !== "published" && (
+                  <Button variant="danger-subtle" size="sm" icon={Trash2} onClick={() => remove(detail.id)} data-testid="delete-post-btn">Delete</Button>
+                )}
+              </>
+            )}
+          >
+            <div className="space-y-3">
+              {editing && (
+                <Input value={form.headline} onChange={(e) => setForm({ ...form, headline: e.target.value })} />
+              )}
+
+              {detail.content_type === "video" && detail.video_status === "processing" && (
+                <div className="text-center" style={{ border: "1px dashed var(--border-default)", borderRadius: "var(--radius-lg)", padding: 24 }}>
+                  <p style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>Generating video — this can take a few minutes. Refresh to check progress.</p>
+                </div>
+              )}
+              {detail.content_type === "video" && detail.video_status === "failed" && (
+                <div className="text-center" style={{ border: "1px solid var(--color-danger-border)", borderRadius: "var(--radius-lg)", padding: 16 }}>
+                  <p style={{ fontSize: 12.5, color: "var(--color-danger)" }}>Video generation failed.</p>
+                </div>
+              )}
+              {detail.media_url && detail.content_type === "video" ? (
+                <video src={`${api.defaults.baseURL}${detail.media_url}`} controls className="w-full" style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--border-default)", maxHeight: 256 }} />
+              ) : detail.media_url && (
+                <img src={`${api.defaults.baseURL}${detail.media_url}`} alt="" className="w-full object-cover" style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--border-default)", maxHeight: 256 }} />
+              )}
+
+              {editing ? (
+                <Input as="textarea" rows={4} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} />
+              ) : (
+                <p className="whitespace-pre-wrap" style={{ fontSize: 13, color: "var(--text-secondary)" }}>{detail.body}</p>
+              )}
+
+              {editing ? (
+                <Input value={form.hashtags} onChange={(e) => setForm({ ...form, hashtags: e.target.value })} placeholder="hashtags, comma, separated" />
+              ) : detail.hashtags?.length > 0 && (
+                <div style={{ fontSize: 12.5, color: "var(--color-primary)" }}>{detail.hashtags.map((h) => `#${h.replace(/^#/, "")}`).join(" ")}</div>
+              )}
+
+              <div>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>Scheduled for</label>
                 {editing ? (
-                  <input value={form.headline} onChange={(e) => setForm({ ...form, headline: e.target.value })}
-                    className="text-card-title font-display font-semibold w-full border-b border-line focus:outline-none focus:border-accent" />
+                  <Input type="datetime-local" value={form.scheduled_for} onChange={(e) => setForm({ ...form, scheduled_for: e.target.value })} data-testid="post-schedule-input" />
                 ) : (
-                  <div className="text-card-title font-display font-semibold truncate">{detail.headline}</div>
+                  <div className="tnum" style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                    {detail.scheduled_for ? new Date(detail.scheduled_for).toLocaleString() : "Not scheduled — publishes as soon as approved"}
+                  </div>
                 )}
               </div>
-              <button onClick={() => setDetail(null)} className="text-ink-muted hover:text-ink shrink-0 ml-2"><X size={16} /></button>
-            </div>
 
-            {detail.content_type === "video" && detail.video_status === "processing" && (
-              <div className="w-full rounded-xl border border-line border-dashed p-6 text-center">
-                <p className="text-caption text-ink-muted">Generating video — this can take a few minutes. Refresh to check progress.</p>
-              </div>
-            )}
-            {detail.content_type === "video" && detail.video_status === "failed" && (
-              <div className="w-full rounded-xl border border-danger/40 p-4 text-center">
-                <p className="text-caption text-danger">Video generation failed.</p>
-              </div>
-            )}
-            {detail.media_url && detail.content_type === "video" ? (
-              <video src={`${api.defaults.baseURL}${detail.media_url}`} controls className="w-full rounded-xl border border-line max-h-64" />
-            ) : detail.media_url && (
-              <img src={`${api.defaults.baseURL}${detail.media_url}`} alt="" className="w-full rounded-xl border border-line object-cover max-h-64" />
-            )}
-
-            {editing ? (
-              <textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} rows={4}
-                className="w-full border border-line rounded-xl px-3 py-2 text-input" />
-            ) : (
-              <p className="text-body whitespace-pre-wrap">{detail.body}</p>
-            )}
-
-            {editing ? (
-              <input value={form.hashtags} onChange={(e) => setForm({ ...form, hashtags: e.target.value })}
-                placeholder="hashtags, comma, separated" className="w-full border border-line rounded-xl px-3 py-2 text-caption" />
-            ) : detail.hashtags?.length > 0 && (
-              <div className="text-caption text-accent">{detail.hashtags.map((h) => `#${h.replace(/^#/, "")}`).join(" ")}</div>
-            )}
-
-            <div>
-              <label className="form-label block mb-1">Scheduled for</label>
-              {editing ? (
-                <input type="datetime-local" value={form.scheduled_for}
-                  onChange={(e) => setForm({ ...form, scheduled_for: e.target.value })}
-                  data-testid="post-schedule-input"
-                  className="w-full border border-line rounded-xl px-3 py-2 text-input" />
-              ) : (
-                <div className="text-caption text-ink-muted font-mono">
-                  {detail.scheduled_for ? new Date(detail.scheduled_for).toLocaleString() : "Not scheduled — publishes as soon as approved"}
+              {detail.status === "publish_failed" && detail.publish_error && (
+                <div style={{ fontSize: 12.5, color: "var(--color-danger)", background: "var(--color-danger-subtle)", border: "1px solid var(--color-danger-border)", borderRadius: "var(--radius-lg)", padding: "8px 12px" }}>{detail.publish_error}</div>
+              )}
+              {detail.engagement && (
+                <div className="tnum" style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                  {detail.engagement.likes} likes · {detail.engagement.comments} comments · {detail.engagement.shares} shares · {detail.engagement.views} views
                 </div>
               )}
             </div>
-
-            {detail.status === "publish_failed" && detail.publish_error && (
-              <div className="text-caption text-danger bg-danger/10 border border-danger/30 rounded-xl px-3 py-2">{detail.publish_error}</div>
-            )}
-            {detail.engagement && (
-              <div className="text-caption text-ink-muted font-mono">
-                {detail.engagement.likes} likes · {detail.engagement.comments} comments · {detail.engagement.shares} shares · {detail.engagement.views} views
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 pt-2 flex-wrap">
-              {editing ? (
-                <>
-                  <button onClick={() => setEditing(false)} className="btn-secondary text-caption">Cancel</button>
-                  <button onClick={saveEdit} data-testid="save-post-btn" className="btn-primary text-caption"><Save size={12} /> Save</button>
-                </>
-              ) : (
-                <>
-                  {detail.status !== "published" && (
-                    <button onClick={startEdit} data-testid="edit-post-btn" className="btn-secondary text-caption"><Pencil size={12} /> Edit</button>
-                  )}
-                  {(detail.status === "draft" || detail.status === "pending_approval" || detail.status === "scheduled") &&
-                    !(detail.content_type === "video" && detail.video_status === "processing") && (
-                    <>
-                      <button onClick={() => approve(detail.id)} data-testid="approve-post-btn" className="btn-secondary text-caption">
-                        <CheckCircle2 size={12} /> Approve
-                      </button>
-                      <button onClick={() => reject(detail.id)} data-testid="reject-post-btn" className="btn-secondary text-caption text-danger">
-                        <XCircle size={12} /> Reject
-                      </button>
-                    </>
-                  )}
-                  {(detail.status === "approved" || detail.status === "publish_failed") && (
-                    <button onClick={() => publish(detail.id)} data-testid="publish-post-btn" className="btn-primary text-caption">
-                      <Send size={12} /> Publish now
-                    </button>
-                  )}
-                  {detail.status !== "published" && (
-                    <button onClick={() => remove(detail.id)} data-testid="delete-post-btn" className="btn-secondary text-caption text-danger">
-                      <Trash2 size={12} /> Delete
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+          </ModalContent>
+        )}
+      </Modal>
     </div>
   );
 }

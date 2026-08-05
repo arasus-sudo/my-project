@@ -1,36 +1,43 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  User as UserIcon, KeyRound, Building2, Loader2, Camera, Trash2, MessageSquare, ArrowLeft, LogOut, Plug,
-} from "lucide-react";
+  User as UserIcon, Lock, Building2, Upload, Trash2, MessageSquare, ArrowLeft, LogOut, Plug,
+} from "../icons";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { PageHeader } from "../components/AppLayout";
+import Card from "../components/composites/Card";
+import { EmptyState } from "../components/composites/EmptyState";
+import Input from "../components/primitives/Input";
+import Select from "../components/primitives/Select";
+import Button from "../components/primitives/Button";
+import Chip from "../components/primitives/Chip";
 
 export default function Settings() {
   const { user, workspace, refresh, logout } = useAuth();
   const [profile, setProfile] = useState(null);
   const [tab, setTab] = useState("profile");
+  const nav = useNavigate();
 
   useEffect(() => {
     api.get("/auth/me").then((r) => setProfile(r.data.user));
   }, []);
 
   return (
-    <div className="min-h-screen bg-bone animate-fade-in">
-      <div className="border-b border-line bg-white">
-        <div className="max-w-6xl mx-auto px-6 sm:px-8 py-3 flex items-center justify-between">
-          <Link to="/suite" data-testid="settings-back" className="flex items-center gap-2 text-caption text-ink-muted hover:text-ink">
-            <ArrowLeft size={16} /> Command center
-          </Link>
+    <div style={{ minHeight: "100vh", background: "var(--bg-canvas)" }} className="animate-fade-in">
+      <div style={{ borderBottom: "1px solid var(--border-default)", background: "var(--bg-surface)" }}>
+        <div className="max-w-6xl mx-auto px-6 sm:px-8 flex items-center justify-between" style={{ paddingTop: 12, paddingBottom: 12 }}>
+          <button onClick={() => nav("/suite")} data-testid="settings-back" className="flex items-center gap-2" style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>
+            <ArrowLeft size={16} strokeWidth={1.5} aria-hidden="true" /> Command center
+          </button>
           <div className="flex items-center gap-3">
             <div className="text-right leading-tight">
-              <div className="text-caption font-medium">{user?.name}</div>
-              <div className="text-tiny text-ink-muted">{user?.email}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 500, color: "var(--text-primary)" }}>{user?.name}</div>
+              <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{user?.email}</div>
             </div>
-            <button onClick={logout} data-testid="settings-logout" className="p-1.5 text-ink-muted hover:text-ink hover:bg-surfacehover rounded-xl transition-colors duration-150">
-              <LogOut size={14} />
+            <button onClick={logout} data-testid="settings-logout" style={{ padding: 6, color: "var(--text-tertiary)", borderRadius: "var(--radius-md)" }}>
+              <LogOut size={14} strokeWidth={1.5} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -42,18 +49,18 @@ export default function Settings() {
 
       <div className="p-6 sm:p-8 grid grid-cols-12 gap-4 sm:gap-6 max-w-6xl">
         <aside className="col-span-12 md:col-span-3">
-          <div className="space-y-1 sticky top-4">
-            <TabBtn active={tab === "profile"} onClick={() => setTab("profile")} icon={<UserIcon size={14} />} label="Profile" testid="settings-tab-profile" />
-            <TabBtn active={tab === "security"} onClick={() => setTab("security")} icon={<KeyRound size={14} />} label="Security" testid="settings-tab-security" />
-            <TabBtn active={tab === "workspace"} onClick={() => setTab("workspace")} icon={<Building2 size={14} />} label="Workspace" testid="settings-tab-workspace" />
-            <TabBtn active={tab === "brand"} onClick={() => setTab("brand")} icon={<MessageSquare size={14} />} label="Brand voice" testid="settings-tab-brand" />
+          <div className="space-y-0.5" style={{ position: "sticky", top: 16 }}>
+            <TabBtn active={tab === "profile"} onClick={() => setTab("profile")} icon={UserIcon} label="Profile" testid="settings-tab-profile" />
+            <TabBtn active={tab === "security"} onClick={() => setTab("security")} icon={Lock} label="Security" testid="settings-tab-security" />
+            <TabBtn active={tab === "workspace"} onClick={() => setTab("workspace")} icon={Building2} label="Workspace" testid="settings-tab-workspace" />
+            <TabBtn active={tab === "brand"} onClick={() => setTab("brand")} icon={MessageSquare} label="Brand voice" testid="settings-tab-brand" />
             {user?.role === "org_admin" && (
-              <TabBtn active={tab === "ai-clients"} onClick={() => setTab("ai-clients")} icon={<Plug size={14} />} label="AI clients" testid="settings-tab-ai-clients" />
+              <TabBtn active={tab === "ai-clients"} onClick={() => setTab("ai-clients")} icon={Plug} label="AI clients" testid="settings-tab-ai-clients" />
             )}
           </div>
         </aside>
 
-        <section className="col-span-12 md:col-span-9 space-y-6">
+        <section className="col-span-12 md:col-span-9 space-y-4">
           {tab === "profile" && <ProfileSection profile={profile} onProfileUpdated={(u) => { setProfile(u); refresh?.(); }} />}
           {tab === "security" && <SecuritySection />}
           {tab === "workspace" && <WorkspaceSection user={user} workspace={workspace} />}
@@ -65,11 +72,19 @@ export default function Settings() {
   );
 }
 
-function TabBtn({ active, onClick, icon, label, testid }) {
+function TabBtn({ active, onClick, icon: Icon, label, testid }) {
   return (
     <button onClick={onClick} data-testid={testid}
-      className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl text-body transition-colors ${active ? "bg-ink text-white" : "hover:bg-neutral-100 text-ink-secondary"}`}>
-      {icon}
+      className="w-full text-left flex items-center gap-2 transition-colors"
+      style={{
+        padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: 13.5,
+        background: active ? "var(--text-primary)" : "transparent",
+        color: active ? "var(--bg-surface)" : "var(--text-secondary)",
+      }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--bg-hover)"; }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
+    >
+      <Icon size={14} strokeWidth={1.5} aria-hidden="true" />
       {label}
     </button>
   );
@@ -122,73 +137,53 @@ function ProfileSection({ profile, onProfileUpdated }) {
     } finally { setBusy(false); }
   };
 
-  if (!profile) return <div className="text-ink-muted text-caption">Loading profile…</div>;
+  if (!profile) return <div style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>Loading profile…</div>;
 
   return (
-    <form onSubmit={submit} className="card-flat shadow-card p-6 space-y-5" data-testid="profile-section">
-      <div>
-        <div className="font-display font-semibold text-card-title">Your profile</div>
-        <div className="text-caption text-ink-muted mt-0.5">Your name and headshot appear on Create EQ carousels and in team invitations.</div>
-      </div>
-
-      <div className="flex flex-col sm:flex-row items-start gap-4">
-        <div className="relative">
-          <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-line bg-neutral-100 flex items-center justify-center">
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="you" className="w-full h-full object-cover" data-testid="profile-avatar-preview"
-                onError={(e) => { e.currentTarget.style.opacity = 0.3; }} />
-            ) : (
-              <UserIcon size={32} className="text-ink-muted" />
+    <Card title="Your profile" subtitle="Your name and headshot appear on Create EQ carousels and in team invitations.">
+      <form onSubmit={submit} className="space-y-4" data-testid="profile-section">
+        <div className="flex flex-col sm:flex-row items-start gap-4">
+          <div className="relative">
+            <div className="rounded-full overflow-hidden flex items-center justify-center" style={{
+              width: 96, height: 96, border: "2px solid var(--border-default)", background: "var(--bg-surface-sunken)",
+            }}>
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="you" className="w-full h-full object-cover" data-testid="profile-avatar-preview"
+                  onError={(e) => { e.currentTarget.style.opacity = 0.3; }} />
+              ) : (
+                <UserIcon size={32} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--text-tertiary)" }} />
+              )}
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" data-testid="profile-avatar-input" onChange={onFile} />
+            <button type="button" onClick={() => fileRef.current?.click()}
+              data-testid="profile-avatar-upload"
+              className="absolute flex items-center justify-center"
+              style={{ bottom: -4, right: -4, width: 32, height: 32, borderRadius: "var(--radius-lg)", background: "var(--color-primary)", color: "#fff", boxShadow: "var(--shadow-sm)" }}>
+              <Upload size={14} strokeWidth={1.5} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="flex-1 space-y-2">
+            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>Headshot</div>
+            <div style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>Upload a square photo of yourself (recommended 512×512). Used across Create EQ slides.</div>
+            {avatarUrl && (
+              <button type="button" onClick={removeAvatar}
+                data-testid="profile-avatar-remove"
+                className="inline-flex items-center gap-1" style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+                <Trash2 size={12} strokeWidth={1.5} aria-hidden="true" /> Remove headshot
+              </button>
             )}
           </div>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" data-testid="profile-avatar-input" onChange={onFile} />
-          <button type="button" onClick={() => fileRef.current?.click()}
-            data-testid="profile-avatar-upload"
-            className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-accent text-white flex items-center justify-center shadow hover:brightness-105">
-            <Camera size={14} />
-          </button>
         </div>
-        <div className="flex-1 space-y-2">
-          <div className="text-body font-medium">Headshot</div>
-          <div className="text-caption text-ink-muted">Upload a square photo of yourself (recommended 512×512). Used across Create EQ slides.</div>
-          {avatarUrl && (
-            <button type="button" onClick={removeAvatar}
-              data-testid="profile-avatar-remove"
-              className="text-tiny text-ink-muted hover:text-danger flex items-center gap-1">
-              <Trash2 size={12} /> Remove headshot
-            </button>
-          )}
+
+        <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} data-testid="profile-name" placeholder="Your full name" />
+        <Input label="Headline" help="Shown next to your headshot" value={headline} onChange={(e) => setHeadline(e.target.value)} data-testid="profile-headline" placeholder="e.g. Founder · Innoira Labs" />
+        <Input label="Email" value={profile.email} disabled style={{ fontFamily: "var(--font-mono)" }} />
+
+        <div className="flex justify-end" style={{ paddingTop: 12, borderTop: "1px solid var(--border-subtle)" }}>
+          <Button type="submit" variant="primary" isLoading={busy} data-testid="profile-save">Save profile</Button>
         </div>
-      </div>
-
-      <label className="block">
-        <span className="form-label">Name</span>
-        <input value={name} onChange={(e) => setName(e.target.value)}
-          data-testid="profile-name"
-          placeholder="Your full name"
-          className="input-premium mt-1 w-full" />
-      </label>
-
-      <label className="block">
-        <span className="form-label">Headline <span className="text-ink-muted font-normal">(shown next to your headshot)</span></span>
-        <input value={headline} onChange={(e) => setHeadline(e.target.value)}
-          data-testid="profile-headline"
-          placeholder="e.g. Founder · Innoira Labs"
-          className="input-premium mt-1 w-full" />
-      </label>
-
-      <label className="block">
-        <span className="form-label">Email</span>
-        <input value={profile.email} disabled
-          className="input-premium mt-1 w-full font-mono bg-ash text-ink-muted" />
-      </label>
-
-      <div className="flex justify-end pt-2 border-t border-line">
-        <button type="submit" disabled={busy} data-testid="profile-save" className="btn-primary disabled:opacity-60">
-          {busy ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : "Save profile"}
-        </button>
-      </div>
-    </form>
+      </form>
+    </Card>
   );
 }
 
@@ -217,50 +212,29 @@ function SecuritySection() {
   };
 
   return (
-    <form onSubmit={submit} className="card-flat shadow-card p-6 space-y-4" data-testid="security-section">
-      <div>
-        <div className="font-display font-semibold text-card-title">Change password</div>
-        <div className="text-caption text-ink-muted mt-0.5">Use at least 8 characters, mix of upper/lower + digits recommended.</div>
-      </div>
+    <Card title="Change password" subtitle="Use at least 8 characters, mix of upper/lower + digits recommended.">
+      <form onSubmit={submit} className="space-y-3" data-testid="security-section">
+        <Input required type="password" label="Current password" value={current} onChange={(e) => setCurrent(e.target.value)} data-testid="password-current" autoComplete="current-password" />
+        <div>
+          <Input required type="password" label="New password" value={next} onChange={(e) => setNext(e.target.value)} data-testid="password-new" autoComplete="new-password" minLength={8} />
+          {next && (
+            <div className="tnum" style={{ fontSize: 11, marginTop: 4, color: strong ? "var(--color-success)" : "var(--text-tertiary)" }}>
+              {strong ? "Strong ✓" : "Add an uppercase letter and a digit to strengthen"}
+            </div>
+          )}
+        </div>
+        <div>
+          <Input required type="password" label="Confirm new password" value={confirm} onChange={(e) => setConfirm(e.target.value)} data-testid="password-confirm" autoComplete="new-password" minLength={8} />
+          {confirm && confirm !== next && (
+            <div style={{ fontSize: 11, marginTop: 4, color: "var(--color-danger)" }}>Passwords don&apos;t match</div>
+          )}
+        </div>
 
-      <label className="block">
-        <span className="form-label">Current password</span>
-        <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)}
-          data-testid="password-current"
-          autoComplete="current-password"
-          className="input-premium mt-1 w-full" required />
-      </label>
-      <label className="block">
-        <span className="form-label">New password</span>
-        <input type="password" value={next} onChange={(e) => setNext(e.target.value)}
-          data-testid="password-new"
-          autoComplete="new-password" minLength={8}
-          className="input-premium mt-1 w-full" required />
-        {next && (
-          <div className={`text-tiny mt-1 font-mono ${strong ? "text-success" : "text-ink-muted"}`}>
-            {strong ? "Strong ✓" : "Add an uppercase letter and a digit to strengthen"}
-          </div>
-        )}
-      </label>
-      <label className="block">
-        <span className="form-label">Confirm new password</span>
-        <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)}
-          data-testid="password-confirm"
-          autoComplete="new-password" minLength={8}
-          className="input-premium mt-1 w-full" required />
-        {confirm && confirm !== next && (
-          <div className="text-tiny mt-1 text-danger">Passwords don&apos;t match</div>
-        )}
-      </label>
-
-      <div className="flex justify-end pt-2 border-t border-line">
-        <button type="submit" disabled={busy || !current || !next || next !== confirm}
-          data-testid="password-submit"
-          className="btn-primary disabled:opacity-40">
-          {busy ? <><Loader2 size={14} className="animate-spin" /> Updating…</> : "Change password"}
-        </button>
-      </div>
-    </form>
+        <div className="flex justify-end" style={{ paddingTop: 12, borderTop: "1px solid var(--border-subtle)" }}>
+          <Button type="submit" variant="primary" isLoading={busy} isDisabled={!current || !next || next !== confirm} data-testid="password-submit">Change password</Button>
+        </div>
+      </form>
+    </Card>
   );
 }
 
@@ -268,12 +242,8 @@ function SecuritySection() {
 
 function WorkspaceSection({ user, workspace }) {
   return (
-    <div className="card-flat shadow-card p-6 space-y-4" data-testid="workspace-section">
-      <div>
-        <div className="font-display font-semibold text-card-title">Workspace</div>
-        <div className="text-caption text-ink-muted mt-0.5">Team-wide info. Contact your admin to change these values.</div>
-      </div>
-      <div className="grid md:grid-cols-2 gap-3 text-body">
+    <Card title="Workspace" subtitle="Team-wide info. Contact your admin to change these values." data-testid="workspace-section">
+      <div className="grid md:grid-cols-2 gap-3">
         <Row k="Workspace" v={workspace?.name} />
         <Row k="Plan" v={workspace?.plan || "trial"} />
         <Row k="Owner" v={user?.email} />
@@ -281,7 +251,7 @@ function WorkspaceSection({ user, workspace }) {
         <Row k="Workspace ID" v={workspace?.id} mono />
         <Row k="LLM quota used" v={String(workspace?.quota_used ?? 0)} mono />
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -305,48 +275,38 @@ function ConnectedClientsSection() {
     } finally { setBusyId(null); }
   };
 
-  if (!clients) return <div className="text-ink-muted text-caption">Loading connected AI clients…</div>;
+  if (!clients) return <div style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>Loading connected AI clients…</div>;
 
   return (
-    <div className="card-flat shadow-card p-6 space-y-4" data-testid="connected-clients-section">
-      <div>
-        <div className="font-display font-semibold text-card-title">Connected AI clients</div>
-        <div className="text-caption text-ink-muted mt-0.5">
-          AI assistants a teammate has connected to this workspace via MCP. Revoking cuts off access
-          immediately — every action an AI client takes is also visible in the audit log.
-        </div>
-      </div>
-
+    <Card title="Connected AI clients"
+      subtitle="AI assistants a teammate has connected to this workspace via MCP. Revoking cuts off access immediately — every action an AI client takes is also visible in the audit log."
+      data-testid="connected-clients-section">
       {clients.length === 0 ? (
-        <div className="text-caption text-ink-muted py-6 text-center border border-dashed border-line rounded-xl">
-          No AI clients connected yet.
-        </div>
+        <EmptyState icon={Plug} title="No AI clients connected yet" description="Connect an MCP client to see it here." className="py-8" />
       ) : (
         <div className="space-y-2">
           {clients.map((c) => (
             <div key={c.grant_id} data-testid="connected-client-row"
-              className="flex items-center justify-between border border-line rounded-lg px-3 py-2.5 bg-white gap-3">
+              className="flex items-center justify-between gap-3" style={{ border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", padding: "10px 12px" }}>
               <div className="min-w-0">
-                <div className="text-body font-medium truncate">{c.client_name}</div>
-                <div className="text-tiny text-ink-muted mt-0.5 truncate">
+                <div className="truncate" style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>{c.client_name}</div>
+                <div className="truncate" style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>
                   Connected by {c.connected_by} · {new Date(c.connected_at).toLocaleDateString()} · {c.scopes.join(", ")}
                 </div>
               </div>
-              <button onClick={() => revoke(c.grant_id)} disabled={busyId === c.grant_id}
-                data-testid="connected-client-revoke"
-                className="btn-secondary text-danger shrink-0 disabled:opacity-60">
-                {busyId === c.grant_id ? <Loader2 size={14} className="animate-spin" /> : "Revoke"}
-              </button>
+              <Button variant="danger-subtle" onClick={() => revoke(c.grant_id)} isLoading={busyId === c.grant_id} data-testid="connected-client-revoke" className="shrink-0">Revoke</Button>
             </div>
           ))}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
 const TONES = ["warm", "professional", "direct", "playful", "formal"];
+const TONE_OPTIONS = TONES.map((t) => ({ value: t, label: t[0].toUpperCase() + t.slice(1) }));
 const PERSONA_TYPES = ["individual", "influencer", "enterprise", "startup", "solo_company"];
+const PERSONA_OPTIONS = [{ value: "", label: "Not set" }, ...PERSONA_TYPES.map((p) => ({ value: p, label: p.replace("_", " ").replace(/^\w/, (c) => c.toUpperCase()) }))];
 const SOCIAL_PLATFORMS = ["linkedin", "instagram", "youtube"];
 
 function BrandVoiceSection() {
@@ -397,153 +357,115 @@ function BrandVoiceSection() {
     } finally { setBusy(false); }
   };
 
-  if (!bv) return <div className="text-ink-muted text-caption">Loading brand voice…</div>;
+  if (!bv) return <div style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>Loading brand voice…</div>;
 
   return (
-    <div className="card-flat shadow-card p-6 space-y-5" data-testid="brand-voice-section">
-      <div>
-        <div className="font-display font-semibold text-card-title">Brand voice</div>
-        <div className="text-caption text-ink-muted mt-0.5">
-          What every agent's AI drafting (cold emails, proposals, carousel copy) should know about your
-          business — this is what actually reaches the model, not just a display setting.
-        </div>
-      </div>
+    <Card title="Brand voice"
+      subtitle="What every agent's AI drafting (cold emails, proposals, carousel copy) should know about your business — this is what actually reaches the model, not just a display setting."
+      data-testid="brand-voice-section">
+      <div className="space-y-4">
+        <Input as="textarea" rows={3} label="What you sell / your offer" value={bv.offer} onChange={(e) => patch({ offer: e.target.value })}
+          data-testid="brand-voice-offer" placeholder="e.g. A project-management tool for construction teams that replaces spreadsheets and site visits."
+          help="Used by Pitch EQ and Proposal EQ so drafts describe your business, not a generic placeholder." />
 
-      <label className="block">
-        <span className="form-label">What you sell / your offer</span>
-        <textarea value={bv.offer} onChange={(e) => patch({ offer: e.target.value })}
-          data-testid="brand-voice-offer" rows={3}
-          placeholder="e.g. A project-management tool for construction teams that replaces spreadsheets and site visits."
-          className="input-premium mt-1 w-full" />
-        <span className="text-tiny text-ink-muted mt-1 block">
-          Used by Pitch EQ and Proposal EQ so drafts describe your business, not a generic placeholder.
-        </span>
-      </label>
+        <Input as="textarea" rows={2} label="Ideal customer profile" value={bv.icp_description} onChange={(e) => patch({ icp_description: e.target.value })}
+          data-testid="brand-voice-icp" placeholder="e.g. Operations leads at mid-size construction firms (50-500 employees)." />
 
-      <label className="block">
-        <span className="form-label">Ideal customer profile</span>
-        <textarea value={bv.icp_description} onChange={(e) => patch({ icp_description: e.target.value })}
-          data-testid="brand-voice-icp" rows={2}
-          placeholder="e.g. Operations leads at mid-size construction firms (50-500 employees)."
-          className="input-premium mt-1 w-full" />
-      </label>
+        <Select label="Default tone" value={bv.tone} onChange={(v) => patch({ tone: v })} data-testid="brand-voice-tone" options={TONE_OPTIONS}
+          help="Used whenever a specific campaign or draft doesn't override the tone itself." />
 
-      <label className="block">
-        <span className="form-label">Default tone</span>
-        <select value={bv.tone} onChange={(e) => patch({ tone: e.target.value })}
-          data-testid="brand-voice-tone"
-          className="input-premium mt-1 w-full capitalize">
-          {TONES.map((t) => <option key={t} value={t} className="capitalize">{t}</option>)}
-        </select>
-        <span className="text-tiny text-ink-muted mt-1 block">
-          Used whenever a specific campaign or draft doesn't override the tone itself.
-        </span>
-      </label>
-
-      <label className="block">
-        <span className="form-label">Sample email <span className="text-ink-muted font-normal">(optional)</span></span>
-        <textarea value={bv.sample} onChange={(e) => patch({ sample: e.target.value })}
-          data-testid="brand-voice-sample" rows={3}
-          placeholder="Paste an email that sounds like you, for the AI to match style against."
-          className="input-premium mt-1 w-full" />
-      </label>
-
-      <div>
-        <span className="form-label">Banned phrases</span>
-        <div className="flex gap-2 mt-1">
-          <input value={phraseInput} onChange={(e) => setPhraseInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPhrase(); } }}
-            data-testid="brand-voice-phrase-input"
-            placeholder="e.g. synergy — press Enter to add"
-            className="input-premium flex-1" />
-          <button type="button" onClick={addPhrase} data-testid="brand-voice-phrase-add" className="btn-secondary shrink-0">Add</button>
-        </div>
-        {bv.banned_phrases.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {bv.banned_phrases.map((p) => (
-              <span key={p} className="pill flex items-center gap-1">
-                {p}
-                <button type="button" onClick={() => removePhrase(p)} className="hover:text-danger">×</button>
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="pt-3 border-t border-line space-y-5">
-        <div className="text-caption text-ink-muted -mb-1">
-          The fields below are read by Social EQ's daily content pipeline in addition to the tone/offer/ICP above.
-        </div>
-
-        <label className="block">
-          <span className="form-label">Persona type</span>
-          <select value={bv.persona_type || ""} onChange={(e) => patch({ persona_type: e.target.value || null })}
-            data-testid="brand-voice-persona-type" className="input-premium mt-1 w-full capitalize">
-            <option value="">Not set</option>
-            {PERSONA_TYPES.map((p) => <option key={p} value={p} className="capitalize">{p.replace("_", " ")}</option>)}
-          </select>
-        </label>
+        <Input as="textarea" rows={3} label="Sample email" optional value={bv.sample} onChange={(e) => patch({ sample: e.target.value })}
+          data-testid="brand-voice-sample" placeholder="Paste an email that sounds like you, for the AI to match style against." />
 
         <div>
-          <span className="form-label">Content pillars <span className="text-ink-muted font-normal">(3-5 recurring topics)</span></span>
-          <div className="flex gap-2 mt-1">
-            <input value={pillarInput} onChange={(e) => setPillarInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPillar(); } }}
-              data-testid="brand-voice-pillar-input"
-              placeholder="e.g. product tips — press Enter to add"
-              className="input-premium flex-1" />
-            <button type="button" onClick={addPillar} data-testid="brand-voice-pillar-add" className="btn-secondary shrink-0">Add</button>
+          <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>Banned phrases</label>
+          <div className="flex gap-2">
+            <Input value={phraseInput} onChange={(e) => setPhraseInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPhrase(); } }}
+              data-testid="brand-voice-phrase-input" placeholder="e.g. synergy — press Enter to add" className="flex-1" />
+            <Button type="button" variant="secondary" onClick={addPhrase} data-testid="brand-voice-phrase-add" className="shrink-0">Add</Button>
           </div>
-          {bv.content_pillars.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {bv.content_pillars.map((p) => (
-                <span key={p} className="pill flex items-center gap-1">
-                  {p}
-                  <button type="button" onClick={() => removePillar(p)} className="hover:text-danger">×</button>
-                </span>
-              ))}
+          {bv.banned_phrases.length > 0 && (
+            <div className="flex flex-wrap gap-1.5" style={{ marginTop: 8 }}>
+              {bv.banned_phrases.map((p) => <Chip key={p} label={p} onRemove={() => removePhrase(p)} />)}
             </div>
           )}
         </div>
 
-        <div>
-          <span className="form-label">Posting cadence</span>
-          <div className="flex items-center gap-2 mt-1">
-            <input type="number" min={1} max={7} value={bv.posting_cadence.days_per_week}
-              onChange={(e) => patchCadence({ days_per_week: Number(e.target.value) || 1 })}
-              data-testid="brand-voice-cadence-days" className="input-premium w-20" />
-            <span className="text-caption text-ink-muted">days/week, on:</span>
+        <div className="space-y-4" style={{ paddingTop: 16, borderTop: "1px solid var(--border-subtle)" }}>
+          <div style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>
+            The fields below are read by Social EQ's daily content pipeline in addition to the tone/offer/ICP above.
           </div>
-          <div className="flex flex-wrap gap-2 mt-2">
-            {SOCIAL_PLATFORMS.map((plat) => (
-              <button type="button" key={plat} onClick={() => togglePlatform(plat)}
-                data-testid={`brand-voice-platform-${plat}`}
-                className={`pill capitalize ${bv.posting_cadence.preferred_platforms?.includes(plat) ? "bg-ink text-white" : ""}`}>
-                {plat}
-              </button>
-            ))}
+
+          <Select label="Persona type" value={bv.persona_type || ""} onChange={(v) => patch({ persona_type: v || null })}
+            data-testid="brand-voice-persona-type" options={PERSONA_OPTIONS} />
+
+          <div>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>
+              Content pillars <span style={{ fontWeight: 400, color: "var(--text-tertiary)" }}>(3-5 recurring topics)</span>
+            </label>
+            <div className="flex gap-2">
+              <Input value={pillarInput} onChange={(e) => setPillarInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPillar(); } }}
+                data-testid="brand-voice-pillar-input" placeholder="e.g. product tips — press Enter to add" className="flex-1" />
+              <Button type="button" variant="secondary" onClick={addPillar} data-testid="brand-voice-pillar-add" className="shrink-0">Add</Button>
+            </div>
+            {bv.content_pillars.length > 0 && (
+              <div className="flex flex-wrap gap-1.5" style={{ marginTop: 8 }}>
+                {bv.content_pillars.map((p) => <Chip key={p} label={p} onRemove={() => removePillar(p)} />)}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>Posting cadence</label>
+            <div className="flex items-center gap-2">
+              <Input type="number" min={1} max={7} value={bv.posting_cadence.days_per_week}
+                onChange={(e) => patchCadence({ days_per_week: Number(e.target.value) || 1 })}
+                data-testid="brand-voice-cadence-days" className="w-20" />
+              <span style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>days/week, on:</span>
+            </div>
+            <div className="flex flex-wrap gap-2" style={{ marginTop: 8 }}>
+              {SOCIAL_PLATFORMS.map((plat) => {
+                const selected = bv.posting_cadence.preferred_platforms?.includes(plat);
+                return (
+                  <button type="button" key={plat} onClick={() => togglePlatform(plat)}
+                    data-testid={`brand-voice-platform-${plat}`}
+                    className="capitalize"
+                    style={{
+                      height: 28, padding: "0 12px", borderRadius: "var(--radius-full)",
+                      border: `1px solid ${selected ? "var(--color-primary)" : "var(--border-default)"}`,
+                      background: selected ? "var(--color-primary)" : "var(--bg-surface)",
+                      color: selected ? "#fff" : "var(--text-primary)", fontSize: 12.5, fontWeight: 500,
+                    }}>
+                    {plat}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="text-caption text-ink-tertiary pt-2 border-t border-line">
-        Brand kits (logo + colors + font) applied inside Create EQ propagate to all slides separately — that's visual styling, not covered here.
-      </div>
+        <div style={{ fontSize: 11.5, color: "var(--text-tertiary)", paddingTop: 12, borderTop: "1px solid var(--border-subtle)" }}>
+          Brand kits (logo + colors + font) applied inside Create EQ propagate to all slides separately — that's visual styling, not covered here.
+        </div>
 
-      <div className="flex justify-end pt-2 border-t border-line">
-        <button onClick={save} disabled={busy} data-testid="brand-voice-save" className="btn-primary disabled:opacity-60">
-          {busy ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : "Save brand voice"}
-        </button>
+        <div className="flex justify-end">
+          <Button variant="primary" onClick={save} isLoading={busy} data-testid="brand-voice-save">Save brand voice</Button>
+        </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
 function Row({ k, v, mono }) {
   return (
-    <div className="flex justify-between border border-line rounded-lg px-3 py-2 bg-white">
-      <span className="ui-label">{k}</span>
-      <span className={mono ? "font-mono text-caption text-ink-secondary truncate max-w-[60%]" : "text-body text-ink"}>{v || "—"}</span>
+    <div className="flex justify-between" style={{ border: "1px solid var(--border-default)", borderRadius: "var(--radius-md)", padding: "8px 12px" }}>
+      <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)" }}>{k}</span>
+      <span className={mono ? "tnum truncate" : "truncate"} style={{
+        fontSize: 13, color: mono ? "var(--text-secondary)" : "var(--text-primary)",
+        fontFamily: mono ? "var(--font-mono)" : "var(--font-ui)", maxWidth: "60%",
+      }}>{v || "—"}</span>
     </div>
   );
 }

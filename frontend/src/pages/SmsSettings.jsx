@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
+import { Check } from "../icons";
+import Card from "../components/composites/Card";
+import Input from "../components/primitives/Input";
+import Button from "../components/primitives/Button";
 
 export default function SmsSettings() {
   const [settings, setSettings] = useState({});
@@ -18,27 +22,19 @@ export default function SmsSettings() {
   return (
     <div>
       <PageHeader title="SMS EQ Settings" subtitle="Configure SMS sending preferences." />
-      <div className="animate-fade-in px-6 sm:px-8 max-w-2xl space-y-4">
-        <div className="bg-white border border-line rounded-2xl p-6 space-y-4">
-          <div className="text-card-title font-display font-semibold">Configuration</div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="ui-label">Default sender name</label>
-              <input className="inp w-full" value={settings.default_sender_name || ""} onChange={(e) => setSettings({ ...settings, default_sender_name: e.target.value })} />
+      <div className="animate-fade-in px-6 sm:px-8 py-6 max-w-2xl space-y-4">
+        <Card title="Configuration">
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Input label="Default sender name" value={settings.default_sender_name || ""} onChange={(e) => setSettings({ ...settings, default_sender_name: e.target.value })} />
+              <Input type="number" label="Max sends per minute" value={settings.max_sends_per_minute ?? 30} onChange={(e) => setSettings({ ...settings, max_sends_per_minute: parseInt(e.target.value) || 30 })} />
             </div>
-            <div>
-              <label className="ui-label">Max sends per minute</label>
-              <input className="inp w-full" type="number" value={settings.max_sends_per_minute ?? 30} onChange={(e) => setSettings({ ...settings, max_sends_per_minute: parseInt(e.target.value) || 30 })} />
+            <Input as="textarea" rows={3} label="Auto-reply message" help="Sent when STOP keywords are received" value={settings.auto_reply_text || ""} onChange={(e) => setSettings({ ...settings, auto_reply_text: e.target.value })} />
+            <div className="flex justify-end">
+              <Button variant="primary" icon={Check} onClick={save}>Save</Button>
             </div>
           </div>
-          <div>
-            <label className="ui-label">Auto-reply message (when STOP keywords are sent)</label>
-            <textarea className="inp w-full h-20" value={settings.auto_reply_text || ""} onChange={(e) => setSettings({ ...settings, auto_reply_text: e.target.value })} />
-          </div>
-          <div className="flex justify-end">
-            <button onClick={save} className="btn-primary">Save</button>
-          </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

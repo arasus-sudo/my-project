@@ -188,92 +188,147 @@ export default function AppLayout() {
 
   useEffect(() => { closeSidebar(); }, [loc.pathname, closeSidebar]);
 
+  // §8.1 sidebar item — default/hover/active states + item geometry, shared
+  // by both the nav links below and the mobile-only inbox/admin/logout
+  // icon buttons so every clickable row in the rail reads consistently.
+  const navItemStyle = (active) => ({
+    display: "flex", alignItems: "center", gap: 8, height: 38, padding: "0 10px",
+    borderRadius: "var(--radius-md)", fontSize: 13.5, fontWeight: 500, fontFamily: "var(--font-ui)",
+    color: active ? "var(--color-primary)" : "var(--text-secondary)",
+    background: active ? "var(--bg-selected)" : "transparent",
+    border: active ? "1px solid var(--color-primary-border)" : "1px solid transparent",
+    transition: "background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)",
+  });
+
   return (
-    <div className="min-h-screen flex bg-bone">
+    <div className="min-h-screen flex" style={{ background: "var(--bg-canvas)" }}>
       <button onClick={() => setSidebarOpen(true)} data-testid="sidebar-open"
-        className="lg:hidden fixed top-4 left-4 z-50 p-2.5 bg-surface/80 backdrop-blur-xl border border-line rounded-xl shadow-card hover:shadow-card-hover transition-all">
-        <Menu size={20} className="text-ink" />
+        className="lg:hidden fixed top-4 left-4 z-50 p-2.5 transition-all"
+        style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-sm)" }}>
+        <Menu size={20} style={{ color: "var(--text-primary)" }} />
       </button>
 
       {sidebarOpen && (
-        <div className="lg:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40 animate-fade-in" onClick={closeSidebar} />
+        <div className="lg:hidden fixed inset-0 z-40 animate-fade-in" style={{ background: "var(--bg-overlay)" }} onClick={closeSidebar} />
       )}
 
-      <aside className={`fixed lg:sticky lg:h-screen inset-y-0 left-0 z-50 w-64 border-r border-line bg-surface flex flex-col transform transition-transform duration-300 ease-out ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
-        <div className="p-4 border-b border-line relative">
+      <aside
+        className={`fixed lg:sticky lg:h-screen inset-y-0 left-0 z-50 flex flex-col transform transition-transform duration-300 ease-out ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
+        style={{ width: 248, background: "var(--bg-surface)", borderRight: "1px solid var(--border-default)" }}
+      >
+        {/* Logo zone — §8.1: 56px tall, 16px bottom margin. */}
+        <div className="relative" style={{ padding: "16px 12px" }}>
           <button onClick={() => setOpen(!open)} data-testid="suite-switcher"
-            className="w-full flex items-center gap-3 hover:bg-ash rounded-xl p-2 transition-colors">
+            className="w-full flex items-center gap-3 transition-colors"
+            style={{ height: 40, borderRadius: "var(--radius-md)", padding: "0 8px" }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          >
             <div className="flex items-center justify-center">
               <InnoiraLogo size="xs" />
             </div>
-            <div className="flex-1 min-w-0">
-              <span className="font-display font-semibold text-body text-ink truncate block">{currentAgent.label}</span>
+            <div className="flex-1 min-w-0 text-left">
+              <span className="truncate block" style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>
+                {currentAgent.label}
+              </span>
             </div>
-            <ChevronDown size={14} className={`text-ink-muted transition-transform duration-200 shrink-0 ${open ? "rotate-180" : ""}`} />
+            <ChevronDown size={14} strokeWidth={1.5} aria-hidden="true"
+              className="shrink-0" style={{ color: "var(--text-tertiary)", transition: "transform var(--dur-fast) var(--ease-out)", transform: open ? "rotate(180deg)" : "rotate(0deg)" }} />
           </button>
           {open && (
-            <div className="absolute left-4 right-4 top-full mt-2 bg-surface border border-line rounded-2xl shadow-card-lg z-30 overflow-hidden animate-scale-in origin-top">
-              {AGENTS.map((a) => (
-                <button key={a.k} onClick={() => { setOpen(false); nav(a.root); }} data-testid={a.tid}
-                  className={`w-full text-left p-3 hover:bg-ash flex items-center gap-3 transition-colors ${a.k === currentAgent.k ? "bg-accent/5" : ""}`}>
-                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center text-tiny font-mono font-medium ${a.k === currentAgent.k ? "bg-accent text-white" : "bg-ash text-ink-muted"}`}>
-                    {AGENT_BADGE[a.k]}
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-body font-display font-medium">{a.label}</div>
-                    <div className="text-tiny text-ink-muted font-mono uppercase">{a.tag}</div>
-                  </div>
-                  {a.k === currentAgent.k && <span className="w-1.5 h-1.5 bg-accent rounded-full" />}
-                </button>
-              ))}
+            <div className="absolute left-3 right-3 top-full mt-1 overflow-y-auto scrollbar-thin animate-scale-in origin-top"
+              style={{ background: "var(--bg-surface-raised)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", zIndex: "var(--z-dropdown)", padding: 4, maxHeight: "calc(100vh - 100px)" }}
+            >
+              {AGENTS.map((a) => {
+                const active = a.k === currentAgent.k;
+                return (
+                  <button key={a.k} onClick={() => { setOpen(false); nav(a.root); }} data-testid={a.tid}
+                    className="w-full text-left flex items-center gap-3 transition-colors"
+                    style={{ padding: 10, borderRadius: "var(--radius-md)", background: active ? "var(--bg-selected)" : "transparent" }}
+                    onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                    onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <div className="flex items-center justify-center shrink-0"
+                      style={{
+                        width: 28, height: 28, borderRadius: "var(--radius-md)", fontSize: 11, fontWeight: 500, fontFamily: "var(--font-mono)",
+                        background: active ? "var(--color-primary)" : "var(--bg-active)", color: active ? "#FFFFFF" : "var(--text-secondary)",
+                      }}
+                    >
+                      {AGENT_BADGE[a.k]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate" style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>{a.label}</div>
+                      <div style={{ fontSize: 10.5, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)", textTransform: "uppercase" }}>{a.tag}</div>
+                    </div>
+                    {active && <span style={{ width: 6, height: 6, borderRadius: "var(--radius-full)", background: "var(--color-primary)" }} />}
+                  </button>
+                );
+              })}
               <button onClick={() => { setOpen(false); nav("/suite"); }} data-testid="suite-home-link"
-                className="w-full text-left p-3 hover:bg-ash flex items-center gap-3 border-t border-line text-ink-muted transition-colors">
-                <div className="w-7 h-7 rounded-xl bg-ash flex items-center justify-center"><LayoutGrid size={14} /></div>
-                <div className="text-body font-display font-medium">Command center</div>
+                className="w-full text-left flex items-center gap-3 transition-colors"
+                style={{ padding: 10, borderRadius: "var(--radius-md)", borderTop: "1px solid var(--border-subtle)", marginTop: 4, paddingTop: 14, color: "var(--text-secondary)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                <div className="flex items-center justify-center" style={{ width: 28, height: 28, borderRadius: "var(--radius-md)", background: "var(--bg-active)" }}>
+                  <LayoutGrid size={14} strokeWidth={1.5} aria-hidden="true" />
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 500, fontFamily: "var(--font-ui)" }}>Command center</span>
               </button>
             </div>
           )}
         </div>
-        <div className="px-4 pt-2 flex items-center gap-2">
+
+        <div className="flex items-center gap-2" style={{ padding: "0 12px 8px" }}>
           <button onClick={() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
             data-testid="open-command-palette"
-            className="flex-1 flex items-center gap-2 px-3 py-1.5 text-caption text-ink-muted bg-ash hover:bg-line/40 rounded-xl transition-colors">
-            <Search size={14} />
+            className="flex-1 flex items-center gap-2 transition-colors"
+            style={{ height: 32, padding: "0 10px", borderRadius: "var(--radius-md)", background: "var(--bg-surface-sunken)", color: "var(--text-tertiary)", fontSize: 12.5, fontFamily: "var(--font-ui)" }}
+          >
+            <Search size={14} strokeWidth={1.5} aria-hidden="true" />
             <span className="flex-1 text-left">Search…</span>
-            <kbd className="text-tiny font-mono">⌘K</kbd>
+            <kbd style={{ fontSize: 10.5, fontFamily: "var(--font-mono)", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-xs)", padding: "1px 5px" }}>⌘K</kbd>
           </button>
           <button onClick={() => nav("/app/unified-inbox")} title="Unified inbox — every channel, one list"
             data-testid="open-unified-inbox"
-            className="p-2 text-ink-muted hover:text-ink hover:bg-ash rounded-xl transition-all">
-            <InboxIcon size={16} />
+            className="inline-grid place-items-center transition-colors"
+            style={{ width: 32, height: 32, borderRadius: "var(--radius-md)", color: "var(--text-tertiary)" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-tertiary)"; }}
+          >
+            <InboxIcon size={16} strokeWidth={1.5} aria-hidden="true" />
           </button>
           <NotificationsCenter />
         </div>
-        <nav className="flex-1 min-h-0 p-4 space-y-1 overflow-y-auto scrollbar-thin">
+
+        {/* §8.1: item gap 2px, group label as overline. */}
+        <nav className="flex-1 min-h-0 overflow-y-auto scrollbar-thin" style={{ padding: "4px 12px", display: "flex", flexDirection: "column", gap: 2 }}>
           {currentAgent.nav.filter((n) => !n.orgAdminOnly || user?.role === "org_admin" || user?.is_admin).map((n) => (
             <NavLink
               key={n.to}
               to={n.to}
               end={n.end}
               data-testid={n.tid}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 text-body font-display font-medium rounded-xl transition-all duration-200 ${
-                  isActive ? "bg-accent-soft text-accent" : "text-ink-muted hover:text-ink hover:bg-ash"
-                }`
-              }
+              style={({ isActive }) => navItemStyle(isActive)}
+              onMouseEnter={(e) => { if (e.currentTarget.getAttribute("aria-current") !== "page") e.currentTarget.style.background = "var(--bg-hover)"; }}
+              onMouseLeave={(e) => { if (e.currentTarget.getAttribute("aria-current") !== "page") e.currentTarget.style.background = "transparent"; }}
             >
-              <n.icon size={15} strokeWidth={1.75} />
+              <n.icon size={18} strokeWidth={1.5} aria-hidden="true" />
               <span className="truncate">{n.label}</span>
             </NavLink>
           ))}
         </nav>
-        <div className="p-3 border-t border-line">
-          <div className="px-1 pb-2">
+
+        {/* Footer — §8.1: pinned bottom, divider, then the user block. */}
+        <div style={{ padding: 12, borderTop: "1px solid var(--border-subtle)" }}>
+          <div style={{ paddingBottom: 8 }}>
             <CreditPill />
           </div>
-          <div className="flex items-center gap-3 pt-2 border-t border-line">
+          <div className="flex items-center gap-3" style={{ paddingTop: 8, borderTop: "1px solid var(--border-subtle)" }}>
             <button onClick={() => nav("/settings")} title="Profile settings"
-              className="w-8 h-8 bg-ash text-ink flex items-center justify-center rounded-xl font-mono text-caption font-semibold shrink-0 overflow-hidden hover:opacity-80 transition-opacity">
+              className="flex items-center justify-center shrink-0 overflow-hidden transition-opacity"
+              style={{ width: 32, height: 32, borderRadius: "var(--radius-full)", background: "var(--bg-active)", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600 }}
+            >
               {user?.avatar_url ? (
                 <img src={user.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               ) : (
@@ -281,17 +336,26 @@ export default function AppLayout() {
               )}
             </button>
             <button onClick={() => nav("/settings")} className="flex-1 min-w-0 text-left">
-              <div className="text-caption font-display font-medium truncate">{user?.name}</div>
-              <div className="text-tiny text-ink-muted truncate">{user?.email}</div>
+              <div className="truncate" style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>{user?.name}</div>
+              <div className="truncate" style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{user?.email}</div>
             </button>
             {user?.is_admin && (
               <button onClick={() => nav("/admin")} data-testid="admin-link" title="Suite Admin"
-                className="p-2 text-ink-muted hover:text-ink hover:bg-ash rounded-xl transition-all">
-                <Shield size={14} />
+                className="inline-grid place-items-center transition-colors"
+                style={{ width: 28, height: 28, borderRadius: "var(--radius-md)", color: "var(--text-tertiary)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-tertiary)"; }}
+              >
+                <Shield size={14} strokeWidth={1.5} aria-hidden="true" />
               </button>
             )}
-            <button data-testid="logout-btn" onClick={logout} className="p-2 text-ink-muted hover:text-ink hover:bg-ash rounded-xl transition-all">
-              <LogOut size={14} />
+            <button data-testid="logout-btn" onClick={logout}
+              className="inline-grid place-items-center transition-colors"
+              style={{ width: 28, height: 28, borderRadius: "var(--radius-md)", color: "var(--text-tertiary)" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-tertiary)"; }}
+            >
+              <LogOut size={14} strokeWidth={1.5} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -319,22 +383,46 @@ function ContentLoader() {
   );
 }
 
+/* PageHeader — docs/design-system.md §8.2.
+ * Row 1: heading-2 title + body-sm description, up to 4 right-aligned
+ * controls. Sticks to the top with --bg-canvas + --border-default after
+ * scroll — restyled onto tokens in place rather than as a parallel
+ * composite, since every page already imports this one. */
 export function PageHeader({ title, subtitle, right, badge }) {
   return (
-    <div className="border-b border-line bg-surface/80 backdrop-blur-sm sticky top-0 z-10">
+    <div
+      className="sticky top-0 z-10"
+      style={{ background: "var(--bg-canvas)", borderBottom: "1px solid var(--border-default)" }}
+    >
       {/* pl-16 below lg clears the fixed hamburger button (top-4 left-4, ~44px);
           actions stack under the title on phones instead of crushing it. */}
       <div className="pl-16 pr-6 sm:pr-8 lg:pl-8 py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-page-title font-display font-semibold truncate">{title}</h1>
+            <h1
+              className="truncate"
+              style={{ fontSize: 20, lineHeight: "26px", fontWeight: 600, letterSpacing: "-0.01em", color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}
+            >
+              {title}
+            </h1>
             {badge && (
-              <span className="badge-info">
-                <Info size={12} /> {badge}
+              <span
+                className="inline-flex items-center gap-1"
+                style={{
+                  height: 20, padding: "0 8px", borderRadius: "var(--radius-sm)",
+                  background: "var(--color-primary-subtle)", color: "var(--color-primary)",
+                  fontSize: 11.5, fontWeight: 500, fontFamily: "var(--font-ui)",
+                }}
+              >
+                <Info size={12} strokeWidth={1.5} aria-hidden="true" /> {badge}
               </span>
             )}
           </div>
-          {subtitle && <div className="text-caption text-ink-muted mt-1 truncate">{subtitle}</div>}
+          {subtitle && (
+            <div className="truncate" style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
+              {subtitle}
+            </div>
+          )}
         </div>
         {right && <div className="flex items-center gap-2.5 shrink-0 flex-wrap">{right}</div>}
       </div>

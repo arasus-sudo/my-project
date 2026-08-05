@@ -2,9 +2,22 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "../icons";
+import Table from "../components/composites/Table";
+import { EmptyState } from "../components/composites/EmptyState";
+import { Modal, ModalContent } from "../components/composites/Modal";
+import Input from "../components/primitives/Input";
+import Select from "../components/primitives/Select";
+import Button from "../components/primitives/Button";
 
-const TYPE_COLORS = { asset: "text-blue-600", liability: "text-orange-600", equity: "text-purple-600", revenue: "text-green-600", expense: "text-red-600" };
+const TYPE_COLOR = {
+  asset: "var(--color-primary)", liability: "var(--color-warning-text)", equity: "var(--text-secondary)",
+  revenue: "var(--color-success-text)", expense: "var(--color-danger)",
+};
+const TYPE_OPTIONS = [
+  { value: "asset", label: "Asset" }, { value: "liability", label: "Liability" }, { value: "equity", label: "Equity" },
+  { value: "revenue", label: "Revenue" }, { value: "expense", label: "Expense" },
+];
 
 export default function ChartOfAccounts() {
   const [items, setItems] = useState([]);
@@ -30,55 +43,55 @@ export default function ChartOfAccounts() {
     } catch (err) { toast.error(err.response?.data?.detail || "Delete failed"); }
   };
 
+  const columns = [
+    { key: "code", label: "Code", render: (a) => <span className="tnum" style={{ fontFamily: "var(--font-mono)" }}>{a.code}</span> },
+    { key: "name", label: "Name", render: (a) => <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{a.name}</span> },
+    { key: "type", label: "Type", render: (a) => <span className="capitalize" style={{ color: TYPE_COLOR[a.account_type] || "var(--text-primary)" }}>{a.account_type}</span> },
+    { key: "category", label: "Category", render: (a) => <span style={{ color: "var(--text-tertiary)" }}>{a.category}</span> },
+    { key: "balance", label: "Balance", align: "right", render: (a) => <span className="tnum" style={{ fontFamily: "var(--font-mono)" }}>${a.balance?.toFixed(2)}</span> },
+    {
+      key: "actions", label: "", align: "right", render: (a) => (
+        <button onClick={() => del(a.id)} style={{ color: "var(--text-tertiary)" }}>
+          <Trash2 size={14} strokeWidth={1.5} aria-hidden="true" />
+        </button>
+      ),
+    },
+  ];
+
   return (
     <div>
       <PageHeader title="Chart of Accounts" subtitle="Your general ledger account structure."
-        right={<button onClick={() => setModal(true)} className="btn-primary"><Plus size={14} /> New account</button>}
+        right={<Button variant="primary" icon={Plus} onClick={() => setModal(true)}>New account</Button>}
       />
-      <div className="animate-fade-in px-6 sm:px-8">
-        {items.length === 0 && <div className="text-body text-ink-muted">No accounts yet.</div>}
-        <div className="bg-white border border-line rounded-2xl overflow-hidden">
-          <table className="w-full text-body">
-            <thead><tr className="border-b border-line bg-ash text-left">
-              <th className="table-header p-3">Code</th><th className="table-header p-3">Name</th><th className="table-header p-3">Type</th><th className="table-header p-3">Category</th><th className="table-header p-3">Balance</th><th className="p-3"></th>
-            </tr></thead>
-            <tbody>
-              {items.map((a) => (
-                <tr key={a.id} className="border-b border-line last:border-0 hover:bg-ash/50">
-                  <td className="p-3 font-mono">{a.code}</td>
-                  <td className="p-3 font-medium">{a.name}</td>
-                  <td className={`p-3 ${TYPE_COLORS[a.account_type] || ""}`}>{a.account_type}</td>
-                  <td className="p-3 text-ink-muted">{a.category}</td>
-                  <td className="p-3 font-mono">${a.balance?.toFixed(2)}</td>
-                  <td className="p-3"><button onClick={() => del(a.id)} className="text-caption text-danger hover:underline"><Trash2 size={12} className="inline" /></button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <div className="animate-fade-in px-6 sm:px-8 py-6">
+        {items.length === 0 ? (
+          <EmptyState title="No accounts yet" description="Set up your chart of accounts to begin tracking transactions."
+            actionLabel="New account" onAction={() => setModal(true)} />
+        ) : (
+          <Table columns={columns} rows={items} rowKey={(a) => a.id} />
+        )}
       </div>
-      {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="text-card-title font-display font-semibold mb-4">New Account</div>
-            <form onSubmit={save} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <input className="inp" placeholder="Account code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required />
-                <input className="inp" placeholder="Account name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-              </div>
-              <select className="inp w-full" value={form.account_type} onChange={(e) => setForm({ ...form, account_type: e.target.value })}>
-                <option value="asset">Asset</option><option value="liability">Liability</option><option value="equity">Equity</option><option value="revenue">Revenue</option><option value="expense">Expense</option>
-              </select>
-              <input className="inp w-full" placeholder="Category (e.g. cash_and_bank, accounts_receivable)" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
-              <textarea className="inp w-full h-20" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary">Create</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+
+      <Modal open={modal} onOpenChange={setModal}>
+        <ModalContent size="sm" title="New Account"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setModal(false)}>Cancel</Button>
+              <Button variant="primary" type="submit" form="coa-form">Create</Button>
+            </>
+          }
+        >
+          <form id="coa-form" onSubmit={save} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <Input required label="Account code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+              <Input required label="Account name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <Select label="Type" value={form.account_type} onChange={(v) => setForm({ ...form, account_type: v })} options={TYPE_OPTIONS} />
+            <Input label="Category" help="e.g. cash_and_bank, accounts_receivable" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+            <Input as="textarea" rows={3} label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          </form>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

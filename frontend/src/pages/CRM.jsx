@@ -6,12 +6,19 @@ import { toast } from "sonner";
 import {
   Users, ListChecks, Kanban, BarChart3, Plus, Target, Activity, Phone, Mail,
   CalendarClock, FileText, MessageSquare, ArrowRight, Share2, Search,
-  CheckSquare, ShieldAlert, ChevronDown, ChevronUp, Building2, Trash2, RotateCcw, Copy,
-  ChevronLeft, ChevronRight, Loader2, ListOrdered,
-} from "lucide-react";
+  AlertTriangle, ChevronDown, ChevronRight, Building2, Trash2, RotateCcw, Copy,
+  Loader2, ListChecks as ListOrdered,
+} from "../icons";
+import { SkeletonKpiGrid, SkeletonListRows } from "../components/ui/loading-states";
+import MetricCard from "../components/composites/MetricCard";
+import Card from "../components/composites/Card";
+import { EmptyState } from "../components/composites/EmptyState";
+import Table, { TableFooter } from "../components/composites/Table";
+import IconSquare from "../components/primitives/IconSquare";
+import Button from "../components/primitives/Button";
+import Input from "../components/primitives/Input";
 
 const RECYCLE_TYPE_LABEL = { lead: "Lead", company: "Company", list: "Lead list", company_list: "Company list" };
-import { SkeletonKpiGrid, SkeletonListRows } from "../components/ui/loading-states";
 
 const QUARANTINE_REASON_LABEL = {
   invalid_syntax: "Invalid email — fix it on the lead",
@@ -121,13 +128,8 @@ export default function CRM() {
     });
   };
 
-  const selectAllRecycle = () => {
-    const rows = recycleBin.rows || [];
-    if (recycleSelected.size === rows.length) {
-      setRecycleSelected(new Set());
-    } else {
-      setRecycleSelected(new Set(rows.map((r) => `${r.type}::${r.id}`)));
-    }
+  const selectAllRecycle = (checked) => {
+    setRecycleSelected(checked ? new Set((recycleBin.rows || []).map((r) => `${r.type}::${r.id}`)) : new Set());
   };
 
   const selectFirstNRecycle = async () => {
@@ -157,42 +159,47 @@ export default function CRM() {
     } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
   };
 
-  const StatCard = ({ icon: Icon, label, value, to, color }) => (
-    <Link to={to} className="shadow-card p-5 rounded-2xl hover:shadow-card-hover transition-all bg-white">
-      <div className="flex items-center justify-between">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}>
-          <Icon size={16} className="text-white" />
-        </div>
-        <ArrowRight size={14} className="text-neutral-300" />
-      </div>
-      <div className="text-page-title font-display font-semibold mt-3">{value ?? "—"}</div>
-      <div className="text-caption text-ink-muted mt-1">{label}</div>
-    </Link>
-  );
-
   const ACTIVITY_ICON = {
     call: Phone, email: Mail, meeting: CalendarClock, booking: CalendarClock,
     proposal: FileText, note: MessageSquare, whatsapp: MessageSquare,
     post: Share2, lead: Users, research: Search, transfer: Phone,
   };
-  const ACTIVITY_COLOR = {
-    call: "bg-blue-500", email: "bg-purple-500", meeting: "bg-green-500",
-    booking: "bg-green-500", proposal: "bg-amber-500", note: "bg-neutral-500",
-    whatsapp: "bg-emerald-500", post: "bg-pink-500", lead: "bg-cyan-500",
-    research: "bg-violet-500", transfer: "bg-orange-500",
+  const ACTIVITY_TONE = {
+    call: "primary", email: "intel", meeting: "success",
+    booking: "success", proposal: "warning", note: "neutral",
+    whatsapp: "success", post: "intel", lead: "primary",
+    research: "intel", transfer: "warning",
   };
 
   if (!stats) {
     return (
       <div>
         <PageHeader title="CRM" subtitle="Shared lead repository, lists, and activity timeline — accessible by every agent." />
-        <div className="px-6 sm:px-8 space-y-8">
+        <div className="px-6 sm:px-8 py-6 space-y-8">
           <SkeletonKpiGrid count={4} />
           <SkeletonListRows rows={4} />
         </div>
       </div>
     );
   }
+
+  const recycleColumns = [
+    { key: "name", label: "Name", render: (item) => <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{item.name || "(untitled)"}</span> },
+    { key: "type", label: "Type", render: (item) => <span style={{ color: "var(--text-tertiary)" }}>{RECYCLE_TYPE_LABEL[item.type] || item.type}</span> },
+    {
+      key: "deleted_at", label: "Deleted",
+      render: (item) => <span className="tnum" style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--text-tertiary)" }}>{item.deleted_at ? new Date(item.deleted_at).toLocaleString() : "—"}</span>,
+    },
+    {
+      key: "actions", label: "Actions", align: "right",
+      render: (item) => (
+        <div className="flex items-center gap-2 justify-end">
+          <Button variant="secondary" size="xs" icon={RotateCcw} onClick={() => restoreRecycled(item)}>Restore</Button>
+          <Button variant="ghost" size="xs" icon={Trash2} onClick={() => purgeRecycled(item)}>Delete permanently</Button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -201,51 +208,44 @@ export default function CRM() {
         subtitle="Shared lead repository, lists, and activity timeline — accessible by every agent."
         right={
           <div className="flex items-center gap-2">
-            <Link to="/app/crm/leads" className="btn-secondary text-caption">
-              <Users size={14} /> Leads
-            </Link>
-            <Link to="/app/crm/lists" className="btn-secondary text-caption">
-              <ListChecks size={14} /> Lists
-            </Link>
-            <Link to="/app/crm/pipeline" className="btn-secondary text-caption">
-              <Kanban size={14} /> Pipeline
-            </Link>
+            <Button variant="secondary" icon={Users} onClick={() => nav("/app/crm/leads")}>Leads</Button>
+            <Button variant="secondary" icon={ListChecks} onClick={() => nav("/app/crm/lists")}>Lists</Button>
+            <Button variant="secondary" icon={Kanban} onClick={() => nav("/app/crm/pipeline")}>Pipeline</Button>
           </div>
         }
       />
-      <div className="animate-fade-in px-6 sm:px-8 space-y-8">
+      <div className="animate-fade-in px-6 sm:px-8 py-6 space-y-8">
         {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon={Users} label="Total Leads" value={stats?.totalLeads} to="/app/crm/leads" color="bg-accent" />
-          <StatCard icon={Building2} label="Companies" value={stats?.totalCompanies} to="/app/crm/companies" color="bg-accent" />
-          <StatCard icon={Target} label="Deals" value={stats?.totalDeals} to="/app/crm/pipeline" color="bg-blue-500" />
-          <StatCard icon={BarChart3} label="Pipeline Value" value={stats ? `$${(stats.pipelineValue).toLocaleString()}` : "—"} to="/app/crm/pipeline" color="bg-emerald-500" />
-          <StatCard icon={Activity} label="Deals Won" value={stats?.dealsWon} to="/app/crm/pipeline" color="bg-amber-500" />
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <MetricCard label="Total leads" value={stats?.totalLeads} icon={Users} tone="primary" />
+          <MetricCard label="Companies" value={stats?.totalCompanies} icon={Building2} tone="primary" />
+          <MetricCard label="Deals" value={stats?.totalDeals} icon={Target} tone="primary" />
+          <MetricCard label="Pipeline value" value={`$${(stats.pipelineValue || 0).toLocaleString()}`} icon={BarChart3} tone="success" />
+          <MetricCard label="Deals won" value={stats?.dealsWon} icon={Activity} tone="warning" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Lead Lists */}
           <div className="lg:col-span-1">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="ui-label">Lead Lists</h2>
-              <button onClick={() => nav("/app/crm/lists")} className="text-caption text-primary hover:underline inline-flex items-center gap-1">
-                <Plus size={12} /> New
+            <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
+              <h2 style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Lead lists</h2>
+              <button onClick={() => nav("/app/crm/lists")} className="inline-flex items-center gap-1" style={{ fontSize: 12, color: "var(--text-link)" }}>
+                <Plus size={12} strokeWidth={1.5} aria-hidden="true" /> New
               </button>
             </div>
             <div className="space-y-2">
               {lists.length === 0 && (
-                <div className="shadow-card p-4 rounded-2xl text-caption text-ink-muted bg-white">
-                  No lead lists yet. Create one to organize leads for any agent.
-                </div>
+                <Card padding="compact"><span style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>No lead lists yet. Create one to organize leads for any agent.</span></Card>
               )}
               {lists.map((l) => (
-                <Link key={l.id} to={`/app/crm/lists`}
-                  className="shadow-card p-4 rounded-2xl flex items-center justify-between hover:shadow-card-hover transition-all bg-white">
-                  <div>
-                    <div className="text-body font-medium">{l.name}</div>
-                    <div className="text-caption text-ink-muted">{l.lead_ids?.length || 0} leads</div>
-                  </div>
-                  <ArrowRight size={14} className="text-neutral-300" />
+                <Link key={l.id} to="/app/crm/lists">
+                  <Card padding="compact" className="flex items-center justify-between transition-shadow">
+                    <div>
+                      <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text-primary)" }}>{l.name}</div>
+                      <div style={{ fontSize: 11.5, color: "var(--text-tertiary)" }}>{l.lead_ids?.length || 0} leads</div>
+                    </div>
+                    <ArrowRight size={14} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--text-tertiary)" }} />
+                  </Card>
                 </Link>
               ))}
             </div>
@@ -253,35 +253,30 @@ export default function CRM() {
 
           {/* Recent Activity */}
           <div className="lg:col-span-2">
-            <h2 className="ui-label mb-3">Recent Activity</h2>
-            <div className="space-y-1">
+            <h2 style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 12 }}>Recent activity</h2>
+            <div className="space-y-1.5">
               {recentActivity.length === 0 && (
-                <div className="shadow-card p-4 rounded-2xl text-caption text-ink-muted bg-white">
-                  No activity yet. Activities from Voice EQ calls, Pitch EQ emails, and other agents appear here.
-                </div>
+                <Card padding="compact"><span style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>No activity yet. Activities from Voice EQ calls, Pitch EQ emails, and other agents appear here.</span></Card>
               )}
               {recentActivity.map((a) => {
                 const typeKey = Object.keys(ACTIVITY_ICON).find((k) => a.type.startsWith(k)) || "note";
                 const Icon = ACTIVITY_ICON[typeKey] || Activity;
-                const color = ACTIVITY_COLOR[typeKey] || "bg-neutral-500";
+                const tone = ACTIVITY_TONE[typeKey] || "neutral";
                 return (
-                  <div key={a.id} className="shadow-card p-3 rounded-xl flex items-start gap-3 bg-white">
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${color}`}>
-                      <Icon size={12} className="text-white" />
-                    </div>
+                  <Card key={a.id} padding="compact" className="flex items-start gap-3">
+                    <IconSquare icon={Icon} tone={tone} size={28} />
                     <div className="flex-1 min-w-0">
-                      <div className="text-caption text-ink-secondary">{a.summary}</div>
-                      <div className="text-tiny text-ink-muted font-mono mt-0.5">
+                      <div style={{ fontSize: 12.5, color: "var(--text-secondary)" }}>{a.summary}</div>
+                      <div className="tnum" style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)", marginTop: 2 }}>
                         {a.agent ? `${a.agent.toUpperCase()} · ` : ""}{a.at ? new Date(a.at).toLocaleString() : ""}
                       </div>
                     </div>
                     {a.lead?.id && (
-                      <Link to={`/app/crm/leads/${a.lead.id}`}
-                        className="text-tiny text-primary hover:underline shrink-0 font-mono">
+                      <Link to={`/app/crm/leads/${a.lead.id}`} className="tnum shrink-0" style={{ fontSize: 11, color: "var(--text-link)", fontFamily: "var(--font-mono)" }}>
                         {a.lead.first_name || "View"}
                       </Link>
                     )}
-                  </div>
+                  </Card>
                 );
               })}
             </div>
@@ -290,27 +285,28 @@ export default function CRM() {
 
         {/* Open tasks */}
         <div>
-          <h2 className="ui-label mb-3 flex items-center gap-1.5"><CheckSquare size={14} /> Open tasks</h2>
+          <h2 className="flex items-center gap-1.5" style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 12 }}>
+            <ListChecks size={14} strokeWidth={1.5} aria-hidden="true" /> Open tasks
+          </h2>
           {tasks.length === 0 ? (
-            <div className="shadow-card p-4 rounded-2xl text-caption text-ink-muted bg-white">
-              Nothing due — add a task from any lead's detail page.
-            </div>
+            <Card padding="compact"><span style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>Nothing due — add a task from any lead's detail page.</span></Card>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {tasks.map((t) => {
                 const overdue = t.due_at && new Date(t.due_at) < new Date();
                 return (
-                  <Link key={t.id} to={t.lead ? `/app/crm/leads/${t.lead.id}` : "/app/crm/leads"}
-                    className="shadow-card p-3 rounded-xl hover:shadow-card-hover transition-all bg-white">
-                    <div className="text-body font-medium truncate">{t.title}</div>
-                    <div className="text-caption text-ink-muted truncate mt-0.5">
-                      {t.lead ? `${t.lead.first_name} ${t.lead.last_name || ""}`.trim() : "—"}
-                    </div>
-                    {t.due_at && (
-                      <div className={`text-tiny font-mono mt-1 ${overdue ? "text-danger" : "text-ink-muted"}`}>
-                        Due {new Date(t.due_at).toLocaleDateString()}
+                  <Link key={t.id} to={t.lead ? `/app/crm/leads/${t.lead.id}` : "/app/crm/leads"}>
+                    <Card padding="compact" className="transition-shadow">
+                      <div className="truncate" style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text-primary)" }}>{t.title}</div>
+                      <div className="truncate" style={{ fontSize: 11.5, color: "var(--text-tertiary)", marginTop: 2 }}>
+                        {t.lead ? `${t.lead.first_name} ${t.lead.last_name || ""}`.trim() : "—"}
                       </div>
-                    )}
+                      {t.due_at && (
+                        <div className="tnum" style={{ fontSize: 11, fontFamily: "var(--font-mono)", marginTop: 6, color: overdue ? "var(--color-danger)" : "var(--text-tertiary)" }}>
+                          Due {new Date(t.due_at).toLocaleDateString()}
+                        </div>
+                      )}
+                    </Card>
                   </Link>
                 );
               })}
@@ -321,37 +317,33 @@ export default function CRM() {
         {/* Possible duplicates */}
         {duplicates.length > 0 && (
           <div>
-            <button onClick={() => setDuplicatesOpen((o) => !o)} className="ui-label mb-3 flex items-center gap-1.5 w-full">
-              <Copy size={14} /> Possible duplicates ({duplicates.length})
-              {duplicatesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            <button onClick={() => setDuplicatesOpen((o) => !o)} className="flex items-center gap-1.5 w-full"
+              style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 12 }}>
+              <Copy size={14} strokeWidth={1.5} aria-hidden="true" /> Possible duplicates ({duplicates.length})
+              {duplicatesOpen ? <ChevronDown size={14} strokeWidth={1.5} aria-hidden="true" /> : <ChevronRight size={14} strokeWidth={1.5} aria-hidden="true" />}
             </button>
             {duplicatesOpen && (
               <div className="space-y-2">
                 {duplicates.map((c) => (
-                  <div key={c.id} className="shadow-card p-4 rounded-2xl bg-white">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-caption text-ink-muted">
+                  <Card key={c.id}>
+                    <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
+                      <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
                         Matched on {c.match_reason?.replace("_", " + ")} · {Math.round((c.confidence || 0) * 100)}% confidence
                       </span>
-                      <button onClick={() => dismissDuplicate(c.id)} className="text-caption text-ink-muted hover:text-ink">
-                        Not a duplicate
-                      </button>
+                      <button onClick={() => dismissDuplicate(c.id)} style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Not a duplicate</button>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       {[c.lead_a, c.lead_b].map((l) => (
-                        <div key={l.id} className="border border-line rounded-xl p-3">
-                          <div className="text-body font-medium truncate">{l.first_name} {l.last_name}</div>
-                          <div className="text-caption text-ink-muted font-mono truncate">{l.email}</div>
-                          {l.phone && <div className="text-caption text-ink-muted font-mono">{l.phone}</div>}
-                          {l.company && <div className="text-caption text-ink-muted truncate">{l.company}</div>}
-                          <button onClick={() => mergeDuplicate(c, l.id)}
-                            className="btn-secondary text-caption w-full justify-center mt-2">
-                            Keep this one
-                          </button>
+                        <div key={l.id} style={{ border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", padding: 12 }}>
+                          <div className="truncate" style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text-primary)" }}>{l.first_name} {l.last_name}</div>
+                          <div className="tnum truncate" style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--text-tertiary)" }}>{l.email}</div>
+                          {l.phone && <div className="tnum" style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--text-tertiary)" }}>{l.phone}</div>}
+                          {l.company && <div className="truncate" style={{ fontSize: 11.5, color: "var(--text-tertiary)" }}>{l.company}</div>}
+                          <Button variant="secondary" size="sm" onClick={() => mergeDuplicate(c, l.id)} className="w-full justify-center mt-2">Keep this one</Button>
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </Card>
                 ))}
               </div>
             )}
@@ -361,28 +353,27 @@ export default function CRM() {
         {/* Quarantined leads */}
         {quarantine.length > 0 && (
           <div>
-            <button onClick={() => setQuarantineOpen((o) => !o)} className="ui-label mb-3 flex items-center gap-1.5 w-full">
-              <ShieldAlert size={14} /> Quarantined leads ({quarantine.length})
-              {quarantineOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            <button onClick={() => setQuarantineOpen((o) => !o)} className="flex items-center gap-1.5 w-full"
+              style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 12 }}>
+              <AlertTriangle size={14} strokeWidth={1.5} aria-hidden="true" /> Quarantined leads ({quarantine.length})
+              {quarantineOpen ? <ChevronDown size={14} strokeWidth={1.5} aria-hidden="true" /> : <ChevronRight size={14} strokeWidth={1.5} aria-hidden="true" />}
             </button>
             {quarantineOpen && (
               <div className="space-y-2">
                 {quarantine.map((q) => (
-                  <div key={q.id} className="shadow-card p-3 rounded-xl flex items-center justify-between gap-3 bg-white">
+                  <Card key={q.id} padding="compact" className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-body font-mono truncate">{q.email}</div>
-                      <div className="text-caption text-ink-muted">{QUARANTINE_REASON_LABEL[q.reason] || q.reason}</div>
+                      <div className="tnum truncate" style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-primary)" }}>{q.email}</div>
+                      <div style={{ fontSize: 11.5, color: "var(--text-tertiary)" }}>{QUARANTINE_REASON_LABEL[q.reason] || q.reason}</div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      {q.reason === "on_suppression_list" && (
-                        <button onClick={() => unsuppress(q.email, q.id)} className="btn-secondary text-caption">Un-suppress</button>
-                      )}
+                      {q.reason === "on_suppression_list" && <Button variant="secondary" size="sm" onClick={() => unsuppress(q.email, q.id)}>Un-suppress</Button>}
                       {(q.reason === "invalid_syntax" || q.reason === "do_not_contact") && q.lead_id && (
-                        <Link to={`/app/crm/leads/${q.lead_id}`} className="btn-secondary text-caption">Fix on lead</Link>
+                        <Link to={`/app/crm/leads/${q.lead_id}`}><Button variant="secondary" size="sm">Fix on lead</Button></Link>
                       )}
-                      <button onClick={() => dismissQuarantine(q.id)} className="text-caption text-ink-muted hover:text-ink">Dismiss</button>
+                      <button onClick={() => dismissQuarantine(q.id)} style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Dismiss</button>
                     </div>
-                  </div>
+                  </Card>
                 ))}
               </div>
             )}
@@ -392,81 +383,40 @@ export default function CRM() {
         {/* Recycle bin */}
         {(recycleBin.total || 0) > 0 && (
           <div>
-            <button onClick={() => setRecycleBinOpen((o) => !o)} className="ui-label mb-3 flex items-center gap-1.5 w-full">
-              <Trash2 size={14} /> Recycle bin ({recycleBin.total || 0})
-              {recycleBinOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            <button onClick={() => setRecycleBinOpen((o) => !o)} className="flex items-center gap-1.5 w-full"
+              style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 12 }}>
+              <Trash2 size={14} strokeWidth={1.5} aria-hidden="true" /> Recycle bin ({recycleBin.total || 0})
+              {recycleBinOpen ? <ChevronDown size={14} strokeWidth={1.5} aria-hidden="true" /> : <ChevronRight size={14} strokeWidth={1.5} aria-hidden="true" />}
             </button>
             {recycleBinOpen && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <div className="flex items-center gap-1">
-                    <input value={recycleSelectN} onChange={(e) => setRecycleSelectN(e.target.value.replace(/\D/, ""))}
-                      placeholder="N" className="inp text-tiny w-12 text-center font-mono" />
-                    <button onClick={selectFirstNRecycle} disabled={!recycleSelectN || parseInt(recycleSelectN) < 1}
-                      className="btn-ghost text-[11px] flex items-center gap-1 disabled:opacity-40">
-                      <ListOrdered size={10} /> Select {recycleSelectN || "N"}
-                    </button>
-                  </div>
+                  <Input size="sm" value={recycleSelectN} onChange={(e) => setRecycleSelectN(e.target.value.replace(/\D/g, ""))} placeholder="N" className="w-16" />
+                  <Button variant="tertiary" size="xs" icon={ListOrdered} onClick={selectFirstNRecycle} isDisabled={!recycleSelectN || parseInt(recycleSelectN, 10) < 1}>
+                    Select {recycleSelectN || "N"}
+                  </Button>
                   {recycleSelected.size > 0 && (
-                    <button onClick={purgeSelected} disabled={purging}
-                      className="btn-ghost text-[11px] text-danger flex items-center gap-1 ml-auto">
-                      {purging ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
+                    <Button variant="danger-subtle" size="xs" icon={Trash2} onClick={purgeSelected} isLoading={purging} className="ml-auto">
                       Delete {recycleSelected.size} permanently
-                    </button>
+                    </Button>
                   )}
                 </div>
-                <div className="shadow-card rounded-lg bg-white overflow-hidden">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-line text-[10.5px] font-mono text-ink-muted uppercase tracking-wider">
-                        <th className="px-3 py-2 w-10">
-                          <input type="checkbox" checked={(recycleBin.rows || []).length > 0 && recycleSelected.size === (recycleBin.rows || []).length}
-                            onChange={selectAllRecycle} title="Select all on this page" />
-                        </th>
-                        <th className="text-left px-3 py-2 font-normal">Name</th>
-                        <th className="text-left px-3 py-2 font-normal">Type</th>
-                        <th className="text-left px-3 py-2 font-normal">Deleted</th>
-                        <th className="text-right px-3 py-2 font-normal">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(recycleBin.rows || []).map((item) => {
-                        const key = `${item.type}::${item.id}`;
-                        return (
-                          <tr key={key} className={`border-b border-line text-body ${recycleSelected.has(key) ? "bg-accent-soft/30" : "hover:bg-surfacehover"}`}>
-                            <td className="px-3 py-2">
-                              <input type="checkbox" checked={recycleSelected.has(key)} onChange={() => toggleRecycleSelect(key)} />
-                            </td>
-                            <td className="px-3 py-2 font-medium">{item.name || "(untitled)"}</td>
-                            <td className="px-3 py-2 text-ink-muted">{RECYCLE_TYPE_LABEL[item.type] || item.type}</td>
-                            <td className="px-3 py-2 text-tiny font-mono text-ink-muted">
-                              {item.deleted_at ? new Date(item.deleted_at).toLocaleString() : "—"}
-                            </td>
-                            <td className="px-3 py-2 text-right">
-                              <div className="flex items-center gap-2 justify-end">
-                                <button onClick={() => restoreRecycled(item)} className="btn-secondary text-caption">
-                                  <RotateCcw size={11} /> Restore
-                                </button>
-                                <button onClick={() => purgeRecycled(item)} className="btn-ghost text-caption text-ink-muted hover:text-danger">
-                                  <Trash2 size={11} /> Delete permanently
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="text-tiny text-ink-muted font-mono">Page {recycleBin.page} of {Math.max(1, Math.ceil((recycleBin.total || 0) / 25))}</div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => setRecyclePage((p) => Math.max(1, p - 1))} disabled={recyclePage <= 1}
-                      className="btn-ghost text-[11px] px-1.5 py-0.5 disabled:opacity-30"><ChevronLeft size={12} /> Prev</button>
-                    <button onClick={() => setRecyclePage((p) => p + 1)} disabled={recyclePage >= Math.ceil((recycleBin.total || 0) / 25)}
-                      className="btn-ghost text-[11px] px-1.5 py-0.5 disabled:opacity-30">Next <ChevronRight size={12} /></button>
-                  </div>
-                </div>
+                <Table
+                  columns={recycleColumns}
+                  rows={recycleBin.rows || []}
+                  rowKey={(item) => `${item.type}::${item.id}`}
+                  selectable
+                  selected={[...recycleSelected]}
+                  onSelectRow={toggleRecycleSelect}
+                  onSelectAll={selectAllRecycle}
+                />
+                <TableFooter
+                  page={recyclePage}
+                  pageCount={Math.max(1, Math.ceil((recycleBin.total || 0) / 25))}
+                  total={recycleBin.total || 0}
+                  pageSize={25}
+                  onPageChange={setRecyclePage}
+                />
               </div>
             )}
           </div>

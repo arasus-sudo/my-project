@@ -3,10 +3,17 @@ import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import {
-  Plus, Edit3, Trash2, Copy, Archive, RefreshCw,
-  Loader2, Lightbulb, Target, Users, Search, CheckCircle2,
-  ChevronDown, ChevronUp, ExternalLink, X, Zap, Globe,
-} from "lucide-react";
+  Plus, Pencil, Trash2, Copy, Archive, RefreshCw,
+  Lightbulb, Zap,
+} from "../icons";
+import Card from "../components/composites/Card";
+import { EmptyState } from "../components/composites/EmptyState";
+import { Modal, ModalContent } from "../components/composites/Modal";
+import Button from "../components/primitives/Button";
+import Input from "../components/primitives/Input";
+import Chip from "../components/primitives/Chip";
+import SegmentedControl from "../components/primitives/SegmentedControl";
+import { Skeleton } from "../components/primitives/Feedback";
 
 const EMPTY_FORM = {
   name: "", description: "", pain_points: [], target_persona: "",
@@ -24,7 +31,6 @@ export default function ServiceLibrary() {
   const [showAiGen, setShowAiGen] = useState(false);
   const [aiInput, setAiInput] = useState("");
   const [aiMethod, setAiMethod] = useState("description");
-  const [expanded, setExpanded] = useState({});
   const [showImprove, setShowImprove] = useState(null);
   const [compUrls, setCompUrls] = useState("");
 
@@ -104,7 +110,7 @@ export default function ServiceLibrary() {
     if (!aiInput.trim()) return;
     setBusy(true);
     try {
-      const { data } = await api.post("/services/generate", {
+      await api.post("/services/generate", {
         method: aiMethod,
         input_text: aiInput,
         industry: form.industry || null,
@@ -122,7 +128,7 @@ export default function ServiceLibrary() {
     setBusy(true);
     try {
       const urls = compUrls.split("\n").map((u) => u.trim()).filter(Boolean);
-      const { data } = await api.post(`/services/${id}/improve`, { competitor_urls: urls });
+      await api.post(`/services/${id}/improve`, { competitor_urls: urls });
       toast.success("Service improved with AI");
       setShowImprove(null);
       setCompUrls("");
@@ -137,12 +143,10 @@ export default function ServiceLibrary() {
 
   const TagDisplay = ({ label, items: list }) => (
     list?.length > 0 ? (
-      <div className="space-y-1">
-        <div className="ui-label">{label}</div>
-        <div className="flex flex-wrap gap-1">
-          {list.map((item, i) => (
-            <span key={i} className="pill">{item}</span>
-          ))}
+      <div className="space-y-1.5">
+        <div style={{ fontSize: 10.5, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
+        <div className="flex flex-wrap gap-1.5">
+          {list.map((item, i) => <Chip key={i} label={item} />)}
         </div>
       </div>
     ) : null
@@ -155,106 +159,90 @@ export default function ServiceLibrary() {
         subtitle="Define every service your company offers. Each service becomes a reusable campaign template with automatically generated positioning, messaging, and competitor insights."
         right={
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowAiGen(true)} className="btn-secondary text-body">
-              <Zap size={14} /> Generate
-            </button>
-            <button onClick={() => { setEditing(null); setForm({ ...EMPTY_FORM }); setShowForm(true); }}
-              className="btn-primary text-body">
-              <Plus size={14} /> Add Service
-            </button>
+            <Button variant="secondary" icon={Zap} onClick={() => setShowAiGen(true)}>Generate</Button>
+            <Button variant="primary" icon={Plus} onClick={() => { setEditing(null); setForm({ ...EMPTY_FORM }); setShowForm(true); }}>Add service</Button>
           </div>
         }
       />
 
-      <div className="px-6 sm:px-8 pt-6 pb-8 space-y-6">
+      <div className="px-6 sm:px-8 py-6 space-y-6">
         {loading ? (
-          <div className="space-y-3">
-            {[1,2,3,4].map(i => <div key={i} className="skeleton h-32 rounded-2xl" />)}
+          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => <Skeleton key={i} height={160} radius="var(--radius-xl)" />)}
           </div>
         ) : activeItems.length === 0 ? (
-          <div className="card-floating p-12 text-center">
-            <Lightbulb size={32} className="mx-auto text-ink-disabled mb-4" />
-            <div className="text-section font-display font-semibold">No services defined yet</div>
-            <p className="text-body text-ink-muted mt-2 max-w-md mx-auto">
-              Define your services so campaigns can be targeted to each one. Generate a full service profile from a single sentence or your website.
-            </p>
-          </div>
+          <EmptyState
+            icon={Lightbulb}
+            title="No services defined yet"
+            description="Define your services so campaigns can be targeted to each one. Generate a full service profile from a single sentence or your website."
+            actionLabel="Add service"
+            onAction={() => { setEditing(null); setForm({ ...EMPTY_FORM }); setShowForm(true); }}
+          />
         ) : (
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
             {activeItems.map((item) => (
-              <div key={item.id} className="card-floating p-5 flex flex-col">
-                <div className="flex items-start justify-between gap-2 mb-3">
+              <Card key={item.id} className="flex flex-col">
+                <div className="flex items-start justify-between gap-2" style={{ marginBottom: 12 }}>
                   <div className="min-w-0 flex-1">
-                    <div className="text-card-title font-display font-semibold truncate">{item.name}</div>
-                    {item.industry && <div className="pill mt-1">{item.industry}</div>}
+                    <div className="truncate" style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>{item.name}</div>
+                    {item.industry && <div style={{ marginTop: 6 }}><Chip label={item.industry} /></div>}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => editItem(item)} className="p-1.5 text-ink-muted hover:text-ink rounded-lg transition-colors" title="Edit">
-                      <Edit3 size={14} />
-                    </button>
-                    <button onClick={() => duplicate(item.id)} className="p-1.5 text-ink-muted hover:text-ink rounded-lg transition-colors" title="Duplicate">
-                      <Copy size={14} />
-                    </button>
-                    <button onClick={() => toggleArchive(item.id)} className="p-1.5 text-ink-muted hover:text-ink rounded-lg transition-colors" title="Archive">
-                      <Archive size={14} />
-                    </button>
-                    <button onClick={() => deleteItem(item.id, item.name)} className="p-1.5 text-ink-muted hover:text-danger rounded-lg transition-colors" title="Delete">
-                      <Trash2 size={14} />
-                    </button>
+                    <IconButton icon={Pencil} title="Edit" onClick={() => editItem(item)} />
+                    <IconButton icon={Copy} title="Duplicate" onClick={() => duplicate(item.id)} />
+                    <IconButton icon={Archive} title="Archive" onClick={() => toggleArchive(item.id)} />
+                    <IconButton icon={Trash2} title="Delete" onClick={() => deleteItem(item.id, item.name)} hoverColor="var(--color-danger)" />
                   </div>
                 </div>
 
                 {item.description && (
-                  <p className="text-caption text-ink-tertiary leading-relaxed line-clamp-2 mb-3">{item.description}</p>
+                  <p className="line-clamp-2" style={{ fontSize: 12.5, color: "var(--text-tertiary)", lineHeight: "18px", marginBottom: 12 }}>{item.description}</p>
                 )}
 
-                <div className="space-y-2 flex-1">
-                  <TagDisplay label="Pain Points" items={item.pain_points?.slice(0, 3)} />
-                  <TagDisplay label="Use Cases" items={item.use_cases?.slice(0, 2)} />
+                <div className="space-y-2.5 flex-1">
+                  <TagDisplay label="Pain points" items={item.pain_points?.slice(0, 3)} />
+                  <TagDisplay label="Use cases" items={item.use_cases?.slice(0, 2)} />
                   <TagDisplay label="Competitors" items={item.competitors?.slice(0, 3)} />
                   <TagDisplay label="Keywords" items={item.keywords?.slice(0, 4)} />
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-line flex items-center justify-between">
-                  {item.cta && <span className="text-caption font-medium text-ink">{item.cta}</span>}
+                <div className="flex items-center justify-between" style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border-subtle)" }}>
+                  {item.cta && <span style={{ fontSize: 12.5, fontWeight: 500, color: "var(--text-primary)" }}>{item.cta}</span>}
                   <button onClick={() => setShowImprove(showImprove === item.id ? null : item.id)}
-                    className="text-caption text-ink-muted hover:text-ink flex items-center gap-1 transition-colors">
-                    <RefreshCw size={12} /> Improve
+                    className="flex items-center gap-1 transition-colors ml-auto" style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                    <RefreshCw size={12} strokeWidth={1.5} aria-hidden="true" /> Improve
                   </button>
                 </div>
 
                 {showImprove === item.id && (
-                  <div className="mt-3 pt-3 border-t border-line space-y-2 animate-fade-in">
-                    <div className="text-caption text-ink-muted">Add competitor URLs (one per line) for context:</div>
-                    <textarea value={compUrls} onChange={(e) => setCompUrls(e.target.value)}
-                      placeholder="https://competitor1.com&#10;https://competitor2.com"
-                      className="input-premium text-caption py-1.5 h-16" />
+                  <div className="space-y-2 animate-fade-in" style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border-subtle)" }}>
+                    <div style={{ fontSize: 11.5, color: "var(--text-tertiary)" }}>Add competitor URLs (one per line) for context:</div>
+                    <Input as="textarea" rows={3} value={compUrls} onChange={(e) => setCompUrls(e.target.value)} placeholder={"https://competitor1.com\nhttps://competitor2.com"} />
                     <div className="flex gap-2">
-                      <button onClick={() => aiImprove(item.id)} disabled={busy}
-                        className="btn-primary text-caption py-1 disabled:opacity-50">
-                        {busy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                        Improve
-                      </button>
-                      <button onClick={() => setShowImprove(null)} className="btn-ghost text-caption py-1">Cancel</button>
+                      <Button variant="primary" size="sm" icon={RefreshCw} onClick={() => aiImprove(item.id)} isLoading={busy}>Improve</Button>
+                      <Button variant="ghost" size="sm" onClick={() => setShowImprove(null)}>Cancel</Button>
                     </div>
                   </div>
                 )}
-              </div>
+              </Card>
             ))}
           </div>
         )}
 
         {archivedItems.length > 0 && (
           <div>
-            <div className="ui-label mb-3">Archived ({archivedItems.length})</div>
+            <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>
+              Archived ({archivedItems.length})
+            </div>
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
               {archivedItems.map((item) => (
-                <div key={item.id} className="card-flat p-4 opacity-60 flex items-center justify-between">
+                <div key={item.id} className="flex items-center justify-between"
+                  style={{ padding: 16, borderRadius: "var(--radius-xl)", border: "1px solid var(--border-default)", opacity: 0.6 }}>
                   <div>
-                    <div className="text-body font-medium">{item.name}</div>
-                    <div className="text-caption text-ink-muted">{item.industry || "No industry"}</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text-primary)" }}>{item.name}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{item.industry || "No industry"}</div>
                   </div>
-                  <button onClick={() => toggleArchive(item.id)} className="btn-ghost text-caption">Restore</button>
+                  <Button variant="ghost" size="sm" onClick={() => toggleArchive(item.id)}>Restore</Button>
                 </div>
               ))}
             </div>
@@ -262,106 +250,68 @@ export default function ServiceLibrary() {
         )}
       </div>
 
-      {/* Add/Edit Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-ink/40 flex items-start justify-center z-50 p-4 pt-12 overflow-y-auto"
-          onClick={(e) => e.target === e.currentTarget && setShowForm(false)}>
-          <form onSubmit={save} className="bg-white border border-line p-6 rounded-2xl w-full max-w-2xl space-y-4 animate-scale-in my-8">
-            <div className="flex items-center justify-between">
-              <div className="text-section font-display font-semibold">{editing ? "Edit Service" : "New Service"}</div>
-              <button type="button" onClick={() => setShowForm(false)} className="p-1 text-ink-muted hover:text-ink rounded-lg"><X size={16} /></button>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <label className="sm:col-span-2 block">
-                <span className="form-label">Service Name</span>
-                <input required value={form.name} onChange={(e) => setForm({...form, name: e.target.value})}
-                  className="input-premium mt-1" placeholder="e.g. AI Automation Services" />
-              </label>
-              <label className="sm:col-span-2 block">
-                <span className="form-label">Description</span>
-                <textarea value={form.description} onChange={(e) => setForm({...form, description: e.target.value})}
-                  className="input-premium mt-1 h-20" placeholder="Describe the service..." />
-              </label>
-              <label className="block">
-                <span className="form-label">Industry</span>
-                <input value={form.industry} onChange={(e) => setForm({...form, industry: e.target.value})}
-                  className="input-premium mt-1" placeholder="e.g. SaaS, Healthcare" />
-              </label>
-              <label className="block">
-                <span className="form-label">Target Persona</span>
-                <input value={form.target_persona} onChange={(e) => setForm({...form, target_persona: e.target.value})}
-                  className="input-premium mt-1" placeholder="e.g. VP of Sales, CTO" />
-              </label>
-              <label className="block">
-                <span className="form-label">Primary Offer</span>
-                <input value={form.primary_offer} onChange={(e) => setForm({...form, primary_offer: e.target.value})}
-                  className="input-premium mt-1" placeholder="What's the core offering?" />
-              </label>
-              <label className="block">
-                <span className="form-label">CTA</span>
-                <input value={form.cta} onChange={(e) => setForm({...form, cta: e.target.value})}
-                  className="input-premium mt-1" placeholder="e.g. Book a demo" />
-              </label>
-              <label className="block">
-                <span className="form-label">Pricing (optional)</span>
-                <input value={form.pricing || ""} onChange={(e) => setForm({...form, pricing: e.target.value || null})}
-                  className="input-premium mt-1" placeholder="e.g. $500/mo starting" />
-              </label>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
-              <button type="submit" disabled={busy} className="btn-primary">
-                {busy ? <Loader2 size={14} className="animate-spin" /> : null}
-                {editing ? "Update" : "Create"} Service
-              </button>
-            </div>
+      <Modal open={showForm} onOpenChange={setShowForm}>
+        <ModalContent
+          size="lg"
+          title={editing ? "Edit service" : "New service"}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setShowForm(false)}>Cancel</Button>
+              <Button type="submit" form="service-form" variant="primary" isLoading={busy}>{editing ? "Update" : "Create"} service</Button>
+            </>
+          }
+        >
+          <form id="service-form" onSubmit={save} className="grid sm:grid-cols-2 gap-4">
+            <Input required className="sm:col-span-2" label="Service name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. AI Automation Services" />
+            <Input as="textarea" rows={3} className="sm:col-span-2" label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe the service…" />
+            <Input label="Industry" value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} placeholder="e.g. SaaS, Healthcare" />
+            <Input label="Target persona" value={form.target_persona} onChange={(e) => setForm({ ...form, target_persona: e.target.value })} placeholder="e.g. VP of Sales, CTO" />
+            <Input label="Primary offer" value={form.primary_offer} onChange={(e) => setForm({ ...form, primary_offer: e.target.value })} placeholder="What's the core offering?" />
+            <Input label="CTA" value={form.cta} onChange={(e) => setForm({ ...form, cta: e.target.value })} placeholder="e.g. Book a demo" />
+            <Input label="Pricing" optional value={form.pricing || ""} onChange={(e) => setForm({ ...form, pricing: e.target.value || null })} placeholder="e.g. $500/mo starting" />
           </form>
-        </div>
-      )}
+        </ModalContent>
+      </Modal>
 
-      {/* AI Generate Modal */}
-      {showAiGen && (
-        <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50 p-4"
-          onClick={(e) => e.target === e.currentTarget && setShowAiGen(false)}>
-          <div className="bg-white border border-line p-6 rounded-2xl w-full max-w-lg space-y-4 animate-scale-in">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-card-title font-display font-semibold flex items-center gap-2">
-                  <Zap size={16} /> Generate Service
-                </div>
-                <p className="text-caption text-ink-muted mt-1">Describe your service in a sentence, paste a brochure, or enter a website URL.</p>
-              </div>
-              <button onClick={() => setShowAiGen(false)} className="p-1 text-ink-muted hover:text-ink rounded-lg"><X size={16} /></button>
-            </div>
-            <div className="flex gap-2 pb-2">
-              {["description", "website"].map((m) => (
-                <button key={m} onClick={() => setAiMethod(m)}
-                  className={`px-3 py-1.5 text-caption rounded-xl border transition-all ${
-                    aiMethod === m ? "border-transparent bg-accent text-white" : "border-line hover:border-ink/20"
-                  }`}>
-                  {m === "description" ? "Text Description" : "Website URL"}
-                </button>
-              ))}
-            </div>
+      <Modal open={showAiGen} onOpenChange={setShowAiGen}>
+        <ModalContent
+          size="md"
+          title={<span className="flex items-center gap-2"><Zap size={16} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--color-intel)" }} /> Generate service</span>}
+          subtitle="Describe your service in a sentence, paste a brochure, or enter a website URL."
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setShowAiGen(false)}>Cancel</Button>
+              <Button variant="primary" icon={Zap} onClick={aiGenerate} isLoading={busy} isDisabled={!aiInput.trim()}>Generate</Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <SegmentedControl
+              options={[{ value: "description", label: "Text description" }, { value: "website", label: "Website URL" }]}
+              value={aiMethod} onChange={setAiMethod}
+            />
             {aiMethod === "description" ? (
-              <textarea value={aiInput} onChange={(e) => setAiInput(e.target.value)}
-                placeholder="Describe your service in one sentence...&#10;e.g. 'We build AI-powered automation agents that handle repetitive business processes'"
-                className="input-premium h-24" />
+              <Input as="textarea" rows={4} value={aiInput} onChange={(e) => setAiInput(e.target.value)}
+                placeholder={"Describe your service in one sentence…\ne.g. 'We build AI-powered automation agents that handle repetitive business processes'"} />
             ) : (
-              <input value={aiInput} onChange={(e) => setAiInput(e.target.value)}
-                placeholder="https://your-service-page.com"
-                className="input-premium" />
+              <Input value={aiInput} onChange={(e) => setAiInput(e.target.value)} placeholder="https://your-service-page.com" />
             )}
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShowAiGen(false)} className="btn-secondary">Cancel</button>
-              <button onClick={aiGenerate} disabled={busy || !aiInput.trim()} className="btn-primary">
-                {busy ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
-                Generate
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        </ModalContent>
+      </Modal>
     </div>
+  );
+}
+
+function IconButton({ icon: Icon, title, onClick, hoverColor = "var(--text-primary)" }) {
+  return (
+    <button onClick={onClick} title={title}
+      className="inline-grid place-items-center transition-colors"
+      style={{ width: 28, height: 28, borderRadius: "var(--radius-md)", color: "var(--text-tertiary)" }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = hoverColor; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-tertiary)"; }}
+    >
+      <Icon size={14} strokeWidth={1.5} aria-hidden="true" />
+    </button>
   );
 }

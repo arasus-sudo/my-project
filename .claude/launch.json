@@ -20,6 +20,18 @@
       "port": 8001
     },
     {
+      "name": "backend-coolbun",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd /d D:\\SUITEOFAGETNS\\.claude\\worktrees\\cool-bun-934479\\backend && set FRONTEND_URL=http://localhost:3020&& set CORS_ORIGINS=http://localhost:3020&& D:\\SUITEOFAGETNS\\backend\\venv\\Scripts\\python.exe -m uvicorn server:app --reload --port 8021"],
+      "port": 8021
+    },
+    {
+      "name": "frontend-coolbun",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd /d D:\\SUITEOFAGETNS\\.claude\\worktrees\\cool-bun-934479\\frontend && set PORT=3020&& set REACT_APP_BACKEND_URL=http://localhost:8021&& npm start"],
+      "port": 3020
+    },
+    {
       "name": "backend-worktree",
       "runtimeExecutable": "cmd",
       "runtimeArgs": ["/c", "cd /d D:\\SUITEOFAGETNS\\.claude\\worktrees\\dazzling-perlman-1bf0d3\\backend && set FRONTEND_URL=http://localhost:3010&& set CORS_ORIGINS=http://localhost:3010&& .\\venv\\Scripts\\python.exe -m uvicorn server:app --reload --port 8011"],

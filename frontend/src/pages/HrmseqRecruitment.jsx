@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Plus, UserPlus, Brain } from "lucide-react";
+import { Plus, Users, Brain } from "../icons";
+import { EmptyState } from "../components/composites/EmptyState";
+import { Modal, ModalContent } from "../components/composites/Modal";
+import Input from "../components/primitives/Input";
+import Select from "../components/primitives/Select";
+import Button from "../components/primitives/Button";
 
 export default function HrmseqRecruitment() {
   const [requisitions, setRequisitions] = useState([]);
@@ -56,83 +61,85 @@ export default function HrmseqRecruitment() {
   return (
     <div>
       <PageHeader title="Recruitment" subtitle="Job requisitions and candidate tracking."
-        right={<button onClick={() => setModal(true)} className="btn-primary"><Plus size={14} /> New requisition</button>}
+        right={<Button variant="primary" icon={Plus} onClick={() => setModal(true)}>New requisition</Button>}
       />
-      <div className="animate-fade-in px-6 sm:px-8 space-y-6">
-        {requisitions.length === 0 && <div className="text-body text-ink-muted">No requisitions yet.</div>}
-        {requisitions.map((r) => (
-          <div key={r.id} className="bg-white border border-line rounded-2xl overflow-hidden">
-            <div className="p-5 border-b border-line flex items-center justify-between">
+      <div className="animate-fade-in px-6 sm:px-8 py-6 space-y-4">
+        {requisitions.length === 0 ? (
+          <EmptyState title="No requisitions yet" description="Create a requisition to start tracking candidates."
+            actionLabel="New requisition" onAction={() => setModal(true)} />
+        ) : requisitions.map((r) => (
+          <div key={r.id} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-xs)", overflow: "hidden" }}>
+            <div className="flex items-center justify-between" style={{ padding: 20 }}>
               <div>
-                <div className="text-card-title font-display font-semibold">{r.title}</div>
-                <div className="text-caption text-ink-muted">{departments.find(d => d.id === r.department_id)?.name || "—"} · {r.status}</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>{r.title}</div>
+                <div style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 4 }}>{departments.find(d => d.id === r.department_id)?.name || "—"} · {r.status}</div>
               </div>
-              <button onClick={() => { setSelectedReq(r.id); setCandidateModal(true); }} className="btn-secondary"><UserPlus size={14} /> Add candidate</button>
+              <Button variant="secondary" icon={Users} onClick={() => { setSelectedReq(r.id); setCandidateModal(true); }}>Add candidate</Button>
             </div>
             {candidates[r.id]?.length > 0 && (
-              <div className="p-4 space-y-2">
+              <div className="space-y-2" style={{ padding: "0 20px 20px" }}>
                 {candidates[r.id].map((c) => (
-                  <div key={c.id} className="flex items-center justify-between border border-line rounded-xl p-3">
+                  <div key={c.id} className="flex items-center justify-between" style={{ border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", padding: 12 }}>
                     <div>
-                      <div className="text-body font-medium">{c.first_name} {c.last_name}</div>
-                      <div className="text-caption text-ink-muted">{c.email} · Stage: {c.stage}</div>
-                      {c.score && <div className="text-tiny text-accent">Score: {c.score}/100</div>}
+                      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>{c.first_name} {c.last_name}</div>
+                      <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{c.email} · Stage: {c.stage}</div>
+                      {c.score && <div style={{ fontSize: 11, color: "var(--color-primary)" }}>Score: {c.score}/100</div>}
                     </div>
-                    <button onClick={() => scoreCandidate(r.id, c.id)} className="btn-secondary"><Brain size={14} /> Score</button>
+                    <Button variant="secondary" size="sm" icon={Brain} onClick={() => scoreCandidate(r.id, c.id)}>Score</Button>
                   </div>
                 ))}
               </div>
             )}
             {(!candidates[r.id] || candidates[r.id].length === 0) && (
-              <div className="p-4 text-caption text-ink-muted" onClick={() => loadCandidates(r.id)}>Click to load candidates</div>
+              <button onClick={() => loadCandidates(r.id)} style={{ padding: "0 20px 20px", fontSize: 12.5, color: "var(--text-tertiary)" }}>Click to load candidates</button>
             )}
           </div>
         ))}
       </div>
-      {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="text-card-title font-display font-semibold mb-4">New Requisition</div>
-            <form onSubmit={saveReq} className="space-y-4">
-              <input className="inp w-full" placeholder="Job title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-              <select className="inp w-full" value={form.department_id} onChange={(e) => setForm({ ...form, department_id: e.target.value })}>
-                <option value="">No department</option>
-                {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </select>
-              <textarea className="inp w-full h-20" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-              <textarea className="inp w-full h-20" placeholder="Requirements" value={form.requirements} onChange={(e) => setForm({ ...form, requirements: e.target.value })} />
-              <div className="grid grid-cols-2 gap-4">
-                <input className="inp" type="number" placeholder="Min salary" value={form.salary_range_min} onChange={(e) => setForm({ ...form, salary_range_min: e.target.value })} />
-                <input className="inp" type="number" placeholder="Max salary" value={form.salary_range_max} onChange={(e) => setForm({ ...form, salary_range_max: e.target.value })} />
-              </div>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary">Create</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-      {candidateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setCandidateModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="text-card-title font-display font-semibold mb-4">Add Candidate</div>
-            <form onSubmit={saveCandidate} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <input className="inp" placeholder="First name" value={candForm.first_name} onChange={(e) => setCandForm({ ...candForm, first_name: e.target.value })} required />
-                <input className="inp" placeholder="Last name" value={candForm.last_name} onChange={(e) => setCandForm({ ...candForm, last_name: e.target.value })} required />
-              </div>
-              <input className="inp w-full" type="email" placeholder="Email" value={candForm.email} onChange={(e) => setCandForm({ ...candForm, email: e.target.value })} required />
-              <input className="inp w-full" placeholder="Phone" value={candForm.phone} onChange={(e) => setCandForm({ ...candForm, phone: e.target.value })} />
-              <textarea className="inp w-full h-24" placeholder="Resume text (for AI scoring)" value={candForm.resume_text} onChange={(e) => setCandForm({ ...candForm, resume_text: e.target.value })} />
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setCandidateModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary">Add</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+
+      <Modal open={modal} onOpenChange={setModal}>
+        <ModalContent size="sm" title="New Requisition"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setModal(false)}>Cancel</Button>
+              <Button variant="primary" type="submit" form="hrms-req-form">Create</Button>
+            </>
+          }
+        >
+          <form id="hrms-req-form" onSubmit={saveReq} className="space-y-3">
+            <Input required label="Job title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            <Select label="Department" value={form.department_id} onChange={(v) => setForm({ ...form, department_id: v })}
+              options={[{ value: "", label: "No department" }, ...departments.map((d) => ({ value: d.id, label: d.name }))]} />
+            <Input as="textarea" rows={3} label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            <Input as="textarea" rows={3} label="Requirements" value={form.requirements} onChange={(e) => setForm({ ...form, requirements: e.target.value })} />
+            <div className="grid grid-cols-2 gap-3">
+              <Input type="number" label="Min salary" value={form.salary_range_min} onChange={(e) => setForm({ ...form, salary_range_min: e.target.value })} />
+              <Input type="number" label="Max salary" value={form.salary_range_max} onChange={(e) => setForm({ ...form, salary_range_max: e.target.value })} />
+            </div>
+          </form>
+        </ModalContent>
+      </Modal>
+
+      <Modal open={candidateModal} onOpenChange={setCandidateModal}>
+        <ModalContent size="sm" title="Add Candidate"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setCandidateModal(false)}>Cancel</Button>
+              <Button variant="primary" type="submit" form="hrms-candidate-form">Add</Button>
+            </>
+          }
+        >
+          <form id="hrms-candidate-form" onSubmit={saveCandidate} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <Input required label="First name" value={candForm.first_name} onChange={(e) => setCandForm({ ...candForm, first_name: e.target.value })} />
+              <Input required label="Last name" value={candForm.last_name} onChange={(e) => setCandForm({ ...candForm, last_name: e.target.value })} />
+            </div>
+            <Input required type="email" label="Email" value={candForm.email} onChange={(e) => setCandForm({ ...candForm, email: e.target.value })} />
+            <Input label="Phone" value={candForm.phone} onChange={(e) => setCandForm({ ...candForm, phone: e.target.value })} />
+            <Input as="textarea" rows={4} label="Resume text" help="For AI scoring" value={candForm.resume_text} onChange={(e) => setCandForm({ ...candForm, resume_text: e.target.value })} />
+          </form>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

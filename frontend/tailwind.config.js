@@ -55,6 +55,55 @@ module.exports = {
       // not hex, for exactly that reason. Nothing here is a hardcoded color;
       // edit index.css to change the actual values.
       colors: {
+      // ---- DESIGN SYSTEM v1 (docs/design-system.md) ----------------------
+      // §21 is Tailwind v4 @theme syntax; this repo is on v3.4, so the tokens
+      // are mapped here and resolve to the same custom properties defined in
+      // src/styles/tokens.css. That keeps the dark theme a pure token swap.
+      //
+      // These are ADDED alongside the existing ink/bone/ash/line names rather
+      // than replacing them: tiers 2-3 (primitives, composites) do not exist
+      // yet, so overwriting the old names now would restyle 96 pages against
+      // components that have not been rebuilt. Old names are removed in the
+      // final migration step, not the first.
+      canvas:          "var(--bg-canvas)",
+      "ds-surface":    "var(--bg-surface)",
+      "surface-sunken":"var(--bg-surface-sunken)",
+      "surface-raised":"var(--bg-surface-raised)",
+      "ds-hover":      "var(--bg-hover)",
+      "ds-active":     "var(--bg-active)",
+      selected:        "var(--bg-selected)",
+      fg:              "var(--text-primary)",
+      "fg-secondary":  "var(--text-secondary)",
+      "fg-tertiary":   "var(--text-tertiary)",
+      "fg-inverse":    "var(--text-inverse)",
+      "line-subtle":   "var(--border-subtle)",
+      "line-default":  "var(--border-default)",
+      "line-strong":   "var(--border-strong)",
+      primary:         "var(--color-primary)",
+      "primary-hover": "var(--color-primary-hover)",
+      "primary-subtle":"var(--color-primary-subtle)",
+      "primary-border":"var(--color-primary-border)",
+      intel:           "var(--color-intel)",
+      "intel-subtle":  "var(--color-intel-subtle)",
+      "intel-border":  "var(--color-intel-border)",
+      // NOTE: no top-level `success`/`warning`/`danger` keys here — those
+      // names are owned by the legacy palette below (`bg-success` etc.,
+      // ~93 existing call sites) via --legacy-success/-warning/-danger.
+      // Design-system components consume --color-success/-warning/-danger
+      // directly through inline style, never through these Tailwind
+      // utilities, so there is no collision left to resolve.
+      "ds-success-subtle":"var(--color-success-subtle)",
+      "ds-success-text":  "var(--color-success-text)",
+      "ds-warning-subtle":"var(--color-warning-subtle)",
+      "ds-warning-text":  "var(--color-warning-text)",
+      risk:            "var(--color-risk)",
+      "risk-subtle":   "var(--color-risk-subtle)",
+      "risk-text":     "var(--color-risk-text)",
+      "ds-danger-subtle": "var(--color-danger-subtle)",
+      "ds-danger-text":   "var(--color-danger-text)",
+      "chart-1": "var(--chart-1)", "chart-2": "var(--chart-2)", "chart-3": "var(--chart-3)",
+      "chart-4": "var(--chart-4)", "chart-5": "var(--chart-5)", "chart-6": "var(--chart-6)",
+
         bone: "rgb(var(--color-bone) / <alpha-value>)",
         ash: "rgb(var(--color-ash) / <alpha-value>)",
         line: "rgb(var(--color-line) / <alpha-value>)",
@@ -76,9 +125,11 @@ module.exports = {
           from: "rgb(var(--color-accent) / <alpha-value>)",
           to: "rgb(var(--color-brand-to) / <alpha-value>)",
         },
-        success: { DEFAULT: "rgb(var(--color-success) / <alpha-value>)", soft: "rgb(var(--color-success) / 0.16)" },
-        warning: { DEFAULT: "rgb(var(--color-warning) / <alpha-value>)", soft: "rgb(var(--color-warning) / 0.16)" },
-        danger: { DEFAULT: "rgb(var(--color-danger) / <alpha-value>)", soft: "rgb(var(--color-danger) / 0.16)" },
+        // --legacy-success/-warning/-danger (renamed from --color-* to stop
+        // colliding with tokens.css's design-system tokens of the same name).
+        success: { DEFAULT: "rgb(var(--legacy-success) / <alpha-value>)", soft: "rgb(var(--legacy-success) / 0.16)" },
+        warning: { DEFAULT: "rgb(var(--legacy-warning) / <alpha-value>)", soft: "rgb(var(--legacy-warning) / 0.16)" },
+        danger: { DEFAULT: "rgb(var(--legacy-danger) / <alpha-value>)", soft: "rgb(var(--legacy-danger) / 0.16)" },
         info: { DEFAULT: "rgb(var(--color-accent) / <alpha-value>)", soft: "rgb(var(--color-accent-soft) / <alpha-value>)" },
         // Raised panel — the token every `bg-white`-as-card-surface call site
         // is swapped to during the page sweep (works correctly in both
@@ -110,7 +161,19 @@ module.exports = {
         ring: "rgb(var(--color-ink) / <alpha-value>)",
         background: "rgb(var(--color-bone) / <alpha-value>)",
         foreground: "rgb(var(--color-ink) / <alpha-value>)",
-        primary: { DEFAULT: "rgb(var(--color-ink) / <alpha-value>)", foreground: "rgb(var(--color-bone) / <alpha-value>)" },
+        // Renamed from "primary": that key collided with the design-system
+        // "primary" token above (line ~82, var(--color-primary), the blue
+        // accent) — same class of bug as the success/warning/danger
+        // collision fixed earlier. This one is worse: it silently shadowed
+        // the blue accent EVERYWHERE bg-primary/text-primary is used in
+        // real pages (CampaignBuilder, CRM, LeadDetail, LeadLists,
+        // Campaigns), rendering selected states, links and progress fills
+        // as this ink-black instead of blue — the "old theme" the user
+        // reported in the campaign editor. Only components/ui/* (the
+        // unused shadcn scaffold — confirmed zero imports from any actual
+        // page) relied on the old meaning, so those were repointed here
+        // instead of the widely-used real one.
+        "shadcn-primary": { DEFAULT: "rgb(var(--color-ink) / <alpha-value>)", foreground: "rgb(var(--color-bone) / <alpha-value>)" },
         secondary: { DEFAULT: "rgb(var(--color-ash) / <alpha-value>)", foreground: "rgb(var(--color-ink) / <alpha-value>)" },
         muted: { DEFAULT: "rgb(var(--color-surface) / <alpha-value>)", foreground: "rgb(var(--color-ink-muted) / <alpha-value>)" },
         popover: { DEFAULT: "rgb(var(--color-surface) / <alpha-value>)", foreground: "rgb(var(--color-ink) / <alpha-value>)" },

@@ -4,9 +4,14 @@ import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import {
-  Plus, Building2, Globe, ExternalLink, Linkedin, MapPin, Users, X, Save,
-  ChevronLeft, ChevronRight, Edit2, Trash2, Loader2,
-} from "lucide-react";
+  Plus, Building2, Globe, Linkedin, MapPin, Users, Pencil, ArrowLeft, Check, X,
+} from "../icons";
+import Table, { TableFooter } from "../components/composites/Table";
+import { EmptyState } from "../components/composites/EmptyState";
+import Card from "../components/composites/Card";
+import { Modal, ModalContent } from "../components/composites/Modal";
+import Button from "../components/primitives/Button";
+import Input from "../components/primitives/Input";
 
 export function CompaniesList() {
   const [companies, setCompanies] = useState([]);
@@ -37,120 +42,75 @@ export function CompaniesList() {
     } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
   };
 
-  if (loading) return <div className="p-6 sm:p-8 text-ink-muted text-body">Loading…</div>;
+  const remove = async (c) => {
+    if (!window.confirm(`Delete ${c.name}?`)) return;
+    await api.delete(`/companies/${c.id}`);
+    toast.success("Company deleted");
+    load();
+  };
+
+  const columns = [
+    { key: "name", label: "Name", render: (c) => <Link to={`/app/crm/companies/${c.id}`} style={{ fontWeight: 500, color: "var(--text-primary)" }}>{c.name}</Link> },
+    { key: "domain", label: "Domain", render: (c) => <span className="tnum" style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-secondary)" }}>{c.domain || "—"}</span> },
+    { key: "industry", label: "Industry", render: (c) => <span style={{ color: "var(--text-tertiary)" }}>{c.industry || "—"}</span> },
+    { key: "leads", label: "Leads", align: "right", numeric: true, render: (c) => c.lead_count || 0 },
+    {
+      key: "links", label: "Links",
+      render: (c) => (
+        <div className="flex items-center gap-2">
+          {c.linkedin_url && <a href={c.linkedin_url} target="_blank" rel="noreferrer" title="LinkedIn" style={{ color: "var(--text-tertiary)" }}><Linkedin size={14} strokeWidth={1.5} aria-hidden="true" /></a>}
+          {c.website && <a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noreferrer" title="Website" style={{ color: "var(--text-tertiary)" }}><Globe size={14} strokeWidth={1.5} aria-hidden="true" /></a>}
+        </div>
+      ),
+    },
+    {
+      key: "actions", label: "", align: "right",
+      render: (c) => (
+        <button onClick={() => remove(c)} className="ds-row-action" style={{ fontSize: 12, color: "var(--color-danger)" }}>Delete</button>
+      ),
+    },
+  ];
+
+  if (loading) return <div className="p-6 sm:p-8" style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Loading…</div>;
 
   return (
     <div>
       <PageHeader
         title="Companies"
         subtitle={`${total} companies`}
-        right={
-          <button onClick={() => setModal(true)} className="btn-primary">
-            <Plus size={14} /> Add company
-          </button>
-        }
+        right={<Button variant="primary" icon={Plus} onClick={() => setModal(true)}>Add company</Button>}
       />
-      <div className="animate-fade-in px-6 sm:px-8">
+      <div className="animate-fade-in px-6 sm:px-8 py-6">
         {companies.length === 0 ? (
-          <div className="shadow-card p-10 text-center rounded-2xl">
-            <Building2 size={40} className="mx-auto text-ink-disabled mb-3" />
-            <div className="text-section font-display font-semibold">No companies yet</div>
-            <p className="text-body text-ink-muted mt-2">Create a company and link leads to it.</p>
-          </div>
+          <EmptyState icon={Building2} title="No companies yet" description="Create a company and link leads to it." actionLabel="Add company" onAction={() => setModal(true)} />
         ) : (
-          <div className="card-floating p-4 border border-line bg-white overflow-hidden overflow-x-auto rounded-2xl">
-            <table className="w-full text-table min-w-[700px]">
-              <thead>
-                <tr className="border-b border-line">
-                  <th className="table-header text-left p-3">Name</th>
-                  <th className="table-header text-left p-3">Domain</th>
-                  <th className="table-header text-left p-3">Industry</th>
-                  <th className="table-header text-center p-3">Leads</th>
-                  <th className="table-header text-left p-3">Links</th>
-                  <th className="p-3"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {companies.map((c) => (
-                  <tr key={c.id} className="border-b border-line hover:bg-surfacehover transition-colors duration-150">
-                    <td className="p-3 font-medium">
-                      <Link to={`/app/crm/companies/${c.id}`} className="hover:text-accent">
-                        {c.name}
-                      </Link>
-                    </td>
-                    <td className="p-3 font-mono text-ink-secondary text-caption">{c.domain || "—"}</td>
-                    <td className="p-3 text-ink-muted text-caption">{c.industry || "—"}</td>
-                    <td className="p-3 text-center">{c.lead_count || 0}</td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-2">
-                        {c.linkedin_url && (
-                          <a href={c.linkedin_url} target="_blank" rel="noreferrer"
-                            className="text-ink-muted hover:text-accent" title="LinkedIn">
-                            <Linkedin size={14} />
-                          </a>
-                        )}
-                        {c.website && (
-                          <a href={c.website.startsWith("http") ? c.website : `https://${c.website}`}
-                            target="_blank" rel="noreferrer"
-                            className="text-ink-muted hover:text-accent" title="Website">
-                            <Globe size={14} />
-                          </a>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-3 text-right">
-                      <button onClick={async () => {
-                        if (!window.confirm(`Delete ${c.name}?`)) return;
-                        await api.delete(`/companies/${c.id}`);
-                        toast.success("Company deleted");
-                        load();
-                      }} className="text-caption text-ink-muted hover:text-danger">delete</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="flex items-center justify-between pt-3 pb-1">
-              <span className="text-caption text-ink-muted">
-                {total > 0 && `Page ${page} · ${Math.ceil(total / pageSize)} total`}
-              </span>
-              <div className="flex items-center gap-2">
-                <button disabled={page <= 1} onClick={() => load(page - 1)}
-                  className="btn-secondary text-caption px-2 py-1 disabled:opacity-30"><ChevronLeft size={14} /></button>
-                <button disabled={page >= Math.ceil(total / pageSize)} onClick={() => load(page + 1)}
-                  className="btn-secondary text-caption px-2 py-1 disabled:opacity-30"><ChevronRight size={14} /></button>
-              </div>
-            </div>
-          </div>
+          <>
+            <Table columns={columns} rows={companies} rowKey={(c) => c.id} />
+            <TableFooter page={page} pageCount={Math.max(1, Math.ceil(total / pageSize))} total={total} pageSize={pageSize} onPageChange={load} />
+          </>
         )}
       </div>
 
-      {modal && (
-        <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50">
-          <form onSubmit={add} className="bg-white border border-line p-6 rounded-2xl w-full max-w-md space-y-3">
-            <div className="text-section font-display font-semibold">Add company</div>
-            <input required placeholder="Company name" value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full border border-line px-3 py-2 rounded-sm" />
-            <input placeholder="Domain (e.g. acme.com)" value={form.domain}
-              onChange={(e) => setForm({ ...form, domain: e.target.value })}
-              className="w-full border border-line px-3 py-2 rounded-sm" />
-            <input placeholder="Website URL" value={form.website}
-              onChange={(e) => setForm({ ...form, website: e.target.value })}
-              className="w-full border border-line px-3 py-2 rounded-sm" />
-            <input placeholder="LinkedIn URL" value={form.linkedin_url}
-              onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })}
-              className="w-full border border-line px-3 py-2 rounded-sm" />
-            <input placeholder="Industry" value={form.industry}
-              onChange={(e) => setForm({ ...form, industry: e.target.value })}
-              className="w-full border border-line px-3 py-2 rounded-sm" />
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>
-              <button type="submit" className="btn-primary">Add</button>
-            </div>
+      <Modal open={modal} onOpenChange={setModal}>
+        <ModalContent
+          size="sm"
+          title="Add company"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setModal(false)}>Cancel</Button>
+              <Button type="submit" form="add-company-form" variant="primary">Add</Button>
+            </>
+          }
+        >
+          <form id="add-company-form" onSubmit={add} className="space-y-3">
+            <Input required placeholder="Company name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Input placeholder="Domain (e.g. acme.com)" value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })} />
+            <Input placeholder="Website URL" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
+            <Input placeholder="LinkedIn URL" value={form.linkedin_url} onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })} />
+            <Input placeholder="Industry" value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} />
           </form>
-        </div>
-      )}
+        </ModalContent>
+      </Modal>
     </div>
   );
 }
@@ -178,8 +138,8 @@ export function CompanyDetail() {
     } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
   };
 
-  if (loading) return <div className="p-6 sm:p-8 text-ink-muted text-body">Loading…</div>;
-  if (!company) return <div className="p-6 sm:p-8 text-ink-muted text-body">Company not found.</div>;
+  if (loading) return <div className="p-6 sm:p-8" style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Loading…</div>;
+  if (!company) return <div className="p-6 sm:p-8" style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Company not found.</div>;
 
   return (
     <div>
@@ -188,7 +148,7 @@ export function CompanyDetail() {
         subtitle={company.industry || company.domain || ""}
         right={
           <div className="flex items-center gap-2">
-            <button onClick={() => {
+            <Button variant="secondary" icon={Pencil} onClick={() => {
               setEditForm({
                 name: company.name, domain: company.domain || "",
                 website: company.website || "", linkedin_url: company.linkedin_url || "",
@@ -196,92 +156,87 @@ export function CompanyDetail() {
                 hq_location: company.hq_location || "",
               });
               setEditing(true);
-            }} className="btn-secondary text-caption"><Edit2 size={14} /> Edit</button>
-            <Link to="/app/crm/companies" className="btn-secondary"><ChevronLeft size={14} /> Companies</Link>
+            }}>Edit</Button>
+            <Link to="/app/crm/companies">
+              <Button variant="secondary" icon={ArrowLeft}>Companies</Button>
+            </Link>
           </div>
         }
       />
-      <div className="animate-fade-in px-6 sm:px-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="animate-fade-in px-6 sm:px-8 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="space-y-4">
-          <div className="shadow-card p-4 space-y-2 rounded-2xl">
-            <div className="ui-label">Company Info</div>
+          <Card title="Company info">
             {editing ? (
               <div className="space-y-2">
-                <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  className="w-full border border-line px-2 py-1 rounded text-input" placeholder="Name" />
-                <input value={editForm.domain} onChange={(e) => setEditForm({ ...editForm, domain: e.target.value })}
-                  className="w-full border border-line px-2 py-1 rounded text-input" placeholder="Domain" />
-                <input value={editForm.website} onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
-                  className="w-full border border-line px-2 py-1 rounded text-input" placeholder="Website" />
-                <input value={editForm.linkedin_url} onChange={(e) => setEditForm({ ...editForm, linkedin_url: e.target.value })}
-                  className="w-full border border-line px-2 py-1 rounded text-input" placeholder="LinkedIn URL" />
-                <input value={editForm.industry} onChange={(e) => setEditForm({ ...editForm, industry: e.target.value })}
-                  className="w-full border border-line px-2 py-1 rounded text-input" placeholder="Industry" />
-                <input value={editForm.hq_location} onChange={(e) => setEditForm({ ...editForm, hq_location: e.target.value })}
-                  className="w-full border border-line px-2 py-1 rounded text-input" placeholder="HQ Location" />
-                <textarea value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                  className="w-full border border-line px-2 py-1 rounded text-input" placeholder="Description" rows={3} />
+                <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} placeholder="Name" />
+                <Input value={editForm.domain} onChange={(e) => setEditForm({ ...editForm, domain: e.target.value })} placeholder="Domain" />
+                <Input value={editForm.website} onChange={(e) => setEditForm({ ...editForm, website: e.target.value })} placeholder="Website" />
+                <Input value={editForm.linkedin_url} onChange={(e) => setEditForm({ ...editForm, linkedin_url: e.target.value })} placeholder="LinkedIn URL" />
+                <Input value={editForm.industry} onChange={(e) => setEditForm({ ...editForm, industry: e.target.value })} placeholder="Industry" />
+                <Input value={editForm.hq_location} onChange={(e) => setEditForm({ ...editForm, hq_location: e.target.value })} placeholder="HQ location" />
+                <Input as="textarea" rows={3} value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} placeholder="Description" />
                 <div className="flex gap-2 pt-1">
-                  <button onClick={saveEdit} className="btn-primary text-caption flex items-center gap-1"><Save size={12} /> Save</button>
-                  <button onClick={() => setEditing(false)} className="btn-secondary text-caption flex items-center gap-1"><X size={12} /> Cancel</button>
+                  <Button variant="primary" size="sm" icon={Check} onClick={saveEdit}>Save</Button>
+                  <Button variant="secondary" size="sm" icon={X} onClick={() => setEditing(false)}>Cancel</Button>
                 </div>
               </div>
             ) : (
-              <>
-                {company.domain && <div className="text-caption font-mono text-ink-secondary">{company.domain}</div>}
+              <div className="space-y-2">
+                {company.domain && <div className="tnum" style={{ fontSize: 12.5, fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>{company.domain}</div>}
                 {company.hq_location && (
-                  <div className="flex items-center gap-1.5 text-caption text-ink-muted">
-                    <MapPin size={12} /> {company.hq_location}
+                  <div className="flex items-center gap-1.5" style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>
+                    <MapPin size={12} strokeWidth={1.5} aria-hidden="true" /> {company.hq_location}
                   </div>
                 )}
-                <div className="flex items-center gap-2 pt-1">
+                <div className="flex items-center gap-3">
                   {company.linkedin_url && (
                     <a href={company.linkedin_url} target="_blank" rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-caption text-accent hover:underline">
-                      <Linkedin size={12} /> LinkedIn
+                      className="inline-flex items-center gap-1" style={{ fontSize: 12.5, color: "var(--text-link)" }}>
+                      <Linkedin size={12} strokeWidth={1.5} aria-hidden="true" /> LinkedIn
                     </a>
                   )}
                   {company.website && (
                     <a href={company.website.startsWith("http") ? company.website : `https://${company.website}`}
                       target="_blank" rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-caption text-accent hover:underline">
-                      <Globe size={12} /> Website
+                      className="inline-flex items-center gap-1" style={{ fontSize: 12.5, color: "var(--text-link)" }}>
+                      <Globe size={12} strokeWidth={1.5} aria-hidden="true" /> Website
                     </a>
                   )}
                 </div>
-                {company.description && (
-                  <p className="text-caption text-ink-muted pt-1">{company.description}</p>
-                )}
+                {company.description && <p style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>{company.description}</p>}
                 {company.employee_count && (
-                  <div className="flex items-center gap-1.5 text-caption text-ink-muted">
-                    <Users size={12} /> {company.employee_count.toLocaleString()} employees
+                  <div className="flex items-center gap-1.5" style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>
+                    <Users size={12} strokeWidth={1.5} aria-hidden="true" /> {company.employee_count.toLocaleString()} employees
                   </div>
                 )}
-              </>
+              </div>
             )}
-          </div>
+          </Card>
         </div>
 
         <div className="col-span-1 lg:col-span-2">
-          <div className="shadow-card p-4 sm:p-6 rounded-2xl">
-            <div className="ui-label mb-3 flex items-center gap-1.5"><Users size={14} /> Leads ({company.lead_count || 0})</div>
+          <Card title={`Leads (${company.lead_count || 0})`}>
             {(!company.leads || company.leads.length === 0) ? (
-              <p className="text-caption text-ink-muted">No leads linked to this company.</p>
+              <p style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>No leads linked to this company.</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {company.leads.map((l) => (
                   <Link key={l.id} to={`/app/crm/leads/${l.id}`}
-                    className="flex items-center justify-between p-2 rounded-lg hover:bg-ash transition-colors">
+                    className="flex items-center justify-between transition-colors"
+                    style={{ padding: "8px 10px", borderRadius: "var(--radius-md)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
                     <div>
-                      <span className="font-medium">{l.first_name} {l.last_name || ""}</span>
-                      <span className="text-ink-muted ml-2 font-mono text-caption">{l.email}</span>
+                      <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{l.first_name} {l.last_name || ""}</span>
+                      <span className="tnum" style={{ color: "var(--text-tertiary)", marginLeft: 8, fontFamily: "var(--font-mono)", fontSize: 12 }}>{l.email}</span>
                     </div>
-                    <span className="text-caption text-ink-muted">{l.title || ""}</span>
+                    <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{l.title || ""}</span>
                   </Link>
                 ))}
               </div>
             )}
-          </div>
+          </Card>
         </div>
       </div>
     </div>

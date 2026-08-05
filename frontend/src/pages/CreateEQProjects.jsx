@@ -8,6 +8,9 @@ import {
   Plus, Trash2, ImageIcon, Sparkles, PenSquare, ChevronLeft, ChevronRight, Wand2, Loader2, Check, ArrowRight, History, X,
 } from "lucide-react";
 import { TEMPLATES, PALETTES, blankSlide } from "../lib/creqTemplates";
+import Input from "../components/primitives/Input";
+import Button from "../components/primitives/Button";
+import Chip from "../components/primitives/Chip";
 
 const AUDIENCES = [
   { id: "founders", label: "Founders & CEOs", tone: "confident, punchy" },
@@ -90,50 +93,64 @@ export default function CreateEQProjects() {
       />
 
       <div className="animate-fade-in px-6 sm:px-8 space-y-8 max-w-5xl">
-        {/* Hero — the ONE AI entry point: type an idea, hit generate. */}
+        {/* Hero — the ONE AI entry point: type an idea, hit generate.
+            §4.5 intelligence container: violet-tinted border + header band,
+            not a gradient (§24.1 bans multi-stop gradients outside a single
+            chart-area fill — the old radial+linear background was exactly
+            that). */}
         <section
-          className="relative overflow-hidden rounded-2xl border border-line p-5 sm:p-6"
-          style={{ background: "radial-gradient(120% 140% at 0% 0%, rgba(29,29,31,0.05), transparent 55%), linear-gradient(180deg, #F5F5F7, #ffffff)" }}
+          className="relative overflow-hidden"
+          style={{
+            borderRadius: "var(--radius-xl)", border: "1px solid var(--color-intel-border)",
+            background: "var(--bg-surface)", padding: "20px 24px",
+          }}
         >
-          <div className="relative">
-            <div className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-sanguine mb-2">
-              <Sparkles size={12} /> Create with AI
-            </div>
-            <h2 className="font-display font-bold text-xl sm:text-2xl leading-[1.15] tracking-tight max-w-xl">
-              Describe your idea. We&apos;ll design the deck.
-            </h2>
-            <p className="text-caption sm:text-body text-neutral-400 mt-2 max-w-md">
-              One sentence is enough. Pick an audience and theme next — a finished, editable carousel in under a minute.
-            </p>
+          <div className="inline-flex items-center gap-1.5" style={{
+            fontSize: 11, fontWeight: 600, color: "var(--color-intel)", textTransform: "uppercase",
+            letterSpacing: "0.06em", marginBottom: 8,
+          }}>
+            <Sparkles size={14} strokeWidth={1.5} aria-hidden="true" /> Create with AI
+          </div>
+          <h2 style={{
+            fontSize: 22, lineHeight: "28px", fontWeight: 700, letterSpacing: "-0.01em",
+            color: "var(--text-primary)", fontFamily: "var(--font-display)", maxWidth: 560,
+          }}>
+            Describe your idea. We&apos;ll design the deck.
+          </h2>
+          <p style={{ fontSize: 13.5, color: "var(--text-secondary)", marginTop: 8, maxWidth: 480 }}>
+            One sentence is enough. Pick an audience and theme next — a finished, editable carousel in under a minute.
+          </p>
 
-            <div className="mt-4 flex flex-col sm:flex-row gap-2 max-w-2xl">
-              <textarea
-                value={heroTopic}
-                onChange={(e) => setHeroTopic(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); launchWizard(); } }}
-                data-testid="hero-topic-input"
-                rows={2}
-                placeholder='e.g. "Why cold outreach fails in 2026 — and the 3-step fix"'
-                className="flex-1 resize-none border border-line rounded-xl px-3.5 py-2.5 text-body bg-white focus:outline-none focus:border-accent shadow-sm"
-              />
-              <button onClick={launchWizard} data-testid="hero-generate" className="btn-primary shrink-0 self-stretch sm:self-start sm:h-[46px] px-4 text-body">
-                <Wand2 size={14} /> Generate
+          <div className="mt-4 flex flex-col sm:flex-row gap-2 max-w-2xl">
+            <Input
+              as="textarea"
+              value={heroTopic}
+              onChange={(e) => setHeroTopic(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); launchWizard(); } }}
+              data-testid="hero-topic-input"
+              rows={2}
+              placeholder='e.g. "Why cold outreach fails in 2026 — and the 3-step fix"'
+              className="flex-1"
+            />
+            <Button variant="intel" icon={Wand2} onClick={launchWizard} data-testid="hero-generate" size="lg" className="shrink-0 self-stretch sm:self-start">
+              Generate
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 mt-3">
+            <span style={{ fontSize: 10.5, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em", marginRight: 4 }}>Try</span>
+            {TOPIC_STARTERS.slice(0, 4).map((t, i) => (
+              <button key={i} onClick={() => setHeroTopic(t)} data-testid={`hero-starter-${i}`}>
+                <Chip label={t} />
               </button>
-            </div>
+            ))}
+          </div>
 
-            <div className="flex flex-wrap items-center gap-1.5 mt-3">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mr-1">Try</span>
-              {TOPIC_STARTERS.slice(0, 4).map((t, i) => (
-                <button key={i} onClick={() => setHeroTopic(t)} data-testid={`hero-starter-${i}`}
-                  className="text-[11px] px-2.5 py-1 rounded-lg border border-line bg-white/70 hover:border-accent hover:bg-white text-neutral-400 transition-colors">
-                  {t}
-                </button>
-              ))}
-            </div>
-
-            <div className="text-caption text-neutral-400 mt-3.5">
-              or <button onClick={startBlank} disabled={busy} data-testid="start-blank-btn" className="underline underline-offset-2 hover:text-ink disabled:opacity-50">start from a blank canvas</button>
-            </div>
+          <div style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 14 }}>
+            or <button onClick={startBlank} disabled={busy} data-testid="start-blank-btn"
+              style={{ textDecoration: "underline", textUnderlineOffset: 2, opacity: busy ? 0.5 : 1, color: "var(--text-secondary)" }}>
+              start from a blank canvas
+            </button>
           </div>
         </section>
 

@@ -1,0 +1,265 @@
+/* Design system tokens — docs/design-system.md §2.2 (light) and §2.3 (dark).
+ *
+ * This file is the definition layer. Components must consume the SEMANTIC
+ * names below (--bg-surface, --text-secondary, --color-primary), never the
+ * palette scales in §2.1 and never a raw hex (§0 rule 2, §23 "Tokens").
+ *
+ * Dark theme is a pure token swap on [data-theme="dark"] (§2.3 RULE). No
+ * component may branch on theme in JS or ship theme-specific markup — if you
+ * find yourself writing `theme === 'dark' ?` in a component, the token is
+ * missing, not the branch.
+ */
+
+:root {
+  /* ---- Surfaces ---- */
+  --bg-canvas:        #F6F7FB;
+  --bg-surface:       #FFFFFF;
+  --bg-surface-sunken:#FBFCFD;
+  --bg-surface-raised:#FFFFFF;
+  --bg-hover:         #F6F7FB;
+  --bg-active:        #EEF0F6;
+  --bg-selected:      #EFF4FF;
+  --bg-disabled:      #F6F7FB;
+  --bg-overlay:       rgba(15, 23, 41, 0.44);
+
+  /* ---- Text ---- */
+  --text-primary:     #0F1729;
+  --text-secondary:   #5A6478;
+  --text-tertiary:    #8A93A6;
+  --text-disabled:    #A6AEC0;
+  --text-inverse:     #FFFFFF;
+  --text-link:        #2563EB;
+  --text-link-hover:  #1D4ED8;
+
+  /* ---- Borders ---- */
+  --border-subtle:    #EEF0F6;
+  --border-default:   #E4E7EF;
+  --border-strong:    #CFD4E1;
+  --border-focus:     #2563EB;
+
+  /* ---- Primary action ---- */
+  --color-primary:            #2563EB;
+  --color-primary-hover:      #1D4ED8;
+  --color-primary-active:     #1E40AF;
+  --color-primary-subtle:     #EFF4FF;
+  --color-primary-subtle-hover:#DBE6FE;
+  --color-primary-border:     #BFD3FE;
+  --color-on-primary:         #FFFFFF;
+
+  /* ---- Intelligence (AI-assisted) ---- */
+  --color-intel:          #6C4FE0;
+  --color-intel-hover:    #5A3EC0;
+  --color-intel-subtle:   #F3F0FE;
+  --color-intel-border:   #D3C8FB;
+  --color-on-intel:       #FFFFFF;
+
+  /* ---- Status ---- */
+  --color-success:        #12A150;
+  --color-success-subtle: #E9F8EF;
+  --color-success-border: #A5E3BE;
+  --color-success-text:   #0E8043;
+
+  --color-warning:        #E08600;
+  --color-warning-subtle: #FEF6E7;
+  --color-warning-border: #F8D99A;
+  --color-warning-text:   #B96A00;
+
+  /* "At risk" is deliberately distinct from warning — orange vs amber. They
+     are different statuses in §4.3 and must never be collapsed into one. */
+  --color-risk:           #E4661F;
+  --color-risk-subtle:    #FEF1E8;
+  --color-risk-border:    #FCDFCB;
+  --color-risk-text:      #C2551A;
+
+  --color-danger:         #DC2626;
+  --color-danger-subtle:  #FDECEC;
+  --color-danger-border:  #F5AFAF;
+  --color-danger-text:    #B91C1C;
+
+  --color-neutral-status:       #5A6478;
+  --color-neutral-status-subtle:#EEF0F6;
+  --color-neutral-status-border:#E4E7EF;
+
+  /* ---- Data visualization ---- */
+  --chart-1: #2563EB;
+  --chart-2: #7C5CF7;
+  --chart-3: #12A150;
+  --chart-4: #F5803E;
+  --chart-5: #10A5A5;
+  --chart-6: #E1568B;
+  --chart-positive: #12A150;
+  --chart-negative: #DC2626;
+  --chart-grid:     #EEF0F6;
+  --chart-axis:     #8A93A6;
+  --chart-reference:#CFD4E1;
+  --chart-area-from: rgba(37, 99, 235, 0.14);
+  --chart-area-to:   rgba(37, 99, 235, 0.00);
+
+  /* ---- Typography (§2.4) ---- */
+  --font-display: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif;
+  --font-ui:      "Geist", "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-mono:    "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+
+  --weight-regular: 400;
+  --weight-medium:  500;
+  --weight-semibold:600;
+  --weight-bold:    700;
+
+  /* ---- Radius (§2.7) ---- */
+  --radius-xs:  4px;
+  --radius-sm:  6px;
+  --radius-md:  8px;
+  --radius-lg:  10px;
+  --radius-xl:  12px;
+  --radius-2xl: 16px;
+  --radius-full:9999px;
+
+  /* ---- Elevation (§2.8). Cool-tinted and shallow: cards are defined by
+         their border, not by a shadow. ---- */
+  --shadow-none: none;
+  --shadow-xs:  0 1px 2px rgba(15,23,41,0.04);
+  --shadow-sm:  0 1px 3px rgba(15,23,41,0.06), 0 1px 2px rgba(15,23,41,0.04);
+  --shadow-md:  0 4px 12px rgba(15,23,41,0.08), 0 1px 3px rgba(15,23,41,0.04);
+  --shadow-lg:  0 12px 28px rgba(15,23,41,0.10), 0 2px 6px rgba(15,23,41,0.05);
+  --shadow-xl:  0 24px 56px rgba(15,23,41,0.14), 0 4px 12px rgba(15,23,41,0.06);
+  --shadow-focus:0 0 0 3px rgba(37,99,235,0.18);
+  --shadow-focus-danger:0 0 0 3px rgba(220,38,38,0.18);
+
+  /* ---- Motion (§2.9) ---- */
+  --dur-instant:80ms;
+  --dur-fast:120ms;
+  --dur-base:180ms;
+  --dur-slow:240ms;
+  --dur-slower:320ms;
+  --ease-out:   cubic-bezier(0.16, 0.84, 0.44, 1);
+  --ease-in-out:cubic-bezier(0.45, 0, 0.35, 1);
+  --ease-spring:cubic-bezier(0.22, 1.2, 0.36, 1);
+
+  /* ---- Tooltip (§10.4): fixed dark regardless of theme, so it stays
+         legible against either canvas without a JS theme branch. ---- */
+  --tooltip-bg: #0F1729;
+  --tooltip-fg: #FFFFFF;
+
+  /* ---- Z-index (§2.10) ---- */
+  --z-base:0;
+  --z-sticky:100;
+  --z-dropdown:200;
+  --z-tooltip:300;
+  --z-drawer:400;
+  --z-modal:500;
+  --z-toast:600;
+  --z-palette:700;
+}
+
+[data-theme="dark"] {
+  --bg-canvas:        #0B1020;
+  --bg-surface:       #121829;
+  --bg-surface-sunken:#0E1424;
+  --bg-surface-raised:#182036;
+  --bg-hover:         #1A2136;
+  --bg-active:        #212A42;
+  --bg-selected:      #16264C;
+  --bg-disabled:      #151B2B;
+  --bg-overlay:       rgba(4, 8, 18, 0.66);
+
+  --text-primary:     #EEF1F8;
+  --text-secondary:   #A2ACC2;
+  --text-tertiary:    #767F96;
+  --text-disabled:    #5A6478;
+  --text-inverse:     #0F1729;
+  --text-link:        #7BA3FB;
+  --text-link-hover:  #A2C0FD;
+
+  --border-subtle:    #1B2338;
+  --border-default:   #242D45;
+  --border-strong:    #33405E;
+  --border-focus:     #6090FA;
+
+  --color-primary:            #3B76F6;
+  --color-primary-hover:      #6090FA;
+  --color-primary-active:     #2563EB;
+  --color-primary-subtle:     #14224A;
+  --color-primary-subtle-hover:#1B2E60;
+  --color-primary-border:     #26407C;
+  --color-on-primary:         #FFFFFF;
+
+  --color-intel:          #957CF2;
+  --color-intel-hover:    #B6A4F7;
+  --color-intel-subtle:   #1E1A40;
+  --color-intel-border:   #372E6E;
+  --color-on-intel:       #0F1729;
+
+  --color-success:        #16B364;
+  --color-success-subtle: #0E2A1D;
+  --color-success-border: #1B4A31;
+  --color-success-text:   #57D18F;
+
+  --color-warning:        #F0A32B;
+  --color-warning-subtle: #2C2109;
+  --color-warning-border: #4D3A12;
+  --color-warning-text:   #F5BE62;
+
+  --color-risk:           #F5803E;
+  --color-risk-subtle:    #2E1A0F;
+  --color-risk-border:    #4E2E1A;
+  --color-risk-text:      #F79E69;
+
+  --color-danger:         #EF4444;
+  --color-danger-subtle:  #2E1213;
+  --color-danger-border:  #522022;
+  --color-danger-text:    #F58585;
+
+  --color-neutral-status:       #A2ACC2;
+  --color-neutral-status-subtle:#1B2338;
+  --color-neutral-status-border:#242D45;
+
+  /* §10.4: on a dark canvas the tooltip inverts to light. */
+  --tooltip-bg: #EEF1F8;
+  --tooltip-fg: #0F1729;
+
+  --chart-1: #6090FA;
+  --chart-2: #957CF2;
+  --chart-3: #16B364;
+  --chart-4: #F5803E;
+  --chart-5: #22B8B8;
+  --chart-6: #EE7AA5;
+  --chart-grid: #1B2338;
+  --chart-axis: #767F96;
+  --chart-reference: #33405E;
+  --chart-area-from: rgba(96, 144, 250, 0.20);
+  --chart-area-to:   rgba(96, 144, 250, 0.00);
+
+  /* §2.8: on dark canvases shadows read as noise. Elevation is carried by
+     --bg-surface-raised plus --border-strong instead. */
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.40);
+  --shadow-lg: 0 12px 28px rgba(0,0,0,0.48);
+  --shadow-xl: 0 24px 56px rgba(0,0,0,0.56);
+}
+
+/* §2.9 RULE: reduced motion drops transforms and chart draw-ins entirely and
+   keeps opacity transitions at or below 80ms. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant: 0ms;
+    --dur-fast:   80ms;
+    --dur-base:   80ms;
+    --dur-slow:   80ms;
+    --dur-slower: 80ms;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 80ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* §2.4 RULE: every numeral in a metric, table cell, chart label or currency
+   is tabular, so columns of numbers line up. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}

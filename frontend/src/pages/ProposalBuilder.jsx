@@ -5,9 +5,13 @@ import { PageHeader } from "../components/AppLayout";
 import RichEmailEditor, { sanitizeEmailHtml } from "../components/RichEmailEditor";
 import { toast } from "sonner";
 import {
-  FileSignature, FileText, FileDown, Send, Save, Loader2, Check, AlertTriangle,
-  Plus, Trash2,
-} from "lucide-react";
+  Wand2, FileText, Download, Send, Check, Loader2, AlertTriangle, Plus, Trash2,
+} from "../icons";
+import Card from "../components/composites/Card";
+import Select from "../components/primitives/Select";
+import Input from "../components/primitives/Input";
+import Button from "../components/primitives/Button";
+import InlineAlert from "../components/composites/InlineAlert";
 
 const CHAIN_STEPS = [
   { key: "solution", label: "Solution" },
@@ -166,58 +170,51 @@ export default function ProposalBuilder() {
       <div>
         <PageHeader title="New proposal"
           subtitle="Proposal EQ assembles everything known about the deal, then drafts a document you can edit." />
-        <div className="animate-fade-in px-6 sm:px-8 max-w-xl">
-          <div className="shadow-card rounded-2xl p-6 sm:p-8 space-y-4">
-            <div>
-              <label className="form-label block mb-1">Lead / deal</label>
-              <select value={leadId} onChange={(e) => setLeadId(e.target.value)} data-testid="proposal-lead-select"
-                className="w-full border border-line px-3 py-2 rounded-full text-input">
-                <option value="">Select a lead…</option>
-                {leads.map((l) => (
-                  <option key={l.id} value={l.id}>{l.first_name} {l.last_name} — {l.company || l.email}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="form-label block mb-1">Proposal type</label>
-              <select value={templateId} onChange={(e) => setTemplateId(e.target.value)} data-testid="proposal-template-select"
-                className="w-full border border-line px-3 py-2 rounded-full text-input">
-                {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-              {template?.blurb && <p className="text-caption text-ink-muted mt-1">{template.blurb}</p>}
-            </div>
-
-            <button onClick={generate} disabled={busy} data-testid="generate-proposal-btn"
-              className="btn-primary w-full justify-center">
-              {chainStep ? <Loader2 size={14} className="animate-spin" /> : <FileSignature size={14} />}
-              {chainStep ? "Drafting…" : "Generate proposal"}
-            </button>
-
-            {chainStep && (
-              <div className="flex items-center gap-1.5 pt-1" data-testid="chain-progress">
-                {CHAIN_STEPS.map((s, i) => {
-                  const idx = CHAIN_STEPS.findIndex((x) => x.key === chainStep);
-                  const done = i < idx, active = s.key === chainStep;
-                  return (
-                    <div key={s.key} className="flex items-center gap-1.5 flex-1">
-                      <span className={`text-tiny font-mono uppercase tracking-wider flex items-center gap-1 ${
-                        active ? "text-ink font-semibold" : done ? "text-ink-muted" : "text-ink-disabled"}`}>
-                        {done ? <Check size={12} /> : active ? <Loader2 size={12} className="animate-spin" /> : <span className="w-2.5" />}
-                        {s.label}
-                      </span>
-                      {i < CHAIN_STEPS.length - 1 && <div className="flex-1 h-px bg-line" />}
-                    </div>
-                  );
-                })}
+        <div className="animate-fade-in px-6 sm:px-8 py-6 max-w-xl">
+          <Card>
+            <div className="space-y-4">
+              <Select label="Lead / deal" value={leadId} onChange={setLeadId} data-testid="proposal-lead-select"
+                options={[{ value: "", label: "Select a lead…" }, ...leads.map((l) => ({ value: l.id, label: `${l.first_name} ${l.last_name} — ${l.company || l.email}` }))]} />
+              <div>
+                <Select label="Proposal type" value={templateId} onChange={setTemplateId} data-testid="proposal-template-select"
+                  options={templates.map((t) => ({ value: t.id, label: t.name }))} />
+                {template?.blurb && <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 6 }}>{template.blurb}</p>}
               </div>
-            )}
-          </div>
+
+              <Button variant="primary" icon={chainStep ? Loader2 : Wand2} onClick={generate} isLoading={busy && !chainStep} disabled={busy}
+                data-testid="generate-proposal-btn" className="w-full justify-center">
+                {chainStep ? "Drafting…" : "Generate proposal"}
+              </Button>
+
+              {chainStep && (
+                <div className="flex items-center gap-1.5 pt-1" data-testid="chain-progress">
+                  {CHAIN_STEPS.map((s, i) => {
+                    const idx = CHAIN_STEPS.findIndex((x) => x.key === chainStep);
+                    const done = i < idx, active = s.key === chainStep;
+                    return (
+                      <div key={s.key} className="flex items-center gap-1.5 flex-1">
+                        <span className="flex items-center gap-1" style={{
+                          fontSize: 10.5, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.04em",
+                          color: active ? "var(--text-primary)" : done ? "var(--text-tertiary)" : "var(--text-disabled)",
+                          fontWeight: active ? 600 : 400,
+                        }}>
+                          {done ? <Check size={12} strokeWidth={1.5} aria-hidden="true" /> : active ? <Loader2 size={12} strokeWidth={1.5} className="animate-spin" aria-hidden="true" /> : <span className="w-2.5" />}
+                          {s.label}
+                        </span>
+                        {i < CHAIN_STEPS.length - 1 && <div className="flex-1 h-px" style={{ background: "var(--border-default)" }} />}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </Card>
         </div>
       </div>
     );
   }
 
-  if (!proposal) return <div className="p-10 text-ink-muted text-body">Loading…</div>;
+  if (!proposal) return <div style={{ padding: 40, fontSize: 13, color: "var(--text-tertiary)" }}>Loading…</div>;
 
   return (
     <div>
@@ -226,42 +223,28 @@ export default function ProposalBuilder() {
         subtitle={`${proposal.template_name || "Proposal"}${proposal.status === "sent" ? " · sent" : ""}`}
         right={
           <div className="flex flex-wrap gap-2">
-            <button onClick={save} disabled={busy || !dirty} data-testid="save-proposal-btn"
-              className="btn-secondary disabled:opacity-40">
-              {busy ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
-            </button>
-            <button onClick={() => download("docx")} disabled={busy} data-testid="export-docx-btn" className="btn-secondary">
-              <FileText size={14} /> DOCX
-            </button>
-            <button onClick={() => download("pdf")} disabled={busy} data-testid="export-pdf-btn" className="btn-secondary">
-              <FileDown size={14} /> PDF
-            </button>
+            <Button variant="secondary" icon={Check} onClick={save} isLoading={busy} disabled={busy || !dirty} data-testid="save-proposal-btn">Save</Button>
+            <Button variant="secondary" icon={FileText} onClick={() => download("docx")} disabled={busy} data-testid="export-docx-btn">DOCX</Button>
+            <Button variant="secondary" icon={Download} onClick={() => download("pdf")} disabled={busy} data-testid="export-pdf-btn">PDF</Button>
             {proposal.status === "draft" && (
-              <button onClick={markSent} data-testid="mark-sent-btn" className="btn-primary"><Send size={14} /> Mark sent</button>
+              <Button variant="primary" icon={Send} onClick={markSent} data-testid="mark-sent-btn">Mark sent</Button>
             )}
           </div>
         }
       />
 
-      <div className="animate-fade-in px-6 sm:px-8 max-w-3xl mx-auto space-y-5">
+      <div className="animate-fade-in px-6 sm:px-8 py-6 max-w-3xl mx-auto space-y-4">
         {!!(proposal.missing || []).length && (
-          <div className="shadow-card rounded-2xl p-4 border-warning/30 bg-warning/10" data-testid="missing-banner">
-            <div className="flex items-start gap-2 text-body text-warning">
-              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-              <div>
-                <div className="font-medium">Some inputs are missing.</div>
-                <div className="text-caption mt-0.5">
-                  The draft left these blank rather than inventing them — fill them in:
-                  {" "}{proposal.missing.join("; ")}.
-                </div>
-              </div>
-            </div>
+          <div data-testid="missing-banner">
+            <InlineAlert tone="warning" title="Some inputs are missing.">
+              The draft left these blank rather than inventing them — fill them in: {proposal.missing.join("; ")}.
+            </InlineAlert>
           </div>
         )}
 
         {sections.map((s) => (
-          <div key={s.key} className="shadow-card rounded-2xl p-6 sm:p-8" data-testid={`section-${s.key}`}>
-            <div className="ui-label mb-2">{s.heading}</div>
+          <Card key={s.key} data-testid={`section-${s.key}`}>
+            <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-tertiary)", marginBottom: 12 }}>{s.heading}</div>
             {s.slot === "pricing_table" ? (
               <PricingEditor
                 pricing={pricing} catalog={catalog}
@@ -272,7 +255,7 @@ export default function ProposalBuilder() {
               <RichEmailEditor value={s.html || ""} onChange={(html) => setSectionHtml(s.key, html)}
                 placeholder="Write this section, or leave the drafted copy as-is." />
             )}
-          </div>
+          </Card>
         ))}
       </div>
     </div>
@@ -287,63 +270,63 @@ function PricingEditor({ pricing, catalog, onAdd, onRemove, onQty, onDiscount })
 
   return (
     <div data-testid="pricing-editor">
-      <p className="text-caption text-ink-muted mb-3">
+      <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginBottom: 12 }}>
         Prices come from your catalog and totals are computed server-side — never set by hand.
       </p>
 
       {(pricing.line_items || []).length === 0 ? (
-        <p className="text-body text-ink-muted py-3">No line items yet — add from your catalog below.</p>
+        <p style={{ fontSize: 13, color: "var(--text-tertiary)", padding: "12px 0" }}>No line items yet — add from your catalog below.</p>
       ) : (
         <div className="overflow-x-auto">
-        <table className="w-full text-table" data-testid="pricing-table">
+        <table className="w-full" data-testid="pricing-table" style={{ fontSize: 13 }}>
           <thead>
-            <tr className="border-b border-line">
-              <th className="table-header py-1.5">Item</th>
-              <th className="table-header py-1.5 w-16 text-center">Qty</th>
-              <th className="table-header py-1.5 w-28 text-right">Unit</th>
-              <th className="table-header py-1.5 w-28 text-right">Amount</th>
-              <th className="w-8"></th>
+            <tr style={{ borderBottom: "1px solid var(--border-default)" }}>
+              <th style={{ textAlign: "left", padding: "6px 0", fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)" }}>Item</th>
+              <th style={{ width: 64, textAlign: "center", padding: "6px 0", fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)" }}>Qty</th>
+              <th style={{ width: 112, textAlign: "right", padding: "6px 0", fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)" }}>Unit</th>
+              <th style={{ width: 112, textAlign: "right", padding: "6px 0", fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)" }}>Amount</th>
+              <th style={{ width: 32 }}></th>
             </tr>
           </thead>
           <tbody>
             {pricing.line_items.map((li, i) => (
-              <tr key={i} className="border-b border-line/60">
-                <td className="py-1.5">
-                  {li.name}{li.unit ? <span className="text-ink-muted"> /{li.unit}</span> : ""}
+              <tr key={i} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                <td style={{ padding: "6px 0", color: "var(--text-primary)" }}>
+                  {li.name}{li.unit ? <span style={{ color: "var(--text-tertiary)" }}> /{li.unit}</span> : ""}
                 </td>
-                <td className="py-1.5 text-center">
-                  <input type="number" min={1} value={li.qty}
+                <td style={{ padding: "6px 0", textAlign: "center" }}>
+                  <Input size="sm" type="number" min={1} value={li.qty}
                     onChange={(e) => onQty(i, parseInt(e.target.value, 10) || 1)}
-                    data-testid={`qty-${i}`}
-                    className="w-14 border border-line rounded px-1 py-0.5 text-center text-input" />
+                    data-testid={`qty-${i}`} className="w-14 text-center" />
                 </td>
-                <td className="py-1.5 text-right tabular-nums text-ink-muted">{money(li.unit_price, cur)}</td>
-                <td className="py-1.5 text-right tabular-nums font-medium">{money(li.line_total, cur)}</td>
-                <td className="py-1.5 text-right">
-                  <button onClick={() => onRemove(i)} data-testid={`remove-line-${i}`}
-                    className="text-ink-muted hover:text-danger"><Trash2 size={14} /></button>
+                <td className="tnum" style={{ padding: "6px 0", textAlign: "right", color: "var(--text-tertiary)" }}>{money(li.unit_price, cur)}</td>
+                <td className="tnum" style={{ padding: "6px 0", textAlign: "right", fontWeight: 500, color: "var(--text-primary)" }}>{money(li.line_total, cur)}</td>
+                <td style={{ padding: "6px 0", textAlign: "right" }}>
+                  <button onClick={() => onRemove(i)} data-testid={`remove-line-${i}`} style={{ color: "var(--text-tertiary)" }}>
+                    <Trash2 size={14} strokeWidth={1.5} aria-hidden="true" />
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={3} className="py-1.5 text-right text-ink-muted">Subtotal</td>
-              <td className="py-1.5 text-right tabular-nums">{money(pricing.subtotal, cur)}</td><td></td>
+              <td colSpan={3} style={{ padding: "6px 0", textAlign: "right", color: "var(--text-tertiary)" }}>Subtotal</td>
+              <td className="tnum" style={{ padding: "6px 0", textAlign: "right" }}>{money(pricing.subtotal, cur)}</td><td></td>
             </tr>
             <tr>
-              <td colSpan={3} className="py-1 text-right text-ink-muted">
+              <td colSpan={3} style={{ padding: "4px 0", textAlign: "right", color: "var(--text-tertiary)" }}>
                 Discount
                 <input type="number" min={0} max={100} value={pricing.discount_pct || 0}
                   onChange={(e) => onDiscount(Math.max(0, Math.min(100, Number(e.target.value))))}
                   data-testid="discount-pct"
-                  className="w-14 border border-line rounded px-1 py-0.5 text-center mx-1 text-input" />%
+                  style={{ width: 56, border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "2px 4px", textAlign: "center", margin: "0 4px", fontSize: 13, background: "var(--bg-surface)", color: "var(--text-primary)" }} />%
               </td>
-              <td className="py-1 text-right tabular-nums">{pricing.discount ? `-${money(pricing.discount, cur)}` : money(0, cur)}</td><td></td>
+              <td className="tnum" style={{ padding: "4px 0", textAlign: "right" }}>{pricing.discount ? `-${money(pricing.discount, cur)}` : money(0, cur)}</td><td></td>
             </tr>
-            <tr className="border-t border-line">
-              <td colSpan={3} className="py-1.5 text-right font-semibold">Total</td>
-              <td className="py-1.5 text-right tabular-nums font-semibold" data-testid="pricing-total">{money(pricing.total, cur)}</td><td></td>
+            <tr style={{ borderTop: "1px solid var(--border-default)" }}>
+              <td colSpan={3} style={{ padding: "6px 0", textAlign: "right", fontWeight: 600, color: "var(--text-primary)" }}>Total</td>
+              <td className="tnum" style={{ padding: "6px 0", textAlign: "right", fontWeight: 600, color: "var(--text-primary)" }} data-testid="pricing-total">{money(pricing.total, cur)}</td><td></td>
             </tr>
           </tfoot>
         </table>
@@ -352,17 +335,14 @@ function PricingEditor({ pricing, catalog, onAdd, onRemove, onQty, onDiscount })
 
       {unused.length > 0 && (
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-3">
-          <select value={pick} onChange={(e) => setPick(e.target.value)} data-testid="add-line-select"
-            className="border border-line rounded-full px-3 py-1.5 text-caption flex-1">
-            <option value="">Add a line from your catalog…</option>
-            {unused.map((c) => <option key={c.id} value={c.id}>{c.name} — {money(c.unit_price, c.currency)}{c.unit ? `/${c.unit}` : ""}</option>)}
-          </select>
-          <button onClick={() => { if (pick) { onAdd(pick); setPick(""); } }} disabled={!pick}
-            data-testid="add-line-btn" className="btn-secondary text-caption disabled:opacity-40"><Plus size={14} /> Add</button>
+          <Select value={pick} onChange={setPick} data-testid="add-line-select" className="flex-1"
+            options={[{ value: "", label: "Add a line from your catalog…" }, ...unused.map((c) => ({ value: c.id, label: `${c.name} — ${money(c.unit_price, c.currency)}${c.unit ? `/${c.unit}` : ""}` }))]} />
+          <Button variant="secondary" size="sm" icon={Plus} onClick={() => { if (pick) { onAdd(pick); setPick(""); } }} disabled={!pick}
+            data-testid="add-line-btn">Add</Button>
         </div>
       )}
 
-      {pricing.notes && <p className="text-caption text-ink-muted mt-3 italic">{pricing.notes}</p>}
+      {pricing.notes && <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 12, fontStyle: "italic" }}>{pricing.notes}</p>}
     </div>
   );
 }

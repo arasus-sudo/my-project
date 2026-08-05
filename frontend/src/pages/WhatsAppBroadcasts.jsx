@@ -2,7 +2,17 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Plus, Play, Pause } from "lucide-react";
+import { Plus, Play, Pause } from "../icons";
+import Card from "../components/composites/Card";
+import { EmptyState } from "../components/composites/EmptyState";
+import { Modal, ModalContent } from "../components/composites/Modal";
+import StatusPill from "../components/primitives/StatusPill";
+import Input from "../components/primitives/Input";
+import Select from "../components/primitives/Select";
+import Button from "../components/primitives/Button";
+
+const STATUS_TONE = { draft: "neutral", scheduled: "primary", sending: "primary", sent: "success", paused: "warning", cancelled: "danger" };
+const STATUS_META = { draft: "Draft", scheduled: "Scheduled", sending: "Sending", sent: "Sent", paused: "Paused", cancelled: "Cancelled" };
 
 export default function WhatsAppBroadcasts() {
   const [items, setItems] = useState([]);
@@ -34,49 +44,49 @@ export default function WhatsAppBroadcasts() {
     } catch { toast.error("Action failed"); }
   };
 
-  const STATUS_META = { draft: "Draft", scheduled: "Scheduled", sending: "Sending", sent: "Sent", paused: "Paused", cancelled: "Cancelled" };
-
   return (
     <div>
       <PageHeader title="WhatsApp Broadcasts" subtitle="Send bulk WhatsApp messages using approved templates."
-        right={<button onClick={() => setModal(true)} className="btn-primary" disabled={templates.length === 0}><Plus size={14} /> New broadcast</button>}
+        right={<Button variant="primary" icon={Plus} onClick={() => setModal(true)} isDisabled={templates.length === 0}>New broadcast</Button>}
       />
-      <div className="animate-fade-in px-6 sm:px-8 space-y-4">
-        {items.length === 0 && <div className="text-body text-ink-muted">No broadcasts yet. You need at least one approved template.</div>}
-        {items.map((b) => (
-          <div key={b.id} className="bg-white border border-line rounded-2xl p-5 flex items-center justify-between">
-            <div>
-              <div className="text-card-title font-display font-semibold">{b.name}</div>
-              <div className="text-caption text-ink-muted mt-1">Template: {b.template_name || "—"} | Sent: {b.sent_count ?? 0}/{b.total_count ?? 0}</div>
-              <div className="text-tiny text-ink-muted mt-0.5">Status: {STATUS_META[b.status] || b.status}</div>
+      <div className="animate-fade-in px-6 sm:px-8 py-6 space-y-3">
+        {items.length === 0 ? (
+          <EmptyState title="No broadcasts yet" description="You need at least one approved template before you can send a broadcast." />
+        ) : items.map((b) => (
+          <Card key={b.id}>
+            <div className="flex items-center justify-between">
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>{b.name}</div>
+                <div style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 4 }}>Template: {b.template_name || "—"} · Sent: {b.sent_count ?? 0}/{b.total_count ?? 0}</div>
+                <div style={{ marginTop: 6 }}><StatusPill status={STATUS_META[b.status] || b.status} tone={STATUS_TONE[b.status]} /></div>
+              </div>
+              <div className="flex gap-2">
+                {b.status === "paused" && <Button variant="secondary" icon={Play} onClick={() => toggleLaunch(b.id, "paused")}>Resume</Button>}
+                {b.status === "sending" && <Button variant="secondary" icon={Pause} onClick={() => toggleLaunch(b.id, "sending")}>Pause</Button>}
+              </div>
             </div>
-            <div className="flex gap-2">
-              {b.status === "paused" && <button onClick={() => toggleLaunch(b.id, "paused")} className="btn-secondary"><Play size={14} /> Resume</button>}
-              {b.status === "sending" && <button onClick={() => toggleLaunch(b.id, "sending")} className="btn-secondary"><Pause size={14} /> Pause</button>}
-            </div>
-          </div>
+          </Card>
         ))}
       </div>
-      {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="text-card-title font-display font-semibold mb-4">New WhatsApp Broadcast</div>
-            <form onSubmit={save} className="space-y-4">
-              <input className="inp w-full" placeholder="Broadcast name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-              <select className="inp w-full" value={form.template_id} onChange={(e) => setForm({ ...form, template_id: e.target.value })} required>
-                <option value="">Select approved template</option>
-                {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-              <input className="inp w-full" placeholder="Contact IDs (comma-separated)" value={form.contact_ids} onChange={(e) => setForm({ ...form, contact_ids: e.target.value })} />
-              <input className="inp w-full" type="datetime-local" value={form.scheduled_at} onChange={(e) => setForm({ ...form, scheduled_at: e.target.value })} />
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary">Create</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+
+      <Modal open={modal} onOpenChange={setModal}>
+        <ModalContent size="sm" title="New WhatsApp Broadcast"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setModal(false)}>Cancel</Button>
+              <Button variant="primary" type="submit" form="whatsapp-broadcast-form">Create</Button>
+            </>
+          }
+        >
+          <form id="whatsapp-broadcast-form" onSubmit={save} className="space-y-3">
+            <Input required label="Broadcast name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Select required label="Template" value={form.template_id} onChange={(v) => setForm({ ...form, template_id: v })}
+              options={[{ value: "", label: "Select approved template" }, ...templates.map((t) => ({ value: t.id, label: t.name }))]} />
+            <Input label="Contact IDs" help="Comma-separated" value={form.contact_ids} onChange={(e) => setForm({ ...form, contact_ids: e.target.value })} />
+            <Input type="datetime-local" label="Scheduled for" value={form.scheduled_at} onChange={(e) => setForm({ ...form, scheduled_at: e.target.value })} />
+          </form>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, Check, X } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X } from "../icons";
+import Card from "../components/composites/Card";
+import Input from "../components/primitives/Input";
+import Select from "../components/primitives/Select";
+import Button from "../components/primitives/Button";
 
 const CURRENCIES = ["USD", "EUR", "GBP", "INR"];
 const SYM = { USD: "$", EUR: "€", GBP: "£", INR: "₹" };
@@ -10,6 +14,7 @@ const money = (n, cur = "USD") =>
   `${SYM[cur] || ""}${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
 const BLANK = { name: "", unit_price: "", currency: "USD", unit: "mo", description: "" };
+const CURRENCY_OPTIONS = CURRENCIES.map((c) => ({ value: c, label: c }));
 
 export default function PricingCatalog() {
   const [items, setItems] = useState([]);
@@ -50,49 +55,47 @@ export default function PricingCatalog() {
     <div>
       <PageHeader title="Pricing Catalog"
         subtitle="Structured line items Proposal EQ selects from — totals are always computed from these, never typed in by hand." />
-      <div className="animate-fade-in px-6 sm:px-8 max-w-2xl space-y-6">
-        <div className="border border-line bg-white rounded-2xl overflow-hidden">
+      <div className="animate-fade-in px-6 sm:px-8 py-6 max-w-2xl space-y-4">
+        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-xs)", overflow: "hidden" }}>
           {items.length === 0 ? (
-            <div className="p-6 text-body text-ink-muted text-center">No pricing items yet.</div>
-          ) : items.map((it) => (
-            <div key={it.id} className="p-3 border-b border-line last:border-0" data-testid={`pricing-row-${it.id}`}>
+            <div style={{ padding: 24, textAlign: "center", fontSize: 13, color: "var(--text-tertiary)" }}>No pricing items yet.</div>
+          ) : items.map((it, i) => (
+            <div key={it.id} data-testid={`pricing-row-${it.id}`}
+              style={{ padding: 12, borderBottom: i < items.length - 1 ? "1px solid var(--border-subtle)" : "none" }}>
               {editId === it.id ? (
                 <div className="space-y-2">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                      className="border border-line px-2 py-1.5 rounded-full text-input" placeholder="Name" />
+                    <Input size="sm" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} placeholder="Name" />
                     <div className="flex gap-1">
-                      <input type="number" value={editForm.unit_price} onChange={(e) => setEditForm({ ...editForm, unit_price: e.target.value })}
-                        className="border border-line px-2 py-1.5 rounded-full text-input w-full" placeholder="Price" />
-                      <select value={editForm.currency} onChange={(e) => setEditForm({ ...editForm, currency: e.target.value })}
-                        className="border border-line px-1 py-1.5 rounded-full text-input">
-                        {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
-                      </select>
+                      <Input size="sm" type="number" value={editForm.unit_price} onChange={(e) => setEditForm({ ...editForm, unit_price: e.target.value })} placeholder="Price" className="flex-1" />
+                      <Select size="sm" value={editForm.currency} onChange={(v) => setEditForm({ ...editForm, currency: v })} options={CURRENCY_OPTIONS} className="w-24" />
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <input value={editForm.unit} onChange={(e) => setEditForm({ ...editForm, unit: e.target.value })}
-                      className="border border-line px-2 py-1.5 rounded-full text-input" placeholder="Unit" />
-                    <input value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                      className="border border-line px-2 py-1.5 rounded-full text-input" placeholder="Description" />
+                    <Input size="sm" value={editForm.unit} onChange={(e) => setEditForm({ ...editForm, unit: e.target.value })} placeholder="Unit" />
+                    <Input size="sm" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} placeholder="Description" />
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={saveEdit} data-testid="save-edit" className="btn-primary text-caption"><Check size={12} /> Save</button>
-                    <button onClick={() => setEditId(null)} className="btn-ghost text-caption"><X size={12} /> Cancel</button>
+                    <Button variant="primary" size="sm" icon={Check} onClick={saveEdit} data-testid="save-edit">Save</Button>
+                    <Button variant="tertiary" size="sm" icon={X} onClick={() => setEditId(null)}>Cancel</Button>
                   </div>
                 </div>
               ) : (
                 <div className="flex items-center justify-between">
                   <div className="min-w-0">
-                    <div className="text-body font-medium">{it.name}</div>
-                    {it.description && <div className="text-caption text-ink-muted truncate">{it.description}</div>}
+                    <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>{it.name}</div>
+                    {it.description && <div className="truncate" style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{it.description}</div>}
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                    <span className="font-mono text-body tabular-nums">
-                      {money(it.unit_price, it.currency)}{it.unit ? <span className="text-ink-muted">/{it.unit}</span> : ""}
+                    <span className="tnum" style={{ fontSize: 13, fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>
+                      {money(it.unit_price, it.currency)}{it.unit ? <span style={{ color: "var(--text-tertiary)" }}>/{it.unit}</span> : ""}
                     </span>
-                    <button onClick={() => startEdit(it)} data-testid={`edit-pricing-${it.id}`} className="text-ink-muted hover:text-ink"><Pencil size={14} /></button>
-                    <button onClick={() => remove(it.id)} data-testid={`delete-pricing-${it.id}`} className="text-ink-muted hover:text-danger"><Trash2 size={14} /></button>
+                    <button onClick={() => startEdit(it)} data-testid={`edit-pricing-${it.id}`} style={{ color: "var(--text-tertiary)" }}>
+                      <Pencil size={14} strokeWidth={1.5} aria-hidden="true" />
+                    </button>
+                    <button onClick={() => remove(it.id)} data-testid={`delete-pricing-${it.id}`} style={{ color: "var(--text-tertiary)" }}>
+                      <Trash2 size={14} strokeWidth={1.5} aria-hidden="true" />
+                    </button>
                   </div>
                 </div>
               )}
@@ -100,29 +103,23 @@ export default function PricingCatalog() {
           ))}
         </div>
 
-        <form onSubmit={add} className="shadow-card rounded-2xl p-6 sm:p-8 space-y-3">
-          <div className="text-card-title font-display font-semibold">Add a pricing item</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input placeholder="Name (e.g. Implementation)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-              data-testid="pricing-name" className="border border-line px-3 py-2 rounded-full text-input" />
-            <div className="flex gap-1">
-              <input type="number" min={0} step="0.01" placeholder="Price" value={form.unit_price}
-                onChange={(e) => setForm({ ...form, unit_price: e.target.value })}
-                data-testid="pricing-price" className="border border-line px-3 py-2 rounded-full text-input w-full" />
-              <select value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}
-                data-testid="pricing-currency" className="border border-line px-2 py-2 rounded-full text-input">
-                {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
-              </select>
+        <Card title="Add a pricing item">
+          <form onSubmit={add} className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input placeholder="Name (e.g. Implementation)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="pricing-name" />
+              <div className="flex gap-1">
+                <Input type="number" min={0} step="0.01" placeholder="Price" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })}
+                  data-testid="pricing-price" className="flex-1" />
+                <Select value={form.currency} onChange={(v) => setForm({ ...form, currency: v })} options={CURRENCY_OPTIONS} data-testid="pricing-currency" className="w-24" />
+              </div>
             </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input placeholder="Unit (mo, seat, project)" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })}
-              data-testid="pricing-unit" className="border border-line px-3 py-2 rounded-full text-input" />
-            <input placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-              data-testid="pricing-description" className="border border-line px-3 py-2 rounded-full text-input" />
-          </div>
-          <button type="submit" disabled={busy} data-testid="pricing-add-btn" className="btn-primary"><Plus size={14} /> Add</button>
-        </form>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input placeholder="Unit (mo, seat, project)" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} data-testid="pricing-unit" />
+              <Input placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} data-testid="pricing-description" />
+            </div>
+            <Button type="submit" variant="primary" icon={Plus} isLoading={busy} data-testid="pricing-add-btn">Add</Button>
+          </form>
+        </Card>
       </div>
     </div>
   );

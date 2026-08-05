@@ -3,7 +3,13 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Save, Phone, Copy, Check, Plus, Trash2 } from "lucide-react";
+import { Check, Phone, Copy, Plus, Trash2 } from "../icons";
+import Card from "../components/composites/Card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/composites/Tabs";
+import Button from "../components/primitives/Button";
+import Input from "../components/primitives/Input";
+import Select from "../components/primitives/Select";
+import Checkbox from "../components/primitives/Checkbox";
 
 const VOICES = [
   { id: "alloy", label: "Alloy — neutral, versatile", gender: "neutral" },
@@ -18,6 +24,7 @@ const VOICES = [
 
 const MALE_VOICES = VOICES.filter((v) => v.gender === "male");
 const FEMALE_VOICES = VOICES.filter((v) => v.gender === "female");
+const NEUTRAL_VOICES = VOICES.filter((v) => v.gender === "neutral");
 
 const MODELS = [
   { id: "gpt-realtime-2.1", label: "GPT Realtime 2.1 (best)" },
@@ -80,8 +87,6 @@ const GOOGLE_VOICES = [
   { id: "pt-BR-Wavenet-A", label: "Brazilian Wavenet A (female)", gender: "female", lang: "pt-BR" },
 ];
 
-
-
 const TAB_LABELS = ["General", "Voice & AI", "Qualification", "Rules"];
 
 const emptyAgent = () => ({
@@ -143,11 +148,40 @@ const FRAMEWORKS = {
   ],
 };
 
+const langOptions = LANGUAGES.map((l) => ({ value: l, label: l }));
+const accentOptions = ACCENTS.map((a) => ({ value: a.id, label: a.label }));
+const styleOptions = SPEAKING_STYLES.map((s) => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }));
+const responseOptions = RESPONSE_STYLES.map((s) => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }));
+const interruptOptions = INTERRUPT_MODES.map((m) => ({ value: m, label: m.charAt(0).toUpperCase() + m.slice(1) }));
+const crmContextOptions = [
+  { value: "full_lead", label: "Full lead profile (name, company, title, industry)" },
+  { value: "summary", label: "Summary only" },
+  { value: "none", label: "No CRM context" },
+];
+
+function RangeField({ label, value, min, max, step, onChange, format, hints }) {
+  return (
+    <div>
+      <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--text-primary)", fontFamily: "var(--font-ui)", marginBottom: 6 }}>
+        {label} · {format ? format(value) : value}
+      </label>
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-primary" style={{ marginTop: 4 }} />
+      {hints && (
+        <div className="flex justify-between" style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 4 }}>
+          {hints.map((h) => <span key={h}>{h}</span>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function VoiceAgentBuilder() {
   const { id } = useParams();
   const nav = useNavigate();
   const [agent, setAgent] = useState(emptyAgent());
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState("0");
   const [busy, setBusy] = useState(false);
   const [inboundUrl, setInboundUrl] = useState("");
   const [copied, setCopied] = useState(false);
@@ -222,56 +256,45 @@ export default function VoiceAgentBuilder() {
 
   const c = agent.config;
 
+  const googleVoiceOptions = [
+    { group: "English (US)", options: GOOGLE_VOICES.filter((v) => v.lang === "en-US").map((v) => ({ value: v.id, label: v.label })) },
+    { group: "English (UK)", options: GOOGLE_VOICES.filter((v) => v.lang === "en-GB").map((v) => ({ value: v.id, label: v.label })) },
+    { group: "English (Australia)", options: GOOGLE_VOICES.filter((v) => v.lang === "en-AU").map((v) => ({ value: v.id, label: v.label })) },
+    { group: "Indian English", options: GOOGLE_VOICES.filter((v) => v.lang === "en-IN").map((v) => ({ value: v.id, label: v.label })) },
+    { group: "Other languages", options: GOOGLE_VOICES.filter((v) => !["en-US", "en-GB", "en-AU", "en-IN"].includes(v.lang)).map((v) => ({ value: v.id, label: v.label })) },
+  ];
+
   return (
     <div>
       <PageHeader
         title={id && id !== "new" ? agent.name : "New voice agent"}
         subtitle="Configure your AI SDR agent — voice, personality, qualification, and call rules."
-        right={
-          <div className="flex gap-2">
-            <button onClick={save} disabled={busy} className="btn-primary">
-              <Save size={14} /> {id && id !== "new" ? "Save" : "Create agent"}
-            </button>
-          </div>
-        }
+        right={<Button variant="primary" icon={Check} onClick={save} isLoading={busy}>{id && id !== "new" ? "Save" : "Create agent"}</Button>}
       />
 
-      {/* Tabs */}
-      <div className="px-6 sm:px-8 border-b border-line">
-        <div className="flex gap-6 -mb-px">
-          {TAB_LABELS.map((label, i) => (
-            <button key={i} onClick={() => setTab(i)}
-              className={`pb-2 text-body font-medium font-display border-b-2 transition-colors ${
-                i === tab ? "border-ink text-ink" : "border-transparent text-ink-muted hover:text-ink"
-              }`}>
-              {label}
-            </button>
-          ))}
+      <Tabs value={tab} onValueChange={setTab}>
+        <div className="px-6 sm:px-8">
+          <TabsList>
+            {TAB_LABELS.map((label, i) => <TabsTrigger key={i} value={String(i)}>{label}</TabsTrigger>)}
+          </TabsList>
         </div>
-      </div>
 
-      <div className="animate-fade-in px-6 sm:px-8 max-w-4xl py-6 space-y-6">
-
-        {/* ─────── Tab 0: General ─────── */}
-        {tab === 0 && (
-          <>
-            <div className="shadow-card rounded-2xl p-6 space-y-4">
-              <div className="text-card-title font-display font-semibold">Agent details</div>
+        <div className="animate-fade-in px-6 sm:px-8 max-w-4xl py-6 space-y-4">
+          {/* ─────── Tab 0: General ─────── */}
+          <TabsContent value="0" className="space-y-4">
+            <Card title="Agent details">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input label="Name" value={agent.name} onChange={(e) => patchAgent({ name: e.target.value })} />
                 <div>
-                  <label className="form-label block mb-1">Name</label>
-                  <input value={agent.name} onChange={(e) => patchAgent({ name: e.target.value })}
-                    className="w-full border border-line px-3 py-2 rounded-lg" />
-                </div>
-                <div>
-                  <label className="form-label block mb-1">Provider</label>
-                  <select value={agent.provider} onChange={(e) => patchAgent({ provider: e.target.value })}
-                    className="w-full border border-line px-3 py-2 rounded-lg">
-                    <option value="twilio_openai">Twilio + OpenAI Realtime</option>
-                    <option value="google_provider">Google Cloud (STT → Claude → TTS)</option>
-                    <option value="twilio_fish">Fish Audio (STT → Claude → cloned voice)</option>
-                  </select>
-                  <p className="text-tiny text-ink-muted mt-1">
+                  <Select
+                    label="Provider" value={agent.provider} onChange={(v) => patchAgent({ provider: v })}
+                    options={[
+                      { value: "twilio_openai", label: "Twilio + OpenAI Realtime" },
+                      { value: "google_provider", label: "Google Cloud (STT → Claude → TTS)" },
+                      { value: "twilio_fish", label: "Fish Audio (STT → Claude → cloned voice)" },
+                    ]}
+                  />
+                  <p style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 6 }}>
                     {agent.provider === "google_provider"
                       ? "Split architecture: 50+ WaveNet/Studio voices, 30+ languages, Indian/British/Australian accents natively supported. Requires GOOGLE_API_KEY in .env."
                       : agent.provider === "twilio_fish"
@@ -280,420 +303,211 @@ export default function VoiceAgentBuilder() {
                   </p>
                 </div>
               </div>
-              <div>
-                <label className="form-label block mb-1">System prompt / persona</label>
-                <textarea value={agent.persona_prompt} onChange={(e) => patchAgent({ persona_prompt: e.target.value })}
-                  rows={6} className="w-full border border-line px-3 py-2 rounded-lg font-mono text-input" />
-                <p className="text-tiny text-ink-muted mt-1">
-                  The agent receives this as its core instruction. CRM context is appended automatically.
-                </p>
+              <div style={{ marginTop: 16 }}>
+                <Input as="textarea" rows={6} label="System prompt / persona" value={agent.persona_prompt} onChange={(e) => patchAgent({ persona_prompt: e.target.value })}
+                  style={{ fontFamily: "var(--font-mono)" }}
+                  help="The agent receives this as its core instruction. CRM context is appended automatically." />
               </div>
-            </div>
+            </Card>
 
-            <div className="shadow-card rounded-2xl p-6 space-y-4">
-              <div className="text-card-title font-display font-semibold">Inbound calling</div>
-              <label className="flex items-center gap-2 text-body">
-                <input type="checkbox" checked={agent.inbound_enabled}
-                  onChange={(e) => patchAgent({ inbound_enabled: e.target.checked })} />
-                Enable inbound calls — route incoming calls to this agent
-              </label>
+            <Card title="Inbound calling">
+              <Checkbox label="Enable inbound calls — route incoming calls to this agent" checked={agent.inbound_enabled}
+                onChange={(e) => patchAgent({ inbound_enabled: e.target.checked })} />
               {agent.inbound_enabled && inboundUrl && (
-                <div className="flex items-center gap-2 bg-bone border border-line rounded-lg px-3 py-2 text-caption font-mono">
-                  <Phone size={12} className="shrink-0 text-ink-muted" />
+                <div className="tnum flex items-center gap-2" style={{
+                  marginTop: 12, background: "var(--bg-surface-sunken)", border: "1px solid var(--border-default)",
+                  borderRadius: "var(--radius-lg)", padding: "8px 12px", fontSize: 12.5, fontFamily: "var(--font-mono)",
+                }}>
+                  <Phone size={12} strokeWidth={1.5} aria-hidden="true" className="shrink-0" style={{ color: "var(--text-tertiary)" }} />
                   <span className="flex-1 truncate">{inboundUrl}</span>
-                  <button onClick={copyInboundUrl} className="shrink-0 text-ink-muted hover:text-ink" title="Copy webhook URL">
-                    {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
+                  <button onClick={copyInboundUrl} title="Copy webhook URL" className="shrink-0" style={{ color: copied ? "var(--color-success)" : "var(--text-tertiary)" }}>
+                    {copied ? <Check size={14} strokeWidth={1.5} aria-hidden="true" /> : <Copy size={14} strokeWidth={1.5} aria-hidden="true" />}
                   </button>
                 </div>
               )}
               {agent.inbound_enabled && !inboundUrl && (
-                <p className="text-caption text-warning">Save the agent first to generate the inbound webhook URL.</p>
+                <p style={{ fontSize: 12.5, color: "var(--color-warning-text)", marginTop: 8 }}>Save the agent first to generate the inbound webhook URL.</p>
               )}
               {agent.inbound_enabled && inboundUrl && (
-                <p className="text-tiny text-ink-muted">
+                <p style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 8 }}>
                   Set this URL as the Voice webhook in your Twilio Console → Phone Numbers → your number → Voice configuration.
                 </p>
               )}
-            </div>
-          </>
-        )}
+            </Card>
+          </TabsContent>
 
-        {/* ─────── Tab 1: Voice & AI ─────── */}
-        {tab === 1 && (
-          <>
+          {/* ─────── Tab 1: Voice & AI ─────── */}
+          <TabsContent value="1" className="space-y-4">
             {agent.provider === "twilio_openai" ? (
               <>
-                <div className="shadow-card rounded-2xl p-6 space-y-4">
-                  <div className="text-card-title font-display font-semibold">AI model (OpenAI Realtime)</div>
+                <Card title="AI model (OpenAI Realtime)">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="form-label block mb-1">Model</label>
-                      <select value={c.model} onChange={(e) => patchConfig({ model: e.target.value })}
-                        className="w-full border border-line px-3 py-2 rounded-lg">
-                        {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="form-label block mb-1">Temperature · {c.temperature.toFixed(1)}</label>
-                      <input type="range" min={0} max={1} step={0.05} value={c.temperature}
-                        onChange={(e) => patchConfig({ temperature: Number(e.target.value) })}
-                        className="w-full mt-2" />
-                    </div>
+                    <Select label="Model" value={c.model} onChange={(v) => patchConfig({ model: v })} options={MODELS.map((m) => ({ value: m.id, label: m.label }))} />
+                    <RangeField label="Temperature" value={c.temperature} min={0} max={1} step={0.05} format={(v) => v.toFixed(1)} onChange={(v) => patchConfig({ temperature: v })} />
                   </div>
-                </div>
+                </Card>
 
-                <div className="shadow-card rounded-2xl p-6 space-y-4">
-                  <div className="text-card-title font-display font-semibold">Voice (OpenAI)</div>
+                <Card title="Voice (OpenAI)">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="form-label block mb-1">Voice</label>
-                      <select value={c.voice} onChange={(e) => patchConfig({ voice: e.target.value })}
-                        className="w-full border border-line px-3 py-2 rounded-lg">
-                        <optgroup label="♀ Female voices">
-                          {FEMALE_VOICES.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-                        </optgroup>
-                        <optgroup label="♂ Male voices">
-                          {MALE_VOICES.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-                        </optgroup>
-                        <optgroup label="— Neutral">
-                          {VOICES.filter((v) => v.gender === "neutral").map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-                        </optgroup>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="form-label block mb-1">Language</label>
-                      <select value={c.language} onChange={(e) => patchConfig({ language: e.target.value })}
-                        className="w-full border border-line px-3 py-2 rounded-lg">
-                        {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
-                      </select>
-                    </div>
+                    <Select
+                      label="Voice" value={c.voice} onChange={(v) => patchConfig({ voice: v })}
+                      options={[
+                        { group: "Female voices", options: FEMALE_VOICES.map((v) => ({ value: v.id, label: v.label })) },
+                        { group: "Male voices", options: MALE_VOICES.map((v) => ({ value: v.id, label: v.label })) },
+                        { group: "Neutral", options: NEUTRAL_VOICES.map((v) => ({ value: v.id, label: v.label })) },
+                      ]}
+                    />
+                    <Select label="Language" value={c.language} onChange={(v) => patchConfig({ language: v })} options={langOptions} />
                   </div>
-                  <div>
-                    <label className="form-label block mb-1">Speaking speed · {c.speaking_speed.toFixed(1)}x</label>
-                    <input type="range" min={0.5} max={2} step={0.1} value={c.speaking_speed}
-                      onChange={(e) => patchConfig({ speaking_speed: Number(e.target.value) })}
-                      className="w-full mt-2" />
-                    <div className="flex justify-between text-tiny text-ink-muted mt-1">
-                      <span>Slow (0.5x)</span>
-                      <span>Normal (1.0x)</span>
-                      <span>Fast (2.0x)</span>
-                    </div>
+                  <div style={{ marginTop: 16 }}>
+                    <RangeField label="Speaking speed" value={c.speaking_speed} min={0.5} max={2} step={0.1} format={(v) => `${v.toFixed(1)}x`}
+                      onChange={(v) => patchConfig({ speaking_speed: v })} hints={["Slow (0.5x)", "Normal (1.0x)", "Fast (2.0x)"]} />
                   </div>
-                  <div>
-                    <label className="form-label block mb-1">Volume boost · {c.volume_gain_db != null ? c.volume_gain_db.toFixed(1) : "3.0"} dB</label>
-                    <input type="range" min={-6} max={12} step={0.5}
-                      value={c.volume_gain_db ?? 3.0}
-                      onChange={(e) => patchConfig({ volume_gain_db: Number(e.target.value) })}
-                      className="w-full mt-2" />
-                    <div className="flex justify-between text-tiny text-ink-muted mt-1">
-                      <span>-6 dB (quieter)</span>
-                      <span>0 dB (neutral)</span>
-                      <span>+12 dB (louder)</span>
-                    </div>
+                  <div style={{ marginTop: 16 }}>
+                    <RangeField label="Volume boost" value={c.volume_gain_db ?? 3.0} min={-6} max={12} step={0.5} format={(v) => `${v.toFixed(1)} dB`}
+                      onChange={(v) => patchConfig({ volume_gain_db: v })} hints={["-6 dB (quieter)", "0 dB (neutral)", "+12 dB (louder)"]} />
                   </div>
-                </div>
+                </Card>
 
-                <div className="shadow-card rounded-2xl p-6 space-y-4">
-                  <div className="text-card-title font-display font-semibold">Style & personality</div>
+                <Card title="Style & personality">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="form-label block mb-1">Speaking style</label>
-                      <select value={c.speaking_style} onChange={(e) => patchConfig({ speaking_style: e.target.value })}
-                        className="w-full border border-line px-3 py-2 rounded-lg">
-                        {SPEAKING_STYLES.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="form-label block mb-1">Response style</label>
-                      <select value={c.response_style} onChange={(e) => patchConfig({ response_style: e.target.value })}
-                        className="w-full border border-line px-3 py-2 rounded-lg">
-                        {RESPONSE_STYLES.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-                      </select>
-                    </div>
+                    <Select label="Speaking style" value={c.speaking_style} onChange={(v) => patchConfig({ speaking_style: v })} options={styleOptions} />
+                    <Select label="Response style" value={c.response_style} onChange={(v) => patchConfig({ response_style: v })} options={responseOptions} />
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="form-label block mb-1">Interrupt mode</label>
-                      <select value={c.interrupt_sensitivity} onChange={(e) => patchConfig({ interrupt_sensitivity: e.target.value })}
-                        className="w-full border border-line px-3 py-2 rounded-lg">
-                        {INTERRUPT_MODES.map((m) => <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
-                      </select>
-                      <p className="text-tiny text-ink-muted mt-1">How aggressively the agent handles barge-in.</p>
-                    </div>
-                    <div>
-                      <label className="form-label block mb-1">Accent</label>
-                      <select value={c.accent || "neutral"} onChange={(e) => patchConfig({ accent: e.target.value })}
-                        className="w-full border border-line px-3 py-2 rounded-lg">
-                        {ACCENTS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-                      </select>
-                      <p className="text-tiny text-ink-muted mt-1">Speaking accent applied via prompt.</p>
-                    </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" style={{ marginTop: 16 }}>
+                    <Select label="Interrupt mode" value={c.interrupt_sensitivity} onChange={(v) => patchConfig({ interrupt_sensitivity: v })} options={interruptOptions}
+                      help="How aggressively the agent handles barge-in." />
+                    <Select label="Accent" value={c.accent || "neutral"} onChange={(v) => patchConfig({ accent: v })} options={accentOptions}
+                      help="Speaking accent applied via prompt." />
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="form-label block mb-1">CRM context in prompt</label>
-                      <select value={c.crm_context_level} onChange={(e) => patchConfig({ crm_context_level: e.target.value })}
-                        className="w-full border border-line px-3 py-2 rounded-lg">
-                        <option value="full_lead">Full lead profile (name, company, title, industry)</option>
-                        <option value="summary">Summary only</option>
-                        <option value="none">No CRM context</option>
-                      </select>
-                    </div>
+                  <div style={{ marginTop: 16 }}>
+                    <Select label="CRM context in prompt" value={c.crm_context_level} onChange={(v) => patchConfig({ crm_context_level: v })} options={crmContextOptions} />
                   </div>
-                </div>
+                </Card>
               </>
             ) : (
               <>
-                <div className="shadow-card rounded-2xl p-6 space-y-4">
-                  <div className="text-card-title font-display font-semibold">
-                    {agent.provider === "twilio_fish" ? "Fish Audio voice" : "Google Cloud voice"}
-                  </div>
+                <Card title={agent.provider === "twilio_fish" ? "Fish Audio voice" : "Google Cloud voice"}>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {agent.provider === "twilio_fish" ? (
                       <>
-                        <div>
-                          <label className="form-label block mb-1">Voice</label>
-                          <select value={c.fish_voice_id || ""} onChange={(e) => patchConfig({ fish_voice_id: e.target.value })}
-                            className="w-full border border-line px-3 py-2 rounded-lg">
-                            <option value="">Fish Audio default voice</option>
-                            {fishVoices.map((v) => (
-                              <option key={v.fish_voice_id} value={v.fish_voice_id}>{v.title}</option>
-                            ))}
-                          </select>
-                          <p className="text-tiny text-ink-muted mt-1">
-                            {fishVoices.length
-                              ? "Voices cloned by this workspace."
-                              : "No cloned voices yet — upload samples in Voice Settings to add one."}
-                          </p>
-                        </div>
-                        <div>
-                          <label className="form-label block mb-1">Model</label>
-                          <select value={c.fish_model || "s2.1-pro"} onChange={(e) => patchConfig({ fish_model: e.target.value })}
-                            className="w-full border border-line px-3 py-2 rounded-lg">
-                            {FISH_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                          </select>
-                          <p className="text-tiny text-ink-muted mt-1">
-                            S2 models take inline emphasis cues; S1 is the older fixed-tag model.
-                          </p>
-                        </div>
-                        <div>
-                          <label className="form-label block mb-1">STT language</label>
-                          <select value={c.google_stt_language || "en-US"} onChange={(e) => patchConfig({ google_stt_language: e.target.value })}
-                            className="w-full border border-line px-3 py-2 rounded-lg">
-                            {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
-                          </select>
-                          <p className="text-tiny text-ink-muted mt-1">Speech recognition language code.</p>
-                        </div>
+                        <Select
+                          label="Voice" value={c.fish_voice_id || ""} onChange={(v) => patchConfig({ fish_voice_id: v })}
+                          placeholder="Fish Audio default voice"
+                          options={[{ value: "", label: "Fish Audio default voice" }, ...fishVoices.map((v) => ({ value: v.fish_voice_id, label: v.title }))]}
+                          help={fishVoices.length ? "Voices cloned by this workspace." : "No cloned voices yet — upload samples in Voice Settings to add one."}
+                        />
+                        <Select label="Model" value={c.fish_model || "s2.1-pro"} onChange={(v) => patchConfig({ fish_model: v })} options={FISH_MODELS.map((m) => ({ value: m.id, label: m.label }))}
+                          help="S2 models take inline emphasis cues; S1 is the older fixed-tag model." />
+                        <Select label="STT language" value={c.google_stt_language || "en-US"} onChange={(v) => patchConfig({ google_stt_language: v })} options={langOptions}
+                          help="Speech recognition language code." />
                       </>
                     ) : (
-                    <>
-                    <div>
-                      <label className="form-label block mb-1">Voice</label>
-                      <select value={c.google_voice || "en-US-Wavenet-D"} onChange={(e) => {
-                        const sel = GOOGLE_VOICES.find((v) => v.id === e.target.value);
-                        patchConfig({ google_voice: e.target.value, google_stt_language: sel ? sel.lang : "en-US" });
-                      }} className="w-full border border-line px-3 py-2 rounded-lg">
-                        <optgroup label="🇺🇸 English (US)">
-                          {GOOGLE_VOICES.filter((v) => v.lang === "en-US").map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-                        </optgroup>
-                        <optgroup label="🇬🇧 English (UK)">
-                          {GOOGLE_VOICES.filter((v) => v.lang === "en-GB").map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-                        </optgroup>
-                        <optgroup label="🇦🇺 English (Australia)">
-                          {GOOGLE_VOICES.filter((v) => v.lang === "en-AU").map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-                        </optgroup>
-                        <optgroup label="🇮🇳 Indian English">
-                          {GOOGLE_VOICES.filter((v) => v.lang === "en-IN").map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-                        </optgroup>
-                        <optgroup label="🌐 Other languages">
-                          {GOOGLE_VOICES.filter((v) => !["en-US","en-GB","en-AU","en-IN"].includes(v.lang)).map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-                        </optgroup>
-                      </select>
-                      <p className="text-tiny text-ink-muted mt-1">WaveNet & Studio voices. Language auto-matched to voice.</p>
-                    </div>
-                    <div>
-                      <label className="form-label block mb-1">STT language</label>
-                      <select value={c.google_stt_language || "en-US"} onChange={(e) => patchConfig({ google_stt_language: e.target.value })}
-                        className="w-full border border-line px-3 py-2 rounded-lg">
-                        {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
-                      </select>
-                      <p className="text-tiny text-ink-muted mt-1">Speech recognition language code.</p>
-                    </div>
-                    </>
+                      <>
+                        <Select
+                          label="Voice" value={c.google_voice || "en-US-Wavenet-D"}
+                          onChange={(v) => {
+                            const sel = GOOGLE_VOICES.find((gv) => gv.id === v);
+                            patchConfig({ google_voice: v, google_stt_language: sel ? sel.lang : "en-US" });
+                          }}
+                          options={googleVoiceOptions}
+                          help="WaveNet & Studio voices. Language auto-matched to voice."
+                        />
+                        <Select label="STT language" value={c.google_stt_language || "en-US"} onChange={(v) => patchConfig({ google_stt_language: v })} options={langOptions}
+                          help="Speech recognition language code." />
+                      </>
                     )}
                   </div>
-                  <div>
-                    <label className="form-label block mb-1">Speaking speed · {c.speaking_speed.toFixed(1)}x</label>
-                    <input type="range" min={0.5} max={2} step={0.1} value={c.speaking_speed}
-                      onChange={(e) => patchConfig({ speaking_speed: Number(e.target.value) })}
-                      className="w-full mt-2" />
-                    <div className="flex justify-between text-tiny text-ink-muted mt-1">
-                      <span>Slow (0.5x)</span>
-                      <span>Normal (1.0x)</span>
-                      <span>Fast (2.0x)</span>
-                    </div>
+                  <div style={{ marginTop: 16 }}>
+                    <RangeField label="Speaking speed" value={c.speaking_speed} min={0.5} max={2} step={0.1} format={(v) => `${v.toFixed(1)}x`}
+                      onChange={(v) => patchConfig({ speaking_speed: v })} hints={["Slow (0.5x)", "Normal (1.0x)", "Fast (2.0x)"]} />
                   </div>
-                </div>
+                </Card>
 
-                <div className="shadow-card rounded-2xl p-6 space-y-4">
-                  <div className="text-card-title font-display font-semibold">Initial greeting</div>
-                  <div>
-                    <label className="form-label block mb-1">Greeting message</label>
-                    <textarea value={c.greeting_message || ""} onChange={(e) => patchConfig({ greeting_message: e.target.value })}
-                      rows={2} placeholder="Leave empty for AI-generated greeting. Example: Hi, this is Sarah calling from Innoira — do you have a moment to chat?"
-                      className="w-full border border-line px-3 py-2 rounded-lg text-input" />
-                    <p className="text-tiny text-ink-muted mt-1">
-                      This plays in the agent's voice the instant the call connects. Leave blank to have the AI generate one.
-                    </p>
-                  </div>
-                </div>
+                <Card title="Initial greeting">
+                  <Input as="textarea" rows={2} label="Greeting message" value={c.greeting_message || ""} onChange={(e) => patchConfig({ greeting_message: e.target.value })}
+                    placeholder="Leave empty for AI-generated greeting. Example: Hi, this is Sarah calling from Innoira — do you have a moment to chat?"
+                    help="This plays in the agent's voice the instant the call connects. Leave blank to have the AI generate one." />
+                </Card>
 
-                <div className="shadow-card rounded-2xl p-6 space-y-4">
-                  <div className="text-card-title font-display font-semibold">Style & personality</div>
+                <Card title="Style & personality">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="form-label block mb-1">Speaking style</label>
-                      <select value={c.speaking_style} onChange={(e) => patchConfig({ speaking_style: e.target.value })}
-                        className="w-full border border-line px-3 py-2 rounded-lg">
-                        {SPEAKING_STYLES.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="form-label block mb-1">Response style</label>
-                      <select value={c.response_style} onChange={(e) => patchConfig({ response_style: e.target.value })}
-                        className="w-full border border-line px-3 py-2 rounded-lg">
-                        {RESPONSE_STYLES.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-                      </select>
-                    </div>
+                    <Select label="Speaking style" value={c.speaking_style} onChange={(v) => patchConfig({ speaking_style: v })} options={styleOptions} />
+                    <Select label="Response style" value={c.response_style} onChange={(v) => patchConfig({ response_style: v })} options={responseOptions} />
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="form-label block mb-1">Accent</label>
-                      <select value={c.accent || "neutral"} onChange={(e) => patchConfig({ accent: e.target.value })}
-                        className="w-full border border-line px-3 py-2 rounded-lg">
-                        {ACCENTS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-                      </select>
-                      <p className="text-tiny text-ink-muted mt-1">Accent applied via Claude prompt.</p>
-                    </div>
-                    <div>
-                      <label className="form-label block mb-1">CRM context in prompt</label>
-                      <select value={c.crm_context_level} onChange={(e) => patchConfig({ crm_context_level: e.target.value })}
-                        className="w-full border border-line px-3 py-2 rounded-lg">
-                        <option value="full_lead">Full lead profile (name, company, title, industry)</option>
-                        <option value="summary">Summary only</option>
-                        <option value="none">No CRM context</option>
-                      </select>
-                    </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" style={{ marginTop: 16 }}>
+                    <Select label="Accent" value={c.accent || "neutral"} onChange={(v) => patchConfig({ accent: v })} options={accentOptions}
+                      help="Accent applied via Claude prompt." />
+                    <Select label="CRM context in prompt" value={c.crm_context_level} onChange={(v) => patchConfig({ crm_context_level: v })} options={crmContextOptions} />
                   </div>
-                </div>
+                </Card>
               </>
             )}
 
-            <div className="shadow-card rounded-2xl p-6 space-y-4">
-              <div className="text-card-title font-display font-semibold">Knowledge base</div>
-              <p className="text-caption text-ink-muted">Facts, pricing, and FAQs the agent can reference during calls.</p>
-              <textarea value={c.knowledge_base} onChange={(e) => patchConfig({ knowledge_base: e.target.value })}
-                rows={4} placeholder="e.g. Our Starter plan is $499/mo for up to 5 seats..."
-                className="w-full border border-line px-3 py-2 rounded-lg text-input" />
-            </div>
-          </>
-        )}
+            <Card title="Knowledge base">
+              <p style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginBottom: 12 }}>Facts, pricing, and FAQs the agent can reference during calls.</p>
+              <Input as="textarea" rows={4} value={c.knowledge_base} onChange={(e) => patchConfig({ knowledge_base: e.target.value })}
+                placeholder="e.g. Our Starter plan is $499/mo for up to 5 seats..." />
+            </Card>
+          </TabsContent>
 
-        {/* ─────── Tab 2: Qualification ─────── */}
-        {tab === 2 && (
-          <div className="shadow-card rounded-2xl p-6 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div>
-                <div className="text-card-title font-display font-semibold">Qualification fields</div>
-                <p className="text-caption text-ink-muted">Structured data the agent extracts and saves to the CRM.</p>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => applyFramework("BANT")} className="btn-ghost text-caption">BANT</button>
-                <button onClick={() => applyFramework("MEDDIC")} className="btn-ghost text-caption">MEDDIC</button>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {(c.qualification_fields || []).map((f, i) => (
-                <div key={i} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-                  <input placeholder="key" value={f.key} onChange={(e) => updateField(i, { key: e.target.value })}
-                    className="w-full sm:w-32 border border-line px-2 py-1.5 rounded-lg text-input font-mono" />
-                  <input placeholder="What should the agent extract?" value={f.prompt}
-                    onChange={(e) => updateField(i, { prompt: e.target.value })}
-                    className="flex-1 border border-line px-2 py-1.5 rounded-lg text-input" />
-                  <button onClick={() => removeField(i)} className="text-ink-muted hover:text-danger">
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <button onClick={addField} className="btn-ghost text-caption"><Plus size={12} /> Add field</button>
-          </div>
-        )}
-
-        {/* ─────── Tab 3: Rules ─────── */}
-        {tab === 3 && (
-          <>
-            <div className="shadow-card rounded-2xl p-6 space-y-4">
-              <div className="text-card-title font-display font-semibold">Call limits</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* ─────── Tab 2: Qualification ─────── */}
+          <TabsContent value="2">
+            <Card>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2" style={{ marginBottom: 16 }}>
                 <div>
-                  <label className="form-label block mb-1">Max call duration (minutes)</label>
-                  <input type="number" min={1} max={60} value={c.max_duration_minutes}
-                    onChange={(e) => patchConfig({ max_duration_minutes: Number(e.target.value) || 10 })}
-                    className="w-full border border-line px-3 py-2 rounded-lg" />
+                  <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>Qualification fields</div>
+                  <p style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>Structured data the agent extracts and saves to the CRM.</p>
                 </div>
-                <div>
-                  <label className="form-label block mb-1">Silence timeout (seconds)</label>
-                  <input type="number" min={5} max={120} value={c.silence_timeout_seconds}
-                    onChange={(e) => patchConfig({ silence_timeout_seconds: Number(e.target.value) || 15 })}
-                    className="w-full border border-line px-3 py-2 rounded-lg" />
+                <div className="flex gap-2">
+                  <Button variant="tertiary" size="sm" onClick={() => applyFramework("BANT")}>BANT</Button>
+                  <Button variant="tertiary" size="sm" onClick={() => applyFramework("MEDDIC")}>MEDDIC</Button>
                 </div>
               </div>
-            </div>
-
-            <div className="shadow-card rounded-2xl p-6 space-y-4">
-              <div className="text-card-title font-display font-semibold">Detection</div>
               <div className="space-y-2">
-                <label className="flex items-center gap-2 text-body">
-                  <input type="checkbox" checked={c.voicemail_detection}
-                    onChange={(e) => patchConfig({ voicemail_detection: e.target.checked })} />
-                  Voicemail detection — hang up and log as voicemail
-                </label>
-                <label className="flex items-center gap-2 text-body">
-                  <input type="checkbox" checked={c.amd_enabled}
-                    onChange={(e) => patchConfig({ amd_enabled: e.target.checked })} />
-                  Answering Machine Detection
-                </label>
-                <label className="flex items-center gap-2 text-body">
-                  <input type="checkbox" checked={c.background_noise_suppression}
-                    onChange={(e) => patchConfig({ background_noise_suppression: e.target.checked })} />
-                  Background noise suppression
-                </label>
-                <label className="flex items-center gap-2 text-body">
-                  <input type="checkbox" checked={c.call_recording}
-                    onChange={(e) => patchConfig({ call_recording: e.target.checked })} />
-                  Record calls
-                </label>
+                {(c.qualification_fields || []).map((f, i) => (
+                  <div key={i} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                    <Input size="sm" placeholder="key" value={f.key} onChange={(e) => updateField(i, { key: e.target.value })} style={{ fontFamily: "var(--font-mono)" }} className="w-full sm:w-32" />
+                    <Input size="sm" placeholder="What should the agent extract?" value={f.prompt} onChange={(e) => updateField(i, { prompt: e.target.value })} className="flex-1" />
+                    <button onClick={() => removeField(i)} style={{ color: "var(--text-tertiary)" }}><Trash2 size={14} strokeWidth={1.5} aria-hidden="true" /></button>
+                  </div>
+                ))}
               </div>
-            </div>
+              <Button variant="tertiary" size="sm" icon={Plus} onClick={addField} className="mt-3">Add field</Button>
+            </Card>
+          </TabsContent>
 
-            <div className="shadow-card rounded-2xl p-6 space-y-4">
-              <div className="text-card-title font-display font-semibold">Human handoff</div>
-              <label className="flex items-center gap-2 text-body">
-                <input type="checkbox" checked={c.human_handoff_enabled}
-                  onChange={(e) => patchConfig({ human_handoff_enabled: e.target.checked })} />
-                If the lead asks for a person, the agent offers to connect them
-              </label>
+          {/* ─────── Tab 3: Rules ─────── */}
+          <TabsContent value="3" className="space-y-4">
+            <Card title="Call limits">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input type="number" min={1} max={60} label="Max call duration (minutes)" value={c.max_duration_minutes}
+                  onChange={(e) => patchConfig({ max_duration_minutes: Number(e.target.value) || 10 })} />
+                <Input type="number" min={5} max={120} label="Silence timeout (seconds)" value={c.silence_timeout_seconds}
+                  onChange={(e) => patchConfig({ silence_timeout_seconds: Number(e.target.value) || 15 })} />
+              </div>
+            </Card>
+
+            <Card title="Detection">
+              <div className="space-y-2">
+                <Checkbox label="Voicemail detection — hang up and log as voicemail" checked={c.voicemail_detection} onChange={(e) => patchConfig({ voicemail_detection: e.target.checked })} />
+                <Checkbox label="Answering Machine Detection" checked={c.amd_enabled} onChange={(e) => patchConfig({ amd_enabled: e.target.checked })} />
+                <Checkbox label="Background noise suppression" checked={c.background_noise_suppression} onChange={(e) => patchConfig({ background_noise_suppression: e.target.checked })} />
+                <Checkbox label="Record calls" checked={c.call_recording} onChange={(e) => patchConfig({ call_recording: e.target.checked })} />
+              </div>
+            </Card>
+
+            <Card title="Human handoff">
+              <Checkbox label="If the lead asks for a person, the agent offers to connect them" checked={c.human_handoff_enabled} onChange={(e) => patchConfig({ human_handoff_enabled: e.target.checked })} />
               {c.human_handoff_enabled && (
-                <p className="text-caption text-ink-muted">
+                <p style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 8 }}>
                   The agent will acknowledge the request in the conversation — this doesn't yet perform a real call transfer.
                 </p>
               )}
-            </div>
-          </>
-        )}
-
-      </div>
+            </Card>
+          </TabsContent>
+        </div>
+      </Tabs>
     </div>
   );
 }

@@ -3,7 +3,14 @@ import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, UsersRound } from "../icons";
+import Table from "../components/composites/Table";
+import { EmptyState } from "../components/composites/EmptyState";
+import { Modal, ModalContent } from "../components/composites/Modal";
+import Button from "../components/primitives/Button";
+import Input from "../components/primitives/Input";
+import Select from "../components/primitives/Select";
+import Chip from "../components/primitives/Chip";
 
 const ROLES = [
   { k: "org_admin", t: "Org Admin" },
@@ -32,7 +39,7 @@ export default function Team() {
     } catch (err) { toast.error(err?.response?.data?.detail || "Invite failed"); }
   };
   const remove = async (id) => {
-    if (!confirm("Remove this member?")) return;
+    if (!window.confirm("Remove this member?")) return;
     try { await api.delete(`/team/${id}`); load(); }
     catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
   };
@@ -43,68 +50,84 @@ export default function Team() {
     } catch (err) { toast.error(err?.response?.data?.detail || "Update failed"); }
   };
 
+  const columns = [
+    {
+      key: "name", label: "Name",
+      render: (m) => (
+        <span className="flex items-center gap-1.5">
+          <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{m.name}</span>
+          {m.id === user?.id && <Chip label="You" />}
+        </span>
+      ),
+    },
+    { key: "email", label: "Email", render: (m) => <span className="tnum" style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{m.email}</span> },
+    { key: "role", label: "Role", render: (m) => ROLES.find((r) => r.k === m.role)?.t || m.role },
+    {
+      key: "department", label: "Department",
+      render: (m) => isOrgAdmin ? (
+        <input
+          defaultValue={m.department || ""} placeholder="—"
+          onBlur={(e) => { if (e.target.value !== (m.department || "")) updateDepartment(m.id, e.target.value.trim()); }}
+          data-testid={`member-department-${m.id}`}
+          style={{
+            width: 112, background: "transparent", border: "none", borderBottom: "1px solid transparent",
+            fontSize: 13, color: "var(--text-primary)", padding: "2px 0",
+          }}
+          onFocus={(e) => (e.currentTarget.style.borderBottomColor = "var(--border-focus)")}
+          onMouseEnter={(e) => { if (document.activeElement !== e.currentTarget) e.currentTarget.style.borderBottomColor = "var(--border-default)"; }}
+          onMouseLeave={(e) => { if (document.activeElement !== e.currentTarget) e.currentTarget.style.borderBottomColor = "transparent"; }}
+        />
+      ) : (m.department || "—"),
+    },
+    { key: "created_at", label: "Joined", render: (m) => <span style={{ color: "var(--text-tertiary)", fontSize: 12 }}>{m.created_at?.slice(0, 10)}</span> },
+    {
+      key: "actions", label: "", align: "right",
+      render: (m) => m.id !== user?.id && (
+        <button onClick={() => remove(m.id)} data-testid={`remove-member-${m.id}`}
+          className="inline-flex items-center gap-1 ds-row-action" style={{ fontSize: 12, color: "var(--color-danger)" }}>
+          <Trash2 size={12} strokeWidth={1.5} aria-hidden="true" /> Remove
+        </button>
+      ),
+    },
+  ];
+
   return (
     <div className="animate-fade-in">
       <PageHeader title="Team" subtitle="Invite people to your workspace."
-        right={<button onClick={() => setModal(true)} data-testid="invite-btn" className="btn-primary"><Plus size={14} /> Invite</button>}
+        right={<Button variant="primary" icon={Plus} onClick={() => setModal(true)} data-testid="invite-btn">Invite</Button>}
       />
       <div className="p-6 sm:p-8">
-        <div className="bg-white border border-line rounded-2xl overflow-hidden card-floating">
-          <div className="overflow-x-auto">
-          <table className="w-full text-table min-w-[520px]">
-            <thead>
-              <tr className="border-b border-line">
-                {["Name", "Email", "Role", "Department", "Joined", ""].map((h) => <th key={h} className="table-header text-left p-3">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((m) => (
-                <tr key={m.id} className="border-b border-line">
-                  <td className="p-3 font-medium">{m.name} {m.id === user?.id && <span className="pill ml-1">You</span>}</td>
-                  <td className="p-3 font-mono">{m.email}</td>
-                  <td className="p-3">{ROLES.find(r => r.k === m.role)?.t || m.role}</td>
-                  <td className="p-3">
-                    {isOrgAdmin ? (
-                      <input defaultValue={m.department || ""} placeholder="—"
-                        onBlur={(e) => { if (e.target.value !== (m.department || "")) updateDepartment(m.id, e.target.value.trim()); }}
-                        data-testid={`member-department-${m.id}`}
-                        className="w-28 bg-transparent border-b border-transparent hover:border-line focus:border-ink focus:outline-none text-table" />
-                    ) : (m.department || "—")}
-                  </td>
-                  <td className="p-3 text-ink-muted">{m.created_at?.slice(0, 10)}</td>
-                  <td className="p-3 text-right">
-                    {m.id !== user?.id && (
-                      <button onClick={() => remove(m.id)} data-testid={`remove-member-${m.id}`} className="text-caption text-danger hover:underline">
-                        <Trash2 size={12} className="inline" /> remove
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        </div>
+        {members.length === 0 ? (
+          <EmptyState icon={UsersRound} title="No team members yet" description="Invite people to your workspace to collaborate." actionLabel="Invite" onAction={() => setModal(true)} />
+        ) : (
+          <Table columns={columns} rows={members} rowKey={(m) => m.id} />
+        )}
       </div>
-      {modal && (
-        <div className="fixed inset-0 bg-ink/40 flex items-center justify-center z-50 p-4">
-          <form onSubmit={invite} className="bg-white border border-line rounded-2xl shadow-card p-6 sm:p-8 w-full max-w-md space-y-3">
-            <div className="text-section font-display font-semibold">Invite team member</div>
-            <input required placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="invite-name" className="input-premium w-full" />
-            <input required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="invite-email" className="input-premium w-full" />
-            <input required minLength={6} type="text" placeholder="Temporary password (share with them)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} data-testid="invite-password" className="input-premium w-full font-mono text-body" />
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} data-testid="invite-role" className="input-premium w-full bg-white">
-              {ROLES.map((r) => <option key={r.k} value={r.k}>{r.t}</option>)}
-            </select>
-            <input placeholder="Department (optional — e.g. Sales)" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} data-testid="invite-department" className="input-premium w-full" />
-            <p className="text-caption text-ink-muted">MVP note: no email sending yet — share the temporary password with them directly.</p>
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>
-              <button type="submit" data-testid="save-invite" className="btn-primary">Invite</button>
-            </div>
+
+      <Modal open={modal} onOpenChange={setModal}>
+        <ModalContent
+          size="sm"
+          title="Invite team member"
+          footer={
+            <>
+              <Button type="button" variant="secondary" onClick={() => setModal(false)}>Cancel</Button>
+              <Button type="submit" form="invite-form" variant="primary" data-testid="save-invite">Invite</Button>
+            </>
+          }
+        >
+          <form id="invite-form" onSubmit={invite} className="space-y-3">
+            <Input required label="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="invite-name" />
+            <Input required type="email" label="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="invite-email" />
+            <Input required minLength={6} label="Temporary password" help="Share this with them directly." value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} data-testid="invite-password" style={{ fontFamily: "var(--font-mono)" }} />
+            <Select
+              label="Role" value={form.role} onChange={(v) => setForm({ ...form, role: v })} data-testid="invite-role"
+              options={ROLES.map((r) => ({ value: r.k, label: r.t }))}
+            />
+            <Input label="Department" optional placeholder="e.g. Sales" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} data-testid="invite-department" />
+            <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>MVP note: no email sending yet — share the temporary password with them directly.</p>
           </form>
-        </div>
-      )}
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

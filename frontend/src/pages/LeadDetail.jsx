@@ -6,21 +6,23 @@ import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import {
   Mail, Phone, CalendarClock, FileText, Share2, ArrowLeft, Loader2,
-  Newspaper, Github, Globe, Flame, ExternalLink, Search, Megaphone, Save, X,
-  Edit2, Check, ListChecks, Tag, Plus, Trash2, StickyNote, CheckSquare, Square,
-  ShieldOff, Linkedin, Building2,
-} from "lucide-react";
+  Globe, Flame, ExternalLink, Search, Send, Database,
+  Pencil, Check, ListChecks, Plus, Trash2,
+  Lock, Linkedin, Building2,
+} from "../icons";
+import Card from "../components/composites/Card";
+import InlineAlert from "../components/composites/InlineAlert";
+import { EmptyState } from "../components/composites/EmptyState";
+import { TimelineRow } from "../components/domain/RecordHeader";
+import Button from "../components/primitives/Button";
+import Input from "../components/primitives/Input";
+import Select from "../components/primitives/Select";
+import Chip from "../components/primitives/Chip";
+import StatusPill from "../components/primitives/StatusPill";
 
 const AGENT_ICON = { pitch: Mail, voice: Phone, scheduler: CalendarClock, proposal: FileText, social: Share2 };
 const AGENT_LABEL = { pitch: "Pitch EQ", voice: "Voice EQ", scheduler: "Schedule EQ", proposal: "Proposal EQ", social: "Social EQ" };
-
-const BAND_STYLE = {
-  hot: "bg-sanguine text-white",
-  warm: "bg-warning/20 text-warning border border-warning/30",
-  cool: "bg-neutral-100 text-ink-muted border border-line",
-  cold: "bg-white text-ink-muted border border-line",
-};
-
+const BAND_TONE = { hot: "risk", warm: "warning", cool: "neutral", cold: "neutral" };
 const STATUS_OPTIONS = ["new", "contacted", "qualified", "unqualified", "unresponsive"];
 
 // Same derivation crm_adapters.py uses internally — prefer an explicit website,
@@ -250,11 +252,13 @@ export default function LeadDetail() {
     } catch (err) { toast.error(err?.response?.data?.detail || "Save failed"); }
   };
 
-  if (loading) return <div className="p-6 sm:p-8 text-ink-muted text-body">Loading…</div>;
-  if (!lead) return <div className="p-6 sm:p-8 text-ink-muted text-body">Lead not found.</div>;
+  if (loading) return <div className="p-6 sm:p-8" style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Loading…</div>;
+  if (!lead) return <div className="p-6 sm:p-8" style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Lead not found.</div>;
 
   const pack = research?.pack;
   const intent = research?.intent || lead.intent;
+  const label = { fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em" };
+  const kbd = { fontFamily: "var(--font-mono)", fontSize: 11, background: "var(--bg-surface-sunken)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-xs)", padding: "2px 6px", color: "var(--text-secondary)" };
 
   return (
     <div>
@@ -263,149 +267,100 @@ export default function LeadDetail() {
         subtitle={lead.company || lead.raw_company_name || lead.company_name || lead.email}
         right={
           <div className="flex items-center gap-2">
-            <button onClick={startEdit} className="btn-secondary text-caption"><Edit2 size={14} /> Edit</button>
-            <Link to="/app/crm/leads" data-testid="back-to-leads" className="btn-secondary">
-              <ArrowLeft size={14} /> Leads
-            </Link>
+            <Button variant="secondary" icon={Pencil} onClick={startEdit}>Edit</Button>
+            <Link to="/app/crm/leads" data-testid="back-to-leads"><Button variant="secondary" icon={ArrowLeft}>Leads</Button></Link>
           </div>
         }
       />
-      <div className="animate-fade-in px-6 sm:px-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="animate-fade-in px-6 sm:px-8 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="space-y-4">
           {/* Contact card with inline editing */}
-          <div className="shadow-card p-4 space-y-2 rounded-2xl">
-            <div className="ui-label">Contact</div>
+          <Card title="Contact">
             {editing ? (
               <div className="space-y-2">
                 <div className="flex gap-2">
-                  <input value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
-                    className="w-1/2 border border-line px-2 py-1 rounded text-input" placeholder="First name" />
-                  <input value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
-                    className="w-1/2 border border-line px-2 py-1 rounded text-input" placeholder="Last name" />
+                  <Input value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} placeholder="First name" className="w-1/2" />
+                  <Input value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} placeholder="Last name" className="w-1/2" />
                 </div>
-                <input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                  className="w-full border border-line px-2 py-1 rounded text-input font-mono" placeholder="Email" />
-                <input value={editForm.phone || ""} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                  className="w-full border border-line px-2 py-1 rounded text-input font-mono" placeholder="Phone" />
-                <input value={editForm.company || ""} onChange={(e) => setEditForm({ ...editForm, company: e.target.value })}
-                  className="w-full border border-line px-2 py-1 rounded text-input" placeholder="Company name" />
-                <input value={editForm.title || ""} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                  className="w-full border border-line px-2 py-1 rounded text-input" placeholder="Title" />
-                <input value={editForm.linkedin_url || ""} onChange={(e) => setEditForm({ ...editForm, linkedin_url: e.target.value })}
-                  className="w-full border border-line px-2 py-1 rounded text-input font-mono" placeholder="LinkedIn URL" />
-                <input value={editForm.website || ""} onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
-                  className="w-full border border-line px-2 py-1 rounded text-input font-mono" placeholder="Website URL" />
-                <select value={editForm.company_id} onChange={(e) => setEditForm({ ...editForm, company_id: e.target.value })}
-                  className="w-full border border-line px-2 py-1 rounded text-input">
-                  <option value="">No company</option>
-                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                  className="w-full border border-line px-2 py-1 rounded text-input">
-                  {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
+                <Input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} placeholder="Email" style={{ fontFamily: "var(--font-mono)" }} />
+                <Input value={editForm.phone || ""} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} placeholder="Phone" style={{ fontFamily: "var(--font-mono)" }} />
+                <Input value={editForm.company || ""} onChange={(e) => setEditForm({ ...editForm, company: e.target.value })} placeholder="Company name" />
+                <Input value={editForm.title || ""} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} placeholder="Title" />
+                <Input value={editForm.linkedin_url || ""} onChange={(e) => setEditForm({ ...editForm, linkedin_url: e.target.value })} placeholder="LinkedIn URL" style={{ fontFamily: "var(--font-mono)" }} />
+                <Input value={editForm.website || ""} onChange={(e) => setEditForm({ ...editForm, website: e.target.value })} placeholder="Website URL" style={{ fontFamily: "var(--font-mono)" }} />
+                <Select value={editForm.company_id} onChange={(v) => setEditForm({ ...editForm, company_id: v })} placeholder="No company"
+                  options={[{ value: "", label: "No company" }, ...companies.map((c) => ({ value: c.id, label: c.name }))]} />
+                <Select value={editForm.status} onChange={(v) => setEditForm({ ...editForm, status: v })}
+                  options={STATUS_OPTIONS.map((s) => ({ value: s, label: s }))} />
                 <div className="flex gap-2 pt-1">
-                  <button onClick={saveEdit} className="btn-primary text-caption flex items-center gap-1"><Save size={12} /> Save</button>
-                  <button onClick={() => setEditing(false)} className="btn-secondary text-caption flex items-center gap-1"><X size={12} /> Cancel</button>
+                  <Button variant="primary" size="sm" icon={Check} onClick={saveEdit}>Save</Button>
+                  <Button variant="secondary" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
                 </div>
               </div>
             ) : (
               <>
-                <div className="text-body font-mono text-ink-secondary">{lead.email}</div>
-                {lead.phone && <div className="text-body font-mono text-ink-secondary">{lead.phone}</div>}
-                {lead.title && <div className="text-body text-ink-muted">{lead.title}</div>}
-                <div className="flex items-center gap-3 pt-1 flex-wrap text-caption">
+                <div className="tnum" style={{ fontSize: 13, fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>{lead.email}</div>
+                {lead.phone && <div className="tnum" style={{ fontSize: 13, fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>{lead.phone}</div>}
+                {lead.title && <div style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{lead.title}</div>}
+                <div className="flex items-center gap-3 pt-1 flex-wrap">
                   {lead.linkedin_url && (
-                    <a href={lead.linkedin_url.startsWith("http") ? lead.linkedin_url : `https://${lead.linkedin_url}`}
-                      target="_blank" rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-accent hover:underline">
-                      <Linkedin size={12} /> LinkedIn
+                    <a href={lead.linkedin_url.startsWith("http") ? lead.linkedin_url : `https://${lead.linkedin_url}`} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1" style={{ fontSize: 12.5, color: "var(--text-link)" }}>
+                      <Linkedin size={12} strokeWidth={1.5} aria-hidden="true" /> LinkedIn
                     </a>
                   )}
                   {lead.website && (
-                    <a href={lead.website.startsWith("http") ? lead.website : `https://${lead.website}`}
-                      target="_blank" rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-accent hover:underline">
-                      <Globe size={12} /> Website
+                    <a href={lead.website.startsWith("http") ? lead.website : `https://${lead.website}`} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1" style={{ fontSize: 12.5, color: "var(--text-link)" }}>
+                      <Globe size={12} strokeWidth={1.5} aria-hidden="true" /> Website
                     </a>
                   )}
                   {lead.company_id && companies.find((c) => c.id === lead.company_id) && (
                     <Link to={`/app/crm/companies/${lead.company_id}`}
-                      className="inline-flex items-center gap-1 text-accent hover:underline">
-                      <Building2 size={12} /> {companies.find((c) => c.id === lead.company_id)?.name}
+                      className="inline-flex items-center gap-1" style={{ fontSize: 12.5, color: "var(--text-link)" }}>
+                      <Building2 size={12} strokeWidth={1.5} aria-hidden="true" /> {companies.find((c) => c.id === lead.company_id)?.name}
                     </Link>
                   )}
                 </div>
-                <div className="flex items-center gap-2 pt-2 flex-wrap">
-                  <span className="ui-label border border-line px-2 py-0.5 rounded-xl">{lead.status}</span>
+                <div className="flex items-center gap-1.5 pt-2 flex-wrap">
+                  <StatusPill status={lead.status} />
                   {intent ? (
-                    <span data-testid="lead-intent"
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-tiny font-mono font-medium ${BAND_STYLE[intent.band]}`}>
-                      <Flame size={12} /> {intent.score} {intent.band}
-                    </span>
+                    <span data-testid="lead-intent"><StatusPill tone={BAND_TONE[intent.band]} icon={Flame} status={`${intent.score} ${intent.band}`} /></span>
                   ) : (
-                    <span className="text-caption font-mono text-ink-muted">not scored yet</span>
+                    <span className="tnum" style={{ fontSize: 11.5, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>not scored yet</span>
                   )}
-                  {lead.dnc && (
-                    <span className="inline-flex items-center gap-1 text-tiny font-mono bg-danger/10 text-danger px-2 py-0.5 rounded-full">
-                      <ShieldOff size={12} /> Do not contact
-                    </span>
-                  )}
+                  {lead.dnc && <StatusPill tone="danger" icon={Lock} status="Do not contact" />}
                 </div>
                 <div className="pt-2 space-y-1.5">
-                  <div className="ui-label">Owner</div>
-                  <select value={lead.owner_id || ""} onChange={(e) => setOwner(e.target.value)} data-testid="lead-owner-select"
-                    className="w-full border border-line px-2 py-1.5 rounded text-caption">
-                    <option value="">Unassigned</option>
-                    {team.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                  </select>
-                  <button onClick={toggleDnc} data-testid="toggle-dnc"
-                    className={`text-caption inline-flex items-center gap-1 mt-1 ${lead.dnc ? "text-danger" : "text-ink-muted hover:text-ink"}`}>
-                    <ShieldOff size={12} /> {lead.dnc ? "Clear do-not-contact" : "Mark do not contact"}
+                  <div style={label}>Owner</div>
+                  <Select size="sm" value={lead.owner_id || ""} onChange={setOwner} data-testid="lead-owner-select" placeholder="Unassigned"
+                    options={[{ value: "", label: "Unassigned" }, ...team.map((m) => ({ value: m.id, label: m.name }))]} />
+                  <button onClick={toggleDnc} data-testid="toggle-dnc" className="inline-flex items-center gap-1 mt-1" style={{ fontSize: 12, color: lead.dnc ? "var(--color-danger)" : "var(--text-tertiary)" }}>
+                    <Lock size={12} strokeWidth={1.5} aria-hidden="true" /> {lead.dnc ? "Clear do-not-contact" : "Mark do not contact"}
                   </button>
                 </div>
                 <div className="pt-2">
                   {lead.deal ? (
-                    <Link to="/app/crm/pipeline" data-testid="view-existing-deal" className="btn-secondary text-caption w-full justify-center">
-                      View deal — {lead.deal.title}
-                    </Link>
+                    <Link to="/app/crm/pipeline" data-testid="view-existing-deal"><Button variant="secondary" className="w-full justify-center">View deal — {lead.deal.title}</Button></Link>
                   ) : (
-                    <button onClick={convertLead} disabled={converting} data-testid="convert-to-deal"
-                      className="btn-primary text-caption w-full justify-center disabled:opacity-50">
-                      {converting ? <Loader2 size={12} className="animate-spin" /> : null}
-                      Convert to Deal
-                    </button>
+                    <Button variant="primary" className="w-full justify-center" onClick={convertLead} isLoading={converting} data-testid="convert-to-deal">Convert to deal</Button>
                   )}
                 </div>
                 {customFieldDefs.length > 0 && (
-                  <div className="pt-2 space-y-1.5 border-t border-line/50">
-                    <div className="ui-label">Custom fields</div>
+                  <div className="pt-2 space-y-1.5" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+                    <div style={label}>Custom fields</div>
                     {customFieldDefs.map((f) => {
                       const value = (lead.custom_fields || {})[f.key] ?? "";
                       if (f.type === "select") {
                         return (
-                          <div key={f.id}>
-                            <label className="text-tiny text-ink-muted">{f.name}</label>
-                            <select value={value} onChange={(e) => setCustomField(f.key, e.target.value)}
-                              data-testid={`custom-field-${f.key}`}
-                              className="w-full border border-line px-2 py-1.5 rounded text-caption">
-                              <option value="">—</option>
-                              {(f.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
-                            </select>
-                          </div>
+                          <Select key={f.id} label={f.name} size="sm" value={value} onChange={(v) => setCustomField(f.key, v)} data-testid={`custom-field-${f.key}`}
+                            options={[{ value: "", label: "—" }, ...(f.options || []).map((o) => ({ value: o, label: o }))]} />
                         );
                       }
                       return (
-                        <div key={f.id}>
-                          <label className="text-tiny text-ink-muted">{f.name}</label>
-                          <input
-                            type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
-                            defaultValue={value}
-                            data-testid={`custom-field-${f.key}`}
-                            onBlur={(e) => { if (e.target.value !== String(value)) setCustomField(f.key, e.target.value); }}
-                            className="w-full border border-line px-2 py-1.5 rounded text-caption"
-                          />
-                        </div>
+                        <Input key={f.id} label={f.name} size="sm" type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                          defaultValue={value} data-testid={`custom-field-${f.key}`}
+                          onBlur={(e) => { if (e.target.value !== String(value)) setCustomField(f.key, e.target.value); }} />
                       );
                     })}
                   </div>
@@ -413,160 +368,140 @@ export default function LeadDetail() {
               </>
             )}
             {lead.campaign_names?.length > 0 && (
-              <div className="flex flex-wrap gap-1 pt-1 border-t border-line/50">
-                {lead.campaign_names.map((cn) => (
-                  <span key={cn} className="inline-flex items-center gap-1 text-tiny font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                    <Megaphone size={12} /> {cn}
-                  </span>
-                ))}
+              <div className="flex flex-wrap gap-1.5 pt-2" style={{ borderTop: "1px solid var(--border-subtle)", marginTop: 8 }}>
+                {lead.campaign_names.map((cn) => <Chip key={cn} icon={Send} label={cn} />)}
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Tags */}
-          <div className="shadow-card p-4 rounded-2xl">
-            <div className="ui-label mb-2 flex items-center gap-1.5"><Tag size={12} /> Tags</div>
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {(lead.tags || []).length === 0 && <p className="text-caption text-ink-muted">No tags yet.</p>}
-              {(lead.tags || []).map((t) => (
-                <span key={t} className="inline-flex items-center gap-1 text-tiny font-mono bg-ash text-ink-tertiary px-2 py-0.5 rounded-full">
-                  {t}
-                  <button onClick={() => removeTag(t)} data-testid={`remove-tag-${t}`} className="hover:text-danger"><X size={12} /></button>
-                </span>
-              ))}
+          <Card title="Tags">
+            <div className="flex flex-wrap gap-1.5" style={{ marginBottom: 10 }}>
+              {(lead.tags || []).length === 0 && <p style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>No tags yet.</p>}
+              {(lead.tags || []).map((t) => <Chip key={t} label={t} onRemove={() => removeTag(t)} />)}
             </div>
             <div className="flex gap-1.5">
-              <input value={tagInput} onChange={(e) => setTagInput(e.target.value)}
+              <Input size="sm" value={tagInput} onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())}
-                placeholder="Add a tag…" data-testid="add-tag-input"
-                className="flex-1 border border-line px-2 py-1.5 rounded text-caption" />
-              <button onClick={addTag} data-testid="add-tag-btn" className="btn-secondary text-caption"><Plus size={12} /></button>
+                placeholder="Add a tag…" data-testid="add-tag-input" className="flex-1" />
+              <Button variant="secondary" size="sm" icon={Plus} onClick={addTag} data-testid="add-tag-btn" iconOnly aria-label="Add tag" />
             </div>
-          </div>
+          </Card>
 
           {/* Lead Lists membership */}
-          <div className="shadow-card p-4 rounded-2xl">
-            <div className="ui-label mb-2">Lead Lists</div>
+          <Card title="Lead lists">
             {lists.filter((l) => (l.lead_ids || []).includes(lead.id)).length === 0 ? (
-              <p className="text-caption text-ink-muted">Not in any list.</p>
+              <p style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>Not in any list.</p>
             ) : (
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-1.5">
                 {lists.filter((l) => (l.lead_ids || []).includes(lead.id)).map((l) => (
-                  <Link key={l.id} to="/app/crm/lists"
-                    className="inline-flex items-center gap-1 text-tiny font-mono bg-ash text-ink-tertiary px-2 py-0.5 rounded-full hover:bg-neutral-200">
-                    <ListChecks size={12} /> {l.name}
-                  </Link>
+                  <Link key={l.id} to="/app/crm/lists"><Chip icon={ListChecks} label={l.name} /></Link>
                 ))}
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Why this score */}
           {intent?.reasons?.length > 0 && (
-            <div className="shadow-card p-4 rounded-2xl" data-testid="intent-reasons">
-              <div className="ui-label mb-2">Why this score</div>
-              <ul className="space-y-1.5 text-caption text-ink-secondary">
+            <Card title="Why this score" data-testid="intent-reasons">
+              <ul className="space-y-1.5">
                 {intent.reasons.map((r, i) => (
-                  <li key={i} className="border-l-2 border-sanguine pl-2">{r}</li>
+                  <li key={i} style={{ fontSize: 12.5, color: "var(--text-secondary)", borderLeft: "2px solid var(--color-risk)", paddingLeft: 8 }}>{r}</li>
                 ))}
               </ul>
-            </div>
+            </Card>
           )}
 
           {lead.deal && (
-            <div className="shadow-card p-4 space-y-1 rounded-2xl">
-              <div className="ui-label">Deal</div>
-              <div className="text-body font-medium">{lead.deal.title}</div>
+            <Card title="Deal">
+              <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text-primary)" }}>{lead.deal.title}</div>
               <div className="flex justify-between items-center pt-1">
-                <span className="font-mono text-body font-bold text-ink">${Number(lead.deal.value || 0).toLocaleString()}</span>
-                <span className="ui-label border border-line px-2 py-0.5 rounded-xl">{lead.deal.stage}</span>
+                <span className="tnum" style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>${Number(lead.deal.value || 0).toLocaleString()}</span>
+                <StatusPill status={lead.deal.stage} />
               </div>
-            </div>
+            </Card>
           )}
 
           {lead.phone && (
-            <Link to={`/app/voice-eq/calls?lead_id=${lead.id}`} data-testid="view-call-history"
-              className="btn-secondary w-full justify-center">
-              <Phone size={14} /> Call history
+            <Link to={`/app/voice-eq/calls?lead_id=${lead.id}`} data-testid="view-call-history">
+              <Button variant="secondary" icon={Phone} className="w-full justify-center">Call history</Button>
             </Link>
           )}
 
-          <Link to={`/app/proposal-eq/new?lead_id=${lead.id}`} data-testid="generate-proposal-link"
-            className="btn-secondary w-full justify-center">
-            <FileText size={14} /> Generate proposal
+          <Link to={`/app/proposal-eq/new?lead_id=${lead.id}`} data-testid="generate-proposal-link">
+            <Button variant="secondary" icon={FileText} className="w-full justify-center">Generate proposal</Button>
           </Link>
         </div>
 
-        <div className="col-span-1 lg:col-span-2 space-y-6">
+        <div className="col-span-1 lg:col-span-2 space-y-4">
           {/* Voice EQ Calls */}
           {voiceCalls.length > 0 && (
-            <div className="shadow-card p-4 sm:p-6 rounded-2xl">
-              <div className="flex items-center gap-2 ui-label mb-3">
-                <Phone size={14} /> Recent calls ({voiceCalls.length})
-              </div>
-              <div className="space-y-2">
+            <Card title={`Recent calls (${voiceCalls.length})`}>
+              <div className="space-y-1">
                 {voiceCalls.slice(0, 5).map((c) => (
                   <Link key={c.id} to="/app/voice-eq/calls"
-                    className="flex items-center justify-between p-2 rounded-lg hover:bg-ash transition-colors text-caption">
+                    className="flex items-center justify-between transition-colors"
+                    style={{ padding: "8px 10px", borderRadius: "var(--radius-md)", fontSize: 12.5 }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
                     <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${c.status === "ended" ? "bg-success" : c.status === "ongoing" ? "bg-info" : "bg-neutral-300"}`} />
-                      <span className="font-mono text-ink-tertiary">{c.to_number}</span>
+                      <span style={{ width: 8, height: 8, borderRadius: "var(--radius-full)", background: c.status === "ended" ? "var(--color-success)" : c.status === "ongoing" ? "var(--color-primary)" : "var(--border-strong)" }} />
+                      <span className="tnum" style={{ fontFamily: "var(--font-mono)", color: "var(--text-tertiary)" }}>{c.to_number}</span>
                     </div>
-                    <div className="text-ink-muted">
+                    <div style={{ color: "var(--text-tertiary)" }}>
                       {c.duration_seconds ? `${Math.round(c.duration_seconds / 6) / 10}m` : "—"}
                       {c.sentiment && <span className="ml-2">{c.sentiment}</span>}
                     </div>
                   </Link>
                 ))}
               </div>
-            </div>
+            </Card>
           )}
 
           {/* Research */}
-          <div className="shadow-card p-6 sm:p-8 rounded-2xl" data-testid="research-panel">
+          <Card data-testid="research-panel">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="ui-label">Research</div>
+              <div style={label}>Research</div>
               <div className="flex items-center gap-3">
                 {research?.researched_at && (
-                  <span className="text-tiny text-ink-muted font-mono">
+                  <span className="tnum" style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>
                     {formatDistanceToNow(new Date(research.researched_at), { addSuffix: true })}
                   </span>
                 )}
-                <button onClick={() => enrich(!!pack)} disabled={enriching}
-                  data-testid="enrich-btn" className="btn-secondary text-caption disabled:opacity-50">
-                  {enriching ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
+                <Button variant="secondary" size="sm" icon={enriching ? undefined : Search} isLoading={enriching} onClick={() => enrich(!!pack)} data-testid="enrich-btn">
                   {enriching ? "Researching…" : pack ? "Re-research" : "Research this lead"}
-                </button>
+                </Button>
               </div>
             </div>
 
             {!pack ? (
-              <p className="text-caption text-ink-muted mt-3">
+              <p style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 12 }}>
                 Not researched yet. We'll check their site, recent news and public GitHub activity,
                 then score how ready they are to hear from you.
               </p>
             ) : !pack.has_signal ? (
-              <div className="mt-3 text-caption bg-warning/10 border border-warning/30 rounded-2xl px-3 py-2 text-warning">
+              <InlineAlert tone="warning" className="mt-3">
                 No public signals found for {pack.company || "this company"}. Any email we write will
                 make no claims about them rather than inventing a reason to reach out.
-              </div>
+              </InlineAlert>
             ) : (
               <div className="mt-4 space-y-4">
                 {pack.perplexity?.summary && (
                   <div data-testid="perplexity-summary">
-                    <div className="flex items-center gap-1.5 ui-label mb-1">
-                      <Search size={12} /> Current research
-                      <span className="text-ink-muted normal-case font-normal">
+                    <div className="flex items-center gap-1.5" style={{ ...label, marginBottom: 4 }}>
+                      <Search size={12} strokeWidth={1.5} aria-hidden="true" /> Current research
+                      <span style={{ color: "var(--text-tertiary)", textTransform: "none", fontWeight: 400 }}>
                         · {pack.perplexity.citations?.length || 0} cited sources
                       </span>
                     </div>
-                    <p className="text-caption text-ink-secondary">{pack.perplexity.summary}</p>
+                    <p style={{ fontSize: 12.5, color: "var(--text-secondary)" }}>{pack.perplexity.summary}</p>
                     {pack.perplexity.citations?.length > 0 && (
                       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
                         {pack.perplexity.citations.slice(0, 4).map((url, i) => (
                           <a key={i} href={url} target="_blank" rel="noreferrer"
-                            className="text-tiny text-ink-muted hover:text-ink inline-flex items-center gap-0.5">
-                            source {i + 1} <ExternalLink size={12} />
+                            className="inline-flex items-center gap-0.5" style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+                            source {i + 1} <ExternalLink size={12} strokeWidth={1.5} aria-hidden="true" />
                           </a>
                         ))}
                       </div>
@@ -576,22 +511,22 @@ export default function LeadDetail() {
 
                 {pack.site_summary && (
                   <div>
-                    <div className="flex items-center gap-1.5 ui-label mb-1">
-                      <Globe size={12} /> What they do
+                    <div className="flex items-center gap-1.5" style={{ ...label, marginBottom: 4 }}>
+                      <Globe size={12} strokeWidth={1.5} aria-hidden="true" /> What they do
                     </div>
-                    <p className="text-caption text-ink-secondary line-clamp-3">{pack.site_summary}</p>
+                    <p className="line-clamp-3" style={{ fontSize: 12.5, color: "var(--text-secondary)" }}>{pack.site_summary}</p>
                   </div>
                 )}
 
                 {["funding", "hiring", "product"].some((k) => pack.signals?.[k]?.length > 0) && (
                   <div>
-                    <div className="ui-label mb-1.5">Buying signals</div>
+                    <div style={{ ...label, marginBottom: 6 }}>Buying signals</div>
                     <div className="space-y-1.5">
                       {["funding", "hiring", "product"].flatMap((k) =>
                         (pack.signals[k] || []).map((s, i) => (
-                          <div key={`${k}-${i}`} className="flex items-start gap-2 text-caption">
-                            <span className="kbd shrink-0 uppercase">{k}</span>
-                            <span className="text-ink-secondary">{s}</span>
+                          <div key={`${k}-${i}`} className="flex items-start gap-2" style={{ fontSize: 12.5 }}>
+                            <span className="shrink-0 uppercase" style={kbd}>{k}</span>
+                            <span style={{ color: "var(--text-secondary)" }}>{s}</span>
                           </div>
                         ))
                       )}
@@ -601,18 +536,17 @@ export default function LeadDetail() {
 
                 {pack.news?.length > 0 && (
                   <div>
-                    <div className="flex items-center gap-1.5 ui-label mb-1.5">
-                      <Newspaper size={12} /> Recent news
+                    <div className="flex items-center gap-1.5" style={{ ...label, marginBottom: 6 }}>
+                      <FileText size={12} strokeWidth={1.5} aria-hidden="true" /> Recent news
                     </div>
                     <ul className="space-y-1">
                       {pack.news.slice(0, 4).map((n, i) => (
-                        <li key={i} className="text-caption">
-                          <a href={n.url} target="_blank" rel="noreferrer"
-                            className="text-ink-secondary hover:text-ink inline-flex items-start gap-1">
+                        <li key={i} style={{ fontSize: 12.5 }}>
+                          <a href={n.url} target="_blank" rel="noreferrer" className="inline-flex items-start gap-1" style={{ color: "var(--text-secondary)" }}>
                             <span>{n.title}</span>
-                            <ExternalLink size={12} className="mt-0.5 shrink-0 opacity-50" />
+                            <ExternalLink size={12} strokeWidth={1.5} aria-hidden="true" className="mt-0.5 shrink-0" style={{ opacity: 0.5 }} />
                           </a>
-                          {n.published && <span className="text-ink-muted font-mono ml-1">{n.published}</span>}
+                          {n.published && <span className="tnum ml-1" style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>{n.published}</span>}
                         </li>
                       ))}
                     </ul>
@@ -621,164 +555,143 @@ export default function LeadDetail() {
 
                 {pack.github?.languages?.length > 0 && (
                   <div>
-                    <div className="flex items-center gap-1.5 ui-label mb-1.5">
-                      <Github size={12} /> Public tech stack
+                    <div className="flex items-center gap-1.5" style={{ ...label, marginBottom: 6 }}>
+                      <Database size={12} strokeWidth={1.5} aria-hidden="true" /> Public tech stack
                     </div>
                     <div className="flex flex-wrap gap-1">
-                      {pack.github.languages.map((l) => <span key={l} className="kbd">{l}</span>)}
+                      {pack.github.languages.map((l) => <span key={l} style={kbd}>{l}</span>)}
                     </div>
                   </div>
                 )}
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Company intelligence */}
           {deriveDomain(lead) && (
-            <div className="shadow-card p-6 sm:p-8 rounded-2xl" data-testid="company-intel-panel">
+            <Card data-testid="company-intel-panel">
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="ui-label flex items-center gap-1.5"><Building2 size={14} /> Company</div>
+                <div className="flex items-center gap-1.5" style={label}><Building2 size={14} strokeWidth={1.5} aria-hidden="true" /> Company</div>
                 {companyIntelStatus !== "loading" && (
-                  <button onClick={crawlCompany} disabled={companyIntelStatus === "crawling"}
-                    data-testid="company-research-btn" className="btn-secondary text-caption disabled:opacity-50">
-                    {companyIntelStatus === "crawling" ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
+                  <Button variant="secondary" size="sm" icon={companyIntelStatus === "crawling" ? undefined : Search} isLoading={companyIntelStatus === "crawling"} onClick={crawlCompany} data-testid="company-research-btn">
                     {companyIntelStatus === "crawling" ? "Researching…" : companyIntel ? "Refresh" : "Research company"}
-                  </button>
+                  </Button>
                 )}
               </div>
 
               {companyIntelStatus === "loading" ? (
-                <p className="text-caption text-ink-muted mt-3">Checking for an existing profile…</p>
+                <p style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 12 }}>Checking for an existing profile…</p>
               ) : !companyIntel?.profile || Object.keys(companyIntel.profile).length === 0 ? (
-                <p className="text-caption text-ink-muted mt-3">
+                <p style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 12 }}>
                   Not researched yet. We'll crawl {deriveDomain(lead)} and build an AI profile —
                   industry, pain points, competitors — so you have context before you reach out.
                 </p>
               ) : (
                 <div className="mt-4 space-y-4">
-                  {companyIntel.profile.description && (
-                    <p className="text-caption text-ink-secondary">{companyIntel.profile.description}</p>
-                  )}
+                  {companyIntel.profile.description && <p style={{ fontSize: 12.5, color: "var(--text-secondary)" }}>{companyIntel.profile.description}</p>}
                   <div className="flex flex-wrap gap-1.5">
-                    {companyIntel.profile.industry && <span className="kbd">{companyIntel.profile.industry}</span>}
-                    {companyIntel.profile.company_size && <span className="kbd">{companyIntel.profile.company_size}</span>}
-                    {companyIntel.profile.buying_stage && <span className="kbd">{companyIntel.profile.buying_stage}</span>}
+                    {companyIntel.profile.industry && <span style={kbd}>{companyIntel.profile.industry}</span>}
+                    {companyIntel.profile.company_size && <span style={kbd}>{companyIntel.profile.company_size}</span>}
+                    {companyIntel.profile.buying_stage && <span style={kbd}>{companyIntel.profile.buying_stage}</span>}
                   </div>
                   {companyIntel.profile.pain_points?.length > 0 && (
                     <div>
-                      <div className="ui-label mb-1.5">Pain points</div>
+                      <div style={{ ...label, marginBottom: 6 }}>Pain points</div>
                       <ul className="space-y-1">
                         {companyIntel.profile.pain_points.slice(0, 5).map((p, i) => (
-                          <li key={i} className="text-caption text-ink-secondary">· {p}</li>
+                          <li key={i} style={{ fontSize: 12.5, color: "var(--text-secondary)" }}>· {p}</li>
                         ))}
                       </ul>
                     </div>
                   )}
                   {companyIntel.profile.competitors?.length > 0 && (
                     <div>
-                      <div className="ui-label mb-1.5">Competitors</div>
+                      <div style={{ ...label, marginBottom: 6 }}>Competitors</div>
                       <div className="flex flex-wrap gap-1">
-                        {companyIntel.profile.competitors.slice(0, 6).map((c) => <span key={c} className="kbd">{c}</span>)}
+                        {companyIntel.profile.competitors.slice(0, 6).map((c) => <span key={c} style={kbd}>{c}</span>)}
                       </div>
                     </div>
                   )}
                 </div>
               )}
-            </div>
+            </Card>
           )}
 
           {/* Tasks */}
-          <div className="shadow-card p-4 sm:p-6 rounded-2xl">
-            <div className="ui-label mb-3 flex items-center gap-1.5"><CheckSquare size={14} /> Tasks</div>
-            <div className="space-y-2 mb-3">
-              {tasks.length === 0 && <p className="text-caption text-ink-muted">No tasks yet.</p>}
+          <Card title="Tasks">
+            <div className="space-y-1.5" style={{ marginBottom: 12 }}>
+              {tasks.length === 0 && <p style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>No tasks yet.</p>}
               {tasks.map((t) => {
                 const overdue = t.status === "open" && t.due_at && new Date(t.due_at) < new Date();
                 return (
-                  <div key={t.id} data-testid={`task-${t.id}`} className="flex items-start gap-2 text-body">
-                    <button onClick={() => toggleTask(t)} data-testid={`toggle-task-${t.id}`} className="mt-0.5 text-ink-muted hover:text-ink">
-                      {t.status === "done" ? <CheckSquare size={16} className="text-success" /> : <Square size={16} />}
+                  <div key={t.id} data-testid={`task-${t.id}`} className="flex items-start gap-2">
+                    <button onClick={() => toggleTask(t)} data-testid={`toggle-task-${t.id}`} className="mt-0.5" style={{ color: t.status === "done" ? "var(--color-success)" : "var(--text-tertiary)" }}>
+                      <Check size={16} strokeWidth={1.5} aria-hidden="true" style={{ opacity: t.status === "done" ? 1 : 0.3 }} />
                     </button>
                     <div className="flex-1 min-w-0">
-                      <div className={t.status === "done" ? "line-through text-ink-muted" : ""}>{t.title}</div>
+                      <div style={{ fontSize: 13, textDecoration: t.status === "done" ? "line-through" : "none", color: t.status === "done" ? "var(--text-tertiary)" : "var(--text-primary)" }}>{t.title}</div>
                       {t.due_at && (
-                        <div className={`text-tiny font-mono ${overdue ? "text-danger" : "text-ink-muted"}`}>
+                        <div className="tnum" style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: overdue ? "var(--color-danger)" : "var(--text-tertiary)" }}>
                           Due {new Date(t.due_at).toLocaleDateString()}
                         </div>
                       )}
                     </div>
-                    <button onClick={() => deleteTask(t.id)} className="text-ink-disabled hover:text-danger"><Trash2 size={12} /></button>
+                    <button onClick={() => deleteTask(t.id)} style={{ color: "var(--text-tertiary)" }}><Trash2 size={12} strokeWidth={1.5} aria-hidden="true" /></button>
                   </div>
                 );
               })}
             </div>
             <div className="flex flex-wrap gap-1.5">
-              <input value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
-                placeholder="New task…" data-testid="new-task-title"
-                className="flex-1 min-w-[140px] border border-line px-2 py-1.5 rounded text-caption" />
-              <input type="date" value={taskForm.due_at} onChange={(e) => setTaskForm({ ...taskForm, due_at: e.target.value })}
-                data-testid="new-task-due" className="border border-line px-2 py-1.5 rounded text-caption" />
-              <select value={taskForm.assignee_id} onChange={(e) => setTaskForm({ ...taskForm, assignee_id: e.target.value })}
-                data-testid="new-task-assignee" className="border border-line px-2 py-1.5 rounded text-caption">
-                <option value="">Unassigned</option>
-                {team.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-              <button onClick={addTask} disabled={!taskForm.title.trim()} data-testid="add-task-btn" className="btn-secondary text-caption disabled:opacity-50">
-                <Plus size={12} /> Add
-              </button>
+              <Input size="sm" value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} placeholder="New task…" data-testid="new-task-title" className="flex-1 min-w-[140px]" />
+              <Input size="sm" type="date" value={taskForm.due_at} onChange={(e) => setTaskForm({ ...taskForm, due_at: e.target.value })} data-testid="new-task-due" />
+              <Select size="sm" value={taskForm.assignee_id} onChange={(v) => setTaskForm({ ...taskForm, assignee_id: v })} data-testid="new-task-assignee" placeholder="Unassigned"
+                options={[{ value: "", label: "Unassigned" }, ...team.map((m) => ({ value: m.id, label: m.name }))]} className="w-36" />
+              <Button variant="secondary" size="sm" icon={Plus} onClick={addTask} isDisabled={!taskForm.title.trim()} data-testid="add-task-btn">Add</Button>
             </div>
-          </div>
+          </Card>
 
           {/* Notes */}
-          <div className="shadow-card p-4 sm:p-6 rounded-2xl">
-            <div className="ui-label mb-3 flex items-center gap-1.5"><StickyNote size={14} /> Notes</div>
-            <div className="flex gap-2 mb-3">
-              <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} rows={2}
-                placeholder="Add a note…" data-testid="new-note-text"
-                className="flex-1 border border-line px-2 py-1.5 rounded text-input" />
-              <button onClick={addNote} disabled={!noteText.trim()} data-testid="add-note-btn"
-                className="btn-secondary text-caption self-start disabled:opacity-50">Add</button>
+          <Card title="Notes">
+            <div className="flex gap-2" style={{ marginBottom: 12 }}>
+              <Input as="textarea" rows={2} value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="Add a note…" data-testid="new-note-text" className="flex-1" />
+              <Button variant="secondary" size="sm" onClick={addNote} isDisabled={!noteText.trim()} data-testid="add-note-btn" className="self-start">Add</Button>
             </div>
             <div className="space-y-3">
-              {notes.length === 0 && <p className="text-caption text-ink-muted">No notes yet.</p>}
+              {notes.length === 0 && <p style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>No notes yet.</p>}
               {notes.map((n) => (
-                <div key={n.id} data-testid={`note-${n.id}`} className="text-body border-l-2 border-line pl-3">
+                <div key={n.id} data-testid={`note-${n.id}`} style={{ borderLeft: "2px solid var(--border-default)", paddingLeft: 12 }}>
                   <div className="flex items-start justify-between gap-2">
-                    <p>{n.body}</p>
-                    <button onClick={() => deleteNote(n.id)} className="text-ink-disabled hover:text-danger shrink-0"><Trash2 size={12} /></button>
+                    <p style={{ fontSize: 13, color: "var(--text-primary)" }}>{n.body}</p>
+                    <button onClick={() => deleteNote(n.id)} className="shrink-0" style={{ color: "var(--text-tertiary)" }}><Trash2 size={12} strokeWidth={1.5} aria-hidden="true" /></button>
                   </div>
-                  <div className="text-tiny text-ink-muted font-mono mt-0.5">
+                  <div className="tnum" style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)", marginTop: 2 }}>
                     {n.author_name} · {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
 
           {/* Activity timeline */}
-          <div className="ui-label mb-3">Activity timeline</div>
-          {timeline.length === 0 ? (
-            <div className="shadow-card p-10 text-center text-body text-ink-muted rounded-2xl">
-              No activity yet — an email, call, or booking will show up here.
-            </div>
-          ) : (
-            <div className="space-y-0 border-l border-line ml-3">
-              {timeline.map((a) => {
-                const Icon = AGENT_ICON[a.agent] || FileText;
-                return (
-                  <div key={a.id} data-testid={`timeline-item-${a.id}`} className="pl-5 pb-5 relative">
-                    <div className="absolute -left-[9px] top-0.5 w-4 h-4 rounded-full bg-white border border-line flex items-center justify-center">
-                      <Icon size={12} />
-                    </div>
-                    <div className="text-caption text-ink-muted font-mono">
-                      {AGENT_LABEL[a.agent] || a.agent} · {formatDistanceToNow(new Date(a.at), { addSuffix: true })}
-                    </div>
-                    <div className="text-body mt-0.5">{a.summary}</div>
+          <div>
+            <div style={{ ...label, marginBottom: 12 }}>Activity timeline</div>
+            {timeline.length === 0 ? (
+              <EmptyState title="No activity yet" description="An email, call, or booking will show up here." />
+            ) : (
+              <Card padding="compact" bodyClassName="-mx-5">
+                {timeline.map((a) => (
+                  <div key={a.id} data-testid={`timeline-item-${a.id}`} style={{ padding: "0 20px" }}>
+                    <TimelineRow
+                      icon={AGENT_ICON[a.agent] || FileText}
+                      title={a.summary}
+                      detail={AGENT_LABEL[a.agent] || a.agent}
+                      timestamp={formatDistanceToNow(new Date(a.at), { addSuffix: true })}
+                    />
                   </div>
-                );
-              })}
-            </div>
-          )}
+                ))}
+              </Card>
+            )}
+          </div>
         </div>
       </div>
     </div>
