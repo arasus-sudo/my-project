@@ -53,6 +53,7 @@ export {
   MoreVertical,      // Card overflow
   ExternalLink,      // Opens a new context
   ChevronRight,      // Drill-in
+  ChevronLeft,       // Backward paging (calendar/carousel prev)
   ChevronDown,       // Disclosure (§7.3 select trigger)
   ArrowRight,        // Forward / link-out in copy
   ArrowLeft,         // Back navigation
@@ -88,6 +89,8 @@ export {
   Globe,             // Website
   Link,              // URL
   Linkedin,          // LinkedIn profile/company link
+  Instagram,         // Instagram platform
+  Youtube,           // YouTube platform
   Tag,               // Segment
   Tags,              // Multiple tags / tag group
   IdCard,            // Profile

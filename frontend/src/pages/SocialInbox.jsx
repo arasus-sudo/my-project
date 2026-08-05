@@ -2,15 +2,20 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Lightbulb, Check, X as XIcon } from "lucide-react";
+import { Lightbulb, Check, X, MessageSquare } from "../icons";
+import { EmptyState } from "../components/composites/EmptyState";
+import StatusPill from "../components/primitives/StatusPill";
+import Input from "../components/primitives/Input";
+import Button from "../components/primitives/Button";
 
 const STATUS_META = {
-  new: { t: "New", c: "text-warning border-warning" },
-  replied: { t: "Replied", c: "text-success border-success" },
-  ignored: { t: "Ignored", c: "text-ink-muted border-neutral-400" },
+  new: { t: "New", tone: "warning" },
+  replied: { t: "Replied", tone: "success" },
+  ignored: { t: "Ignored", tone: "neutral" },
 };
 
 const PLATFORM_LABEL = { linkedin: "LinkedIn", instagram: "Instagram", youtube: "YouTube" };
+const FILTERS = [["all", "All"], ["new", "New"], ["replied", "Replied"], ["ignored", "Ignored"]];
 
 export default function SocialInbox() {
   const [comments, setComments] = useState([]);
@@ -53,104 +58,111 @@ export default function SocialInbox() {
       <PageHeader title="Engagement Inbox" subtitle="Every comment on your published posts, one place." />
       <div className="flex-1 grid grid-cols-1 md:grid-cols-12 min-h-0">
         {/* Filters */}
-        <aside className="hidden md:block col-span-2 border-r border-line bg-white p-4">
-          <div className="ui-label mb-3">Filter</div>
-          <ul className="space-y-1 text-body">
-            {[["all", "All"], ["new", "New"], ["replied", "Replied"], ["ignored", "Ignored"]].map(([k, t]) => (
-              <li key={k}>
-                <button onClick={() => setFilter(k)} data-testid={`inbox-filter-${k}`}
-                  className={`w-full text-left px-2 py-1.5 rounded-xl transition-colors duration-150 ${filter === k ? "bg-accent text-white" : "hover:bg-surfacehover"}`}>
-                  {t}
-                </button>
-              </li>
+        <aside className="hidden md:block col-span-2 overflow-y-auto" style={{ borderRight: "1px solid var(--border-default)", background: "var(--bg-surface)", padding: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Filter</div>
+          <div className="space-y-0.5">
+            {FILTERS.map(([k, t]) => (
+              <button key={k} onClick={() => setFilter(k)} data-testid={`inbox-filter-${k}`}
+                className="w-full text-left transition-colors"
+                style={{
+                  padding: "8px 10px", borderRadius: "var(--radius-md)", fontSize: 13.5,
+                  background: filter === k ? "var(--bg-selected)" : "transparent",
+                  color: filter === k ? "var(--color-primary)" : "var(--text-secondary)",
+                }}
+                onMouseEnter={(e) => { if (filter !== k) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { if (filter !== k) e.currentTarget.style.background = "transparent"; }}
+              >
+                {t}
+              </button>
             ))}
-          </ul>
+          </div>
         </aside>
 
         {/* List */}
-        <div className="col-span-full md:col-span-4 border-r border-line overflow-y-auto">
+        <div className="col-span-full md:col-span-4 overflow-y-auto" style={{ borderRight: "1px solid var(--border-default)" }}>
           {filtered.length === 0 && (
-            <div className="p-6 text-body text-ink-muted">
-              No comments yet. Once a post is published on a connected, real platform, comments show up here automatically.
-            </div>
+            <EmptyState icon={MessageSquare} title="No comments yet" description="Once a post is published on a connected, real platform, comments show up here automatically." className="py-10" />
           )}
-          {filtered.map((c) => (
-            <button key={c.id} onClick={() => select(c)} data-testid={`comment-${c.id}`}
-              className={`w-full text-left p-4 border-b border-line block transition-colors duration-150 ${active?.id === c.id ? "bg-surfacehover border-l-2 border-l-accent" : "hover:bg-surfacehover"}`}>
-              <div className="flex items-center justify-between">
-                <div className="text-body font-medium truncate">{c.author || "Someone"}</div>
-                <span className={`ui-label border px-1.5 py-0.5 ${STATUS_META[c.status]?.c || STATUS_META.new.c}`}>
-                  {STATUS_META[c.status]?.t || "New"}
-                </span>
-              </div>
-              <div className="text-caption text-ink-muted truncate mt-1 capitalize">
-                {PLATFORM_LABEL[c.platform] || c.platform} · {c.post_headline || "post"}
-              </div>
-              <div className="text-body text-ink-secondary mt-2 line-clamp-2">{c.text}</div>
-            </button>
-          ))}
+          {filtered.map((c) => {
+            const isActive = active?.id === c.id;
+            return (
+              <button key={c.id} onClick={() => select(c)} data-testid={`comment-${c.id}`}
+                className="w-full text-left block transition-colors"
+                style={{
+                  padding: 16, borderBottom: "1px solid var(--border-subtle)",
+                  background: isActive ? "var(--bg-selected)" : "transparent",
+                  borderLeft: isActive ? "2px solid var(--color-primary)" : "2px solid transparent",
+                }}
+                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="truncate" style={{ fontWeight: 500, color: "var(--text-primary)", fontSize: 13.5 }}>{c.author || "Someone"}</div>
+                  <StatusPill status={STATUS_META[c.status]?.t || "New"} tone={STATUS_META[c.status]?.tone || "warning"} className="shrink-0" />
+                </div>
+                <div className="truncate capitalize" style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 4 }}>
+                  {PLATFORM_LABEL[c.platform] || c.platform} · {c.post_headline || "post"}
+                </div>
+                <div className="line-clamp-2" style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 8 }}>{c.text}</div>
+              </button>
+            );
+          })}
         </div>
 
         {/* Thread */}
         <div className="col-span-full md:col-span-4 flex flex-col overflow-y-auto">
           {active ? (
             <>
-              <div className="p-4 border-b border-line bg-white">
-                <div className="text-subheading font-display font-semibold">{active.author || "Someone"}</div>
-                <div className="text-caption text-ink-muted font-mono capitalize">{PLATFORM_LABEL[active.platform] || active.platform}</div>
+              <div style={{ padding: 16, borderBottom: "1px solid var(--border-default)", background: "var(--bg-surface)" }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>{active.author || "Someone"}</div>
+                <div className="tnum capitalize" style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>{PLATFORM_LABEL[active.platform] || active.platform}</div>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div className="flex-1 overflow-y-auto space-y-4" style={{ padding: 16 }}>
                 <div className="max-w-md">
-                  <div className="ui-label mb-1">{active.author || "Someone"}</div>
-                  <div className="p-3 text-body rounded-xl border bg-white border-line">{active.text}</div>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", marginBottom: 4 }}>{active.author || "Someone"}</div>
+                  <div style={{ padding: 12, borderRadius: "var(--radius-lg)", fontSize: 13.5, background: "var(--bg-surface)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}>{active.text}</div>
                 </div>
                 {active.replied_text && (
                   <div className="max-w-md ml-auto">
-                    <div className="ui-label mb-1">You</div>
-                    <div className="p-3 text-body rounded-xl border bg-accent text-white border-transparent">{active.replied_text}</div>
+                    <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", marginBottom: 4 }}>You</div>
+                    <div style={{ padding: 12, borderRadius: "var(--radius-lg)", fontSize: 13.5, background: "var(--color-primary)", color: "#fff" }}>{active.replied_text}</div>
                   </div>
                 )}
               </div>
               {active.status !== "replied" && (
-                <div className="p-4 border-t border-line bg-white space-y-2">
+                <div className="space-y-2" style={{ padding: 16, borderTop: "1px solid var(--border-default)", background: "var(--bg-surface)" }}>
                   {active.ai_suggested_reply && reply === active.ai_suggested_reply && (
-                    <div className="flex items-center gap-1.5 text-tiny text-accent">
-                      <Lightbulb size={12} /> Suggested reply — edit before sending
+                    <div className="flex items-center gap-1.5" style={{ fontSize: 11, color: "var(--color-primary)" }}>
+                      <Lightbulb size={12} strokeWidth={1.5} aria-hidden="true" /> Suggested reply — edit before sending
                     </div>
                   )}
-                  <textarea value={reply} onChange={(e) => setReply(e.target.value)} data-testid="inbox-reply-body"
-                    rows={3} placeholder={`Reply to ${active.author || "them"}…`}
-                    className="w-full border border-line p-3 rounded-sm focus:outline-none focus:border-accent text-input" />
+                  <Input as="textarea" rows={3} value={reply} onChange={(e) => setReply(e.target.value)} data-testid="inbox-reply-body" placeholder={`Reply to ${active.author || "them"}…`} />
                   <div className="flex gap-2">
-                    <button onClick={send} data-testid="send-inbox-reply" disabled={!reply.trim()} className="btn-primary disabled:opacity-50">
-                      <Check size={14} /> Send reply
-                    </button>
-                    <button onClick={() => ignore(active.id)} data-testid="ignore-comment-btn" className="btn-secondary">
-                      <XIcon size={14} /> Ignore
-                    </button>
+                    <Button variant="primary" icon={Check} onClick={send} data-testid="send-inbox-reply" isDisabled={!reply.trim()}>Send reply</Button>
+                    <Button variant="secondary" icon={X} onClick={() => ignore(active.id)} data-testid="ignore-comment-btn">Ignore</Button>
                   </div>
                 </div>
               )}
             </>
           ) : (
-            <div className="p-8 text-ink-muted text-body">Select a comment</div>
+            <div style={{ padding: 32, fontSize: 13, color: "var(--text-tertiary)" }}>Select a comment</div>
           )}
         </div>
 
         {/* Post context */}
-        <aside className="hidden lg:block col-span-2 border-l border-line bg-white p-4 overflow-y-auto">
+        <aside className="hidden lg:block col-span-2 overflow-y-auto" style={{ borderLeft: "1px solid var(--border-default)", background: "var(--bg-surface)", padding: 16 }}>
           {active?.post ? (
             <>
-              <div className="ui-label">Post</div>
-              <div className="text-subheading font-display font-semibold mt-1">{active.post.headline}</div>
-              <p className="text-caption text-ink-muted mt-2 line-clamp-4">{active.post.body}</p>
+              <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Post</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)", marginTop: 4 }}>{active.post.headline}</div>
+              <p className="line-clamp-4" style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 8 }}>{active.post.body}</p>
               {active.post.platform_post_url && (
                 <a href={active.post.platform_post_url} target="_blank" rel="noreferrer"
-                  className="text-caption text-accent hover:underline mt-3 inline-block">View live post</a>
+                  className="inline-block" style={{ fontSize: 12, color: "var(--text-link)", marginTop: 12 }}>View live post</a>
               )}
             </>
           ) : (
-            <div className="text-ink-muted text-body">—</div>
+            <div style={{ fontSize: 13, color: "var(--text-tertiary)" }}>—</div>
           )}
         </aside>
       </div>

@@ -516,7 +516,7 @@ Keep this table authoritative; do not pick synonyms per screen.
 `layout-dashboard` Dashboard · `users` Leads/Contacts · `kanban` Pipeline · `list-checks` Tasks · `bar-chart-3` Analytics · `clock` Reports · `users-round` Team · `plug` Integrations · `settings` Settings · `life-buoy` Help & Support · `bell` Notifications
 
 **Actions**
-`plus` Add/Create · `pencil` Edit · `pen-square` Compose/draft (long-form content, distinct from row Edit) · `trash-2` Delete · `copy` Duplicate · `download` Export · `upload` Import · `share-2` Share · `play` Run · `pause` Pause a running campaign/process · `rotate-ccw` Reset · `refresh-cw` Sync · `check` Confirm · `x` Dismiss · `archive` Archive · `more-horizontal` Row overflow · `more-vertical` Card overflow · `external-link` Opens new context · `chevron-right` Drill-in · `arrow-right` Forward/link-out in copy · `arrow-left` Back navigation
+`plus` Add/Create · `pencil` Edit · `pen-square` Compose/draft (long-form content, distinct from row Edit) · `trash-2` Delete · `copy` Duplicate · `download` Export · `upload` Import · `share-2` Share · `play` Run · `pause` Pause a running campaign/process · `rotate-ccw` Reset · `refresh-cw` Sync · `check` Confirm · `x` Dismiss · `archive` Archive · `more-horizontal` Row overflow · `more-vertical` Card overflow · `external-link` Opens new context · `chevron-right` Drill-in · `chevron-left` Backward paging (calendar/carousel prev) · `arrow-right` Forward/link-out in copy · `arrow-left` Back navigation
 
 **Filtering & search**
 `search` Search · `filter` Filters · `arrow-up-down` Sort · `calendar` Date range · `sliders-horizontal` Advanced/Columns · `layout-grid` Grid view · `list` List view
@@ -525,7 +525,7 @@ Keep this table authoritative; do not pick synonyms per screen.
 `mail` Email · `phone` Call · `phone-call` Active/answered call · `phone-outgoing` Outbound call placed · `message-square` Message/Notes · `calendar-clock` Schedule · `send` Send · `file-text` Document/Proposal · `sticky-note` Note · `paperclip` Attachment
 
 **Records & entities**
-`building-2` Company · `user` Person · `map-pin` Location · `globe` Website · `link` URL · `tag` Segment · `tags` Multiple tags/tag group · `id-card` Profile · `briefcase` Deal · `linkedin` LinkedIn profile/company link · `image` Static image/photo content · `video` Video content
+`building-2` Company · `user` Person · `map-pin` Location · `globe` Website · `link` URL · `tag` Segment · `tags` Multiple tags/tag group · `id-card` Profile · `briefcase` Deal · `linkedin` LinkedIn profile/company link · `instagram` Instagram platform · `youtube` YouTube platform · `image` Static image/photo content · `video` Video content
 
 **Metrics & analytics**
 `dollar-sign` Value/Revenue · `percent` Rate · `target` Goal/Quota · `trending-up` Positive trend · `trending-down` Negative trend · `activity` Activity volume · `pie-chart` Distribution · `gauge` Health/Score · `line-chart` Trend
