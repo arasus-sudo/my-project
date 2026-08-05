@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Plus, CheckCircle2, Circle } from "lucide-react";
+import { Plus, CheckCircle2, CircleDashed } from "../icons";
+import Card from "../components/composites/Card";
+import { EmptyState } from "../components/composites/EmptyState";
+import { Modal, ModalContent } from "../components/composites/Modal";
+import Input from "../components/primitives/Input";
+import Select from "../components/primitives/Select";
+import Button from "../components/primitives/Button";
 
 export default function HrmseqOnboarding() {
   const [tasks, setTasks] = useState([]);
@@ -34,46 +40,51 @@ export default function HrmseqOnboarding() {
   return (
     <div>
       <PageHeader title="Onboarding" subtitle="Onboarding checklists for new hires."
-        right={<button onClick={() => setModal(true)} className="btn-primary"><Plus size={14} /> New task</button>}
+        right={<Button variant="primary" icon={Plus} onClick={() => setModal(true)}>New task</Button>}
       />
-      <div className="animate-fade-in px-6 sm:px-8 space-y-3">
-        {tasks.length === 0 && <div className="text-body text-ink-muted">No onboarding tasks yet.</div>}
-        {tasks.map((t) => (
-          <div key={t.id} className="bg-white border border-line rounded-2xl p-5 flex items-start gap-4">
-            <button onClick={() => toggleStatus(t.id, t.status)} className="mt-0.5">
-              {t.status === "completed" ? <CheckCircle2 size={18} className="text-success" /> : <Circle size={18} className="text-ink-muted" />}
-            </button>
-            <div className="flex-1">
-              <div className={`text-body font-medium ${t.status === "completed" ? "line-through text-ink-muted" : ""}`}>{t.title}</div>
-              {t.description && <div className="text-caption text-ink-muted mt-1">{t.description}</div>}
-              <div className="text-tiny text-ink-muted mt-1">
-                {employees.find(e => e.id === t.employee_id) ? `${employees.find(e => e.id === t.employee_id).first_name} ${employees.find(e => e.id === t.employee_id).last_name}` : "—"}
-                {t.due_by ? ` · Due: ${t.due_by}` : ""}
+      <div className="animate-fade-in px-6 sm:px-8 py-6 space-y-3">
+        {tasks.length === 0 ? (
+          <EmptyState title="No onboarding tasks yet" description="Create a checklist item for a new hire."
+            actionLabel="New task" onAction={() => setModal(true)} />
+        ) : tasks.map((t) => (
+          <Card key={t.id}>
+            <div className="flex items-start gap-3">
+              <button onClick={() => toggleStatus(t.id, t.status)} className="mt-0.5 shrink-0">
+                {t.status === "completed"
+                  ? <CheckCircle2 size={18} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--color-success)" }} />
+                  : <CircleDashed size={18} strokeWidth={1.5} aria-hidden="true" style={{ color: "var(--text-tertiary)" }} />}
+              </button>
+              <div className="flex-1">
+                <div style={{ fontSize: 13, fontWeight: 500, color: t.status === "completed" ? "var(--text-tertiary)" : "var(--text-primary)", textDecoration: t.status === "completed" ? "line-through" : "none" }}>{t.title}</div>
+                {t.description && <div style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 4 }}>{t.description}</div>}
+                <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 4 }}>
+                  {employees.find(e => e.id === t.employee_id) ? `${employees.find(e => e.id === t.employee_id).first_name} ${employees.find(e => e.id === t.employee_id).last_name}` : "—"}
+                  {t.due_by ? ` · Due: ${t.due_by}` : ""}
+                </div>
               </div>
             </div>
-          </div>
+          </Card>
         ))}
       </div>
-      {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="text-card-title font-display font-semibold mb-4">New Onboarding Task</div>
-            <form onSubmit={save} className="space-y-4">
-              <input className="inp w-full" placeholder="Task title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-              <textarea className="inp w-full h-20" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-              <select className="inp w-full" value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })}>
-                <option value="">Select employee</option>
-                {employees.map((e) => <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}
-              </select>
-              <input className="inp w-full" type="date" value={form.due_by} onChange={(e) => setForm({ ...form, due_by: e.target.value })} />
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary">Create</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+
+      <Modal open={modal} onOpenChange={setModal}>
+        <ModalContent size="sm" title="New Onboarding Task"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setModal(false)}>Cancel</Button>
+              <Button variant="primary" type="submit" form="hrms-onboarding-form">Create</Button>
+            </>
+          }
+        >
+          <form id="hrms-onboarding-form" onSubmit={save} className="space-y-3">
+            <Input required label="Task title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            <Input as="textarea" rows={3} label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            <Select label="Employee" value={form.employee_id} onChange={(v) => setForm({ ...form, employee_id: v })}
+              options={[{ value: "", label: "Select employee" }, ...employees.map((e) => ({ value: e.id, label: `${e.first_name} ${e.last_name}` }))]} />
+            <Input type="date" label="Due by" value={form.due_by} onChange={(e) => setForm({ ...form, due_by: e.target.value })} />
+          </form>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

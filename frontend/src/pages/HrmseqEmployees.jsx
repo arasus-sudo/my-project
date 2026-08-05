@@ -2,7 +2,19 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus } from "../icons";
+import Table, { TableFooter } from "../components/composites/Table";
+import { EmptyState } from "../components/composites/EmptyState";
+import { Modal, ModalContent } from "../components/composites/Modal";
+import StatusPill from "../components/primitives/StatusPill";
+import Input from "../components/primitives/Input";
+import Select from "../components/primitives/Select";
+import Button from "../components/primitives/Button";
+
+const EMPLOYMENT_TYPE_OPTIONS = [
+  { value: "full_time", label: "Full-time" }, { value: "part_time", label: "Part-time" },
+  { value: "contractor", label: "Contractor" }, { value: "intern", label: "Intern" },
+];
 
 export default function HrmseqEmployees() {
   const [items, setItems] = useState([]);
@@ -33,71 +45,57 @@ export default function HrmseqEmployees() {
 
   const totalPages = Math.ceil(total / 25);
 
+  const columns = [
+    { key: "name", label: "Name", render: (e) => <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{e.first_name} {e.last_name}</span> },
+    { key: "email", label: "Email", render: (e) => <span style={{ color: "var(--text-tertiary)" }}>{e.email}</span> },
+    { key: "position", label: "Position", render: (e) => e.position },
+    { key: "department", label: "Department", render: (e) => <span style={{ color: "var(--text-tertiary)" }}>{deptMap[e.department_id] || "—"}</span> },
+    { key: "status", label: "Status", render: (e) => <StatusPill status={e.status} /> },
+  ];
+
   return (
     <div>
       <PageHeader title="Employees" subtitle="Manage your workforce."
-        right={<button onClick={() => setModal(true)} className="btn-primary"><Plus size={14} /> Add employee</button>}
+        right={<Button variant="primary" icon={Plus} onClick={() => setModal(true)}>Add employee</Button>}
       />
-      <div className="animate-fade-in px-6 sm:px-8 space-y-4">
-        {items.length === 0 && <div className="text-body text-ink-muted">No employees yet.</div>}
-        {items.length > 0 && (
-          <div className="bg-white border border-line rounded-2xl overflow-hidden">
-            <table className="w-full text-body">
-              <thead><tr className="border-b border-line bg-ash text-left">
-                <th className="table-header p-3">Name</th><th className="table-header p-3">Email</th><th className="table-header p-3">Position</th><th className="table-header p-3">Department</th><th className="table-header p-3">Status</th>
-              </tr></thead>
-              <tbody>
-                {items.map((e) => (
-                  <tr key={e.id} className="border-b border-line last:border-0 hover:bg-ash/50">
-                    <td className="p-3 font-medium">{e.first_name} {e.last_name}</td>
-                    <td className="p-3 text-ink-muted">{e.email}</td>
-                    <td className="p-3">{e.position}</td>
-                    <td className="p-3 text-ink-muted">{deptMap[e.department_id] || "—"}</td>
-                    <td className="p-3"><span className={`text-tiny px-1.5 py-0.5 rounded-full border ${e.status === "active" ? "text-success border-success/30" : "text-ink-muted border-line"}`}>{e.status}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2">
-            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="btn-secondary"><ChevronLeft size={14} /></button>
-            <span className="text-body text-ink-muted">Page {page} of {totalPages}</span>
-            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="btn-secondary"><ChevronRight size={14} /></button>
-          </div>
+      <div className="animate-fade-in px-6 sm:px-8 py-6 space-y-4">
+        {items.length === 0 ? (
+          <EmptyState title="No employees yet" description="Add your first employee to start building your workforce."
+            actionLabel="Add employee" onAction={() => setModal(true)} />
+        ) : (
+          <>
+            <Table columns={columns} rows={items} rowKey={(e) => e.id} />
+            {totalPages > 1 && <TableFooter page={page} pageCount={totalPages} total={total} pageSize={25} onPageChange={setPage} />}
+          </>
         )}
       </div>
-      {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="text-card-title font-display font-semibold mb-4">Add Employee</div>
-            <form onSubmit={save} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <input className="inp" placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required />
-                <input className="inp" placeholder="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required />
-              </div>
-              <input className="inp w-full" type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-              <input className="inp w-full" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-              <div className="grid grid-cols-2 gap-4">
-                <select className="inp" value={form.department_id} onChange={(e) => setForm({ ...form, department_id: e.target.value })}>
-                  <option value="">No department</option>
-                  {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                </select>
-                <select className="inp" value={form.employment_type} onChange={(e) => setForm({ ...form, employment_type: e.target.value })}>
-                  <option value="full_time">Full-time</option><option value="part_time">Part-time</option><option value="contractor">Contractor</option><option value="intern">Intern</option>
-                </select>
-              </div>
-              <input className="inp w-full" placeholder="Position" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} />
-              <input className="inp w-full" type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary">Save</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+
+      <Modal open={modal} onOpenChange={setModal}>
+        <ModalContent size="sm" title="Add Employee"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setModal(false)}>Cancel</Button>
+              <Button variant="primary" type="submit" form="hrms-employee-form">Save</Button>
+            </>
+          }
+        >
+          <form id="hrms-employee-form" onSubmit={save} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <Input required label="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
+              <Input required label="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
+            </div>
+            <Input required type="email" label="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <Input label="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <div className="grid grid-cols-2 gap-3">
+              <Select label="Department" value={form.department_id} onChange={(v) => setForm({ ...form, department_id: v })}
+                options={[{ value: "", label: "No department" }, ...departments.map((d) => ({ value: d.id, label: d.name }))]} />
+              <Select label="Employment type" value={form.employment_type} onChange={(v) => setForm({ ...form, employment_type: v })} options={EMPLOYMENT_TYPE_OPTIONS} />
+            </div>
+            <Input label="Position" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} />
+            <Input type="date" label="Start date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
+          </form>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }
