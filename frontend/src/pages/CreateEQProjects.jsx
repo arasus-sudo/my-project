@@ -5,12 +5,11 @@ import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import {
-  Plus, Trash2, ImageIcon, Sparkles, PenSquare, ChevronLeft, ChevronRight, Wand2, Loader2, Check, ArrowRight, History, X,
+  Trash2, Sparkles, ChevronLeft, ChevronRight, Wand2, Loader2, Check, LayoutGrid,
 } from "lucide-react";
-import { TEMPLATES, PALETTES, blankSlide } from "../lib/creqTemplates";
-import Input from "../components/primitives/Input";
-import Button from "../components/primitives/Button";
-import Chip from "../components/primitives/Chip";
+import { PALETTES, blankSlide } from "../lib/creqTemplates";
+import PremiumCarouselWizard from "../components/creq/PremiumCarouselWizard";
+import FormatPicker, { FORMATS } from "../components/creq/FormatPicker";
 
 const AUDIENCES = [
   { id: "founders", label: "Founders & CEOs", tone: "confident, punchy" },
@@ -22,12 +21,6 @@ const AUDIENCES = [
   { id: "generic", label: "General audience", tone: "confident, punchy" },
 ];
 
-const PLATFORMS = [
-  { id: "linkedin", label: "LinkedIn Deck", ratio: "4:5", w: 1080, h: 1350 },
-  { id: "square", label: "Square Social", ratio: "1:1", w: 1080, h: 1080 },
-  { id: "twitter", label: "Twitter / X Cheat Sheet", ratio: "4:5", w: 1080, h: 1350 },
-];
-
 const TOPIC_STARTERS = [
   "Why cold outreach fails in 2026 (and the fix)",
   "5 hiring signals that outperform intent data",
@@ -36,40 +29,23 @@ const TOPIC_STARTERS = [
   "The anatomy of a scroll-stopping LinkedIn hook",
 ];
 
+/** Create EQ landing — three doors (blank canvas, standard AI, Premium AI),
+ * then every previously created deck inline below them, closest analog in
+ * this codebase to how Claude Design Labs lays out its own project picker.
+ * The old template-gallery filmstrip is gone entirely — no template ever
+ * gets forwarded into an LLM prompt now (it never did; that filmstrip just
+ * seeded a palette client-side), and removing it keeps this page to exactly
+ * the three creation paths the product wants surfaced. */
 export default function CreateEQProjects() {
   const nav = useNavigate();
   const [items, setItems] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [wizard, setWizard] = useState(null); // null | { topic, step }
-  const [busy, setBusy] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-  const [pendingTemplate, setPendingTemplate] = useState(null);
-  const [heroTopic, setHeroTopic] = useState("");
+  const [wizard, setWizard] = useState(null); // null | { step }
+  const [showPremiumWizard, setShowPremiumWizard] = useState(false);
+  const [showBlankDialog, setShowBlankDialog] = useState(false);
 
   const load = () => api.get("/carousel").then((r) => setItems(r.data)).finally(() => setLoaded(true));
   useEffect(() => { load(); }, []);
-
-  const startBlank = async () => {
-    setBusy(true);
-    try {
-      const { data } = await api.post("/carousel/generate", {
-        topic: "Untitled", platform: "linkedin", slide_count: 1, tone: "neutral",
-      });
-      await api.put(`/carousel/${data.id}`, {
-        slides: [blankSlide()], palette_id: "midnight", platform: "linkedin", topic: "Untitled",
-      });
-      nav(`/app/create-eq/${data.id}`);
-    } catch { toast.error("Could not create"); }
-    finally { setBusy(false); }
-  };
-
-  // Single AI entry point: whatever's typed in the hero is carried straight
-  // into the wizard. A real sentence skips the topic step; an empty box opens
-  // the wizard at step 1 so it still works as a plain "Create with AI" button.
-  const launchWizard = () => {
-    const topic = heroTopic.trim();
-    setWizard({ topic, step: topic.length > 3 ? 2 : 1 });
-  };
 
   const del = async (id) => {
     if (!confirm("Delete this project? This can't be undone.")) return;
@@ -82,192 +58,159 @@ export default function CreateEQProjects() {
 
   return (
     <div>
-      <PageHeader
-        title="Create EQ"
-        subtitle="Design scroll-stopping carousels and decks."
-        right={
-          <button onClick={() => setShowHistory(true)} data-testid="history-open-btn" className="btn-secondary">
-            <History size={14} /> Your projects{items.length > 0 ? ` · ${items.length}` : ""}
-          </button>
-        }
-      />
+      <PageHeader title="Create EQ" subtitle="Design scroll-stopping carousels and decks." />
 
       <div className="animate-fade-in px-6 sm:px-8 space-y-8 max-w-5xl">
-        {/* Hero — the ONE AI entry point: type an idea, hit generate.
-            §4.5 intelligence container: violet-tinted border + header band,
-            not a gradient (§24.1 bans multi-stop gradients outside a single
-            chart-area fill — the old radial+linear background was exactly
-            that). */}
-        <section
-          className="relative overflow-hidden"
-          style={{
-            borderRadius: "var(--radius-xl)", border: "1px solid var(--color-intel-border)",
-            background: "var(--bg-surface)", padding: "20px 24px",
-          }}
-        >
-          <div className="inline-flex items-center gap-1.5" style={{
-            fontSize: 11, fontWeight: 600, color: "var(--color-intel)", textTransform: "uppercase",
-            letterSpacing: "0.06em", marginBottom: 8,
-          }}>
-            <Sparkles size={14} strokeWidth={1.5} aria-hidden="true" /> Create with AI
-          </div>
-          <h2 style={{
-            fontSize: 22, lineHeight: "28px", fontWeight: 700, letterSpacing: "-0.01em",
-            color: "var(--text-primary)", fontFamily: "var(--font-display)", maxWidth: 560,
-          }}>
-            Describe your idea. We&apos;ll design the deck.
-          </h2>
-          <p style={{ fontSize: 13.5, color: "var(--text-secondary)", marginTop: 8, maxWidth: 480 }}>
-            One sentence is enough. Pick an audience and theme next — a finished, editable carousel in under a minute.
-          </p>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <OptionCard
+            icon={LayoutGrid}
+            title="Blank canvas"
+            description="Start empty, design freehand."
+            testId="option-blank"
+            onClick={() => setShowBlankDialog(true)}
+          />
+          <OptionCard
+            icon={Wand2}
+            title="Create by AI"
+            description="Describe a topic — a full deck, drafted and templated."
+            testId="option-standard"
+            onClick={() => setWizard({ step: 1 })}
+          />
+          <OptionCard
+            icon={Sparkles}
+            title="Premium AI Carousel"
+            description="Per-slide creative direction + your brand, or AI-designed. Extra credits."
+            badge="LLM Design"
+            accent
+            testId="option-premium"
+            onClick={() => setShowPremiumWizard(true)}
+          />
+        </div>
 
-          <div className="mt-4 flex flex-col sm:flex-row gap-2 max-w-2xl">
-            <Input
-              as="textarea"
-              value={heroTopic}
-              onChange={(e) => setHeroTopic(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); launchWizard(); } }}
-              data-testid="hero-topic-input"
-              rows={2}
-              placeholder='e.g. "Why cold outreach fails in 2026 — and the 3-step fix"'
-              className="flex-1"
-            />
-            <Button variant="intel" icon={Wand2} onClick={launchWizard} data-testid="hero-generate" size="lg" className="shrink-0 self-stretch sm:self-start">
-              Generate
-            </Button>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5 mt-3">
-            <span style={{ fontSize: 10.5, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em", marginRight: 4 }}>Try</span>
-            {TOPIC_STARTERS.slice(0, 4).map((t, i) => (
-              <button key={i} onClick={() => setHeroTopic(t)} data-testid={`hero-starter-${i}`}>
-                <Chip label={t} />
-              </button>
-            ))}
-          </div>
-
-          <div style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginTop: 14 }}>
-            or <button onClick={startBlank} disabled={busy} data-testid="start-blank-btn"
-              style={{ textDecoration: "underline", textUnderlineOffset: 2, opacity: busy ? 0.5 : 1, color: "var(--text-secondary)" }}>
-              start from a blank canvas
-            </button>
-          </div>
-        </section>
-
-        {/* Templates gallery — horizontal filmstrip, not a big grid, so it
-            doesn't compete with the AI hero above it. Cards are small; a
-            hover pops one up in place (scale + z-index) as a quick preview
-            instead of opening anything. */}
         <section>
           <div className="flex items-baseline justify-between mb-3">
-            <div>
-              <div className="font-display font-semibold text-body">Start from a template</div>
-              <div className="text-[11px] text-neutral-400 mt-0.5">Pre-designed layouts — add your topic, edit anything.</div>
+            <div className="font-display font-semibold text-body">Your projects{items.length > 0 ? ` · ${items.length}` : ""}</div>
+          </div>
+          {!loaded ? (
+            <div className="text-neutral-400 text-body">Loading…</div>
+          ) : items.length === 0 ? (
+            <div className="text-neutral-400 text-body border border-dashed border-line rounded-2xl p-8 text-center">
+              No carousels yet — pick one of the three options above to start.
             </div>
-          </div>
-          <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-thin">
-            {TEMPLATES.map((t) => {
-              const pal = PALETTES.find((p) => p.id === t.palette) || PALETTES[0];
-              return (
-                <button key={t.id} onClick={() => setPendingTemplate(t)} data-testid={`start-tpl-${t.id}`}
-                  className="group shrink-0 w-28 sm:w-32 rounded-xl overflow-hidden border border-line hover:border-accent hover:shadow-xl hover:scale-[1.12] hover:-translate-y-1 hover:z-10 transition-all duration-200 text-left relative">
-                  <div className="aspect-[4/5] p-3 flex flex-col justify-between relative"
-                    style={{ background: pal.bg, color: pal.text, fontFamily: "Inter" }}>
-                    <div className="text-[8px] font-mono uppercase tracking-widest opacity-60">{t.tag}</div>
-                    <div className="font-semibold text-caption leading-tight" style={{ color: pal.accent }}>{t.name}</div>
-                    <div className="absolute inset-x-0 bottom-0 h-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] font-medium"
-                      style={{ background: `linear-gradient(transparent, ${pal.bg})`, color: pal.text }}>
-                      Use this →
-                    </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {items.map((p) => {
+                const pal = PALETTES.find((pp) => pp.id === p.palette_id) || PALETTES[0];
+                return (
+                  <div key={p.id} className="group relative rounded-2xl border border-line bg-white overflow-hidden hover:border-ink hover:shadow-card-hover transition-colors">
+                    <Link to={`/app/create-eq/${p.id}`} data-testid={`carousel-open-${p.id}`} className="block">
+                      <div className="p-4 flex items-center gap-2.5" style={{ background: pal.bg2 || pal.bg }}>
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: pal.accent }} />
+                        <span className="text-[10px] font-mono uppercase tracking-widest truncate" style={{ color: pal.text, opacity: 0.7 }}>
+                          {p.design_mode === "premium" ? "Premium AI" : "Standard"}
+                        </span>
+                      </div>
+                      <div className="p-4">
+                        <div className="text-body font-medium truncate">{p.topic}</div>
+                        <div className="text-caption text-neutral-400 mt-0.5">
+                          {p.updated_at ? formatDistanceToNow(new Date(p.updated_at), { addSuffix: true }) : "—"} · {p.slides?.length || 0} slides
+                        </div>
+                      </div>
+                    </Link>
+                    <button onClick={() => del(p.id)} data-testid={`carousel-delete-${p.id}`}
+                      className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg bg-white/90 text-neutral-400 hover:text-danger"
+                      title="Delete project">
+                      <Trash2 size={14} />
+                    </button>
                   </div>
-                </button>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </section>
       </div>
 
       {wizard && (
         <NewCarouselWizard
-          initialTopic={wizard.topic}
-          initialStep={wizard.step}
           onClose={() => setWizard(null)}
           onCreated={(id) => nav(`/app/create-eq/${id}`)}
         />
       )}
 
-      {showHistory && (
-        <HistoryDrawer items={items} onClose={() => setShowHistory(false)} onDelete={del} />
+      {showBlankDialog && (
+        <BlankCanvasDialog
+          onClose={() => setShowBlankDialog(false)}
+          onCreated={(id) => { setShowBlankDialog(false); nav(`/app/create-eq/${id}`); }}
+        />
       )}
 
-      {pendingTemplate && (
-        <TemplateStartDialog
-          template={pendingTemplate}
-          onClose={() => setPendingTemplate(null)}
-          onCreated={(id) => { setPendingTemplate(null); nav(`/app/create-eq/${id}`); }}
+      {showPremiumWizard && (
+        <PremiumCarouselWizard
+          onClose={() => setShowPremiumWizard(false)}
+          onCreated={(id) => { setShowPremiumWizard(false); nav(`/app/create-eq/${id}`); }}
         />
       )}
     </div>
   );
 }
 
-/** Asks for a topic before creating a carousel from a template — the
- * template's own hand-authored slide is a fixed layout with placeholder
- * text; instead of using that verbatim (or silently discarding a wasted AI
- * call the way this used to work), we generate a real multi-slide deck for
- * the given topic and carry over just the template's palette. */
-function TemplateStartDialog({ template, onClose, onCreated }) {
-  const [topic, setTopic] = useState("");
-  const [slideCount, setSlideCount] = useState(6);
+function OptionCard({ icon: Icon, title, description, badge, accent, onClick, testId }) {
+  return (
+    <button onClick={onClick} data-testid={testId}
+      className="text-left rounded-2xl border p-5 transition-colors hover:shadow-card-hover"
+      style={{
+        borderColor: accent ? "var(--color-primary)" : "var(--border-default, #E5E5E5)",
+        background: accent ? "var(--bg-surface)" : "white",
+      }}>
+      <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
+        style={{ background: accent ? "var(--color-primary)" : "#F4F4F5", color: accent ? "#fff" : "#141414" }}>
+        <Icon size={18} strokeWidth={1.75} />
+      </div>
+      <div className="flex items-center gap-1.5">
+        <div className="font-display font-semibold text-body">{title}</div>
+        {badge && (
+          <span className="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full"
+            style={{ background: "var(--color-primary)", color: "#fff" }}>{badge}</span>
+        )}
+      </div>
+      <div className="text-caption text-neutral-400 mt-1">{description}</div>
+    </button>
+  );
+}
+
+/** Blank canvas still asks for format up front — "all necessary information"
+ * per option, not just the two AI-driven paths — since the canvas size is
+ * now a real, load-bearing property of the project (see CreateEQEditor.jsx's
+ * per-project CANVAS), not something to silently default and never revisit. */
+function BlankCanvasDialog({ onClose, onCreated }) {
+  const [format, setFormat] = useState({ platform: "linkedin", customW: 1080, customH: 1350 });
   const [busy, setBusy] = useState(false);
 
-  const submit = async () => {
-    if (!topic.trim()) { toast.error("Describe what this deck is about"); return; }
+  const create = async () => {
     setBusy(true);
     try {
       const { data } = await api.post("/carousel/generate", {
-        topic: topic.trim(), platform: "linkedin", slide_count: slideCount, tone: "confident, punchy",
+        topic: "Untitled", platform: format.platform, slide_count: 1, tone: "neutral",
+        ...(format.platform === "custom" ? { custom_w: format.customW, custom_h: format.customH } : {}),
       });
-      if (template.palette) {
-        try { await api.put(`/carousel/${data.id}`, { palette_id: template.palette }); } catch { /* not fatal */ }
-      }
-      toast.success("Draft ready — customise anything you want");
+      await api.put(`/carousel/${data.id}`, {
+        slides: [blankSlide()], palette_id: "midnight", topic: "Untitled",
+      });
       onCreated(data.id);
-    } catch (err) { if (!isCreditError(err)) toast.error("Generation failed — try again"); }
+    } catch { toast.error("Could not create"); }
     finally { setBusy(false); }
   };
 
   return (
     <div className="fixed inset-0 bg-ink/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-        <div className="bg-white rounded-2xl w-full max-w-lg p-4 sm:p-6" onClick={(e) => e.stopPropagation()} data-testid="template-start-dialog">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="w-5 h-5 rounded-md shrink-0" style={{ background: template.thumb_bg }} />
-          <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">{template.tag} · {template.name}</div>
-        </div>
-        <h2 className="font-display font-semibold text-2xl mt-2 mb-1">What&apos;s this deck about?</h2>
-        <p className="text-body text-neutral-400 mb-4">We&apos;ll draft real content in this template&apos;s theme — one sentence is enough.</p>
-        <textarea
-          autoFocus
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-          rows={3}
-          placeholder='e.g. "Why cold outreach fails in 2026 and how to fix it"'
-          data-testid="template-topic-input"
-          className="w-full border border-line rounded-lg px-4 py-3 text-base focus:outline-none focus:border-ink"
-        />
-        <div className="flex items-center gap-2 mt-3">
-          <span className="text-caption text-neutral-400">Slides:</span>
-          {[3, 5, 6, 8].map((n) => (
-            <button key={n} onClick={() => setSlideCount(n)} data-testid={`template-count-${n}`}
-              className={`px-3 py-1 rounded-xl text-caption font-mono ${slideCount === n ? "bg-ink text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}>
-              {n}
-            </button>
-          ))}
-        </div>
+      <div className="bg-white rounded-2xl w-full max-w-lg p-4 sm:p-6" onClick={(e) => e.stopPropagation()} data-testid="blank-canvas-dialog">
+        <h2 className="font-display font-semibold text-2xl mb-1">Blank canvas</h2>
+        <p className="text-body text-neutral-400 mb-4">Pick a size — everything else is a blank slide you design freehand.</p>
+        <FormatPicker value={format} onChange={setFormat} />
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="btn-ghost">Cancel</button>
-          <button onClick={submit} disabled={busy} data-testid="template-start-generate" className="btn-primary disabled:opacity-60">
-            {busy ? <><Loader2 size={14} className="animate-spin" /> Drafting…</> : <><Wand2 size={14} /> Generate carousel</>}
+          <button onClick={create} disabled={busy} data-testid="blank-canvas-create" className="btn-primary disabled:opacity-60">
+            {busy ? <><Loader2 size={14} className="animate-spin" /> Creating…</> : "Create"}
           </button>
         </div>
       </div>
@@ -275,86 +218,14 @@ function TemplateStartDialog({ template, onClose, onCreated }) {
   );
 }
 
-/** Collapsible side panel holding "continue where you left off" + the full
- * projects list, so the main page stays focused on the header and templates
- * instead of a wall of project cards. Opened via the "Your projects" button
- * in the page header. */
-function HistoryDrawer({ items, onClose, onDelete }) {
-  return (
-    <div className="fixed inset-0 bg-ink/40 z-50 flex justify-end" onClick={onClose}>
-      <div className="w-full max-w-md bg-white h-full overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="history-drawer">
-        <div className="sticky top-0 bg-white border-b border-line px-5 py-4 flex items-center gap-3 z-10">
-          <History size={16} />
-          <div className="font-display font-semibold">Your projects</div>
-          <button onClick={onClose} data-testid="history-close-btn" className="ml-auto btn-ghost text-caption"><X size={14} /></button>
-        </div>
+/* --------------------------- Standard AI wizard --------------------------- */
 
-        <div className="p-4 space-y-6">
-          {items.length === 0 ? (
-            <div className="text-neutral-400 text-body">No carousels yet. Pick a template or click Create with AI.</div>
-          ) : (
-            <>
-              <div>
-                <div className="ui-label mb-2">Continue where you left off</div>
-                <ContinueCard project={items[0]} onNavigate={onClose} />
-              </div>
-
-              <div>
-                <div className="ui-label mb-1">All projects</div>
-                <div className="divide-y divide-line border-t border-line">
-                  {items.map((p) => {
-                    const pal = PALETTES.find((pp) => pp.id === p.palette_id) || PALETTES[0];
-                    return (
-                      <div key={p.id} className="group flex items-center gap-2.5 py-2.5">
-                        <Link to={`/app/create-eq/${p.id}`} onClick={onClose} data-testid={`carousel-open-${p.id}`}
-                          className="flex-1 flex items-center gap-2.5 min-w-0">
-                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: pal.bg }} />
-                          <span className="text-body font-medium truncate">{p.topic}</span>
-                          <span className="text-caption text-neutral-400 shrink-0 ml-auto pl-2">
-                            {p.updated_at ? formatDistanceToNow(new Date(p.updated_at), { addSuffix: true }) : `${p.slides?.length || 0} slides`}
-                          </span>
-                        </Link>
-                        <button onClick={() => onDelete(p.id)} data-testid={`carousel-delete-${p.id}`}
-                          className="text-neutral-300 hover:text-danger shrink-0" title="Delete project"><Trash2 size={14} /></button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Prominent "resume where you left off" card for the single most recently
- * edited project — `items` is already sorted by updated_at desc by the API. */
-function ContinueCard({ project: p, onNavigate }) {
-  const pal = PALETTES.find((pp) => pp.id === p.palette_id) || PALETTES[0];
-  const edited = p.updated_at ? formatDistanceToNow(new Date(p.updated_at), { addSuffix: true }) : null;
-  return (
-    <Link to={`/app/create-eq/${p.id}`} onClick={onNavigate} data-testid="continue-card"
-      className="group flex items-center gap-2.5 rounded-2xl border border-line bg-white px-3 py-2.5 hover:shadow-card-hover hover:border-ink transition-colors">
-      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: pal.bg }} />
-      <div className="min-w-0 flex-1">
-        <div className="text-body font-medium truncate">{p.topic}</div>
-        {edited && <div className="text-caption text-neutral-400">{edited} · {p.slides?.length || 0} slides</div>}
-      </div>
-      <ArrowRight size={14} className="shrink-0 text-neutral-400 group-hover:text-ink" />
-    </Link>
-  );
-}
-
-/* --------------------------- Gamma-style wizard --------------------------- */
-
-function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep = 1 }) {
-  const [step, setStep] = useState(initialStep); // 1 = topic, 2 = audience, 3 = platform+palette, 4 = review
+function NewCarouselWizard({ onClose, onCreated }) {
+  const [step, setStep] = useState(1); // 1 topic, 2 audience, 3 format+palette, 4 review
   const [form, setForm] = useState({
-    topic: initialTopic,
+    topic: "",
     audience: "generic",
-    platform: "linkedin",
+    format: { platform: "linkedin", customW: 1080, customH: 1350 },
     palette_id: "midnight",
     slide_count: 6,
     tone: "confident, punchy",
@@ -362,8 +233,10 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
   const [busy, setBusy] = useState(false);
 
   const audience = AUDIENCES.find((a) => a.id === form.audience) || AUDIENCES[0];
-  const platform = PLATFORMS.find((p) => p.id === form.platform) || PLATFORMS[0];
   const palette = PALETTES.find((p) => p.id === form.palette_id) || PALETTES[0];
+  const formatLabel = form.format.platform === "custom"
+    ? `Custom ${form.format.customW}×${form.format.customH}`
+    : FORMATS.find((f) => f.id === form.format.platform)?.label || form.format.platform;
 
   const canNext = () => {
     if (step === 1) return form.topic.trim().length > 3;
@@ -378,9 +251,10 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
     try {
       const { data } = await api.post("/carousel/generate", {
         topic: form.topic.trim(),
-        platform: form.platform,
+        platform: form.format.platform,
         slide_count: form.slide_count,
         tone: audience.tone,
+        ...(form.format.platform === "custom" ? { custom_w: form.format.customW, custom_h: form.format.customH } : {}),
       });
       // Apply chosen palette immediately.
       if (form.palette_id && form.palette_id !== "midnight") {
@@ -460,23 +334,11 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
           {step === 3 && (
             <div className="space-y-6" data-testid="wizard-step-3">
               <div>
-                <h2 className="font-display font-bold text-2xl sm:text-3xl leading-tight">Pick a platform &amp; theme</h2>
+                <h2 className="font-display font-bold text-2xl sm:text-3xl leading-tight">Pick a format &amp; theme</h2>
                 <p className="text-body text-neutral-400 mt-1">These are just starting points — everything is editable after.</p>
               </div>
 
-              <div>
-                <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-2">Platform</div>
-                <div className="grid grid-cols-3 gap-2">
-                  {PLATFORMS.map((p) => (
-                    <button key={p.id} onClick={() => setForm({ ...form, platform: p.id })}
-                      data-testid={`wizard-platform-${p.id}`}
-                      className={`text-left p-3 rounded-2xl border ${form.platform === p.id ? "border-ink bg-ash" : "border-line hover:border-neutral-400"}`}>
-                      <div className="text-caption font-medium">{p.label}</div>
-                      <div className="text-[10px] text-neutral-400 mt-0.5 font-mono">{p.ratio} · {p.w}×{p.h}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <FormatPicker value={form.format} onChange={(format) => setForm({ ...form, format })} />
 
               <div>
                 <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-2">Theme</div>
@@ -515,9 +377,9 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
               <p className="text-body text-neutral-400">Review your choices — you can adjust anything after generation.</p>
 
               <div className="rounded-2xl border border-line overflow-hidden">
-                <div className="aspect-[4/5] p-6 flex flex-col justify-between max-h-72"
-                  style={{ background: palette.bg, color: palette.text }}>
-                  <div className="text-[10px] font-mono uppercase tracking-widest opacity-70">{platform.label}</div>
+                <div className="p-6 flex flex-col justify-between max-h-72"
+                  style={{ background: palette.bg, color: palette.text, aspectRatio: `${form.format.platform === "custom" ? form.format.customW : (FORMATS.find(f => f.id === form.format.platform)?.w || 1080)} / ${form.format.platform === "custom" ? form.format.customH : (FORMATS.find(f => f.id === form.format.platform)?.h || 1350)}` }}>
+                  <div className="text-[10px] font-mono uppercase tracking-widest opacity-70">{formatLabel}</div>
                   <div className="font-semibold text-2xl leading-tight" style={{ color: palette.accent }}>
                     {form.topic || "Your topic here"}
                   </div>
@@ -528,7 +390,7 @@ function NewCarouselWizard({ onClose, onCreated, initialTopic = "", initialStep 
               <ul className="space-y-2 text-body">
                 <li className="flex items-start gap-2"><Check size={14} className="text-ink mt-0.5" /> <span><span className="font-medium">Topic:</span> {form.topic}</span></li>
                 <li className="flex items-start gap-2"><Check size={14} className="text-ink mt-0.5" /> <span><span className="font-medium">Audience:</span> {audience.label} · {audience.tone}</span></li>
-                <li className="flex items-start gap-2"><Check size={14} className="text-ink mt-0.5" /> <span><span className="font-medium">Platform:</span> {platform.label} ({platform.ratio})</span></li>
+                <li className="flex items-start gap-2"><Check size={14} className="text-ink mt-0.5" /> <span><span className="font-medium">Format:</span> {formatLabel}</span></li>
                 <li className="flex items-start gap-2"><Check size={14} className="text-ink mt-0.5" /> <span><span className="font-medium">Theme:</span> {palette.name} · {form.slide_count} slides</span></li>
               </ul>
             </div>

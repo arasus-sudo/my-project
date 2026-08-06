@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Loader2, FileText, Download } from "lucide-react";
-import { CANVAS } from "../../../lib/creqTemplates";
+import { CANVAS as DEFAULT_CANVAS } from "../../../lib/creqTemplates";
 import { renderBackground } from "../utils";
 import ElementRender from "../ElementRender";
 import PanoramaLayer from "../PanoramaLayer";
@@ -17,6 +17,8 @@ export const EXPORT_QUALITIES = [
 ];
 
 export default function PdfExportDialog({ proj, palette, onClose, busy, progress, onExport }) {
+  const CANVAS = proj?.canvas?.w && proj?.canvas?.h ? proj.canvas : DEFAULT_CANVAS;
+  const thumbScale = 220 / CANVAS.w; // thumbnail grid cell target width, any format
   const total = proj.slides.length;
   const [picked, setPicked] = useState(() => proj.slides.map((_, i) => i));
   const [quality, setQuality] = useState("standard");
@@ -51,9 +53,9 @@ export default function PdfExportDialog({ proj, palette, onClose, busy, progress
               return (
                 <button key={s._k} onClick={() => toggle(i)} data-testid={`pdf-pick-${i}`}
                   className={`text-left rounded-xl overflow-hidden border-2 transition-all ${on ? "border-ink shadow-md" : "border-line hover:border-neutral-400"}`}>
-                  <div className="relative w-full aspect-[4/5] overflow-hidden" style={{ background: bg }}>
+                  <div className="relative w-full overflow-hidden" style={{ background: bg, aspectRatio: `${CANVAS.w} / ${CANVAS.h}` }}>
                     <PanoramaLayer panorama={proj.panorama} slideIdx={i} totalSlides={total} />
-                    <div style={{ position: "absolute", inset: 0, transform: `scale(${0.2})`, transformOrigin: "top left", width: CANVAS.w, height: CANVAS.h, pointerEvents: "none" }}>
+                    <div style={{ position: "absolute", inset: 0, transform: `scale(${thumbScale})`, transformOrigin: "top left", width: CANVAS.w, height: CANVAS.h, pointerEvents: "none" }}>
                       {s.elements.map((el) => (
                         <ElementRender key={el.id} el={el} palette={palette} selected={false} onPointerDown={() => {}} />
                       ))}

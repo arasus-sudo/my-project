@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { ChevronRight } from "lucide-react";
 import { resolveColor } from "../../lib/creqTemplates";
+import { contrast, readableOn } from "../../lib/creqClaudeDesign";
 
 /** Deck-wide chrome (slide counter, progress dots, swipe hint) — rendered
  * identically in the live canvas, board view, and PNG/PDF export so what you
@@ -14,7 +15,18 @@ function DeckOverlay({ proj, slideIdx, palette }) {
   const showBranding = !!proj.show_branding;
   if (!showNum && !showDots && !showSwipe && !showBranding) return null;
 
-  const fg = resolveColor("text", palette);
+  // Chrome colour has to follow the SLIDE, not the deck. A Premium deck
+  // deliberately mixes light and dark surfaces, so a single deck-level colour
+  // renders this furniture invisible (dark-on-dark) on half the slides. The
+  // deck palette's text colour is still used whenever it actually reads against
+  // this slide's background, so nothing changes for single-surface decks.
+  const slideBg = proj.slides?.[slideIdx]?.bg;
+  const paletteFg = resolveColor("text", palette);
+  let fg = paletteFg;
+  if (slideBg?.type === "solid") {
+    const bgHex = resolveColor(slideBg.color || "bg", palette);
+    if (/^#[0-9a-f]{3,8}$/i.test(bgHex) && contrast(paletteFg, bgHex) < 3) fg = readableOn(bgHex);
+  }
 
   return (
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>

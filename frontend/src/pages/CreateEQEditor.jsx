@@ -12,10 +12,12 @@ import {
 import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { useAuth } from "../lib/auth";
-import { PALETTES, CANVAS, blankSlide, slideFromTemplate } from "../lib/creqTemplates";
+import { PALETTES, CANVAS as DEFAULT_CANVAS, blankSlide, slideFromTemplate } from "../lib/creqTemplates";
 import { STYLES, LAYOUTS } from "../lib/creqStyles";
 import { ACCENT_ELEMENTS, DESIGN_THEMES, COMPOSITIONS, IMAGE_FRAMES } from "../lib/creqDesignEngine";
 import { ensureProjectFontsLoaded, waitForProjectFonts } from "../lib/googleFonts";
+import { buildPremiumDeck, isPremiumSlide } from "../lib/creqPremiumEngine";
+import { DEFAULT_FAMILY } from "../lib/creqClaudeDesign";
 
 import LeftPanel from "../components/creq/LeftPanel";
 import RightPanel from "../components/creq/RightPanel";
@@ -33,6 +35,16 @@ import StockPhotoDrawer from "../components/creq/drawers/StockPhotoDrawer";
 import PanoramaDrawer from "../components/creq/drawers/PanoramaDrawer";
 import PdfExportDialog, { EXPORT_QUALITIES } from "../components/creq/drawers/PdfExportDialog";
 import { newId, renderBackground, renderBackgroundImageCss, stripLocalKeys, elementBounds } from "../components/creq/utils";
+import { makeFlow, fitToCanvas, contentBox, auditAndCorrect } from "../lib/creqLayoutFlow";
+
+/** Resolve a project's actual authoring canvas — real per-project sizing
+ * (LinkedIn/Instagram Square/Instagram Story/custom, see PLATFORM_DIMS in
+ * backend/server.py) for decks created after this existed; the fixed
+ * 1080x1350 default for every deck created before it, so old projects keep
+ * opening exactly as authored. */
+function canvasFor(project) {
+  return project?.canvas?.w && project?.canvas?.h ? project.canvas : DEFAULT_CANVAS;
+}
 
 // Autosave cadence. This is a poll, not a debounce: the tick is cheap because
 // it exits immediately unless the document is actually dirty, so an idle editor
@@ -44,25 +56,59 @@ const AUTOSAVE_INTERVAL_MS = 5000;
 /** Convert one backend/LLM-drafted slide `{title,subtitle,body,cta}` into the
  * editor's element-list shape. Shared by hydrate() (loading a project that
  * still has legacy-shape slides) and the in-editor "Generate content" action
- * (appending freshly-generated slides to an already-open deck). */
-function legacySlideToElements(s) {
-  const els = [];
-  if (s.subtitle) els.push({ id: newId(), type: "text", x: 80, y: 120, w: 920, h: 60, text: s.subtitle,
-    font: "JetBrains Mono", size: 24, weight: 500, uppercase: true, letter_spacing: 0.2, color: "muted", align: "left" });
-  if (s.title) els.push({ id: newId(), type: "text", x: 80, y: 260, w: 920, h: 480, text: s.title,
-    font: "Archivo Black", size: 132, weight: 900, color: "accent", line_height: 0.95, align: "left" });
-  if (s.body) els.push({ id: newId(), type: "text", x: 80, y: 820, w: 920, h: 380, text: s.body,
-    font: "Inter", size: 32, weight: 400, color: "text", line_height: 1.4, align: "left" });
-  if (s.cta) els.push({ id: newId(), type: "badge", x: 80, y: 1180, text: s.cta, bg: "accent", color: "bg", radius: 999, size: 22 });
-  return { _k: newId(), bg: { type: "solid", color: "bg" }, elements: els };
+ * (appending freshly-generated slides to an already-open deck). Uses the same
+ * vertical-flow layout as the premium engine (creqLayoutFlow.js) so standard
+ * mode can't overlap either, and scales to the deck's actual canvas instead
+ * of a literal 1080x1350-only layout. */
+function legacySlideToElements(s, canvas = DEFAULT_CANVAS) {
+  const { pad, cw } = contentBox(canvas);
+  const flow = makeFlow(pad, canvas.h * 0.09, cw);
+  if (s.subtitle) {
+    flow.addText(s.subtitle, {
+      font: "JetBrains Mono", size: Math.round(canvas.w * 0.0222), weight: 500,
+      uppercase: true, letterSpacing: 0.2, color: "muted", gap: canvas.h * 0.024,
+    });
+  }
+  if (s.title) {
+    flow.addText(s.title, {
+      font: "Archivo Black", size: Math.round(canvas.w * 0.122), weight: 900,
+      color: "accent", lineHeight: 0.95, gap: canvas.h * 0.03,
+    });
+  }
+  if (s.body) {
+    flow.addText(s.body, {
+      font: "Inter", size: Math.round(canvas.w * 0.0296), weight: 400,
+      color: "text", lineHeight: 1.4, gap: canvas.h * 0.027,
+    });
+  }
+  if (s.cta) flow.addBadge(s.cta, { size: Math.round(canvas.w * 0.0204) });
+  const audited = auditAndCorrect(fitToCanvas(flow, canvas), canvas);
+  return { _k: newId(), bg: { type: "solid", color: "bg" }, elements: audited.elements };
 }
 
 function hydrate(project) {
   const p = { ...project };
   p.palette_id = p.palette_id || "midnight";
-  p.slides = (p.slides || []).map((s) => {
+  p.canvas = canvasFor(project);
+  const canvas = p.canvas;
+  const raw = p.slides || [];
+  // Premium decks compose at DECK level, not slide by slide: which slides go
+  // dark, and where, is a property of the sequence (see planSurfaces()). A
+  // per-slide loop physically cannot make that decision, which is why premium
+  // decks used to render as one flat surface repeated N times.
+  const unbuilt = raw.filter((s) => s && !s.elements && (s.title || s.body || s.subtitle));
+  const premiumDeck = unbuilt.length > 0 && unbuilt.every(isPremiumSlide);
+  const builtPremium = premiumDeck
+    ? buildPremiumDeck(unbuilt, {
+        canvas,
+        familyId: project.palette_family || DEFAULT_FAMILY,
+        brand: project.palette_family === "brand" ? project.brand : null,
+      })
+    : [];
+  let premiumIdx = 0;
+  p.slides = raw.map((s) => {
     if (s && !s.elements && (s.title || s.body || s.subtitle)) {
-      return legacySlideToElements(s);
+      return premiumDeck ? builtPremium[premiumIdx++] : legacySlideToElements(s, canvas);
     }
     return {
       _k: s._k || newId(),
@@ -106,11 +152,11 @@ function normalizeBrand(brand) {
  * (top/middle/bottom) to the nearest matching edge of another element or of
  * the canvas itself, within a small threshold. Returns the adjusted x/y and
  * the guide lines to draw. */
-function computeSnap(dragged, propX, propY, others, threshold = 7) {
+function computeSnap(dragged, propX, propY, others, canvas, threshold = 7) {
   const w = dragged.w || 0, h = dragged.h || 0;
   // Candidate vertical lines (x positions) and horizontal lines (y positions).
-  const vTargets = [0, CANVAS.w / 2, CANVAS.w];
-  const hTargets = [0, CANVAS.h / 2, CANVAS.h];
+  const vTargets = [0, canvas.w / 2, canvas.w];
+  const hTargets = [0, canvas.h / 2, canvas.h];
   others.forEach((o) => {
     vTargets.push(o.x, o.x + (o.w || 0) / 2, o.x + (o.w || 0));
     hTargets.push(o.y, o.y + (o.h || 0) / 2, o.y + (o.h || 0));
@@ -155,6 +201,10 @@ export default function CreateEQEditor() {
   const nav = useNavigate();
   const { user } = useAuth();
   const [proj, setProj] = useState(null);
+  // Shadows the fixed DEFAULT_CANVAS import for every render/export helper
+  // below — a deck created at Instagram Story (1080x1920) or a custom size
+  // now actually authors/exports at that size instead of always 1080x1350.
+  const CANVAS = proj?.canvas?.w && proj?.canvas?.h ? proj.canvas : DEFAULT_CANVAS;
   const [activeSlide, setActiveSlide] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -256,10 +306,17 @@ export default function CreateEQEditor() {
     setMeasureTick((t) => t + 1);
   }, []);
 
-  const palette = useMemo(
-    () => PALETTES.find((p) => p.id === proj?.palette_id) || PALETTES[0],
-    [proj?.palette_id]
-  );
+  // "ai" isn't one of the 10 fixed PALETTES swatches — it's a bespoke 5-color
+  // identity either invented by the Premium AI prompt (no brand supplied) or
+  // built from the logo/colors the user provided in the Premium wizard. See
+  // backend/server.py's carousel_generate deck_theme handling.
+  const palette = useMemo(() => {
+    if (proj?.palette_id === "ai" && proj?.ai_palette) {
+      const ai = proj.ai_palette;
+      return { id: "ai", name: "AI-designed", bg: ai.bg, bg2: ai.bg2, accent: ai.accent, text: ai.text, muted: ai.muted };
+    }
+    return PALETTES.find((p) => p.id === proj?.palette_id) || PALETTES[0];
+  }, [proj?.palette_id, proj?.ai_palette]);
 
   const slide = proj?.slides?.[activeSlide];
   const selected = slide?.elements?.find((e) => e.id === selectedId);
@@ -713,14 +770,14 @@ export default function CreateEQEditor() {
     }
     if (ds.single) {
       const start = ds.starts[ds.single.id];
-      const snap = computeSnap(ds.single, start.x + dx, start.y + dy, ds.others);
+      const snap = computeSnap(ds.single, start.x + dx, start.y + dy, ds.others, CANVAS);
       patchElement(ds.single.id, { x: snap.x, y: snap.y });
       setGuides(snap.guides);
       setInteraction({ mode: "drag", label: `${snap.x}, ${snap.y}` });
       return;
     }
     // Group drag: snap the union bbox, then apply the snapped delta to every member.
-    const snap = computeSnap({ w: ds.bbox.w, h: ds.bbox.h }, ds.bbox.x + dx, ds.bbox.y + dy, ds.others);
+    const snap = computeSnap({ w: ds.bbox.w, h: ds.bbox.h }, ds.bbox.x + dx, ds.bbox.y + dy, ds.others, CANVAS);
     const sdx = snap.x - ds.bbox.x, sdy = snap.y - ds.bbox.y;
     ds.ids.forEach((id) => {
       const start = ds.starts[id];
@@ -1389,7 +1446,9 @@ export default function CreateEQEditor() {
   const handleApplyStyle = useCallback((styleId, allSlides) => {
     const style = STYLES.find((s) => s.id === styleId);
     if (!style || !proj) return;
-    const palette = PALETTES.find((p) => p.id === proj.palette_id);
+    const palette = proj.palette_id === "ai" && proj.ai_palette
+      ? { id: "ai", ...proj.ai_palette }
+      : PALETTES.find((p) => p.id === proj.palette_id);
     mutate((n) => {
       n.slides = n.slides.map((slide, i) => {
         if (!allSlides && i !== activeSlide) return slide;
@@ -1477,9 +1536,17 @@ export default function CreateEQEditor() {
     setBusy(true);
     try {
       const { data } = await api.post("/carousel/generate", {
-        topic: topic.trim(), platform: proj.platform || "linkedin", slide_count: slideCount, tone: "confident, punchy",
+        topic: topic.trim(), platform: proj.platform || "linkedin", slide_count: slideCount,
+        tone: "confident, punchy",
       });
-      const newSlides = (data.slides || []).map(legacySlideToElements);
+      const incoming = data.slides || [];
+      const newSlides = incoming.length && incoming.every(isPremiumSlide)
+        ? buildPremiumDeck(incoming, {
+            canvas: CANVAS,
+            familyId: proj.palette_family || DEFAULT_FAMILY,
+            brand: proj.palette_family === "brand" ? proj.brand : null,
+          })
+        : incoming.map((s) => legacySlideToElements(s, CANVAS));
       if (!newSlides.length) { toast.error("No slides generated"); return; }
       mutate((n) => { n.slides.push(...newSlides); });
       setActiveSlide(proj.slides.length);
