@@ -1362,7 +1362,7 @@ export default function CreateEQEditor() {
         root.render(
           <>
             {proj.slides[slideIdx].bg_img && <div style={renderBackgroundImageCss(proj.slides[slideIdx])} />}
-            <PanoramaLayer panorama={proj.panorama} slideIdx={slideIdx} totalSlides={proj.slides.length} />
+            <PanoramaLayer panorama={proj.panorama} slideIdx={slideIdx} totalSlides={proj.slides.length} canvas={CANVAS} />
             {proj.slides[slideIdx].elements.map((el) => (
               <ElementRender key={el.id} el={el} palette={palette} onPointerDown={() => {}} isExport />
             ))}
@@ -1713,7 +1713,7 @@ export default function CreateEQEditor() {
                   style={{ width: CANVAS.w, height: CANVAS.h, transform: `scale(${zoom})`, transformOrigin: "top left", background: renderBackground(slide.bg, palette), "--inv-zoom": 1 / zoom }}
                 >
                   {slide.bg_img && <div style={renderBackgroundImageCss(slide)} />}
-                  <PanoramaLayer panorama={proj.panorama} slideIdx={activeSlide} totalSlides={proj.slides.length} />
+                  <PanoramaLayer panorama={proj.panorama} slideIdx={activeSlide} totalSlides={proj.slides.length} canvas={CANVAS} />
                   {panoManual && (
                     <div
                       onPointerDown={onPanoDragStart}

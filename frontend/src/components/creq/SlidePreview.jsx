@@ -88,7 +88,7 @@ export default function SlidePreview({ proj, palette, startIndex = 0, onClose })
             transform: `scale(${scale})`, transformOrigin: "top left",
             background: renderBackground(slide.bg, palette),
           }}>
-            <PanoramaLayer panorama={proj.panorama} slideIdx={idx} totalSlides={total} />
+            <PanoramaLayer panorama={proj.panorama} slideIdx={idx} totalSlides={total} canvas={CANVAS} />
             {slide.elements.map((el) => (
               <ElementRender key={el.id} el={el} palette={palette} onPointerDown={() => {}} />
             ))}

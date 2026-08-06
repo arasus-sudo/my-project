@@ -1,8 +1,9 @@
 import { memo } from "react";
-import { CANVAS } from "../../lib/creqTemplates";
+import { CANVAS as DEFAULT_CANVAS } from "../../lib/creqTemplates";
 
 /** Compute inline style for the panorama slice image on a slide (auto / manual / same). */
-export function panoramaSliceStyle(panorama, slideIdx, totalSlides) {
+export function panoramaSliceStyle(panorama, slideIdx, totalSlides, canvas = DEFAULT_CANVAS) {
+  const CANVAS = canvas;
   if (!panorama || !panorama.src || totalSlides < 1) return null;
   const n = Math.max(1, totalSlides);
   // Tailwind's Preflight base styles apply `img { max-width: 100% }` globally,
@@ -41,8 +42,8 @@ export function panoramaSliceStyle(panorama, slideIdx, totalSlides) {
 }
 
 /** React overlay for panorama — renders one <img> sized/positioned to show the current slice. */
-function PanoramaLayer({ panorama, slideIdx, totalSlides }) {
-  const style = panoramaSliceStyle(panorama, slideIdx, totalSlides);
+function PanoramaLayer({ panorama, slideIdx, totalSlides, canvas }) {
+  const style = panoramaSliceStyle(panorama, slideIdx, totalSlides, canvas);
   if (!style) return null;
   return (
     <img
