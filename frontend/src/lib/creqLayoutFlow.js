@@ -26,8 +26,37 @@ export function estimateLines(text, boxWidth, fontSize, avgCharWidthRatio = 0.56
   return total;
 }
 
+/** A font's natural line box (ascent + descent) as a multiple of font size.
+ * Measured by rasterising ascender-and-descender text at line-height 1 and
+ * reading the painted extent: Instrument Serif 1.95, JetBrains Mono 1.95,
+ * Geist 1.88. One slightly-conservative constant covers all three — erring high
+ * costs a few pixels of whitespace, erring low causes the collision below. */
+const NATURAL_LINE_BOX = 1.92;
+
+/**
+ * How far a block's glyphs paint BELOW its own CSS box.
+ *
+ * When line-height is smaller than the font's natural line box, the box is
+ * crushed but the glyphs keep their size, so they spill past the bottom edge by
+ * half the difference. Nothing in the DOM reflects that overhang — the box
+ * reports its declared height — so a flow cursor that advances by box height
+ * places the next element inside the previous one's descenders.
+ *
+ * That is what broke stat slides: the numeral is set at 0.9 leading, so a 232px
+ * figure overflowed its box by 116px and the hairline rule beneath it landed
+ * inside the digits. On screen the two merely touched; rasterised to PDF they
+ * merged into a single blob, because rule and numeral share the accent colour.
+ *
+ * Verified against measurement: predicted 116px at 232px/0.9, 46px at
+ * 105px/1.02 and 6px at 29px/1.5 — matching the 73/47/5px overflows observed.
+ */
+export function glyphOverhang(fontSize, lineHeight = 1.2) {
+  return Math.ceil(Math.max(0, (NATURAL_LINE_BOX - lineHeight) / 2) * fontSize);
+}
+
 export function estimateBlockHeight(text, boxWidth, fontSize, lineHeight = 1.2, avgCharWidthRatio = 0.56) {
-  return Math.ceil(estimateLines(text, boxWidth, fontSize, avgCharWidthRatio) * fontSize * lineHeight);
+  const lines = estimateLines(text, boxWidth, fontSize, avgCharWidthRatio);
+  return Math.ceil(lines * fontSize * lineHeight) + glyphOverhang(fontSize, lineHeight);
 }
 
 /** Average glyph width as a fraction of font size, per family. A single shared
