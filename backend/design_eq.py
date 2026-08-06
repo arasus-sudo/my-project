@@ -624,6 +624,146 @@ async def handoff_to_editor(project_id: str, body: Optional[HandoffIn] = None,
     return {"carousel_id": carousel_id, "project_id": project_id, "palette_family": chosen_family}
 
 
+# --------------------------------------------------------------------------
+# Code target — landing pages, prototypes, component labs
+# --------------------------------------------------------------------------
+# The formats a structured slide model genuinely cannot express. Here we DO emit
+# a self-contained HTML file, the same shape Claude Design produces — but only
+# for the surfaces where interactivity is the point, and with the design system
+# and the anti-slop rules injected as hard constraints rather than left to the
+# model's taste.
+
+class CodeBuildIn(BaseModel):
+    # Resolved design tokens, supplied by the caller. The hex values live in the
+    # frontend design system (creqClaudeDesign.js); duplicating them into Python
+    # would give the palette two sources of truth that would silently drift.
+    tokens: Optional[Dict[str, Any]] = None
+    notes: Optional[str] = None
+
+
+CODE_BANNED = (
+    "  - No CDN links, no <script src>, no <link href> to a font or stylesheet host, "
+    "no remote images. Everything inline. A single file that opens offline.\n"
+    "  - No Inter. UI text is Geist, display is Plus Jakarta Sans, mono is Roboto Mono; "
+    "fall back through system-ui.\n"
+    "  - No blue→violet gradient, no default indigo accent, no glassmorphism, no "
+    "centered rounded-square icon toppers, no three equal icon+text feature tiles, no "
+    "decorative colored left-border rails, and do not centre everything by default.\n"
+)
+
+
+def _code_prompt(surface_id: str, fmt: str, tokens: Optional[Dict[str, Any]], notes: Optional[str]) -> str:
+    s = SURFACES[surface_id]
+    fmt_label = FORMATS.get(fmt, {}).get("label", fmt)
+    tok = tokens or {}
+    token_clause = (
+        f"Use EXACTLY these design tokens and no other colours: {tok}. They are the "
+        f"workspace's system, not a suggestion."
+        if tok else
+        "No tokens were supplied, so choose one small coherent palette — warm or cool "
+        "neutrals plus a single accent — and stay inside it."
+    )
+    return (
+        f"You are Design EQ. Build a {fmt_label} as ONE self-contained HTML file.\n\n"
+        f"SURFACE — settled, do not renegotiate: **{s['label']}**. The user is {s['does']}. "
+        f"{s['composition']}\n\n"
+        f"The surface decides the composition. A hero followed by three cards is correct "
+        f"ONLY on Decide/Learn; reaching for it on any other surface is the single most "
+        f"obvious tell that a machine made this.\n\n"
+        f"{token_clause}\n\n"
+        f"HARD CONSTRAINTS:\n{CODE_BANNED}"
+        f"  - Responsive. Wide content scrolls inside its own container; the page body "
+        f"never scrolls sideways.\n"
+        f"  - Real content written for this brief. Never lorem ipsum, never placeholder.\n"
+        f"  - Visible keyboard focus states. Respect prefers-reduced-motion for any "
+        f"non-trivial animation.\n"
+        f"  - Support light and dark via prefers-color-scheme, driven by CSS custom "
+        f"properties rather than styling inside the media query.\n\n"
+        + (f"Additional direction from the user: {notes}\n\n" if notes else "")
+        + "Return ONLY the HTML document, starting at <!DOCTYPE html>. No prose, no code "
+          "fences, no explanation."
+    )
+
+
+_EXTERNAL_REF = re.compile(r"""(?:src|href)\s*=\s*["']\s*(?:https?:)?//""", re.I)
+_FENCE = re.compile(r"^\s*```[a-zA-Z]*\s*|\s*```\s*$")
+
+
+def audit_code(html: str) -> Dict[str, Any]:
+    """Deterministic QA on generated markup — the automated half of the design
+    review. Every check here is a fact about the file, not an opinion about it,
+    which is why the result can be shown to the user as a gate."""
+    hits: List[Dict[str, str]] = []
+    low = html.lower()
+
+    ext = _EXTERNAL_REF.findall(html)
+    if ext:
+        hits.append({"id": "external_refs",
+                     "detail": f"{len(ext)} remote resource reference(s) — the file will not open offline"})
+    if re.search(r"font-family\s*:[^;}]*\binter\b", low):
+        hits.append({"id": "default_type", "detail": "Inter is present in a font stack"})
+    if re.search(r"linear-gradient\([^)]*(#6366f1|#4f46e5|#8b5cf6|#7c3aed)", low):
+        hits.append({"id": "tech_gradient", "detail": "blue→violet gradient"})
+    if re.search(r"(background|color)\s*:\s*(#6366f1|#4f46e5|#818cf8)", low):
+        hits.append({"id": "generic_hue", "detail": "stock indigo used as a colour"})
+    if "backdrop-filter" in low and "blur" in low:
+        hits.append({"id": "unearned_blur", "detail": "backdrop blur — justify it or drop it"})
+    if "viewport" not in low:
+        hits.append({"id": "not_responsive", "detail": "no viewport meta tag"})
+    if ("@keyframes" in low or "transition:" in low) and "prefers-reduced-motion" not in low:
+        hits.append({"id": "motion_unguarded", "detail": "animation without a prefers-reduced-motion guard"})
+    if "prefers-color-scheme" not in low:
+        hits.append({"id": "single_theme", "detail": "no dark-mode handling"})
+
+    return {
+        "score": len(hits),
+        "hits": hits,
+        "verdict": "clean" if not hits else ("minor" if len(hits) <= 2 else "rework"),
+        "bytes": len(html.encode("utf-8")),
+    }
+
+
+@design_router.post("/projects/{project_id}/build-code")
+async def build_code(project_id: str, body: Optional[CodeBuildIn] = None, user=Depends(current_user)):
+    """Generate the HTML for a code-master design and store it on the project."""
+    doc = await get_project(project_id, user)
+    if doc.get("master") != "code":
+        raise HTTPException(400, "This format uses the structured master — open it as a deck instead.")
+    if not _llm_configured():
+        raise HTTPException(503, "No LLM is configured")
+
+    await charge_credits(user["workspace_id"], "design_generate",
+                         meta={"format": doc.get("format"), "surface": doc.get("surface"), "target": "code"})
+    try:
+        resp = await _llm_chat(
+            _code_prompt(doc.get("surface") or "decide", doc.get("format") or "landing",
+                         (body.tokens if body else None), (body.notes if body else None)),
+            f"Brief: {doc.get('brief')}",
+            f"deq-code-{user['id']}",
+            user=user, max_tokens=16000, **_creq_llm_kwargs(),
+        )
+    except Exception as ex:
+        log.warning("design-eq code build failed: %s", ex)
+        raise HTTPException(502, "The build did not complete — try again")
+
+    html = _FENCE.sub("", (resp or "").strip())
+    start = html.lower().find("<!doctype")
+    if start == -1:
+        start = html.lower().find("<html")
+    if start > 0:
+        html = html[start:]
+    if "<html" not in html.lower():
+        raise HTTPException(502, "The build did not return a usable HTML document")
+
+    review = audit_code(html)
+    await db.design_projects.update_one(
+        {"id": project_id, "workspace_id": user["workspace_id"]},
+        {"$set": {"code": html, "code_audit": review, "updated_at": now_iso()}},
+    )
+    await _audit(user, "design.build_code", {"project_id": project_id, **{k: review[k] for k in ("score", "bytes")}})
+    return {"project_id": project_id, "audit": review, "bytes": review["bytes"], "code": html}
+
+
 @design_router.get("/decks/{carousel_id}/pptx")
 async def export_deck_pptx(carousel_id: str, user=Depends(current_user)):
     """Export a deck as a native .pptx with live, editable text.
