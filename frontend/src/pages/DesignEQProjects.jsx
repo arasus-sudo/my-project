@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Loader2, Compass, Trash2, ArrowRight, ShieldCheck, AlertTriangle } from "lucide-react";
 import { api, isCreditError } from "../lib/api";
@@ -202,7 +203,8 @@ export default function DesignEQProjects() {
         )}
         <div className="grid sm:grid-cols-2 gap-3">
           {projects.map((p) => (
-            <div key={p.id} className="group relative border border-line rounded-xl p-4 bg-white" data-testid={`deq-project-${p.id}`}>
+            <div key={p.id} className="group relative border border-line rounded-xl bg-white hover:border-neutral-400 transition-colors" data-testid={`deq-project-${p.id}`}>
+              <Link to={`/app/design-eq/${p.id}`} className="block p-4 no-underline text-ink">
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-ash text-ink-muted">
                   {surfaceLabel(catalog, p.surface)}
@@ -218,6 +220,7 @@ export default function DesignEQProjects() {
               <div className="text-caption text-neutral-400 mt-1">
                 {(p.sections || []).length} sections · {(p.sections || []).map((s) => s.archetype).slice(0, 4).join(" · ")}
               </div>
+              </Link>
               <button onClick={() => remove(p.id)} title="Delete design"
                 data-testid={`deq-delete-${p.id}`}
                 className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 focus:opacity-100 text-neutral-400 hover:text-danger transition-opacity">

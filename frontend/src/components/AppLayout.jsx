@@ -179,7 +179,7 @@ export const AGENT_CATEGORIES = [
   { key: "operations", label: "Operations" },
 ];
 
-export const AGENT_BADGE = { crm: "M", pitch: "P", create: "C", voice: "V", schedule: "S", proposal: "R", social: "O", site: "W", sms: "T", whatsapp: "WA", hrms: "H", accounting: "F" };
+export const AGENT_BADGE = { crm: "M", pitch: "P", create: "C", design: "D", voice: "V", schedule: "S", proposal: "R", social: "O", site: "W", sms: "T", whatsapp: "WA", hrms: "H", accounting: "F" };
 
 export default function AppLayout() {
   const { user, workspace, logout } = useAuth();

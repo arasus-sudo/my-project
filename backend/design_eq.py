@@ -40,6 +40,7 @@ from pydantic import BaseModel
 from server import (
     db, now_iso, new_id, current_user, _audit,
     _llm_chat, _llm_configured, _extract_json, _creq_llm_kwargs,
+    CREQ_PALETTE_FAMILIES,
 )
 from billing import charge_credits
 
@@ -355,11 +356,13 @@ def _system_clause(system: Optional[Dict[str, Any]]) -> str:
     a constraint with the reason attached — a bare token dump gets ignored far
     more often than one that says what it is."""
     if not system:
+        families = "\n".join(f"  - {k}: {v}" for k, v in CREQ_PALETTE_FAMILIES.items())
         return (
-            "No workspace design system is registered, so you also choose the visual "
-            "identity. Choose ONE small, coherent system and stay inside it. Do NOT use "
-            "Inter — it is banned by the house design system and reads as a default. "
-            "Do not invent many colours."
+            "No workspace design system is registered, so you also choose the palette. "
+            f"Return ONE `palette_family` at the top level, from exactly these values:\n{families}\n"
+            "Choose on subject matter, not decoration. Do NOT return hex values anywhere — the "
+            "design system owns every colour, surface and contrast decision, and it already "
+            "excludes Inter. Your job is to pick the family and write copy that suits it."
         )
     tok = system.get("tokens") or {}
     return (
@@ -405,7 +408,7 @@ def _build_system_prompt(surface_id: str, fmt: str, count: int, tone: str,
         f"machine-generated design and fix any you hit:\n{tells}\n\n"
         f"Vary the archetype between adjacent sections. First section is 'cover', last is "
         f"'closer'.\n\n"
-        'STRICT JSON only: {"sections":[{"archetype":str,"surface_intent":"light"|"dark",'
+        'STRICT JSON only: {"palette_family":str,"sections":[{"archetype":str,"surface_intent":"light"|"dark",'
         '"eyebrow":str,"title":str,"subtitle":str,"body":str,'
         '"items":[{"label":str,"text":str}],"stat":{"value":str,"label":str},'
         '"quote":{"text":str,"attribution":str},"cta":str}]}\n'
@@ -434,6 +437,7 @@ async def generate(body: DesignGenIn, user=Depends(current_user)):
     system = await _resolve_system(user["workspace_id"], body.system_id)
 
     sections: List[Dict[str, Any]] = []
+    palette_family: Optional[str] = None
     if _llm_configured():
         await charge_credits(
             user["workspace_id"], "design_generate",
@@ -451,6 +455,12 @@ async def generate(body: DesignGenIn, user=Depends(current_user)):
             parsed = _extract_json(resp)
             if parsed and parsed.get("sections"):
                 sections = parsed["sections"][:count]
+                fam = parsed.get("palette_family")
+                # Constrained choice, not free text — anything unrecognised
+                # falls back rather than reaching the renderer as a family it
+                # has no tokens for.
+                if isinstance(fam, str) and fam in CREQ_PALETTE_FAMILIES:
+                    palette_family = fam
         except Exception as ex:
             log.warning("design-eq generation failed: %s", ex)
 
@@ -470,6 +480,9 @@ async def generate(body: DesignGenIn, user=Depends(current_user)):
         "surface_secondary": routing.get("secondary"),
         "routing_why": routing.get("why"),
         "system_id": (system or {}).get("id"),
+        # A registered system supplies its own tokens; otherwise the composition
+        # engine resolves this family name into surfaces.
+        "palette_family": None if system else (palette_family or "claude"),
         "canvas": canvas,
         # The structured master. The frontend composition engine turns these
         # into positioned elements; nothing here is a rendered pixel, which is
@@ -538,6 +551,76 @@ async def audit_project(project_id: str, user=Depends(current_user)):
     gate, which is the part Claude Design keeps internal."""
     doc = await get_project(project_id, user)
     return audit_slop(doc)
+
+
+class HandoffIn(BaseModel):
+    # The direction the user was actually previewing when they hit open. Palette
+    # families are switched client-side for free, so the stored family can be
+    # stale by the time this is called — the deck must open in what they saw.
+    palette_family: Optional[str] = None
+
+
+@design_router.post("/projects/{project_id}/handoff")
+async def handoff_to_editor(project_id: str, body: Optional[HandoffIn] = None,
+                            user=Depends(current_user)):
+    """Materialise a structured design into an editable Create EQ deck.
+
+    This is the payoff of keeping a structured master rather than emitting HTML:
+    the handoff is a straight copy, because Design EQ's section schema and Create
+    EQ's premium slide schema are deliberately the same vocabulary (archetype +
+    typed content). The composition engine, canvas editor, PDF and PNG export all
+    work on the result with no translation and no fidelity loss — which is
+    exactly the step Claude Design cannot perform.
+
+    No credit charge: nothing is generated here, the design was already paid for.
+    """
+    doc = await get_project(project_id, user)
+    if doc.get("master") != "structured":
+        raise HTTPException(
+            400,
+            "Only structured designs can open in the deck editor. Code-master "
+            "formats (landing pages, prototypes, component labs) render through "
+            "the code target instead.",
+        )
+    sections = doc.get("sections") or []
+    if not sections:
+        raise HTTPException(400, "This design has no sections to open")
+
+    chosen_family = (body.palette_family if body else None) or doc.get("palette_family") or "claude"
+    if chosen_family not in CREQ_PALETTE_FAMILIES:
+        chosen_family = "claude"
+
+    carousel_id = new_id()
+    carousel = {
+        "id": carousel_id,
+        "workspace_id": user["workspace_id"],
+        "owner_id": user["id"],
+        "topic": doc.get("brief", "")[:200],
+        "platform": "linkedin",
+        "brand": {"bg": "#0F1010", "accent": "#E85D3A", "text": "#FFFFFF",
+                  "font": "Geist", "logo_text": ""},
+        # Copied verbatim: `archetype` on a slide is what routes it through the
+        # premium composition engine on open.
+        "slides": sections,
+        "design_mode": "premium",
+        "palette_family": chosen_family,
+        # The 5-colour palette itself is written by the caller straight after
+        # this returns: the hex values live in the frontend design system, and
+        # duplicating them here would give the tokens two sources of truth.
+        "palette_id": "ai",
+        "canvas": doc.get("canvas") or {"w": 1080, "h": 1350},
+        "design_eq_id": project_id,
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.carousels.insert_one(carousel)
+    await db.design_projects.update_one(
+        {"id": project_id, "workspace_id": user["workspace_id"]},
+        {"$set": {"carousel_id": carousel_id, "updated_at": now_iso()}},
+    )
+    await _audit(user, "design.handoff", {"project_id": project_id, "carousel_id": carousel_id})
+    carousel.pop("_id", None)
+    return {"carousel_id": carousel_id, "project_id": project_id, "palette_family": chosen_family}
 
 
 @design_router.delete("/projects/{project_id}")
