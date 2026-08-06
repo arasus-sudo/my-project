@@ -402,7 +402,7 @@ function ElementRender({ el, palette, onPointerDown, onMeasure, onDoubleClick, e
               position: "absolute", left: (w - fw) / 2, top: fy, width: fw, height: stepH - 12,
               background: accent, opacity: 0.5 + 0.4 * (1 - i / data.length), borderRadius: 6,
               display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "0 16px", fontSize: 13, color: "white", fontWeight: 600, fontFamily: '"Inter", sans-serif',
+              padding: "0 16px", fontSize: 13, color: "white", fontWeight: 600, fontFamily: '"Geist", system-ui, sans-serif',
             }}>
               <span>{labels[i] || ""}</span>
               <span style={{ fontFamily: '"JetBrains Mono", monospace' }}>{v}</span>
@@ -424,7 +424,7 @@ function ElementRender({ el, palette, onPointerDown, onMeasure, onDoubleClick, e
     const bgC = resolveColor("bg", palette);
 
     const baseCard = {
-      width: cardW, height: cardH, fontFamily: '"Inter", sans-serif',
+      width: cardW, height: cardH, fontFamily: '"Geist", system-ui, sans-serif',
       display: "flex", flexDirection: "column", justifyContent: "center",
       padding: 24, boxSizing: "border-box", position: "relative",
     };
@@ -506,7 +506,7 @@ function ElementRender({ el, palette, onPointerDown, onMeasure, onDoubleClick, e
       return (
         <div className="creq-el" onPointerDown={bind} style={{
           ...common, width: cardW, height: cardH, borderRadius: 20, overflow: "hidden",
-          fontFamily: '"Inter", sans-serif', position: "relative",
+          fontFamily: '"Geist", system-ui, sans-serif', position: "relative",
         }}>
           <div style={{ position: "absolute", inset: 0, background: `linear-gradient(135deg, ${textC} 0%, ${textC} 50%, ${accent} 50%, ${accent} 100%)` }} />
           <div style={{ position: "relative", zIndex: 1, padding: 24, display: "flex", flexDirection: "column", justifyContent: "center", height: "100%", boxSizing: "border-box" }}>

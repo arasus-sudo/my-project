@@ -9,7 +9,7 @@ import {
   LayoutDashboard, Send, Users, Inbox as InboxIcon, Kanban, Mail, Settings as SettingsIcon, LogOut, Info, Shield,
   FileText, BarChart3, UsersRound, ShieldCheck, Image as ImageIcon, ChevronDown, Layers, Webhook, Link2,
   Bot, PhoneCall, History, Radio, Clock, CalendarClock, CalendarCheck, CalendarRange, FileBarChart, Tags,
-  Share2, PenSquare, ListChecks, LayoutGrid, Menu, X, Search, Upload, Globe, Loader2,
+  Share2, PenSquare, ListChecks, LayoutGrid, Menu, X, Search, Upload, Globe, Loader2, Compass,
   Building2, Briefcase, BookOpen, DollarSign, FileDown, Scale, TrendingUp,
   Smartphone, Phone, Zap, KeyRound,
 } from "lucide-react";
@@ -48,6 +48,10 @@ const CRM_NAV = [
   { to: "/app/signatures", label: "Signatures", icon: PenSquare, tid: "nav-signatures" },
   { to: "/app/signature-policies", label: "Signature Policies", icon: Zap, tid: "nav-signature-policies", orgAdminOnly: true },
   { to: "/app/directory-sync", label: "Directory Sync", icon: KeyRound, tid: "nav-directory-sync", orgAdminOnly: true },
+];
+
+const DESIGN_NAV = [
+  { to: "/app/design-eq", label: "Designs", icon: Compass, end: true, tid: "deq-nav-projects" },
 ];
 
 const CREATE_NAV = [
@@ -154,6 +158,8 @@ export const AGENTS = [
     category: "sales", blurb: "WhatsApp Business messaging, templates, and broadcasts." },
   { k: "create", label: "Create EQ", tag: "Carousel", root: "/app/create-eq", nav: CREATE_NAV, tid: "agent-create", icon: Layers,
     category: "marketing", blurb: "Drafted carousels and decks, Canva-style editing." },
+  { k: "design", label: "Design EQ", tag: "Design", root: "/app/design-eq", nav: DESIGN_NAV, tid: "agent-design", icon: Compass,
+    category: "marketing", blurb: "Decks, prototypes and landing pages, composed for what the surface actually does." },
   { k: "social", label: "Social EQ", tag: "Social", root: "/app/social-eq", nav: SOCIAL_NAV, tid: "agent-social", icon: Share2,
     category: "marketing", blurb: "Drafts and schedules posts — publishing always needs your approval." },
   { k: "site", label: "Site EQ", tag: "Website Chat", root: "/app/site-eq", nav: SITE_NAV, tid: "agent-site", icon: Globe,
@@ -173,7 +179,7 @@ export const AGENT_CATEGORIES = [
   { key: "operations", label: "Operations" },
 ];
 
-export const AGENT_BADGE = { crm: "M", pitch: "P", create: "C", voice: "V", schedule: "S", proposal: "R", social: "O", site: "W", sms: "T", whatsapp: "WA", hrms: "H", accounting: "F" };
+export const AGENT_BADGE = { crm: "M", pitch: "P", create: "C", design: "D", voice: "V", schedule: "S", proposal: "R", social: "O", site: "W", sms: "T", whatsapp: "WA", hrms: "H", accounting: "F" };
 
 export default function AppLayout() {
   const { user, workspace, logout } = useAuth();

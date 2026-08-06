@@ -35,7 +35,9 @@ export function textStyleOf(el, palette) {
     : null;
   return {
     color: resolveColor(el.color, palette),
-    fontFamily: `"${el.font || "Inter"}", sans-serif`,
+    // Geist is the fallback for an element with no font recorded — §24.6, and
+    // the last place Inter could slip back in as a silent default.
+    fontFamily: `"${el.font || "Geist"}", system-ui, sans-serif`,
     fontSize: el.size,
     fontWeight: el.weight,
     fontStyle: el.italic ? "italic" : "normal",

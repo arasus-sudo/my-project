@@ -42,6 +42,8 @@ const Analytics = lazy(() => import("./pages/Analytics"));
 const AuditLog = lazy(() => import("./pages/AuditLog"));
 const CreateEQEditor = lazy(() => import("./pages/CreateEQEditor"));
 const CreateEQProjects = lazy(() => import("./pages/CreateEQProjects"));
+const DesignEQProjects = lazy(() => import("./pages/DesignEQProjects"));
+const DesignEQViewer = lazy(() => import("./pages/DesignEQViewer"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Team = lazy(() => import("./pages/Team"));
 const Templates = lazy(() => import("./pages/Templates"));
@@ -178,6 +180,8 @@ function App() {
               <Route path="audit-log" element={<AuditLog />} />
               <Route path="create-eq" element={<CreateEQProjects />} />
               <Route path="create-eq/:id" element={<CreateEQEditor />} />
+              <Route path="design-eq" element={<DesignEQProjects />} />
+              <Route path="design-eq/:id" element={<DesignEQViewer />} />
               <Route path="voice-eq" element={<VoiceEQOverview />} />
               <Route path="voice-eq/agents" element={<VoiceAgents />} />
               <Route path="voice-eq/agents/:id" element={<VoiceAgentBuilder />} />

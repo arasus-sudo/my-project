@@ -33,7 +33,9 @@ function DeckOverlay({ proj, slideIdx, palette }) {
       {showBranding && (
         <div style={{
           position: "absolute", left: 40, bottom: 40,
-          fontFamily: '"Inter", sans-serif',
+          // Geist, not Inter — §24.6. This string is burned into every exported
+          // slide, so it is the most visible place the ban could be missed.
+          fontFamily: '"Geist", system-ui, sans-serif',
           // Size/colour/opacity are deck settings (RightPanel → Deck chrome).
           // Falling back to the palette's text colour keeps it readable when a
           // brand kit changes the background and no explicit colour was picked.

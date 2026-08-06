@@ -83,7 +83,126 @@ export const PALETTE_FAMILIES = {
       clay:  { bg: "#2C5470", panel: "#23445C", text: "#F1F6F9", muted: "#B4CEDF", accent: "#F1F6F9", accentDisplay: "#F1F6F9", rule: "#5A82A0", onAccent: "#2C5470", dark: true },
     },
   },
+  // Warm browns. The most current of the set — the espresso/mocha neutral has
+  // displaced grey as the default "serious warm" in the last two seasons.
+  mocha: {
+    id: "mocha",
+    name: "Cream & Mocha",
+    blurb: "Cream paper, espresso ink, caramel accent. Warm, tactile, premium — hospitality, food, beauty, craft.",
+    surfaces: {
+      paper: { bg: "#FAF6F1", panel: "#F0E8DF", text: "#2A1F1A", muted: "#6F6157", accent: "#8A5330", accentDisplay: "#965C37", rule: "#E6DCD0", onAccent: "#FAF6F1", dark: false },
+      cloud: { bg: "#F0E8DF", panel: "#E3D7C9", text: "#2A1F1A", muted: "#6F6157", accent: "#8A5330", accentDisplay: "#965C37", rule: "#D8CBBB", onAccent: "#FAF6F1", dark: false },
+      ink:   { bg: "#2A1F1A", panel: "#3A2C25", text: "#F0E8DF", muted: "#A79689", accent: "#D09A66", accentDisplay: "#D09A66", rule: "#4A3A31", onAccent: "#2A1F1A", dark: true },
+      clay:  { bg: "#8A5330", panel: "#714227", text: "#FDF8F3", muted: "#E5C3A8", accent: "#FDF8F3", accentDisplay: "#FDF8F3", rule: "#A87352", onAccent: "#8A5330", dark: true },
+    },
+  },
+  // A true blue, not the indigo/violet the anti-slop audit names as a tell —
+  // saturated and confident rather than the default SaaS gradient hue.
+  cobalt: {
+    id: "cobalt",
+    name: "Porcelain & Cobalt",
+    blurb: "Porcelain paper, true cobalt accent. Confident and modern — fintech, B2B software, enterprise.",
+    surfaces: {
+      paper: { bg: "#F7F8FA", panel: "#EAEEF4", text: "#101828", muted: "#5C6675", accent: "#1B4AC4", accentDisplay: "#1E52D6", rule: "#DDE3EC", onAccent: "#F7F8FA", dark: false },
+      cloud: { bg: "#EAEEF4", panel: "#DCE3EC", text: "#101828", muted: "#5C6675", accent: "#1B4AC4", accentDisplay: "#1E52D6", rule: "#CED7E3", onAccent: "#F7F8FA", dark: false },
+      ink:   { bg: "#101828", panel: "#1A2436", text: "#EAEEF4", muted: "#94A0B2", accent: "#7FA8FF", accentDisplay: "#7FA8FF", rule: "#2A3748", onAccent: "#101828", dark: true },
+      clay:  { bg: "#1B4AC4", panel: "#153BA0", text: "#F2F6FF", muted: "#BACDFF", accent: "#F2F6FF", accentDisplay: "#F2F6FF", rule: "#5379DA", onAccent: "#1B4AC4", dark: true },
+    },
+  },
+  // Dark-first. The amber only reads correctly against a near-black ground, so
+  // this family leans on its ink surface far more than the others.
+  amber: {
+    id: "amber",
+    name: "Charcoal & Amber",
+    blurb: "Charcoal ground, signal-amber accent. High contrast and energetic — developer tools, data, events.",
+    surfaces: {
+      paper: { bg: "#FAF8F3", panel: "#F0ECE2", text: "#1C1A16", muted: "#6B6459", accent: "#8A6100", accentDisplay: "#996C00", rule: "#E6E0D2", onAccent: "#FAF8F3", dark: false },
+      cloud: { bg: "#F0ECE2", panel: "#E3DDCD", text: "#1C1A16", muted: "#6B6459", accent: "#8A6100", accentDisplay: "#996C00", rule: "#D6CFBC", onAccent: "#FAF8F3", dark: false },
+      ink:   { bg: "#1C1A16", panel: "#2A2620", text: "#F0ECE2", muted: "#A39B8C", accent: "#F0B429", accentDisplay: "#F0B429", rule: "#3A352C", onAccent: "#1C1A16", dark: true },
+      clay:  { bg: "#B8860B", panel: "#9A7009", text: "#1C1A16", muted: "#4A3A0C", accent: "#1C1A16", accentDisplay: "#1C1A16", rule: "#D2A63C", onAccent: "#B8860B", dark: false },
+    },
+  },
+  // Editorial and unusual — the direction to reach for when the topic would be
+  // flattened by another neutral-plus-blue deck.
+  plum: {
+    id: "plum",
+    name: "Blush & Plum",
+    blurb: "Blush paper, deep plum accent. Editorial and distinctive — fashion, media, culture, brand work.",
+    surfaces: {
+      paper: { bg: "#FBF7F8", panel: "#F2E8EC", text: "#241820", muted: "#6E5C66", accent: "#7A2F52", accentDisplay: "#8A375E", rule: "#E8DAE0", onAccent: "#FBF7F8", dark: false },
+      cloud: { bg: "#F2E8EC", panel: "#E5D5DC", text: "#241820", muted: "#6E5C66", accent: "#7A2F52", accentDisplay: "#8A375E", rule: "#DAC7D0", onAccent: "#FBF7F8", dark: false },
+      ink:   { bg: "#241820", panel: "#33232C", text: "#F2E8EC", muted: "#A38F9A", accent: "#DE8FAE", accentDisplay: "#DE8FAE", rule: "#42303A", onAccent: "#241820", dark: true },
+      clay:  { bg: "#7A2F52", panel: "#631F41", text: "#FBF3F6", muted: "#E2B6C8", accent: "#FBF3F6", accentDisplay: "#FBF3F6", rule: "#A0567A", onAccent: "#7A2F52", dark: true },
+    },
+  },
+  // Cool without being corporate blue; the sand paper keeps it from going cold.
+  teal: {
+    id: "teal",
+    name: "Sand & Deep Teal",
+    blurb: "Sand paper, deep teal accent. Calm and considered — healthcare, education, non-profit, wellbeing.",
+    surfaces: {
+      paper: { bg: "#F8F7F2", panel: "#EDEBE0", text: "#14201F", muted: "#5F6D6B", accent: "#1F5E5B", accentDisplay: "#236B67", rule: "#E1DED0", onAccent: "#F8F7F2", dark: false },
+      cloud: { bg: "#EDEBE0", panel: "#DFDCCC", text: "#14201F", muted: "#5F6D6B", accent: "#1F5E5B", accentDisplay: "#236B67", rule: "#D3CFBD", onAccent: "#F8F7F2", dark: false },
+      ink:   { bg: "#14201F", panel: "#1F2E2C", text: "#EDEBE0", muted: "#93A5A2", accent: "#6FC7C0", accentDisplay: "#6FC7C0", rule: "#2C3E3B", onAccent: "#14201F", dark: true },
+      clay:  { bg: "#1F5E5B", panel: "#174846", text: "#F1F8F7", muted: "#ADD6D2", accent: "#F1F8F7", accentDisplay: "#F1F8F7", rule: "#4E8A87", onAccent: "#1F5E5B", dark: true },
+    },
+  },
 };
+
+/**
+ * Enforce contrast on every hand-authored surface, once, at module load.
+ *
+ * The literals above are chosen by eye, and an eye is unreliable about this:
+ * an audit of the original three families found the clay accent at 4.16:1 on
+ * ivory and clay-surface muted text at 2.82:1 — both below AA, both shipped.
+ * onLightAccent() existed to prevent exactly that but was only ever wired into
+ * brand-derived families, so the hand-written tables were never actually
+ * checked against it.
+ *
+ * Doing the correction here rather than in the literals makes the guarantee
+ * structural: any family added later is safe without anyone remembering to
+ * verify it. Colours already passing are left untouched, so the palettes stay
+ * as authored wherever they were right to begin with.
+ */
+function enforceContrast(fam) {
+  for (const s of Object.values(fam.surfaces)) {
+    // Some grounds are simply too mid-tone to carry AA text at any foreground:
+    // the authored clay #C15F3C tops out around 4.0:1 against both white and
+    // near-black, so no amount of adjusting the text can rescue it. Deepening
+    // the ground keeps the hue — which is the design intent — while making the
+    // surface legible, and these are punctuation surfaces where a richer tone
+    // reads perfectly well.
+    if (contrast(s.text, s.bg) < 4.5) {
+      const away = luminance(s.text) > 0.5 ? "#000000" : "#FFFFFF";
+      for (let i = 0; i < 24 && contrast(s.text, s.bg) < 4.5; i++) s.bg = mix(s.bg, away, 0.05);
+      s.panel = mix(s.panel, away, 0.12);
+    }
+    s.text = ensureContrast(s.text, s.bg, 4.5);
+    s.muted = ensureContrast(s.muted, s.bg, 4.5);
+    // Small accent text has the full AA bar; the display variant only carries
+    // headline-sized type, which AA rates at 3:1.
+    s.accent = ensureContrast(s.accent, s.bg, 4.5);
+    s.accentDisplay = ensureContrast(s.accentDisplay, s.bg, 3);
+    s.onAccent = ensureContrast(s.onAccent, s.accent, 4.5);
+  }
+  return fam;
+}
+
+/** Walk `fg` toward whichever pole increases contrast against `bg` until it
+ * clears `target`. Steps are small so a colour that only just fails is nudged
+ * rather than collapsed to black or white. */
+export function ensureContrast(fg, bg, target = 4.5) {
+  if (!fg || !bg || contrast(fg, bg) >= target) return fg;
+  // Pick the pole by measuring both, not by a luminance threshold. A mid-tone
+  // ground breaks the threshold heuristic: against amber #B8860B black reaches
+  // 6.8:1 while white only reaches 3.1:1, but its luminance sits on the "go
+  // lighter" side of any fixed cutoff, so the rule would walk the colour the
+  // wrong way and never converge.
+  const toward = contrast("#000000", bg) >= contrast("#FFFFFF", bg) ? "#000000" : "#FFFFFF";
+  let out = fg;
+  for (let i = 0; i < 24 && contrast(out, bg) < target; i++) out = mix(out, toward, 0.06);
+  return out;
+}
 
 export const DEFAULT_FAMILY = "claude";
 
@@ -119,7 +238,9 @@ export function familyFromBrand(brand) {
 }
 
 export function getFamily(id, brand) {
-  if (brand) return familyFromBrand(brand);
+  // Brand-derived families are built on demand from user colour, so they get
+  // the same contrast enforcement the static tables receive at load.
+  if (brand) return enforceContrast(familyFromBrand(brand));
   return PALETTE_FAMILIES[id] || PALETTE_FAMILIES[DEFAULT_FAMILY];
 }
 
@@ -164,15 +285,26 @@ export function onLightAccent(accent, bg) {
   return c;
 }
 
+// Runs here, not next to the palette tables: enforceContrast depends on mix()
+// and contrast(), which are `const` bindings defined above and would still be
+// in their temporal dead zone at the point the tables are declared.
+Object.values(PALETTE_FAMILIES).forEach(enforceContrast);
+
 /* ------------------------------- Typography -------------------------------- */
 // Sizes are fractions of canvas WIDTH so every format (LinkedIn 4:5, IG square,
 // IG story 9:16, custom) reads at the same relative scale. Leading/tracking are
 // the part that actually makes it look editorial: display sits tight (1.05) and
 // body sits open (1.55), and that contrast is deliberate.
 
+// Geist, not Inter. Two independent rules land on the same verdict: the suite's
+// own design system (docs/design-system.md §24.6) bans Inter outright and
+// specifies Geist for UI text, and "Inter, chosen because it is safe" is a named
+// tell on the anti-slop audit this system is modelled on. The display face stays
+// an editorial serif — that is the deck's own typographic identity, and it is
+// what carries the light/dark editorial look these compositions are built for.
 export const FONTS = {
   display: "Instrument Serif", // high-contrast editorial serif, single weight by design
-  sans: "Inter",
+  sans: "Geist",
   mono: "JetBrains Mono",
 };
 

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Sparkles, Pencil, Image as ImageIcon } from "lucide-react";
+import { Plus, Trash2, Palette, Pencil, Image as ImageIcon } from "lucide-react";
 import { Vibrant } from "node-vibrant/browser";
 import { api } from "../../../lib/api";
 import { PALETTES } from "../../../lib/creqTemplates";
@@ -32,7 +32,7 @@ const EMPTY_FORM = () => ({
   name: "",
   logo_url: "",
   colors: DEFAULT_COLORS(),
-  fonts: ["Inter"],
+  fonts: ["Geist"],
   palette_id: "midnight",
   logo_size: "l",
   logo_position: "bl",
@@ -53,7 +53,7 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
           ? DEFAULT_COLORS().slice((k.colors || []).length)
           : []
       ),
-      fonts: k.fonts && k.fonts.length ? k.fonts : ["Inter"],
+      fonts: k.fonts && k.fonts.length ? k.fonts : ["Geist"],
       palette_id: k.palette_id || "midnight",
       logo_size: k.logo_size || "l",
       logo_position: k.logo_position || "bl",
@@ -133,7 +133,7 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
     <div className="fixed inset-0 bg-ink/40 z-50 flex justify-end" onClick={onClose}>
       <div className="w-full max-w-md bg-white h-full overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="brandkit-drawer">
         <div className="sticky top-0 bg-white border-b border-line px-5 py-4 flex items-center gap-3 z-10">
-          <Sparkles size={16} />
+          <Palette size={16} />
           <div className="font-display font-bold">Brand kits</div>
           {!editing && (
             <button onClick={startCreate} data-testid="brandkit-new"
@@ -236,7 +236,7 @@ export default function BrandKitDrawer({ onClose, kits, onSaved, onUpdated, onDe
             <label className="block">
               <span className="ui-label">Primary font</span>
               <GoogleFontPicker
-                value={editing.fonts[0] || "Inter"}
+                value={editing.fonts[0] || "Geist"}
                 onChange={(font) => setEditing({ ...editing, fonts: [font] })}
                 testid="brandkit-font"
               />
