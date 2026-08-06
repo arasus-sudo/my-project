@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Vibrant } from "node-vibrant/browser";
-import { Sparkles, Check, Loader2, Image as ImageIcon, ArrowRight } from "lucide-react";
+import { Palette, Check, Loader2, Image as ImageIcon, ArrowRight } from "lucide-react";
 import { api, isCreditError } from "../../lib/api";
 import { buildPremiumDeck, refineDeck, paletteForDeck } from "../../lib/creqPremiumEngine";
 import { DEFAULT_FAMILY } from "../../lib/creqClaudeDesign";
@@ -14,7 +14,7 @@ import FormatPicker, { FORMATS } from "./FormatPicker";
  * client with none) or genuinely locked to what the user supplies — not
  * quietly inherited from whatever swatch a human happened to click in a
  * generic theme picker. After generation, a refinement loop (deterministic
- * geometry audit on every slide + a conditional targeted LLM rewrite on any
+ * geometry audit on every slide + a conditional targeted copy rewrite on any
  * slide that still reads too sparse or too cramped) runs before the deck is
  * handed to the editor — see creqPremiumEngine.js's refineDeck(). */
 
@@ -75,7 +75,7 @@ export default function PremiumCarouselWizard({ onClose, onCreated }) {
         // only asks the model to pick a palette_family when body.brand is
         // absent, so sending a default-valued brand here would silently lock
         // the deck to generic colours instead of a chosen design-system family.
-        ...(providingBrand ? { brand: { bg, accent, text, font: "Inter", logo_text: "" } } : {}),
+        ...(providingBrand ? { brand: { bg, accent, text, font: "Geist", logo_text: "" } } : {}),
       });
       const canvas = data.canvas || { w: 1080, h: 1350 };
       const brandKit = providingBrand ? { bg, accent, text } : null;
@@ -85,7 +85,7 @@ export default function PremiumCarouselWizard({ onClose, onCreated }) {
       // Compose the whole deck at once — surface rhythm (which slides go dark,
       // and where) is a deck-level decision, not a per-slide one. The
       // deterministic geometry audit runs inside every slide build; refineDeck
-      // adds the conditional targeted LLM copy rewrite for any slide that still
+      // adds the conditional targeted copy rewrite for any slide that still
       // scores poorly (too sparse or overrunning its slot).
       const built = buildPremiumDeck(data.slides || [], buildOpts);
       setBusyLabel("Refining slides…");
@@ -118,9 +118,8 @@ export default function PremiumCarouselWizard({ onClose, onCreated }) {
       <div className="bg-white rounded-2xl w-full max-w-xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()} data-testid="premium-carousel-wizard">
         <div className="px-4 sm:px-8 pt-6 pb-4">
           <div className="flex items-center gap-2 mb-3">
-            <Sparkles size={16} className="text-accent" />
-            <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">Premium AI · Step {step} of 4</div>
-            <span className="ml-2 text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-accent text-white">LLM Design</span>
+            <Palette size={16} className="text-accent" />
+            <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">Premium · Step {step} of 4</div>
             <button onClick={onClose} className="ml-auto text-neutral-400 hover:text-ink text-body">Cancel</button>
           </div>
           <div className="flex gap-1">
@@ -220,7 +219,7 @@ export default function PremiumCarouselWizard({ onClose, onCreated }) {
                 <li className="flex items-start gap-2"><Check size={14} className="text-ink mt-0.5" /> <span><span className="font-medium">Slides:</span> {slideCount}</span></li>
                 <li className="flex items-start gap-2"><Check size={14} className="text-ink mt-0.5" /> <span><span className="font-medium">Format:</span> {formatLabel}</span></li>
                 <li className="flex items-start gap-2"><Check size={14} className="text-ink mt-0.5" />
-                  <span><span className="font-medium">Design:</span> {brandChoice === "provide" ? "Your brand colors" : "AI-designed identity"}</span>
+                  <span><span className="font-medium">Design:</span> {brandChoice === "provide" ? "Your brand colors" : "Generated identity"}</span>
                 </li>
               </ul>
               {brandChoice === "provide" && (
@@ -241,7 +240,7 @@ export default function PremiumCarouselWizard({ onClose, onCreated }) {
               className="btn-primary disabled:opacity-40">Continue <ArrowRight size={14} /></button>
           ) : (
             <button onClick={generate} disabled={busy} data-testid="premium-wizard-generate" className="btn-primary disabled:opacity-60">
-              {busy ? <><Loader2 size={14} className="animate-spin" /> {busyLabel}</> : <><Sparkles size={14} /> Generate with Premium AI</>}
+              {busy ? <><Loader2 size={14} className="animate-spin" /> {busyLabel}</> : <><Palette size={14} /> Generate with Premium</>}
             </button>
           )}
         </div>

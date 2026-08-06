@@ -177,19 +177,19 @@ function LeftPanel({ onTemplate, onStyle, onLayout, onAddText, onAddShape, onAdd
           <TextPreset label="Serif quote" onClick={() => onAddText({ type: "text", x: 80, y: 400, w: 920, h: 320, text: "Your sharp thought",
             font: "Instrument Serif", size: 96, weight: 400, italic: true, color: "accent", line_height: 1.05 })} sample="Aa" style={{ fontFamily: "Instrument Serif", fontSize: 26, fontStyle: "italic" }} />
           <TextPreset label="Subheadline" onClick={() => onAddText({ type: "text", x: 80, y: 400, w: 920, h: 100, text: "Supporting line",
-            font: "Inter", size: 40, weight: 600, color: "text" })} sample="Aa" style={{ fontFamily: "Inter", fontSize: 22, fontWeight: 600 }} />
+            font: "Geist", size: 40, weight: 600, color: "text" })} sample="Aa" style={{ fontFamily: "Geist", fontSize: 22, fontWeight: 600 }} />
           <TextPreset label="Bold condensed" onClick={() => onAddText({ type: "text", x: 80, y: 400, w: 920, h: 180, text: "CONDENSED HEADLINE",
             font: "Bebas Neue", size: 120, weight: 400, color: "accent", letter_spacing: 0.04, line_height: 0.9, align: "left" })} sample="AB" style={{ fontFamily: "Bebas Neue", fontSize: 24 }} />
           <div className="ui-label mb-1 mt-2">Body</div>
           <TextPreset label="Body paragraph" onClick={() => onAddText({ type: "text", x: 80, y: 400, w: 920, h: 240, text: "Long-form paragraph text with balanced line height for easy reading.",
-            font: "Inter", size: 28, weight: 400, color: "text", line_height: 1.4 })} sample="Ag" style={{ fontFamily: "Inter", fontSize: 18 }} />
+            font: "Geist", size: 28, weight: 400, color: "text", line_height: 1.4 })} sample="Ag" style={{ fontFamily: "Geist", fontSize: 18 }} />
           <TextPreset label="Caption small" onClick={() => onAddText({ type: "text", x: 80, y: 400, w: 920, h: 60, text: "SMALL CAPS",
             font: "JetBrains Mono", size: 20, weight: 500, uppercase: true, letter_spacing: 0.24, color: "muted" })} sample="AA" style={{ fontFamily: "JetBrains Mono", fontSize: 14 }} />
           <div className="ui-label mb-1 mt-2">Treatments</div>
           <TextPreset label="Hero number" onClick={() => onAddText({ type: "text", x: 80, y: 200, w: 920, h: 640, text: "86",
             font: "Bebas Neue", size: 420, weight: 400, color: "accent", line_height: 0.85, align: "center" })} sample="#1" style={{ fontFamily: "Bebas Neue", fontSize: 22 }} />
           <TextPreset label="Swiss editorial" onClick={() => onAddText({ type: "text", x: 80, y: 400, w: 920, h: 200, text: "Swiss typography",
-            font: "Inter", size: 72, weight: 700, color: "text", letter_spacing: -0.02, line_height: 1.0, align: "left" })} sample="Aa" style={{ fontFamily: "Inter", fontSize: 22, fontWeight: 700 }} />
+            font: "Geist", size: 72, weight: 700, color: "text", letter_spacing: -0.02, line_height: 1.0, align: "left" })} sample="Aa" style={{ fontFamily: "Geist", fontSize: 22, fontWeight: 700 }} />
           <TextPreset label="Mono code" onClick={() => onAddText({ type: "text", x: 80, y: 400, w: 920, h: 100, text: "import { Agent } from 'innoira'",
             font: "JetBrains Mono", size: 32, weight: 500, color: "accent", letter_spacing: 0, line_height: 1.2, align: "left" })} sample="{ }" style={{ fontFamily: "JetBrains Mono", fontSize: 16 }} />
         </div>
