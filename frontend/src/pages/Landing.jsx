@@ -60,7 +60,7 @@ const USE_CASES = [
   {
     agents: ["HRMS EQ", "Accounting EQ"],
     title: "HR and the books, without the spreadsheet",
-    body: "Org charts, AI-scored recruitment pipelines, onboarding, leave and performance reviews on one side. Double-entry bookkeeping with enforced balance rules, AR/AP and real financial reports on the other — both living in the same workspace as your revenue data, not a side export.",
+    body: "Org charts, scored recruitment pipelines, onboarding, leave and performance reviews on one side. Double-entry bookkeeping with enforced balance rules, AR/AP and real financial reports on the other — both living in the same workspace as your revenue data, not a side export.",
   },
 ];
 
@@ -74,7 +74,7 @@ const RELAY = [
 const FAQS = [
   {
     q: "Is this just ChatGPT wrapped in a dashboard?",
-    a: "No. The LLM writes and reasons, but the actions are real: Voice EQ places real phone calls over Twilio, Schedule EQ runs an actual availability and booking engine, Accounting EQ enforces double-entry bookkeeping rules on every transaction, and Pitch EQ sends from a mailbox you connect via real OAuth. The model is one component, not the whole product.",
+    a: "No. The model writes and reasons, but the actions are real: Voice EQ places real phone calls over Twilio, Schedule EQ runs an actual availability and booking engine, Accounting EQ enforces double-entry bookkeeping rules on every transaction, and Pitch EQ sends from a mailbox you connect via real OAuth. The model is one component, not the whole product.",
   },
   {
     q: "Can the agents send or post anything without my approval?",
@@ -233,7 +233,7 @@ export default function Landing() {
           <div className="max-w-2xl mb-10 sm:mb-14">
             <div className="ui-label mb-4 text-white/70">Why a suite beats ten point tools</div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold tracking-tight">
-              The agents <span className="hl-white">share a brain.</span>
+              The agents <span className="hl-white">share one engine.</span>
             </h2>
           </div>
 
@@ -392,8 +392,8 @@ export default function Landing() {
               {[
                 { n: "20", l: "per minute of an AI phone call" },
                 { n: "60", l: "per researched proposal deck" },
-                { n: "40", l: "per AI-generated carousel" },
-                { n: "5", l: "per AI-enriched lead or candidate score" },
+                { n: "40", l: "per generated carousel" },
+                { n: "5", l: "per enriched lead or candidate score" },
                 { n: "2", l: "per WhatsApp broadcast message" },
                 { n: "1", l: "per AI email, SMS, or EQ Score" },
               ].map((c) => (

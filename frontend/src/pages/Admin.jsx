@@ -205,17 +205,17 @@ export default function Admin() {
           <TabsContent value="cost">
             <div className="space-y-4">
               <p style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>
-                Real LLM token cost — what agent actions actually cost us to run, independent of the
+                Real model token cost — what agent actions actually cost us to run, independent of the
                 flat credit prices workspaces are charged. Internal COGS visibility only.
               </p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <MetricCard icon={DollarSign} label="Total LLM cost" value={`$${(tokenUsage?.total_cost_usd ?? 0).toFixed(4)}`} />
-                <MetricCard label="LLM calls logged" value={tokenUsage?.total_calls ?? 0} />
+                <MetricCard icon={DollarSign} label="Total model cost" value={`$${(tokenUsage?.total_cost_usd ?? 0).toFixed(4)}`} />
+                <MetricCard label="Model calls logged" value={tokenUsage?.total_calls ?? 0} />
               </div>
 
               <Card title="Cost by workspace" padding="compact" bodyClassName={(tokenUsage?.by_workspace?.length ?? 0) > 0 ? "-mx-5" : ""}>
                 {(tokenUsage?.by_workspace?.length ?? 0) === 0 ? (
-                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--text-tertiary)" }}>No LLM usage logged yet.</div>
+                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--text-tertiary)" }}>No model usage logged yet.</div>
                 ) : (
                   <Table columns={wsCostColumns} rows={tokenUsage.by_workspace} rowKey={(w) => w.workspace_id} />
                 )}
@@ -223,7 +223,7 @@ export default function Admin() {
 
               <Card title="Cost by model" padding="compact" bodyClassName={(tokenUsage?.by_model?.length ?? 0) > 0 ? "-mx-5" : ""}>
                 {(tokenUsage?.by_model?.length ?? 0) === 0 ? (
-                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--text-tertiary)" }}>No LLM usage logged yet.</div>
+                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--text-tertiary)" }}>No model usage logged yet.</div>
                 ) : (
                   <Table columns={modelCostColumns} rows={tokenUsage.by_model} rowKey={(m) => m.model} />
                 )}
@@ -231,7 +231,7 @@ export default function Admin() {
 
               <Card title="Cost by user" padding="compact" bodyClassName={(tokenUsage?.by_user?.length ?? 0) > 0 ? "-mx-5" : ""}>
                 {(tokenUsage?.by_user?.length ?? 0) === 0 ? (
-                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--text-tertiary)" }}>No per-user LLM usage attributed yet.</div>
+                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--text-tertiary)" }}>No per-user model usage attributed yet.</div>
                 ) : (
                   <Table columns={userCostColumns} rows={tokenUsage.by_user} rowKey={(u) => u.user_id} onRowClick={(u) => viewActivity(u.user_id)} />
                 )}
@@ -253,7 +253,7 @@ export default function Admin() {
                   <div><div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Workspace</div><div style={{ fontSize: 13, color: "var(--text-primary)", marginTop: 2 }}>{activity.workspace?.name || "—"}</div></div>
                   <div><div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Role</div><div style={{ fontSize: 13, color: "var(--text-primary)", marginTop: 2 }}>{activity.user.role}</div></div>
                   <div><div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Last active</div><div className="tnum" style={{ fontSize: 13, color: "var(--text-primary)", marginTop: 2, fontFamily: "var(--font-mono)" }}>{activity.user.last_login_at ? new Date(activity.user.last_login_at).toLocaleString() : "Never"}</div></div>
-                  <div><div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>LLM cost driven</div><div className="tnum" style={{ fontSize: 13, color: "var(--text-primary)", marginTop: 2, fontFamily: "var(--font-mono)" }}>${activity.llm_cost_usd.toFixed(4)}</div></div>
+                  <div><div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Model cost driven</div><div className="tnum" style={{ fontSize: 13, color: "var(--text-primary)", marginTop: 2, fontFamily: "var(--font-mono)" }}>${activity.llm_cost_usd.toFixed(4)}</div></div>
                 </div>
 
                 <div>
@@ -273,9 +273,9 @@ export default function Admin() {
                 </div>
 
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", marginBottom: 8 }}>Recent LLM calls ({activity.llm_usage.length})</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", marginBottom: 8 }}>Recent model calls ({activity.llm_usage.length})</div>
                   {activity.llm_usage.length === 0 ? (
-                    <p style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>No LLM usage attributed to this user yet.</p>
+                    <p style={{ fontSize: 12.5, color: "var(--text-tertiary)" }}>No model usage attributed to this user yet.</p>
                   ) : (
                     <div style={{ border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
                       {activity.llm_usage.slice(0, 50).map((u, i) => (

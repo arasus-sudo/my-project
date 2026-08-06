@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Wand2 } from "lucide-react";
+import { Loader2, ImagePlus } from "lucide-react";
 import { api, isCreditError } from "../../../lib/api";
 
 const IMAGE_PROVIDERS = [
@@ -47,7 +47,7 @@ export default function AiImageDrawer({ onClose, onAddAsElement, onAddAsBackgrou
     <div className="fixed inset-0 bg-ink/40 z-50 flex justify-end" onClick={onClose}>
       <div className="w-full max-w-md bg-white h-full overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="ai-image-drawer">
         <div className="sticky top-0 bg-white border-b border-line px-5 py-4 flex items-center gap-3 z-10">
-          <Wand2 size={16} />
+          <ImagePlus size={16} />
           <div className="font-display font-bold">AI Image</div>
           <button onClick={onClose} className="ml-auto btn-ghost text-caption">Close</button>
         </div>
@@ -97,7 +97,7 @@ export default function AiImageDrawer({ onClose, onAddAsElement, onAddAsBackgrou
 
           <button onClick={generate} disabled={busy} data-testid="ai-image-generate"
             className="w-full btn-primary justify-center">
-            {busy ? <><Loader2 size={14} className="animate-spin" /> Generating (~30–60s)…</> : <><Wand2 size={14} /> Generate</>}
+            {busy ? <><Loader2 size={14} className="animate-spin" /> Generating (~30–60s)…</> : <><ImagePlus size={14} /> Generate</>}
           </button>
 
           {preview && (

@@ -1588,7 +1588,7 @@ function ReviewAndSendView({
                         </button>
                       )}
                       <button onClick={() => regenerateOpener(current.id)} disabled={generatingEmail === current.id} className="btn-ghost text-[11px] flex items-center gap-1">
-                        <RotateCw size={11} className={generatingEmail === current.id ? "animate-spin" : ""} /> {current.personalized ? "Regenerate" : "Generate with AI"}
+                        <RotateCw size={11} className={generatingEmail === current.id ? "animate-spin" : ""} /> {current.personalized ? "Regenerate" : "Generate"}
                       </button>
                     </>
                   )}
@@ -1677,7 +1677,7 @@ function ReviewAndSendView({
                       )
                     ) : (
                       !current.personalized ? (
-                        <span className="text-tiny text-fg-tertiary">Write an opener above (or generate with AI) to enable approval.</span>
+                        <span className="text-tiny text-fg-tertiary">Write an opener above (or generate one) to enable approval.</span>
                       ) : current.email_status === "approved" ? (
                         <>
                           <span className="flex items-center gap-1 text-tiny text-success font-medium"><Check size={11} /> Approved</span>

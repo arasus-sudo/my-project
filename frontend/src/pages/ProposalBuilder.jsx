@@ -5,7 +5,7 @@ import { PageHeader } from "../components/AppLayout";
 import RichEmailEditor, { sanitizeEmailHtml } from "../components/RichEmailEditor";
 import { toast } from "sonner";
 import {
-  Wand2, FileText, Download, Send, Check, Loader2, AlertTriangle, Plus, Trash2,
+  FileText, Download, Send, Check, Loader2, AlertTriangle, Plus, Trash2,
 } from "../icons";
 import Card from "../components/composites/Card";
 import Select from "../components/primitives/Select";
@@ -181,7 +181,7 @@ export default function ProposalBuilder() {
                 {template?.blurb && <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 6 }}>{template.blurb}</p>}
               </div>
 
-              <Button variant="primary" icon={chainStep ? Loader2 : Wand2} onClick={generate} isLoading={busy && !chainStep} disabled={busy}
+              <Button variant="primary" icon={chainStep ? Loader2 : FileText} onClick={generate} isLoading={busy && !chainStep} disabled={busy}
                 data-testid="generate-proposal-btn" className="w-full justify-center">
                 {chainStep ? "Drafting…" : "Generate proposal"}
               </Button>

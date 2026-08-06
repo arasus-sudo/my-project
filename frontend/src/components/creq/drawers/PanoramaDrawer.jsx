@@ -1,6 +1,6 @@
 import { useRef, useState, useLayoutEffect } from "react";
 import { toast } from "sonner";
-import { Loader2, Mountain, Wand2 } from "lucide-react";
+import { Loader2, Mountain, ImagePlus } from "lucide-react";
 import { api, isCreditError } from "../../../lib/api";
 import { CANVAS as DEFAULT_CANVAS } from "../../../lib/creqTemplates";
 import { panoramaSliceStyle } from "../PanoramaLayer";
@@ -110,14 +110,14 @@ export default function PanoramaDrawer({ onClose, panorama, slideCount, onApply,
           </div>
 
           <div className="border-t border-line pt-4">
-            <div className="ui-label mb-1.5">…or generate with AI</div>
+            <div className="ui-label mb-1.5">…or generate an image</div>
             <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3}
               placeholder={mode === "auto" ? "e.g. Cinematic mountain range, ultra-wide seamless" : "e.g. Soft cream paper texture with subtle grain"}
               data-testid="pano-prompt"
               className="w-full border border-line rounded-lg p-2 text-body focus:outline-none focus:border-ink" />
             <button onClick={generateWide} disabled={busy} data-testid="pano-generate"
               className="mt-2 w-full btn-secondary justify-center">
-              {busy ? <><Loader2 size={14} className="animate-spin" /> Generating (~60s)…</> : <><Wand2 size={14} /> Generate image</>}
+              {busy ? <><Loader2 size={14} className="animate-spin" /> Generating (~60s)…</> : <><ImagePlus size={14} /> Generate image</>}
             </button>
           </div>
 

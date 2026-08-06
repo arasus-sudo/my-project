@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Search, Sparkles, Image as ImageIcon } from "lucide-react";
+import { Loader2, Search, Image as ImageIcon } from "lucide-react";
 import { api } from "../../../lib/api";
 
 export default function StockPhotoDrawer({ onClose, onAddAsElement, onAddAsBackground, slideContent }) {
@@ -62,7 +62,7 @@ export default function StockPhotoDrawer({ onClose, onAddAsElement, onAddAsBackg
           {slideContent && (
             <button onClick={suggestFromSlide} disabled={suggesting} data-testid="stock-photo-suggest"
               className="w-full btn-ghost text-caption justify-center border border-dashed border-line">
-              {suggesting ? <><Loader2 size={13} className="animate-spin" /> Reading this slide…</> : <><Sparkles size={13} /> Suggest from this slide</>}
+              {suggesting ? <><Loader2 size={13} className="animate-spin" /> Reading this slide…</> : <><Search size={13} /> Suggest from this slide</>}
             </button>
           )}
 

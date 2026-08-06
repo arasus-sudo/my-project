@@ -315,7 +315,7 @@ export default function CampaignWizard() {
     return (
       <div className="card-floating p-5">
         <div className="text-card-title font-display font-semibold mb-4 flex items-center gap-2">
-          <BarChart3 size={16} /> AI Score
+          <BarChart3 size={16} /> Campaign Score
         </div>
         <div className="text-center mb-4">
           <div className={`font-display text-5xl font-bold tracking-tight ${getScoreColor(score.overall_score)}`}>
@@ -370,7 +370,7 @@ export default function CampaignWizard() {
     return (
       <div className="card-floating p-5">
         <div className="text-card-title font-display font-semibold mb-4 flex items-center gap-2">
-          <Zap size={16} /> AI Action Items
+          <Zap size={16} /> Action Items
         </div>
         <div className="space-y-2">
           {actions.map((a, i) => (

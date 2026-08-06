@@ -249,7 +249,7 @@ function WorkspaceSection({ user, workspace }) {
         <Row k="Owner" v={user?.email} />
         <Row k="Your role" v={user?.role || "org_admin"} />
         <Row k="Workspace ID" v={workspace?.id} mono />
-        <Row k="LLM quota used" v={String(workspace?.quota_used ?? 0)} mono />
+        <Row k="Quota used" v={String(workspace?.quota_used ?? 0)} mono />
       </div>
     </Card>
   );

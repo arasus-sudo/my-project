@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles, Loader2 } from "lucide-react";
+import { PenLine, FileText, Gauge, Loader2 } from "lucide-react";
 import { api, isCreditError } from "../../../lib/api";
 import { toast } from "sonner";
 import { newBlock } from "../blockRegistry";
@@ -18,8 +18,8 @@ export default function AiAssistant({ blocks, onBlocksChange, style }) {
       const { data } = await api.post("/signatures/ai-assist", { action, text: text || "", context: context || {} });
       return data.result;
     } catch (err) {
-      if (isCreditError(err)) toast.error("Out of credits for AI actions this cycle");
-      else toast.error("AI assist failed — try again");
+      if (isCreditError(err)) toast.error("Out of credits for assisted actions this cycle");
+      else toast.error("Assist failed — try again");
       return null;
     } finally {
       setBusy("");
@@ -67,29 +67,29 @@ export default function AiAssistant({ blocks, onBlocksChange, style }) {
   return (
     <div className="space-y-2">
       <button onClick={improveTagline} disabled={!!busy} className="w-full flex items-center gap-2 border border-line rounded-xl px-3 py-2 text-caption hover:border-ink/40 hover:bg-ash transition-colors disabled:opacity-50">
-        {busy === "improve_tagline" ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} className="text-ink-muted" />}
+        {busy === "improve_tagline" ? <Loader2 size={13} className="animate-spin" /> : <PenLine size={13} className="text-ink-muted" />}
         Improve tagline
       </button>
       <button onClick={() => rewriteTone("professional")} disabled={!!busy} className="w-full flex items-center gap-2 border border-line rounded-xl px-3 py-2 text-caption hover:border-ink/40 hover:bg-ash transition-colors disabled:opacity-50">
-        {busy === "tone_professional" ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} className="text-ink-muted" />}
+        {busy === "tone_professional" ? <Loader2 size={13} className="animate-spin" /> : <PenLine size={13} className="text-ink-muted" />}
         Rewrite: Professional tone
       </button>
       <button onClick={() => rewriteTone("executive")} disabled={!!busy} className="w-full flex items-center gap-2 border border-line rounded-xl px-3 py-2 text-caption hover:border-ink/40 hover:bg-ash transition-colors disabled:opacity-50">
-        {busy === "tone_executive" ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} className="text-ink-muted" />}
+        {busy === "tone_executive" ? <Loader2 size={13} className="animate-spin" /> : <PenLine size={13} className="text-ink-muted" />}
         Rewrite: Executive tone
       </button>
       <button onClick={generateDisclaimer} disabled={!!busy} className="w-full flex items-center gap-2 border border-line rounded-xl px-3 py-2 text-caption hover:border-ink/40 hover:bg-ash transition-colors disabled:opacity-50">
-        {busy === "generate_disclaimer" ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} className="text-ink-muted" />}
+        {busy === "generate_disclaimer" ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} className="text-ink-muted" />}
         Generate disclaimer
       </button>
       <button onClick={() => checkAccessibility(style)} disabled={!!busy} className="w-full flex items-center gap-2 border border-line rounded-xl px-3 py-2 text-caption hover:border-ink/40 hover:bg-ash transition-colors disabled:opacity-50">
-        {busy === "accessibility" ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} className="text-ink-muted" />}
+        {busy === "accessibility" ? <Loader2 size={13} className="animate-spin" /> : <Gauge size={13} className="text-ink-muted" />}
         Accessibility suggestions
       </button>
       {suggestion && (
         <p className="text-caption text-ink-muted bg-ash border border-line rounded-xl px-3 py-2">{suggestion}</p>
       )}
-      <p className="text-tiny text-ink-muted px-1">Each AI action uses 1 credit.</p>
+      <p className="text-tiny text-ink-muted px-1">Each assisted action uses 1 credit.</p>
     </div>
   );
 }

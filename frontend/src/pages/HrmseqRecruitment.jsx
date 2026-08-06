@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Plus, Users, Brain } from "../icons";
+import { Plus, Users, Crosshair } from "../icons";
 import { EmptyState } from "../components/composites/EmptyState";
 import { Modal, ModalContent } from "../components/composites/Modal";
 import Input from "../components/primitives/Input";
@@ -85,7 +85,7 @@ export default function HrmseqRecruitment() {
                       <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{c.email} · Stage: {c.stage}</div>
                       {c.score && <div style={{ fontSize: 11, color: "var(--color-primary)" }}>Score: {c.score}/100</div>}
                     </div>
-                    <Button variant="secondary" size="sm" icon={Brain} onClick={() => scoreCandidate(r.id, c.id)}>Score</Button>
+                    <Button variant="secondary" size="sm" icon={Crosshair} onClick={() => scoreCandidate(r.id, c.id)}>Score</Button>
                   </div>
                 ))}
               </div>

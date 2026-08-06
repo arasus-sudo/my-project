@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { Link, useNavigate } from "react-router-dom";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { Play, Pause, Plus, Workflow, Trash2, Copy, FileJson, LayoutTemplate, ChevronDown, Archive, CheckCircle, Folder, BarChart3, AlertTriangle, Check, Loader2, Users, TrendingUp, Sparkles, Activity } from "lucide-react";
+import { Play, Pause, Plus, Workflow, Trash2, Copy, FileJson, LayoutTemplate, ChevronDown, Archive, CheckCircle, Folder, BarChart3, AlertTriangle, Check, Loader2, Users, TrendingUp, Lightbulb, Activity } from "lucide-react";
 import { SkeletonTableRows } from "../components/ui/loading-states";
 import Table from "../components/composites/Table";
 import { EmptyState } from "../components/composites/EmptyState";
@@ -167,7 +167,7 @@ export default function Campaigns() {
     <div>
       <PageHeader
         title="Campaigns"
-        subtitle="Multi-step sequences with AI personalization and hard-stop on reply."
+        subtitle="Multi-step sequences with personalization and hard-stop on reply."
         right={
           <div className="flex items-center gap-2">
             <button onClick={() => nav("/app/campaigns/wizard")} data-testid="btn-ai-campaign" className="btn-secondary text-caption"><Workflow size={14} /> Wizard</button>
@@ -190,7 +190,7 @@ export default function Campaigns() {
                   </button>
                   <button onClick={() => { setCreateOpen(false); nav("/app/campaigns/wizard"); }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-body hover:bg-ds-hover text-left">
-                    <Workflow size={14} /> AI Wizard
+                    <Workflow size={14} /> Wizard
                   </button>
                 </div>
               )}
@@ -453,7 +453,7 @@ export default function Campaigns() {
       </Modal>
 
       <Modal open={optimizeModal} onOpenChange={(o) => { setOptimizeModal(o); if (!o) setOptimizeData(null); }}>
-        <ModalContent size="md" title="AI campaign optimizer">
+        <ModalContent size="md" title="Campaign optimizer">
           {optimizeLoading ? (
             <div className="flex items-center gap-3 py-8 justify-center">
               <Loader2 size={20} className="animate-spin" style={{ color: "var(--color-primary)" }} />
@@ -630,7 +630,7 @@ function campaignColumns({ nav, runPreflight, pause, complete, archive, duplicat
           <RowAction title="Duplicate" icon={Copy} onClick={() => duplicate(c)} />
           <RowAction title="Save as template" icon={LayoutTemplate} onClick={() => saveTemplate(c)} />
           <RowAction title="Funnel analytics" icon={TrendingUp} onClick={() => openFunnel(c.id)} />
-          <RowAction title="AI Optimize" icon={Sparkles} onClick={() => openOptimize(c.id)} hoverColor="var(--color-primary)" />
+          <RowAction title="Optimize" icon={Lightbulb} onClick={() => openOptimize(c.id)} hoverColor="var(--color-primary)" />
           <RowAction title="Contact states" icon={Users} onClick={() => openContacts(c.id)} />
           <RowAction title="A/B test results" icon={BarChart3} onClick={() => nav(`/app/campaigns/${c.id}/ab-test`)} />
           <RowAction title="Delete" icon={Trash2} onClick={() => remove(c.id)} hoverColor="var(--color-danger)" />

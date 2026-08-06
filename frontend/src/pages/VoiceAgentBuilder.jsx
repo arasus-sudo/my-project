@@ -426,7 +426,7 @@ export default function VoiceAgentBuilder() {
 
                 <Card title="Initial greeting">
                   <Input as="textarea" rows={2} label="Greeting message" value={c.greeting_message || ""} onChange={(e) => patchConfig({ greeting_message: e.target.value })}
-                    placeholder="Leave empty for AI-generated greeting. Example: Hi, this is Sarah calling from Innoira — do you have a moment to chat?"
+                    placeholder="Leave empty for a generated greeting. Example: Hi, this is Sarah calling from Innoira — do you have a moment to chat?"
                     help="This plays in the agent's voice the instant the call connects. Leave blank to have the AI generate one." />
                 </Card>
 

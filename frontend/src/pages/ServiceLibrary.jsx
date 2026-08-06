@@ -115,7 +115,7 @@ export default function ServiceLibrary() {
         input_text: aiInput,
         industry: form.industry || null,
       });
-      toast.success("AI-generated service created");
+      toast.success("Service created");
       setShowAiGen(false);
       setAiInput("");
       load();
@@ -129,7 +129,7 @@ export default function ServiceLibrary() {
     try {
       const urls = compUrls.split("\n").map((u) => u.trim()).filter(Boolean);
       await api.post(`/services/${id}/improve`, { competitor_urls: urls });
-      toast.success("Service improved with AI");
+      toast.success("Service improved");
       setShowImprove(null);
       setCompUrls("");
       load();
@@ -292,7 +292,7 @@ export default function ServiceLibrary() {
             />
             {aiMethod === "description" ? (
               <Input as="textarea" rows={4} value={aiInput} onChange={(e) => setAiInput(e.target.value)}
-                placeholder={"Describe your service in one sentence…\ne.g. 'We build AI-powered automation agents that handle repetitive business processes'"} />
+                placeholder={"Describe your service in one sentence…\ne.g. 'We build automation agents that handle repetitive business processes'"} />
             ) : (
               <Input value={aiInput} onChange={(e) => setAiInput(e.target.value)} placeholder="https://your-service-page.com" />
             )}

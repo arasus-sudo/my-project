@@ -116,7 +116,7 @@ export default function LeadSearch() {
     setSearchBusy(false);
   };
 
-  // ── AI Search ──
+  // ── Intelligent search ──
   const aiSearch = useCallback(async () => {
     if (!query.trim()) { toast.error("Describe your ideal lead"); return; }
     setAiBusy(true); setParsedFilters(null); setResults([]); setSelected(new Set());
@@ -270,7 +270,7 @@ export default function LeadSearch() {
             </div>
             <input value={query} onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") aiSearch(); }}
-              placeholder='AI Search — e.g. "CTOs at SaaS startups in Berlin, 50-200 employees, mobile numbers"'
+              placeholder='Search — e.g. "CTOs at SaaS startups in Berlin, 50-200 employees, mobile numbers"'
               className="ds-input w-full"
               style={{
                 paddingLeft: 40, paddingRight: 148, height: 46, borderRadius: "var(--radius-lg)",
@@ -282,7 +282,7 @@ export default function LeadSearch() {
                 <Lightbulb size={14} strokeWidth={1.5} aria-hidden="true" />
               </button>
               <Button variant="intel" size="sm" icon={aiBusy ? undefined : Search} isLoading={aiBusy} isDisabled={!query.trim()} onClick={aiSearch}>
-                {aiBusy ? "Analyzing…" : "AI Search"}
+                {aiBusy ? "Analyzing…" : "Search"}
               </Button>
             </div>
           </div>

@@ -5,7 +5,7 @@ import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
 import {
-  Trash2, Sparkles, ChevronLeft, ChevronRight, Wand2, Loader2, Check, LayoutGrid,
+  Trash2, ChevronLeft, ChevronRight, PenLine, Loader2, Check, LayoutTemplate, Palette,
 } from "lucide-react";
 import { PALETTES, blankSlide } from "../lib/creqTemplates";
 import PremiumCarouselWizard from "../components/creq/PremiumCarouselWizard";
@@ -29,13 +29,13 @@ const TOPIC_STARTERS = [
   "The anatomy of a scroll-stopping LinkedIn hook",
 ];
 
-/** Create EQ landing — three doors (blank canvas, standard AI, Premium AI),
+/** Create EQ landing — three doors (start blank, start with AI, Premium AI),
  * then every previously created deck inline below them, closest analog in
  * this codebase to how Claude Design Labs lays out its own project picker.
  * The old template-gallery filmstrip is gone entirely — no template ever
- * gets forwarded into an LLM prompt now (it never did; that filmstrip just
- * seeded a palette client-side), and removing it keeps this page to exactly
- * the three creation paths the product wants surfaced. */
+ * gets forwarded into a generation prompt now (it never did; that filmstrip
+ * just seeded a palette client-side), and removing it keeps this page to
+ * exactly the three creation paths the product wants surfaced. */
 export default function CreateEQProjects() {
   const nav = useNavigate();
   const [items, setItems] = useState([]);
@@ -63,25 +63,23 @@ export default function CreateEQProjects() {
       <div className="animate-fade-in px-6 sm:px-8 space-y-8 max-w-5xl">
         <div className="grid sm:grid-cols-3 gap-4">
           <OptionCard
-            icon={LayoutGrid}
-            title="Blank canvas"
-            description="Start empty, design freehand."
+            icon={LayoutTemplate}
+            title="Start from blank slides"
+            description="Pick a canvas size and build every slide freehand."
             testId="option-blank"
             onClick={() => setShowBlankDialog(true)}
           />
           <OptionCard
-            icon={Wand2}
-            title="Create by AI"
-            description="Describe a topic — a full deck, drafted and templated."
+            icon={PenLine}
+            title="Start with AI"
+            description="Describe a topic and get a full deck drafted, then edit anything."
             testId="option-standard"
             onClick={() => setWizard({ step: 1 })}
           />
           <OptionCard
-            icon={Sparkles}
-            title="Premium AI Carousel"
-            description="Per-slide creative direction + your brand, or AI-designed. Extra credits."
-            badge="LLM Design"
-            accent
+            icon={Palette}
+            title="Premium AI"
+            description="Per-slide creative direction with your brand locked in. Extra credits."
             testId="option-premium"
             onClick={() => setShowPremiumWizard(true)}
           />
@@ -154,25 +152,14 @@ export default function CreateEQProjects() {
   );
 }
 
-function OptionCard({ icon: Icon, title, description, badge, accent, onClick, testId }) {
+function OptionCard({ icon: Icon, title, description, onClick, testId }) {
   return (
     <button onClick={onClick} data-testid={testId}
-      className="text-left rounded-2xl border p-5 transition-colors hover:shadow-card-hover"
-      style={{
-        borderColor: accent ? "var(--color-primary)" : "var(--border-default, #E5E5E5)",
-        background: accent ? "var(--bg-surface)" : "white",
-      }}>
-      <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
-        style={{ background: accent ? "var(--color-primary)" : "#F4F4F5", color: accent ? "#fff" : "#141414" }}>
+      className="group text-left rounded-2xl border border-line bg-white p-5 transition-colors hover:border-[var(--color-primary)] active:border-[var(--color-primary)]">
+      <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 bg-ash text-ink transition-colors group-hover:bg-[var(--color-primary)] group-hover:text-white group-active:bg-[var(--color-primary)] group-active:text-white">
         <Icon size={18} strokeWidth={1.75} />
       </div>
-      <div className="flex items-center gap-1.5">
-        <div className="font-display font-semibold text-body">{title}</div>
-        {badge && (
-          <span className="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full"
-            style={{ background: "var(--color-primary)", color: "#fff" }}>{badge}</span>
-        )}
-      </div>
+      <div className="font-display font-semibold text-body">{title}</div>
       <div className="text-caption text-neutral-400 mt-1">{description}</div>
     </button>
   );
@@ -275,8 +262,8 @@ function NewCarouselWizard({ onClose, onCreated }) {
         {/* Header + step indicator */}
         <div className="px-4 sm:px-8 pt-6 pb-4">
           <div className="flex items-center gap-2 mb-3">
-            <Wand2 size={16} className="text-ink" />
-            <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">Create with AI · Step {step} of 4</div>
+            <PenLine size={16} className="text-ink" />
+            <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">Create · Step {step} of 4</div>
             <button onClick={onClose} className="ml-auto text-neutral-400 hover:text-ink text-body">Cancel</button>
           </div>
           <div className="flex gap-1">
@@ -411,7 +398,7 @@ function NewCarouselWizard({ onClose, onCreated }) {
           ) : (
             <button onClick={generate} disabled={busy} data-testid="wizard-generate"
               className="btn-primary disabled:opacity-60">
-              {busy ? <><Loader2 size={14} className="animate-spin" /> Drafting…</> : <><Sparkles size={14} /> Generate carousel</>}
+              {busy ? <><Loader2 size={14} className="animate-spin" /> Drafting…</> : <><Check size={14} /> Generate carousel</>}
             </button>
           )}
         </div>

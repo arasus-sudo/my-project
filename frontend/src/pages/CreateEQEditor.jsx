@@ -313,7 +313,7 @@ export default function CreateEQEditor() {
   const palette = useMemo(() => {
     if (proj?.palette_id === "ai" && proj?.ai_palette) {
       const ai = proj.ai_palette;
-      return { id: "ai", name: "AI-designed", bg: ai.bg, bg2: ai.bg2, accent: ai.accent, text: ai.text, muted: ai.muted };
+      return { id: "ai", name: "Generated", bg: ai.bg, bg2: ai.bg2, accent: ai.accent, text: ai.text, muted: ai.muted };
     }
     return PALETTES.find((p) => p.id === proj?.palette_id) || PALETTES[0];
   }, [proj?.palette_id, proj?.ai_palette]);
@@ -1521,11 +1521,11 @@ export default function CreateEQEditor() {
       });
       if (data?.slide?.title) {
         patchElement(selected.id, { text: data.slide.title });
-        toast.success("Rewritten by AI");
+        toast.success("Rewritten");
       } else {
         toast.error("No rewrite returned");
       }
-    } catch (err) { if (!isCreditError(err)) toast.error("AI assist failed"); }
+    } catch (err) { if (!isCreditError(err)) toast.error("Assist failed"); }
     finally { setBusy(false); }
   };
 
@@ -1551,7 +1551,7 @@ export default function CreateEQEditor() {
       mutate((n) => { n.slides.push(...newSlides); });
       setActiveSlide(proj.slides.length);
       setShowGenerateContent(false);
-      toast.success(`Added ${newSlides.length} AI-generated slide${newSlides.length === 1 ? "" : "s"}`);
+      toast.success(`Added ${newSlides.length} generated slide${newSlides.length === 1 ? "" : "s"}`);
     } catch (err) { if (!isCreditError(err)) toast.error("Generation failed — try again"); }
     finally { setBusy(false); }
   };
@@ -1581,9 +1581,9 @@ export default function CreateEQEditor() {
               {viewMode === "focus" ? <><LayoutGrid size={14} /><span className="hidden 2xl:inline"> Board</span></> : <><Maximize2 size={14} /><span className="hidden 2xl:inline"> Focus</span></>}
             </button>
             <button onClick={() => setShowPreview(true)} title="Preview deck" data-testid="preview-open-btn" className="btn-secondary btn-sm"><Play size={14} /><span className="hidden 2xl:inline"> Preview</span></button>
-            <button onClick={() => setShowGenerateContent(true)} title="Generate slide content with AI" data-testid="generate-content-open" className="btn-secondary btn-sm"><PenSquare size={14} /><span className="hidden 2xl:inline"> Generate content</span></button>
+            <button onClick={() => setShowGenerateContent(true)} title="Generate slide content" data-testid="generate-content-open" className="btn-secondary btn-sm"><PenSquare size={14} /><span className="hidden 2xl:inline"> Generate content</span></button>
             <button onClick={() => setShowPanorama(true)} title="Panorama background across slides" data-testid="panorama-open" className="btn-secondary btn-sm"><Mountain size={14} /><span className="hidden 2xl:inline"> Panorama</span></button>
-            <button onClick={() => setShowAiImage(true)} title="Generate an image with AI" data-testid="ai-image-open" className="btn-secondary btn-sm"><ImagePlus size={14} /><span className="hidden 2xl:inline"> Generate image</span></button>
+            <button onClick={() => setShowAiImage(true)} title="Generate an image" data-testid="ai-image-open" className="btn-secondary btn-sm"><ImagePlus size={14} /><span className="hidden 2xl:inline"> Generate image</span></button>
             <button onClick={() => setShowStockPhotos(true)} title="Search stock photos" data-testid="stock-photos-open" className="btn-secondary btn-sm"><Search size={14} /><span className="hidden 2xl:inline"> Stock photos</span></button>
             <button onClick={() => setShowImageGallery(true)} title="Workspace image gallery" data-testid="image-gallery-open" className="btn-secondary btn-sm"><ImageIcon size={14} /><span className="hidden 2xl:inline"> Images</span></button>
             <button onClick={() => setShowBrandKit(true)} title="Apply a brand kit" data-testid="brand-kit-open" className="btn-secondary btn-sm"><Palette size={14} /><span className="hidden 2xl:inline"> Brand kit</span></button>

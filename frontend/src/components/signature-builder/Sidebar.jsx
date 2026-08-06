@@ -1,5 +1,5 @@
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "../ui/accordion";
-import { LayoutTemplate, Blocks, Palette, Plus, Sparkles, ShieldCheck } from "lucide-react";
+import { LayoutTemplate, Blocks, Palette, Plus, MessageSquare, ShieldCheck } from "lucide-react";
 import { BLOCK_REGISTRY } from "./blockRegistry";
 import { SIGNATURE_TEMPLATES } from "./templates";
 import { FONT_CHOICES } from "./renderHtml";
@@ -78,7 +78,7 @@ export default function Sidebar({ style, onStyleChange, onAddBlock, onLoadTempla
 
       <AccordionItem value="ai">
         <AccordionTrigger className="px-3">
-          <span className="inline-flex items-center gap-2"><Sparkles size={14} /> AI Assistant</span>
+          <span className="inline-flex items-center gap-2"><MessageSquare size={14} /> Assistant</span>
         </AccordionTrigger>
         <AccordionContent className="px-3">
           <AiAssistant blocks={blocks} onBlocksChange={onBlocksChange} style={style} />

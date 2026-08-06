@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { api, isCreditError } from "../lib/api";
 import { toast } from "sonner";
-import { Loader2, Search, X, Plus, Sparkles } from "lucide-react";
+import { Loader2, Search, X, Plus, Target } from "lucide-react";
 
-/** Prospect Finder drawer — lead providers + LLM icebreaker */
+/** Prospect Finder drawer — lead providers + icebreaker */
 export default function ProspectFinder({ open, onClose, onDone }) {
   const [icps, setIcps] = useState([]);
   const [icpModalOpen, setIcpModalOpen] = useState(false);
@@ -208,7 +208,7 @@ export default function ProspectFinder({ open, onClose, onDone }) {
               <div className="font-display font-bold text-xl">New ICP</div>
               <button type="button" onClick={generateIcpFromDeals} disabled={icpGenBusy}
                 className="btn-secondary text-caption">
-                {icpGenBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                {icpGenBusy ? <Loader2 size={12} className="animate-spin" /> : <Target size={12} />}
                 Generate from won deals
               </button>
             </div>

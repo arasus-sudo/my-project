@@ -105,7 +105,7 @@ export default function CompanyIntel() {
           <EmptyState
             icon={Globe}
             title="No companies analysed yet"
-            description="Enter a company website above and we'll crawl every page — homepage, about, services, blog, pricing, case studies, and more — then AI builds a complete intelligence profile."
+            description="Enter a company website above and we'll crawl every page — homepage, about, services, blog, pricing, case studies, and more — then build a complete intelligence profile."
           />
         ) : (
           <div className="grid lg:grid-cols-3 gap-6">

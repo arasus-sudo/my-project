@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { toast } from "sonner";
-import { ArrowRight, Sparkles, Check, Loader2, X } from "../icons";
+import { ArrowRight, ListChecks, Check, Loader2, X } from "../icons";
 import Input from "../components/primitives/Input";
 import Select from "../components/primitives/Select";
 import Button from "../components/primitives/Button";
@@ -142,7 +142,7 @@ export default function SocialSetup() {
         {step === 1 && (
           <StepPanel>
             <div className="flex items-center gap-1" style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-tertiary)", marginBottom: 12 }}>
-              <Sparkles size={12} strokeWidth={1.5} aria-hidden="true" /> Step 1 of 3
+              <ListChecks size={12} strokeWidth={1.5} aria-hidden="true" /> Step 1 of 3
             </div>
             <h1 style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 600, color: "var(--text-primary)" }}>Tell Social EQ who you are.</h1>
             <p style={{ marginTop: 12, fontSize: 14, color: "var(--text-secondary)" }}>
