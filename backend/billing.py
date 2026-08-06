@@ -85,6 +85,11 @@ CREDIT_COSTS: Dict[str, int] = {
     "voice_call_minute": 20,
     "proposal_generate": 60,
     "carousel_generate": 40,
+    # ~1.75x standard, not 15x — the premium call is one richer structured
+    # completion (narrative/intent/emotion/hierarchy in one schema), not a
+    # chain of 15 LLM calls; see docs/createeq-handbook/ch16 §16.5 for the
+    # cost reasoning this price reflects.
+    "carousel_generate_premium": 70,
     "ai_image": 25,
     "email_draft_chain": 8,   # four LLM calls: angle -> draft -> humanise
     "lead_research": 8,       # site crawl + news + GitHub fan-out
@@ -122,6 +127,7 @@ ACTION_LABELS = {
     "voice_call_minute": "Voice call (per minute)",
     "proposal_generate": "Proposal generated",
     "carousel_generate": "Deck generated",
+    "carousel_generate_premium": "Deck generated (Premium AI Design)",
     "ai_image": "AI image",
     "email_draft_chain": "Researched email written",
     "lead_research": "Lead researched",
@@ -155,6 +161,7 @@ ACTION_AGENT = {
     "voice_call_minute": "voice",
     "proposal_generate": "proposal",
     "carousel_generate": "create",
+    "carousel_generate_premium": "create",
     "ai_image": "create",
     "email_draft_chain": "pitch",
     "lead_research": "pitch",
