@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { X, ChevronLeft, ChevronRight, Play, Pause } from "lucide-react";
-import { CANVAS } from "../../lib/creqTemplates";
+import { CANVAS as DEFAULT_CANVAS } from "../../lib/creqTemplates";
 import { renderBackground } from "./utils";
 import ElementRender from "./ElementRender";
 import PanoramaLayer from "./PanoramaLayer";
@@ -14,6 +14,7 @@ const AUTOPLAY_MS = 3500;
  * what you preview is what actually gets exported — no separate rendering
  * path to drift out of sync. */
 export default function SlidePreview({ proj, palette, startIndex = 0, onClose }) {
+  const CANVAS = proj?.canvas?.w && proj?.canvas?.h ? proj.canvas : DEFAULT_CANVAS;
   const total = proj.slides.length;
   const [idx, setIdx] = useState(Math.min(Math.max(startIndex, 0), total - 1));
   const [playing, setPlaying] = useState(false);
@@ -44,7 +45,8 @@ export default function SlidePreview({ proj, palette, startIndex = 0, onClose })
     return () => window.removeEventListener("keydown", onKey);
   }, [next, prev, onClose]);
 
-  // Fit the fixed 1080×1350 canvas to whatever viewport the preview opens in.
+  // Fit this deck's actual canvas (its own format — LinkedIn/Square/Story/
+  // custom) to whatever viewport the preview opens in.
   useEffect(() => {
     const fit = () => {
       const availW = window.innerWidth - 140;
@@ -86,7 +88,7 @@ export default function SlidePreview({ proj, palette, startIndex = 0, onClose })
             transform: `scale(${scale})`, transformOrigin: "top left",
             background: renderBackground(slide.bg, palette),
           }}>
-            <PanoramaLayer panorama={proj.panorama} slideIdx={idx} totalSlides={total} />
+            <PanoramaLayer panorama={proj.panorama} slideIdx={idx} totalSlides={total} canvas={CANVAS} />
             {slide.elements.map((el) => (
               <ElementRender key={el.id} el={el} palette={palette} onPointerDown={() => {}} />
             ))}

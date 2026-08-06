@@ -1,0 +1,225 @@
+// Shared vertical-flow layout primitives — canvas-size-aware text-height
+// estimation and a flow cursor so no composition (standard OR premium) can
+// place two blocks on top of each other, regardless of how much text the
+// model returns or what canvas dimensions the deck was created at (LinkedIn
+// 1080x1350, Instagram Square 1080x1080, Instagram Story 1080x1920, or a
+// custom size). Extracted out of creqPremiumEngine.js so legacySlideToElements
+// (standard mode) can share the same overlap-proof positioning instead of the
+// old fixed-literal-pixel layout that only ever worked for one canvas size.
+
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+/* --------------------------- Text-height estimation ------------------------ */
+// No canvas/DOM measurement available in the off-DOM slide-building path, so
+// this approximates: average glyph width as a fraction of font size (~0.56
+// for the sans/display faces this deck uses), wrap at that estimate, then
+// account for explicit newlines separately. Deliberately conservative (rounds
+// UP) — a box slightly too tall costs empty space; one too short overlaps
+// the next block, which was the original bug this replaced.
+export function estimateLines(text, boxWidth, fontSize, avgCharWidthRatio = 0.56) {
+  if (!text) return 0;
+  const charsPerLine = Math.max(1, Math.floor(boxWidth / (fontSize * avgCharWidthRatio)));
+  let total = 0;
+  for (const manualLine of String(text).split("\n")) {
+    total += manualLine.length === 0 ? 1 : Math.max(1, Math.ceil(manualLine.length / charsPerLine));
+  }
+  return total;
+}
+
+export function estimateBlockHeight(text, boxWidth, fontSize, lineHeight = 1.2, avgCharWidthRatio = 0.56) {
+  return Math.ceil(estimateLines(text, boxWidth, fontSize, avgCharWidthRatio) * fontSize * lineHeight);
+}
+
+/** Average glyph width as a fraction of font size, per family. A single shared
+ * constant mis-measures both ends of the type system — the display serif is
+ * materially narrower than a grotesque and the mono is wider — and because the
+ * composer and the geometry audit BOTH estimate height, any disagreement
+ * between them makes the audit "correct" boxes that were already right,
+ * pushing them into their neighbours. Both sides call this. */
+const CHAR_RATIO = {
+  "Instrument Serif": 0.40,
+  "JetBrains Mono": 0.60,
+  Inter: 0.52,
+};
+
+/** Letter-spacing is specified in em, so it adds to effective glyph width 1:1. */
+export function charRatio(font, tracking = 0, uppercase = false) {
+  const base = CHAR_RATIO[font] ?? 0.54;
+  return base * (uppercase ? 1.08 : 1) + Math.max(0, tracking || 0);
+}
+
+/* ------------------------------ Element helpers --------------------------- */
+
+export const textEl = (over) => ({ id: uid(), type: "text", align: "left", letter_spacing: -0.01, line_height: 1.2, weight: 700, color: "text", font: "Inter", ...over });
+export const shapeEl = (over) => ({ id: uid(), type: "shape", shape: "rect", fill: "accent", opacity: 1, radius: 0, ...over });
+export const badgeEl = (over) => ({ id: uid(), type: "badge", bg: "accent", color: "bg", radius: 999, size: 20, ...over });
+
+/** Padding/content-width scale proportionally with canvas size instead of a
+ * literal 80px that only ever looked right on the 1080-wide authoring
+ * canvas — a 1080x1920 Story canvas or a small custom size both need this to
+ * track their own width, not LinkedIn's. */
+export function contentBox(canvas) {
+  const pad = Math.round(canvas.w * 0.074); // ≈80px at 1080 wide
+  return { pad, cw: canvas.w - pad * 2 };
+}
+
+/** A vertical-flow cursor: each `add*` call estimates the real height its
+ * content needs at the given font size, places it at the current y, and
+ * advances by (height + gap) — no two blocks can land on top of each other
+ * regardless of how long the generated copy turns out to be. */
+export function makeFlow(x, startY, width) {
+  let y = startY;
+  const els = [];
+  return {
+    els,
+    cursorY: () => y,
+    addText(str, { font, size, weight, color = "text", lineHeight = 1.2, gap = 24, uppercase = false, letterSpacing, align = "left", boxX = x, boxW = width } = {}) {
+      if (!str) return;
+      const h = estimateBlockHeight(str, boxW, size, lineHeight);
+      els.push(textEl({
+        x: boxX, y, w: boxW, h, text: str, font, size, weight, color,
+        line_height: lineHeight, uppercase, align,
+        ...(letterSpacing !== undefined ? { letter_spacing: letterSpacing } : {}),
+      }));
+      y += h + gap;
+    },
+    addRule({ w = 160, h = 8, gap = 24 } = {}) {
+      els.push(shapeEl({ x, y, w, h, radius: h / 2 }));
+      y += h + gap;
+    },
+    addBadge(str, { size = 22, gap = 24 } = {}) {
+      if (!str) return;
+      els.push(badgeEl({ x, y, text: str, size }));
+      y += size + 40 + gap;
+    },
+    remaining: (canvas) => Math.max(0, canvas.h - Math.round(canvas.w * 0.074) - y),
+  };
+}
+
+/** If a flow overran the canvas (long generated copy at a composition's
+ * default sizes), shrink every text element's font size by the same factor
+ * so the deck stays legible instead of clipping or overlapping the canvas
+ * edge — single pass, not a retry loop, since compositions already pick
+ * conservative starting sizes. */
+export function fitToCanvas(flow, canvas) {
+  const safeBottom = canvas.h - Math.round(canvas.w * 0.074);
+  const overflow = flow.cursorY() - safeBottom;
+  if (overflow <= 0) return flow.els;
+  const totalTextHeight = flow.els.reduce((sum, e) => sum + (e.type === "text" ? e.h : 0), 0) || 1;
+  const shrink = Math.max(0.6, 1 - overflow / totalTextHeight);
+  return flow.els.map((e) => e.type === "text" ? { ...e, size: Math.round(e.size * shrink), h: Math.round(e.h * shrink) } : e);
+}
+
+/* -------------------------------- Anchoring -------------------------------- */
+
+/** Bounding box of a built element list. */
+export function measureBlock(els) {
+  if (!els.length) return { top: 0, bottom: 0, height: 0 };
+  const top = Math.min(...els.map((e) => e.y));
+  const bottom = Math.max(...els.map((e) => e.y + (e.h || 0)));
+  return { top, bottom, height: bottom - top };
+}
+
+/**
+ * Shift a built block vertically so it sits where the composition INTENDED,
+ * rather than wherever the flow cursor happened to end up.
+ *
+ * This is the fix for the single most visible flaw in the old engine: every
+ * composition flushed its content to the top of the canvas, so a slide with
+ * three words of copy rendered as a small huddle of text above 60% empty
+ * canvas. Editorial decks anchor deliberately — a cover's title block sits low,
+ * a statement sits optically centred (slightly above true centre, which reads
+ * as centred to the eye), body slides start below the top margin.
+ *
+ * `optical` biases centring upward by 3% of canvas height; true mathematical
+ * centring consistently looks low.
+ */
+export function anchorBlock(els, canvas, anchor = "top", { top, bottom, optical = true } = {}) {
+  if (!els.length) return els;
+  const pad = Math.round(canvas.w * 0.093);
+  const topLimit = top ?? pad;
+  const bottomLimit = bottom ?? canvas.h - pad;
+  const box = measureBlock(els);
+  let targetTop = box.top;
+
+  if (anchor === "center") {
+    targetTop = topLimit + (bottomLimit - topLimit - box.height) / 2 - (optical ? canvas.h * 0.03 : 0);
+  } else if (anchor === "bottom") {
+    targetTop = bottomLimit - box.height;
+  } else {
+    targetTop = topLimit;
+  }
+  // Never push content off either edge to satisfy an anchor — a block taller
+  // than its own slot just starts at the top limit and lets the shrink/audit
+  // passes deal with the overflow.
+  targetTop = Math.max(topLimit, Math.min(targetTop, bottomLimit - box.height));
+  if (box.height > bottomLimit - topLimit) targetTop = topLimit;
+
+  const dy = Math.round(targetTop - box.top);
+  if (dy === 0) return els;
+  return els.map((e) => (e._pin ? e : { ...e, y: e.y + dy }));
+}
+
+/* ------------------------------ Geometry audit ----------------------------- */
+// The deterministic half of "loop engineering" (see ch16-creative-reasoning-
+// engine.md §16.3.1's Eye Tracking / Self Critique stages): after a slide's
+// elements are built, check for real geometry problems — overlapping text
+// boxes, elements that landed off-canvas, boxes narrower/shorter than their
+// own estimated content needs — and correct them in place. This runs on
+// every premium slide (and can run on standard slides too) with no extra LLM
+// call; it's the fast, free, always-on half of the refinement loop. A second,
+// LLM-driven qualitative pass (regenerate copy on slides that still look
+// weak) is layered on top in creqPremiumEngine.js's refineDeck() — this
+// function is the geometry guardrail under it, not a replacement for it.
+export function auditAndCorrect(elements, canvas) {
+  const texts = elements.filter((e) => e.type === "text");
+  const issues = [];
+  // 1) Off-canvas: clamp any element whose box extends past the canvas.
+  for (const e of elements) {
+    if (e.x < 0) { e.x = 0; issues.push(`${e.id} clamped x`); }
+    if (e.y < 0) { e.y = 0; issues.push(`${e.id} clamped y`); }
+    if (e.x + (e.w || 0) > canvas.w) { e.x = Math.max(0, canvas.w - (e.w || 0)); issues.push(`${e.id} clamped right edge`); }
+    if (e.y + (e.h || 0) > canvas.h) { e.y = Math.max(0, canvas.h - (e.h || 0)); issues.push(`${e.id} clamped bottom edge`); }
+  }
+  // 2) Re-verify every text box is tall enough for its own content at its
+  // final font size — a shrink pass upstream (fitToCanvas) can leave a box
+  // sized for the PRE-shrink font; regrow to the shrunk estimate so text
+  // never clips against its own box.
+  for (const e of texts) {
+    if (e._hlock) continue; // height declared deliberately by the composition
+    // Same measurement the composer used — see charRatio()'s note on why a
+    // mismatch here actively creates the overlaps this pass exists to prevent.
+    const needed = estimateBlockHeight(e.text, e.w, e.size, e.line_height || 1.2,
+      charRatio(e.font, e.letter_spacing, e.uppercase));
+    if (needed > e.h) { e.h = needed; issues.push(`${e.id} regrown to fit its own text`); }
+  }
+  // 3) Overlap resolution: sort by y, push down any text block whose box top
+  // starts before the previous block's box actually ends (can happen after
+  // rule 2 regrows an earlier block).
+  // Two boxes only collide if they overlap on BOTH axes. Checking y alone
+  // treats a deliberate two-column layout (headline left, body right, same y)
+  // as a collision and shoves the right column below the left one — which is
+  // exactly what it used to do. `_pin`ned elements are absolutely placed on
+  // purpose and are never moved.
+  // `_fixed` text is positioned RELATIVE TO SOMETHING ELSE — a button's label,
+  // a panel's inner copy, a list row's index numeral. Moving it independently
+  // separates it from the thing it belongs to (the CTA label used to get
+  // pushed clean out of its own button), so it is never a push target.
+  // `_pin` additionally opts out of anchoring.
+  const overlapsX = (a, b) => a.x < b.x + (b.w || 0) && b.x < a.x + (a.w || 0);
+  const sorted = texts.filter((e) => !e._pin && !e._fixed).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < sorted.length; i++) {
+    const cur = sorted[i];
+    for (let j = 0; j < i; j++) {
+      const prev = sorted[j];
+      if (!overlapsX(prev, cur)) continue;
+      const prevBottom = prev.y + prev.h;
+      if (cur.y < prevBottom) {
+        const shift = prevBottom - cur.y + 16;
+        cur.y += shift;
+        issues.push(`${cur.id} pushed down ${shift}px to clear overlap with ${prev.id}`);
+      }
+    }
+  }
+  return { elements, issues };
+}

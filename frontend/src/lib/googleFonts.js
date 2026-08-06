@@ -47,6 +47,25 @@ export function ensureProjectFontsLoaded(slides) {
   return families;
 }
 
+/** Every distinct (family, weight, italic) combo actually used in the deck —
+ *  `document.fonts.load` resolves per face, not per family, so waiting on
+ *  just the family's regular weight leaves a bold/italic heading rasterized
+ *  in the fallback face (wrong metrics -> text and anything sized to it,
+ *  like an auto-sized badge, lands in the wrong place in the export). */
+function projectFontFaces(slides) {
+  const faces = new Map(); // key -> {family, weight, italic}
+  for (const slide of slides || []) {
+    for (const el of slide.elements || []) {
+      if (el.type !== "text" || !el.font) continue;
+      const weight = el.weight || 400;
+      const italic = !!el.italic;
+      const key = `${el.font}__${weight}__${italic}`;
+      if (!faces.has(key)) faces.set(key, { family: el.font, weight, italic });
+    }
+  }
+  return [...faces.values()];
+}
+
 /** Export needs a stronger guarantee than "the <link> exists" — html2canvas
  *  rasterizes whatever is on screen the instant it's called, and injecting a
  *  stylesheet link doesn't mean the browser has fetched/parsed that font yet.
@@ -55,14 +74,22 @@ export function ensureProjectFontsLoaded(slides) {
  *  the fetch and resolves once it's actually usable; a per-font timeout keeps
  *  one slow/unavailable family from hanging the whole export. */
 export async function waitForProjectFonts(slides, timeoutMs = 4000) {
-  const families = ensureProjectFontsLoaded(slides);
-  if (!families.size || !document.fonts?.load) return;
+  ensureProjectFontsLoaded(slides);
+  const faces = projectFontFaces(slides);
+  if (!faces.length || !document.fonts?.load) return;
 
   const withTimeout = (p) => Promise.race([
     p, new Promise((resolve) => setTimeout(resolve, timeoutMs)),
   ]);
 
   await Promise.all(
-    [...families].map((f) => withTimeout(document.fonts.load(`16px "${f}"`).catch(() => {})))
+    faces.map(({ family, weight, italic }) =>
+      withTimeout(document.fonts.load(`${italic ? "italic " : ""}${weight} 16px "${family}"`).catch(() => {}))
+    )
   );
+  // document.fonts.load resolving means the fetch settled, not that the face
+  // is registered and ready to paint with — document.fonts.ready is the only
+  // API that actually guarantees that, and html2canvas paints synchronously
+  // off the DOM the instant it's called.
+  await withTimeout(document.fonts.ready);
 }

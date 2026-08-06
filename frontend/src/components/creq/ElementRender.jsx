@@ -62,7 +62,7 @@ function BadgeEl({ el, style, bind, onMeasure }) {
  * SelectionChrome (an overlay sibling), NOT here — this component renders the
  * pure element, identically for the live canvas and the off-screen export
  * tree. The `.creq-el` class carries the CSS-only hover affordance. */
-function ElementRender({ el, palette, onPointerDown, onMeasure, onDoubleClick, editing, isDropTarget, isRepositioning, onImageDrop, onContextMenu }) {
+function ElementRender({ el, palette, onPointerDown, onMeasure, onDoubleClick, editing, isDropTarget, isRepositioning, onImageDrop, onContextMenu, isExport }) {
   const common = {
     position: "absolute",
     left: el.x, top: el.y, width: el.w, height: el.h,
@@ -206,15 +206,39 @@ function ElementRender({ el, palette, onPointerDown, onMeasure, onDoubleClick, e
       }}>
         {el.src ? (
           <>
-            <img src={el.src} alt="" crossOrigin="anonymous"
-              style={{
-                width: "100%", height: "100%", objectFit: el.fit || "cover",
-                display: "block", pointerEvents: "none", imageRendering: "auto",
-                filter: imgFilter, opacity: imgOpacity,
-                transform: imgTransform,
-                transformOrigin: "center",
-              }}
-              onError={(e) => { e.currentTarget.style.opacity = 0.2; }} />
+            {isExport ? (
+              // html2canvas (v1.4.1, as of writing) does not support CSS
+              // object-fit on <img> — contain/cover are silently ignored and
+              // the image gets cropped/stretched to fill the box, which is
+              // what made brand logos render narrower than authored. Its
+              // background-image handling IS correct, so the export tree
+              // paints via a background layer instead; a 1x1 <img> stays in
+              // the DOM purely so the existing "wait for every <img> to
+              // load" step before rasterizing still finds and awaits it.
+              <>
+                <div style={{
+                  position: "absolute", inset: 0,
+                  backgroundImage: `url(${el.src})`,
+                  backgroundSize: el.fit === "contain" ? "contain" : "cover",
+                  backgroundPosition: "center", backgroundRepeat: "no-repeat",
+                  filter: imgFilter, opacity: imgOpacity,
+                  transform: imgTransform, transformOrigin: "center",
+                }} />
+                <img src={el.src} alt="" crossOrigin="anonymous"
+                  style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+                  onError={(e) => { e.currentTarget.style.opacity = 0; }} />
+              </>
+            ) : (
+              <img src={el.src} alt="" crossOrigin="anonymous"
+                style={{
+                  width: "100%", height: "100%", objectFit: el.fit || "cover",
+                  display: "block", pointerEvents: "none", imageRendering: "auto",
+                  filter: imgFilter, opacity: imgOpacity,
+                  transform: imgTransform,
+                  transformOrigin: "center",
+                }}
+                onError={(e) => { e.currentTarget.style.opacity = 0.2; }} />
+            )}
             {effectDef?.overlay === "vignette" && (
               <div style={{ position: "absolute", inset: 0, pointerEvents: "none",
                 background: "radial-gradient(circle, transparent 50%, rgba(0,0,0,0.5) 100%)" }} />

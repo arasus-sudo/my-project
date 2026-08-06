@@ -4078,9 +4078,11 @@ async def delete_brandkit(bid: str, user=Depends(current_user)):
 # ----------------------------- Create EQ (Carousel Agent) --------------------
 PLATFORM_DIMS = {
     "linkedin": {"w": 1080, "h": 1350, "label": "LinkedIn Deck"},
-    "square": {"w": 1080, "h": 1080, "label": "Square Social"},
+    "square": {"w": 1080, "h": 1080, "label": "Instagram Square"},
+    "instagram_story": {"w": 1080, "h": 1920, "label": "Instagram Story / Reel"},
     "twitter": {"w": 1080, "h": 1350, "label": "Twitter Cheat Sheet"},
 }
+CUSTOM_DIM_MIN, CUSTOM_DIM_MAX = 320, 2160
 
 
 class BrandKit(BaseModel):
@@ -4098,6 +4100,18 @@ class CarouselGenIn(BaseModel):
     brand: Optional[BrandKit] = None
     tone: str = "confident, punchy"
     source_url: Optional[str] = None
+    # "standard" = today's single hook/body/cta pass (cheap, fast, unchanged).
+    # "premium" = richer per-slide creative brief (narrative/intent/emotion/
+    # hierarchy) that the frontend's composition engine uses to pick a
+    # content-aware layout instead of one fixed template — see
+    # docs/createeq-handbook/ch16-creative-reasoning-engine.md. Costs more
+    # credits (billing.CREDIT_COSTS["carousel_generate_premium"]) because it's
+    # a materially richer completion, not because it's slower or chained.
+    design_mode: str = "standard"
+    # platform="custom" pairs with these — any other platform value ignores
+    # them and uses PLATFORM_DIMS[platform] instead.
+    custom_w: Optional[int] = None
+    custom_h: Optional[int] = None
 
 
 class CarouselEditIn(BaseModel):
@@ -4108,6 +4122,62 @@ class CarouselEditIn(BaseModel):
 
 class BrandFromUrlIn(BaseModel):
     url: str
+
+
+# Expanded intent taxonomy for design_mode="premium" — lets the frontend's
+# composition engine pick a content-aware layout instead of the one fixed
+# hook/body/cta template every standard-mode slide gets. See
+# docs/createeq-handbook/ch16-creative-reasoning-engine.md §16.3.1 for why
+# this is one richer structured call rather than a chain of calls: narrative,
+# intent classification, visual metaphor, editorial direction, and emotion
+# are all things a single well-specified JSON schema can produce in one
+# completion — density scoring, composition selection, typography scale, and
+# novelty tracking are deliberately NOT asked of the model here; they're pure
+# arithmetic/rules-table logic done in the frontend against real generated
+# text, which is both cheaper and more reliable than asking an LLM to reason
+# about its own output's word count.
+CREQ_PREMIUM_KINDS = [
+    "warning", "celebration", "proof", "comparison", "timeline", "failure", "success",
+    "statistics", "framework", "prediction", "story", "quote", "lesson", "question",
+    "cta", "checklist", "myth", "reality",
+]
+CREQ_PREMIUM_EMOTIONS = [
+    "urgency", "hope", "luxury", "curiosity", "fear", "confidence", "authority",
+    "wonder", "excitement", "calm",
+]
+CREQ_PREMIUM_DIRECTIONS = [
+    "swiss", "minimal", "magazine", "financial", "startup", "luxury", "documentary",
+    "scientific", "poster", "report",
+]
+
+# --- Claude Design system (premium mode) ---------------------------------
+# The model chooses FROM this system; it never invents colour or position.
+# Every hex, type size, margin and anchor lives in
+# frontend/src/lib/creqClaudeDesign.js — these ids are the contract between
+# the two. Keep them in sync with PALETTE_FAMILIES / ARCHETYPES there.
+#
+# This replaced an earlier design where the model returned five free-form hex
+# values per deck ("deck_theme"). That reliably produced off-system palettes:
+# an LLM asked for "a cohesive 5-colour identity" returns plausible-sounding
+# but generic colour, and no amount of prompt tightening fixed the underlying
+# problem, which is that palette construction is a design-system decision, not
+# a per-request creative one.
+CREQ_PALETTE_FAMILIES = {
+    "claude": "Warm ivory paper, book-cloth clay accent, warm near-black ink. Editorial and human. The default — use unless the topic argues otherwise.",
+    "sage": "Cool chalk paper, deep evergreen accent. Quieter and institutional — sustainability, health, research, policy.",
+    "oxide": "Bone paper, oxidised steel-blue accent. Technical and precise — engineering, finance, data, infrastructure.",
+}
+CREQ_ARCHETYPES = {
+    "cover": "Opening slide. Big display title anchored low, short eyebrow above, one supporting line.",
+    "statement": "One assertion carrying the whole slide. Very short title, optional supporting sentence.",
+    "stat": "One number is the point. REQUIRES stat.value (short, e.g. '3.7x', '68%', '12 days') and stat.label.",
+    "list": "Three or four parallel points. REQUIRES items[] with label + text.",
+    "steps": "An ordered sequence where order matters. REQUIRES items[] with label + text.",
+    "two_column": "A heading against explanatory copy. Title short, body carries the detail.",
+    "quote": "A quotation. REQUIRES quote.text and quote.attribution.",
+    "compare": "Two opposed options, before/after, or myth/reality. REQUIRES exactly 2 items[]; item 2 is the favoured side.",
+    "closer": "Final slide. Lands the argument and gives one action. Provide cta.",
+}
 
 
 def _default_slides(topic: str, n: int) -> List[Dict[str, Any]]:
@@ -4125,9 +4195,19 @@ async def carousel_generate(body: CarouselGenIn, user=Depends(current_user)):
     # branch, which has no Request object to key off. carousel_ai_image
     # below — the pure HTTP entry point for AI image generation — carries
     # the rate limit instead.
-    if body.platform not in PLATFORM_DIMS:
+    if body.platform == "custom":
+        w, h = body.custom_w, body.custom_h
+        if not w or not h:
+            raise HTTPException(400, "custom_w and custom_h are required when platform is 'custom'")
+        if not (CUSTOM_DIM_MIN <= w <= CUSTOM_DIM_MAX) or not (CUSTOM_DIM_MIN <= h <= CUSTOM_DIM_MAX):
+            raise HTTPException(400, f"custom dimensions must be between {CUSTOM_DIM_MIN} and {CUSTOM_DIM_MAX}px")
+        canvas_dims = {"w": w, "h": h}
+    elif body.platform not in PLATFORM_DIMS:
         raise HTTPException(400, "invalid platform")
+    else:
+        canvas_dims = {"w": PLATFORM_DIMS[body.platform]["w"], "h": PLATFORM_DIMS[body.platform]["h"]}
     slides: List[Dict[str, Any]] = []
+    palette_family: Optional[str] = None
     source_summary = ""
     if body.source_url:
         try:
@@ -4138,43 +4218,141 @@ async def carousel_generate(body: CarouselGenIn, user=Depends(current_user)):
                 source_summary = f"\n\nSource URL content summary:\n{snippet[:6000]}"
         except Exception as ex:
             logging.warning("source_url crawl error: %s", ex)
+    premium = body.design_mode == "premium"
     if _llm_configured():
         from billing import charge_credits
-        await charge_credits(user["workspace_id"], "carousel_generate",
+        credit_action = "carousel_generate_premium" if premium else "carousel_generate"
+        await charge_credits(user["workspace_id"], credit_action,
                               meta={"platform": body.platform, "slides": body.slide_count})
-        system = (
-            f"You are Create EQ, a carousel narrative designer. From a single topic, produce a "
-            f"multi-slide carousel with narrative arc Hook → Body → CTA. Return EXACTLY {body.slide_count} slides. "
-            "Each body slide has a punchy title (<=8 words), optional subtitle (<=12 words), and a body "
-            "paragraph (<=45 words, plain, no emojis, no hashtags). Slide 1 = hook (kind:'hook'), last = cta "
-            "(kind:'cta') with a short 'cta' call-to-action string. Tone: "
-            f"{body.tone}. STRICT JSON only: "
-            '{"slides":[{"kind":"hook|body|cta","title":str,"subtitle":str,"body":str,"cta":str}]}'
-        )
+        if premium:
+            brand_locked = body.brand is not None
+            if brand_locked:
+                bk = body.brand
+                wordmark = f' The wordmark reads "{bk.logo_text}".' if bk.logo_text else ""
+                brand_clause = (
+                    f"This deck is brand-locked: the client's colours ({bk.bg} background, {bk.accent} "
+                    f"accent, {bk.text} text) are already wired into the design system downstream.{wordmark} "
+                    f"Do NOT return palette_family and do not mention or describe colour anywhere in your "
+                    f"output — colour is not your decision on this deck."
+                )
+            else:
+                families = "\n".join(f"  - {k}: {v}" for k, v in CREQ_PALETTE_FAMILIES.items())
+                brand_clause = (
+                    "Choose ONE palette family for the whole deck and return it as top-level "
+                    f"'palette_family'. These are the only valid values:\n{families}\n"
+                    "Pick on subject matter, not decoration. Do NOT return hex values anywhere — the "
+                    "design system owns every colour, surface and contrast decision. Your job is to pick "
+                    "the family and then write copy that suits it."
+                )
+            archetypes = "\n".join(f"  - {k}: {v}" for k, v in CREQ_ARCHETYPES.items())
+            system = (
+                f"You are Create EQ's Creative Director. You work the way a senior editorial designer works "
+                f"on a real deck: understand the argument, decide what each slide has to do, choose the "
+                f"structure that does it, THEN write copy into that structure. Never write copy first and "
+                f"hope a layout fits it.\n\n"
+                f"Return EXACTLY {body.slide_count} slides. Tone: {body.tone}.\n\n"
+                f"{brand_clause}\n\n"
+                f"LAYOUT IS CHOSEN, NOT DECORATED. For each slide pick an 'archetype' — the only valid "
+                f"values are:\n{archetypes}\n\n"
+                f"CRITICAL — the archetype determines which fields you must fill. A 'stat' slide with no "
+                f"stat.value, a 'list' with no items[], a 'quote' with no quote.text, or a 'compare' with "
+                f"fewer than 2 items is a BROKEN slide: it will render empty. If you cannot supply the "
+                f"required structured fields for an archetype, choose a different archetype that fits the "
+                f"content you actually have. Never fake a stat you do not have.\n\n"
+                f"Slide 1 must be archetype 'cover'. The final slide must be archetype 'closer' and carry a "
+                f"'cta'. In between, vary the archetype — three 'two_column' slides in a row is a failure. "
+                f"Do not use the same archetype twice consecutively.\n\n"
+                f"Before writing copy for a slide, decide:\n"
+                f"1. narrative: {{message, visual_metaphor}} — the one thing this slide argues, and a "
+                f"CONCRETE real-world scene for it ('abandoned mailbox', 'climbing staircase', 'domino "
+                f"chain'), never an abstract noun like 'growth' or 'change'.\n"
+                f"2. kind: one of {CREQ_PREMIUM_KINDS} — the rhetorical intent behind the archetype.\n"
+                f"3. editorial_direction: one of {CREQ_PREMIUM_DIRECTIONS}.\n"
+                f"4. emotion_primary: one of {CREQ_PREMIUM_EMOTIONS} — must not contradict the narrative.\n"
+                f"5. surface_intent: 'light' or 'dark' — whether this slide should feel like a pause or a "
+                f"punch. This is a HINT; the design system decides the final rhythm across the deck.\n\n"
+                f"COPY RULES — these exist because the layout has real, fixed space:\n"
+                f"  - eyebrow: 1-3 words, a label not a sentence (e.g. 'The problem', 'Q3 result').\n"
+                f"  - title: <=8 words. On 'statement' and 'cover' slides, <=6 words hits hardest.\n"
+                f"  - subtitle: <=12 words, omit unless it adds something the title does not.\n"
+                f"  - body: 20-40 words. Below 15 the slide looks empty; above 45 it overruns and gets cut.\n"
+                f"  - items[].label: <=4 words. items[].text: 10-20 words each.\n"
+                f"  - stat.value: <=8 characters ('3.7x', '68%', '12 days'). stat.label: <=5 words.\n"
+                f"  - Plain prose. No emojis, no hashtags, no markdown, no bold markers, no citation "
+                f"brackets. Specifics beat adjectives: a number, a name, or a consequence every time.\n\n"
+                f"Check your own output before returning it: every slide's required fields present for its "
+                f"archetype, no two adjacent slides sharing an archetype, and the deck reading as one "
+                f"argument from cover to closer.\n\n"
+            )
+            family_schema = "" if brand_locked else '"palette_family":str,'
+            system += (
+                "STRICT JSON only: {"
+                + family_schema +
+                '"slides":[{"archetype":str,"kind":str,"surface_intent":str,'
+                '"narrative":{"message":str,"visual_metaphor":str},'
+                '"editorial_direction":str,"emotion_primary":str,'
+                '"eyebrow":str,"title":str,"subtitle":str,"body":str,'
+                '"items":[{"label":str,"text":str}],'
+                '"stat":{"value":str,"label":str},'
+                '"quote":{"text":str,"attribution":str},"cta":str}]}\n'
+                "Omit items/stat/quote entirely on slides whose archetype does not use them."
+            )
+        else:
+            system = (
+                f"You are Create EQ, a carousel narrative designer. From a single topic, produce a "
+                f"multi-slide carousel with narrative arc Hook → Body → CTA. Return EXACTLY {body.slide_count} slides. "
+                "Each body slide has a punchy title (<=8 words), optional subtitle (<=12 words), and a body "
+                "paragraph (<=45 words, plain, no emojis, no hashtags). Slide 1 = hook (kind:'hook'), last = cta "
+                "(kind:'cta') with a short 'cta' call-to-action string. Tone: "
+                f"{body.tone}. STRICT JSON only: "
+                '{"slides":[{"kind":"hook|body|cta","title":str,"subtitle":str,"body":str,"cta":str}]}'
+            )
         user_text = f"Topic: {body.topic}{source_summary}"
         try:
             # Output is one JSON object per slide, so the ceiling scales with the
             # deck rather than sitting at the shared 2048 default. This caps the
-            # worst case; it does not by itself reduce a normal response.
+            # worst case; it does not by itself reduce a normal response. Premium
+            # mode's schema is ~3x richer per slide (plus one deck_theme object
+            # when the model is also inventing the palette), so it gets a taller
+            # ceiling.
             resp = await _llm_chat(
                 system, user_text, f"creq-gen-{user['id']}", user=user,
-                max_tokens=min(4096, 400 + body.slide_count * 200), **_creq_llm_kwargs(),
+                max_tokens=min(8192, 500 + body.slide_count * (600 if premium else 200)),
+                **_creq_llm_kwargs(),
             )
             parsed = _extract_json(resp)
             if parsed and parsed.get("slides"):
                 slides = parsed["slides"][: body.slide_count]
+                if premium and not brand_locked:
+                    pf = parsed.get("palette_family")
+                    # Constrained choice, not free text — an unrecognised value
+                    # falls back to the default family rather than propagating
+                    # something the frontend design system has no tokens for.
+                    if isinstance(pf, str) and pf in CREQ_PALETTE_FAMILIES:
+                        palette_family = pf
         except Exception as ex:
             logging.warning("carousel gen fallback: %s", ex)
     if not slides:
         slides = _default_slides(body.topic, body.slide_count)
 
-    brand = (body.brand or BrandKit()).model_dump()
+    # Brand resolution: an explicitly supplied brand kit is a hard constraint.
+    # Premium decks without one no longer carry an invented palette here —
+    # colour comes from the chosen palette_family, resolved against the design
+    # system in frontend/src/lib/creqClaudeDesign.js.
+    brand = body.brand.model_dump() if body.brand is not None else BrandKit().model_dump()
+
     proj_id = new_id()
     doc = {
         "id": proj_id, "workspace_id": user["workspace_id"], "owner_id": user["id"],
         "topic": body.topic, "platform": body.platform, "brand": brand,
-        "slides": slides, "created_at": now_iso(), "updated_at": now_iso(),
+        "slides": slides, "design_mode": body.design_mode, "canvas": canvas_dims,
+        "created_at": now_iso(), "updated_at": now_iso(),
     }
+    # Premium decks record which design-system family they were composed
+    # against, so reopening or regenerating a slide later resolves the same
+    # surfaces instead of drifting to the default.
+    if premium:
+        doc["palette_family"] = "brand" if body.brand is not None else (palette_family or "claude")
     await db.carousels.insert_one(doc)
     await _audit(user, "carousel.create", {"project_id": proj_id, "topic": body.topic})
     doc.pop("_id", None)
@@ -4230,7 +4408,7 @@ async def carousel_get(pid: str, user=Depends(current_user)):
 @api.put("/carousel/{pid}")
 async def carousel_update(pid: str, body: Dict[str, Any], user=Depends(current_user)):
     allowed = {k: v for k, v in body.items() if k in {
-        "slides", "brand", "platform", "topic", "palette_id", "panorama",
+        "slides", "brand", "platform", "topic", "palette_id", "ai_palette", "palette_family", "canvas", "panorama",
         "show_slide_numbers", "show_progress_dots", "show_swipe_hint", "show_branding",
         # Styling for the "Made with…" branding line. Must be listed here or the
         # editor's controls appear to work and then silently reset on reload.

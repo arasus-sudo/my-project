@@ -7,7 +7,7 @@ import {
   AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
   AlignHorizontalSpaceAround, AlignVerticalSpaceAround, Plus,
 } from "lucide-react";
-import { PALETTES, CANVAS, resolveColor } from "../../lib/creqTemplates";
+import { PALETTES, CANVAS as DEFAULT_CANVAS, resolveColor } from "../../lib/creqTemplates";
 import { IMAGE_FRAMES, FRAME_CATEGORIES, DECORATIVE_CATEGORIES } from "../../lib/creqDesignEngine";
 import { IMAGE_EFFECTS } from "../../lib/creqCharts";
 import PanoramaLayer from "./PanoramaLayer";
@@ -913,6 +913,22 @@ function ColorPicker({ label, palette, value, onChange }) {
 /* --- Manual-mode panorama pan controls ------------------------------------ */
 
 function PanoramaManualControls({ proj, palette, activeSlide, onChange, onReset, onApplyAll }) {
+  const CANVAS = proj?.canvas?.w && proj?.canvas?.h ? proj.canvas : DEFAULT_CANVAS;
+  // Preview scale measured from the box rather than fixed, so it stays correct
+  // at any panel width and any deck format (see PdfExportDialog for the same
+  // contract).
+  const previewRef = useRef(null);
+  const [previewW, setPreviewW] = useState(0);
+  useEffect(() => {
+    const node = previewRef.current;
+    if (!node) return undefined;
+    const measure = () => setPreviewW(node.getBoundingClientRect().width);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, []);
+  const previewScale = previewW ? previewW / CANVAS.w : 0;
   const vp = (proj.panorama?.viewports || [])[activeSlide] || { ox: 50, oy: 50, scale: 1 };
 
   return (
@@ -922,11 +938,14 @@ function PanoramaManualControls({ proj, palette, activeSlide, onChange, onReset,
         <div className="ui-label m-0">Panorama · slide {activeSlide + 1}</div>
       </div>
 
-      {/* live preview thumbnail (1/8 scale) */}
-      <div className="relative w-full aspect-[4/5] rounded-md overflow-hidden border border-line bg-neutral-100">
-        <div style={{ position: "absolute", inset: 0, transform: "scale(0.125)", transformOrigin: "top left", width: 1080, height: 1350 }}>
-          <PanoramaLayer panorama={proj.panorama} slideIdx={activeSlide} totalSlides={proj.slides.length} />
-        </div>
+      {/* live preview thumbnail, scaled from its measured width */}
+      <div ref={previewRef} className="relative w-full rounded-md overflow-hidden border border-line bg-neutral-100"
+        style={{ aspectRatio: `${CANVAS.w} / ${CANVAS.h}` }}>
+        {previewScale > 0 && (
+          <div style={{ position: "absolute", left: 0, top: 0, transform: `scale(${previewScale})`, transformOrigin: "top left", width: CANVAS.w, height: CANVAS.h }}>
+            <PanoramaLayer panorama={proj.panorama} slideIdx={activeSlide} totalSlides={proj.slides.length} canvas={CANVAS} />
+          </div>
+        )}
       </div>
 
       <label className="block">

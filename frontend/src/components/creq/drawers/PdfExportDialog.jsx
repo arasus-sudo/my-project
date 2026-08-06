@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import { Loader2, FileText, Download } from "lucide-react";
-import { CANVAS } from "../../../lib/creqTemplates";
+import { CANVAS as DEFAULT_CANVAS } from "../../../lib/creqTemplates";
 import { renderBackground } from "../utils";
 import ElementRender from "../ElementRender";
 import PanoramaLayer from "../PanoramaLayer";
@@ -17,9 +17,36 @@ export const EXPORT_QUALITIES = [
 ];
 
 export default function PdfExportDialog({ proj, palette, onClose, busy, progress, onExport }) {
+  const CANVAS = proj?.canvas?.w && proj?.canvas?.h ? proj.canvas : DEFAULT_CANVAS;
   const total = proj.slides.length;
   const [picked, setPicked] = useState(() => proj.slides.map((_, i) => i));
   const [quality, setQuality] = useState("standard");
+
+  // A thumbnail scales its slide down by cellWidth/CANVAS.w, so that ratio has
+  // to come from the cell's REAL width. The grid is responsive (2/3/4 columns),
+  // so assuming a fixed cell width leaves the scale and the box disagreeing —
+  // the slide then renders too large (overflowing its tile) or too small
+  // (floating in the corner), which reads as the export previews being
+  // misaligned. Same contract BoardView and SlidePreview use: one scale drives
+  // both the box and the content.
+  const gridRef = useRef(null);
+  const [cellW, setCellW] = useState(0);
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return undefined;
+    const measure = () => {
+      // The preview box itself, not the tile button around it — the button's
+      // 2px border would otherwise be counted into the scale and push the slide
+      // a few px past the box it is supposed to fill.
+      const box = grid.querySelector("[data-thumb-box]");
+      if (box) setCellW(box.getBoundingClientRect().width);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(grid);
+    return () => ro.disconnect();
+  }, [total]);
+  const thumbScale = cellW ? cellW / CANVAS.w : 0;
 
   const toggle = (i) => setPicked((cur) => cur.includes(i) ? cur.filter((x) => x !== i) : [...cur, i].sort((a, b) => a - b));
   const selectAll = () => setPicked(proj.slides.map((_, i) => i));
@@ -44,20 +71,22 @@ export default function PdfExportDialog({ proj, palette, onClose, busy, progress
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div ref={gridRef} className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {proj.slides.map((s, i) => {
               const on = picked.includes(i);
               const bg = renderBackground(s.bg, palette);
               return (
                 <button key={s._k} onClick={() => toggle(i)} data-testid={`pdf-pick-${i}`}
                   className={`text-left rounded-xl overflow-hidden border-2 transition-all ${on ? "border-ink shadow-md" : "border-line hover:border-neutral-400"}`}>
-                  <div className="relative w-full aspect-[4/5] overflow-hidden" style={{ background: bg }}>
-                    <PanoramaLayer panorama={proj.panorama} slideIdx={i} totalSlides={total} />
-                    <div style={{ position: "absolute", inset: 0, transform: `scale(${0.2})`, transformOrigin: "top left", width: CANVAS.w, height: CANVAS.h, pointerEvents: "none" }}>
-                      {s.elements.map((el) => (
-                        <ElementRender key={el.id} el={el} palette={palette} selected={false} onPointerDown={() => {}} />
-                      ))}
-                    </div>
+                  <div data-thumb-box className="relative w-full overflow-hidden" style={{ background: bg, aspectRatio: `${CANVAS.w} / ${CANVAS.h}` }}>
+                    <PanoramaLayer panorama={proj.panorama} slideIdx={i} totalSlides={total} canvas={CANVAS} />
+                    {thumbScale > 0 && (
+                      <div style={{ position: "absolute", left: 0, top: 0, transform: `scale(${thumbScale})`, transformOrigin: "top left", width: CANVAS.w, height: CANVAS.h, pointerEvents: "none" }}>
+                        {s.elements.map((el) => (
+                          <ElementRender key={el.id} el={el} palette={palette} selected={false} onPointerDown={() => {}} />
+                        ))}
+                      </div>
+                    )}
                     <div className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center text-caption font-bold ${on ? "bg-ink text-white border-ink" : "bg-white border-neutral-300 text-transparent"}`}>
                       ✓
                     </div>

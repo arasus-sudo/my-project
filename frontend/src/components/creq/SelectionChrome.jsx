@@ -1,5 +1,5 @@
 import { Lock } from "lucide-react";
-import { CANVAS } from "../../lib/creqTemplates";
+import { CANVAS as DEFAULT_CANVAS } from "../../lib/creqTemplates";
 import { elementBounds } from "./utils";
 
 /** Premium selection chrome for the Create EQ canvas — bounding border, resize
@@ -121,8 +121,9 @@ function SingleChrome({ el, bounds, zoom, onResizeStart, onRotateStart }) {
   );
 }
 
-export default function SelectionChrome({ els, zoom, measured, interaction, onResizeStart, onRotateStart, onGroupResizeStart }) {
+export default function SelectionChrome({ els, zoom, measured, interaction, onResizeStart, onRotateStart, onGroupResizeStart, canvas }) {
   if (!els?.length) return null;
+  const CANVAS = canvas?.w && canvas?.h ? canvas : DEFAULT_CANVAS;
   const z = (v) => v / zoom;
   const boundsList = els.map((el) => elementBounds(el, measured));
 

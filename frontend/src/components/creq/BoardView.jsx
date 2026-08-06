@@ -1,11 +1,16 @@
 import { memo } from "react";
-import { CANVAS } from "../../lib/creqTemplates";
+import { CANVAS as DEFAULT_CANVAS } from "../../lib/creqTemplates";
 import { renderBackground } from "./utils";
 import ElementRender from "./ElementRender";
 import PanoramaLayer from "./PanoramaLayer";
 import DeckOverlay from "./DeckOverlay";
 
 function BoardView({ proj, palette, onFocus }) {
+  // Per-project canvas, not the fixed authoring size — a Story (1080x1920) or
+  // custom-format deck laid out in 1080x1350 boxes gets cropped at the bottom
+  // and mis-scaled. DEFAULT_CANVAS keeps decks saved before per-project canvas
+  // existed rendering exactly as they did.
+  const CANVAS = proj?.canvas?.w && proj?.canvas?.h ? proj.canvas : DEFAULT_CANVAS;
   const n = proj.slides.length;
   const targetStripW = Math.max(900, Math.min(1800, 300 * n));
   const zoom = targetStripW / (n * CANVAS.w);
@@ -24,7 +29,7 @@ function BoardView({ proj, palette, onFocus }) {
                 background: renderBackground(s.bg, palette),
               }}
             >
-              <PanoramaLayer panorama={proj.panorama} slideIdx={i} totalSlides={n} />
+              <PanoramaLayer panorama={proj.panorama} slideIdx={i} totalSlides={n} canvas={CANVAS} />
               <div style={{ pointerEvents: "none", width: "100%", height: "100%", position: "absolute", inset: 0 }}>
                 {s.elements.map((el) => (
                   <ElementRender key={el.id} el={el} palette={palette} selected={false} onPointerDown={() => {}} />
