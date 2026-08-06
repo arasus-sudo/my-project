@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, PenSquare, ShieldCheck, AlertTriangle, Check } from "lucide-react";
+import { ArrowLeft, Loader2, PenSquare, ShieldCheck, AlertTriangle, Check, Download } from "lucide-react";
 import { api, isCreditError } from "../lib/api";
 import { buildPremiumDeck, paletteForDeck } from "../lib/creqPremiumEngine";
 import { PALETTE_FAMILIES } from "../lib/creqClaudeDesign";
@@ -28,6 +28,7 @@ export default function DesignEQViewer() {
   const [audit, setAudit] = useState(null);
   const [family, setFamily] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -55,26 +56,64 @@ export default function DesignEQViewer() {
 
   const palette = useMemo(() => paletteForDeck(family || "claude"), [family]);
 
+  /** Materialise the design as a deck, composed and persisted.
+   *
+   * The handoff writes the raw sections; this then saves the COMPOSED slides
+   * over them. That matters beyond speed: composition runs in the browser, so
+   * until the composed elements are persisted the server only holds
+   * archetypes and copy — and anything server-side that reads the deck (the
+   * .pptx exporter above all) would see slides with no elements on them.
+   * Composing here means the stored deck is complete the moment it exists. */
+  const materialise = async () => {
+    // Hand off in whatever direction is on screen, not whatever the model
+    // originally chose — the switcher above is free, so the two diverge.
+    const { data } = await api.post(`/design-eq/projects/${id}/handoff`, { palette_family: family });
+    const composed = built.length ? built : buildPremiumDeck(proj.sections, { canvas, familyId: family });
+    try {
+      await api.put(`/carousel/${data.carousel_id}`, {
+        slides: composed,
+        // The palette hexes live in the frontend design system, so they are
+        // written from here rather than duplicated into Python.
+        ai_palette: paletteForDeck(data.palette_family || family),
+      });
+    } catch { /* the editor recomposes from sections on open, so this is not fatal */ }
+    setProj((p) => ({ ...p, carousel_id: data.carousel_id }));
+    return data.carousel_id;
+  };
+
   const openInEditor = async () => {
     setBusy(true);
     try {
-      // Hand off in whatever direction is on screen, not whatever the model
-      // originally chose — the switcher above is free, so the two diverge.
-      const { data } = await api.post(`/design-eq/projects/${id}/handoff`, { palette_family: family });
-      // The palette hexes live in the frontend design system, so the deck's
-      // swatches and chrome are written from here rather than duplicated in
-      // Python. Non-fatal: the slides carry literal colours and render
-      // correctly regardless — only the editor's palette panel would be stale.
-      try {
-        await api.put(`/carousel/${data.carousel_id}`, {
-          ai_palette: paletteForDeck(data.palette_family || family),
-        });
-      } catch { /* deck still opens correctly */ }
+      const deckId = await materialise();
       toast.success("Opened as an editable deck");
-      nav(`/app/create-eq/${data.carousel_id}`);
+      nav(`/app/create-eq/${deckId}`);
     } catch (err) {
       if (!isCreditError(err)) toast.error(err?.response?.data?.detail || "Could not open in the editor");
     } finally { setBusy(false); }
+  };
+
+  /** Download a native .pptx. Needs a materialised deck, so it hands off first
+   * when one doesn't exist yet — the user shouldn't have to know that a deck is
+   * the thing being exported. Fetched as a blob rather than linked directly
+   * because the endpoint is authenticated and an <a href> sends no token. */
+  const downloadPptx = async () => {
+    setExporting(true);
+    try {
+      // Always re-materialise: the export reads the stored deck, and the
+      // direction on screen may have changed since it was last written.
+      const deckId = await materialise();
+      const res = await api.get(`/design-eq/decks/${deckId}/pptx`, { responseType: "blob" });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(proj.brief || "deck").slice(0, 40).replace(/\W+/g, "-")}.pptx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      const live = res.headers?.["x-deck-text-elements"];
+      toast.success(live ? `Exported — ${live} text blocks stayed editable` : "Exported");
+    } catch (err) {
+      if (!isCreditError(err)) toast.error("Could not build the presentation");
+    } finally { setExporting(false); }
   };
 
   if (!proj) return <div className="p-6 sm:p-8 text-ink-muted">Loading…</div>;
@@ -105,11 +144,19 @@ export default function DesignEQViewer() {
           {proj.routing_why && <p className="text-caption text-neutral-400 mt-2 max-w-2xl">{proj.routing_why}</p>}
         </div>
         {structured && (
-          <button onClick={openInEditor} disabled={busy} data-testid="deq-open-editor"
-            className="btn-primary disabled:opacity-50">
-            {busy ? <><Loader2 size={14} className="animate-spin" /> Opening…</>
-                  : <><PenSquare size={14} /> Open in editor</>}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={downloadPptx} disabled={exporting} data-testid="deq-export-pptx"
+              className="btn-secondary text-body disabled:opacity-50"
+              title="Native PowerPoint — every text block stays editable">
+              {exporting ? <><Loader2 size={14} className="animate-spin" /> Building…</>
+                         : <><Download size={14} /> Download .pptx</>}
+            </button>
+            <button onClick={openInEditor} disabled={busy} data-testid="deq-open-editor"
+              className="btn-primary disabled:opacity-50">
+              {busy ? <><Loader2 size={14} className="animate-spin" /> Opening…</>
+                    : <><PenSquare size={14} /> Open in editor</>}
+            </button>
+          </div>
         )}
       </header>
 

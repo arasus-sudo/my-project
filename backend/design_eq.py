@@ -32,6 +32,7 @@ asymmetry is the whole point of the architecture.
 """
 
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -621,6 +622,64 @@ async def handoff_to_editor(project_id: str, body: Optional[HandoffIn] = None,
     await _audit(user, "design.handoff", {"project_id": project_id, "carousel_id": carousel_id})
     carousel.pop("_id", None)
     return {"carousel_id": carousel_id, "project_id": project_id, "palette_family": chosen_family}
+
+
+@design_router.get("/decks/{carousel_id}/pptx")
+async def export_deck_pptx(carousel_id: str, user=Depends(current_user)):
+    """Export a deck as a native .pptx with live, editable text.
+
+    The point of the structured master, delivered. Every text block lands as a
+    real PowerPoint text frame rather than a picture of one, so the deck can be
+    restyled, translated or edited downstream by someone who has never opened
+    this product — which is exactly what a rasterising HTML→PPTX path cannot
+    offer, and the most-cited complaint about the tool this agent is modelled on.
+
+    Lives on the Design EQ router because Design EQ is where the structured
+    master is a guarantee; it accepts any Create EQ deck id, including the ones
+    produced by /handoff.
+    """
+    from fastapi import Response
+    from pptx_export import deck_to_pptx, deck_text_stats
+
+    doc = await db.carousels.find_one(
+        {"id": carousel_id, "workspace_id": user["workspace_id"]}, {"_id": 0}
+    )
+    if not doc:
+        raise HTTPException(404, "deck not found")
+    if not (doc.get("slides") or []):
+        raise HTTPException(400, "this deck has no slides")
+    # Composition runs in the browser, so a deck that was created but never
+    # composed holds archetypes and copy with no positioned elements. Exporting
+    # it would produce a file of blank slides — an empty deck that looks like a
+    # working export is worse than a refusal.
+    if not any((s.get("elements") or []) for s in doc["slides"]):
+        raise HTTPException(
+            409,
+            "This deck hasn't been composed yet — open it once so its layout is "
+            "generated, then export.",
+        )
+
+    try:
+        blob = deck_to_pptx(doc)
+    except Exception as ex:
+        log.exception("pptx export failed for %s", carousel_id)
+        raise HTTPException(500, f"could not build the presentation: {ex}")
+
+    stats = deck_text_stats(doc)
+    safe = re.sub(r"[^A-Za-z0-9]+", "-", (doc.get("topic") or "deck"))[:48].strip("-") or "deck"
+    await _audit(user, "design.export.pptx", {"carousel_id": carousel_id, **stats})
+    return Response(
+        content=blob,
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe}.pptx"',
+            # Surfaced so the UI can state plainly how much of the deck came
+            # across as live text rather than leaving the user to trust it.
+            "X-Deck-Text-Elements": str(stats["text_elements"]),
+            "X-Deck-Slides": str(stats["slides"]),
+            "Access-Control-Expose-Headers": "X-Deck-Text-Elements, X-Deck-Slides",
+        },
+    )
 
 
 @design_router.delete("/projects/{project_id}")
