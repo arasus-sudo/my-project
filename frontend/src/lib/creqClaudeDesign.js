@@ -170,9 +170,15 @@ export function onLightAccent(accent, bg) {
 // the part that actually makes it look editorial: display sits tight (1.05) and
 // body sits open (1.55), and that contrast is deliberate.
 
+// Geist, not Inter. Two independent rules land on the same verdict: the suite's
+// own design system (docs/design-system.md §24.6) bans Inter outright and
+// specifies Geist for UI text, and "Inter, chosen because it is safe" is a named
+// tell on the anti-slop audit this system is modelled on. The display face stays
+// an editorial serif — that is the deck's own typographic identity, and it is
+// what carries the light/dark editorial look these compositions are built for.
 export const FONTS = {
   display: "Instrument Serif", // high-contrast editorial serif, single weight by design
-  sans: "Inter",
+  sans: "Geist",
   mono: "JetBrains Mono",
 };
 

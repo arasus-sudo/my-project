@@ -36,10 +36,20 @@ export function estimateBlockHeight(text, boxWidth, fontSize, lineHeight = 1.2, 
  * composer and the geometry audit BOTH estimate height, any disagreement
  * between them makes the audit "correct" boxes that were already right,
  * pushing them into their neighbours. Both sides call this. */
+// Measured with canvas measureText over representative English prose at 100px:
+// Geist 0.4425, Inter 0.4615, Instrument Serif 0.3269, JetBrains Mono 0.6000.
+// The constants below sit deliberately ABOVE those averages, because a pure
+// average under-counts lines — real text breaks at word boundaries and leaves a
+// ragged right edge, so a box sized to the average is too short and its text
+// collides with the block beneath it. Over-estimating only costs whitespace.
+// Geist's value is Inter's validated constant scaled by the measured ratio
+// between the two faces, which preserves the margin already proven out rather
+// than re-deriving it.
 const CHAR_RATIO = {
   "Instrument Serif": 0.40,
   "JetBrains Mono": 0.60,
-  Inter: 0.52,
+  Geist: 0.50,
+  Inter: 0.52, // retained: decks generated before the Geist switch still use it
 };
 
 /** Letter-spacing is specified in em, so it adds to effective glyph width 1:1. */
