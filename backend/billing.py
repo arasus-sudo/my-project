@@ -90,6 +90,12 @@ CREDIT_COSTS: Dict[str, int] = {
     # chain of 15 LLM calls; see docs/createeq-handbook/ch16 §16.5 for the
     # cost reasoning this price reflects.
     "carousel_generate_premium": 70,
+    # Design EQ. One structured completion like the premium deck call, plus a
+    # small routing call that classifies the brief onto a surface archetype
+    # before any content exists — see backend/design_eq.py. Priced above the
+    # premium deck because the schema is richer and the surface routing is a
+    # second (cheap) round trip, not because it is chained.
+    "design_generate": 80,
     "ai_image": 25,
     "email_draft_chain": 8,   # four LLM calls: angle -> draft -> humanise
     "lead_research": 8,       # site crawl + news + GitHub fan-out
@@ -128,6 +134,7 @@ ACTION_LABELS = {
     "proposal_generate": "Proposal generated",
     "carousel_generate": "Deck generated",
     "carousel_generate_premium": "Deck generated (Premium AI Design)",
+    "design_generate": "Design generated (Design EQ)",
     "ai_image": "AI image",
     "email_draft_chain": "Researched email written",
     "lead_research": "Lead researched",
@@ -162,6 +169,7 @@ ACTION_AGENT = {
     "proposal_generate": "proposal",
     "carousel_generate": "create",
     "carousel_generate_premium": "create",
+    "design_generate": "design",
     "ai_image": "create",
     "email_draft_chain": "pitch",
     "lead_research": "pitch",

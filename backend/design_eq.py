@@ -1,0 +1,551 @@
+"""Design EQ — surface-first design agent for decks, prototypes and landing pages.
+
+Reverse-engineered from Anthropic's Claude Design (see
+docs/createeq-handbook/ch16-creative-reasoning-engine.md §16.7 and the Design EQ
+research brief). The discipline is copied deliberately; the architecture is
+deliberately NOT.
+
+What we copy
+------------
+1. Surface-first composition. The request is routed to exactly one of seven
+   surface archetypes BEFORE any colour, type or layout decision. This is the
+   single highest-leverage idea in their system: naming the surface collapses
+   the entropy of "what should this look like" into "what does this surface
+   do", which is what stops a model averaging every layout it has ever seen.
+2. A design-system precedence chain — the user's prompt outranks the workspace
+   design system, which outranks model defaults. Never inverted.
+3. An anti-slop audit run against the model's own output, scored and returned
+   to the caller rather than kept private.
+
+What we deliberately do NOT copy
+--------------------------------
+Claude Design emits a single self-contained HTML file and treats every other
+format as a translation away from it. That is why their PPTX export flattens
+text to images, substitutes fonts and drops master slides, and why their own
+guidance to users is "pick the exit before polish".
+
+Design EQ keeps a STRUCTURED master (the same element-tree shape Create EQ
+already renders and exports) and treats HTML as one render target among
+several. Adding an HTML target to a structured master is straightforward;
+adding a structured master to HTML is the problem they have not solved. That
+asymmetry is the whole point of the architecture.
+"""
+
+import logging
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+from server import (
+    db, now_iso, new_id, current_user, _audit,
+    _llm_chat, _llm_configured, _extract_json, _creq_llm_kwargs,
+)
+from billing import charge_credits
+
+log = logging.getLogger(__name__)
+
+design_router = APIRouter(prefix="/design-eq")
+
+
+# --------------------------------------------------------------------------
+# Surface archetypes
+# --------------------------------------------------------------------------
+# Each entry carries what the USER is doing on that surface, because that is
+# what conditions the layout. "does" is what the router matches against;
+# "composition" is what the generator is told to build. Keeping both on one
+# record means the classifier and the generator can never drift apart.
+
+SURFACES: Dict[str, Dict[str, str]] = {
+    "monitor": {
+        "label": "Monitor",
+        "does": "watching state change — dashboards, status pages, observability",
+        "composition": "Density and glanceable hierarchy. Summary before detail. State encoded in form (pill, chip, severity stripe) as well as number. No marketing framing whatsoever.",
+    },
+    "operate": {
+        "label": "Operate",
+        "does": "taking action on things — consoles, admin panels, queues, inboxes",
+        "composition": "Action affordances and selection state dominate. The primary action per row is unambiguous. Bulk state is visible.",
+    },
+    "compare": {
+        "label": "Compare",
+        "does": "weighing options against each other — pricing, plans, spec tables, search results",
+        "composition": "Aligned columns and strict structural parity between options, with exactly ONE emphasized differentiator. Never emphasise two.",
+    },
+    "configure": {
+        "label": "Configure",
+        "does": "setting things up — settings, forms, wizards, onboarding",
+        "composition": "Progressive disclosure, explicit save and validation states, low decoration. Field grouping carries the meaning.",
+    },
+    "decide": {
+        "label": "Decide / Learn",
+        "does": "being convinced or taught — landing pages, docs, pitch decks, one-pagers",
+        "composition": "One idea per section, argument-led. This is the ONLY surface where a hero and a three-card row are correct.",
+    },
+    "explore": {
+        "label": "Explore",
+        "does": "browsing an open space — galleries, catalogs, maps, search-and-filter",
+        "composition": "Filters, result grids and zoom/peek ARE the composition. Do not bolt a hero onto a browse surface.",
+    },
+    "inspect": {
+        "label": "Command / Inspect",
+        "does": "drilling into one object or driving by keyboard — command bars, inspectors, detail panes, property editors",
+        "composition": "Speed and focus over breadth. One object's full depth, not many objects' summaries.",
+    },
+}
+
+# Delivery formats. `master` records which renderer owns the output — this is
+# the fork that keeps export lossless for the formats that need to stay
+# editable, and lets the code target handle the ones that need interactivity.
+FORMATS: Dict[str, Dict[str, Any]] = {
+    "deck":        {"label": "Slide deck",          "master": "structured", "surface_default": "decide"},
+    "one_pager":   {"label": "One-pager",           "master": "structured", "surface_default": "decide"},
+    "landing":     {"label": "Landing page",        "master": "code",       "surface_default": "decide"},
+    "prototype":   {"label": "Interactive prototype","master": "code",      "surface_default": "operate"},
+    "comparison":  {"label": "Static comparison",   "master": "structured", "surface_default": "compare"},
+    "component_lab": {"label": "Component lab",     "master": "code",       "surface_default": "inspect"},
+}
+
+# The anti-slop audit. Ten named tells, scored against the generated output.
+# `auto` marks the ones we can detect deterministically from the structured
+# master rather than asking the model to grade its own homework — those are the
+# only ones whose score can be trusted without a human.
+SLOP_TELLS: List[Dict[str, Any]] = [
+    {"id": "tech_gradient",  "label": "Tech gradient (blue→violet glossy wash)", "auto": True},
+    {"id": "generic_hue",    "label": "Generic tech hue (default indigo accent)", "auto": True},
+    {"id": "feature_tiles",  "label": "Feature-tile grid (3 equal icon+text cards)", "auto": False},
+    {"id": "accent_rail",    "label": "Accent rail used as decoration", "auto": False},
+    {"id": "unearned_blur",  "label": "Glassmorphism with no depth system", "auto": False},
+    {"id": "monument_stat",  "label": "Oversized number carrying no argument", "auto": False},
+    {"id": "icon_topper",    "label": "Centered rounded-square icon topper", "auto": False},
+    {"id": "center_stack",   "label": "Everything centered by default", "auto": True},
+    {"id": "default_type",   "label": "Default type (Inter, chosen because it is safe)", "auto": True},
+    {"id": "wrong_surface",  "label": "Composition does not match the named surface", "auto": False},
+]
+
+# Faces banned outright by docs/design-system.md §24.6, which is also tell 09 on
+# the audit above. Checked on generated output AND on any design system a
+# workspace tries to register, so the violation cannot enter through the back
+# door.
+BANNED_FONTS = {"inter"}
+
+
+def surface_catalog() -> List[Dict[str, str]]:
+    return [{"id": k, **v} for k, v in SURFACES.items()]
+
+
+# --------------------------------------------------------------------------
+# Design system registry
+# --------------------------------------------------------------------------
+
+class DesignSystemIn(BaseModel):
+    name: str
+    tokens: Dict[str, Any]          # {colors:{}, type:{}, spacing:{}, radius:{}}
+    source: str = "manual"          # manual | repo | upload
+    source_ref: Optional[str] = None
+    is_default: bool = False
+
+
+def _validate_tokens(tokens: Dict[str, Any]) -> None:
+    """A registered system is a hard constraint on every future generation, so
+    it is validated on the way IN. Catching a banned face here is worth far
+    more than catching it on every generation afterwards."""
+    if not isinstance(tokens, dict):
+        raise HTTPException(400, "tokens must be an object")
+    type_tokens = tokens.get("type") or {}
+    if not isinstance(type_tokens, dict):
+        raise HTTPException(400, "tokens.type must be an object")
+    for role, family in type_tokens.items():
+        if isinstance(family, str) and family.strip().lower() in BANNED_FONTS:
+            raise HTTPException(
+                400,
+                f"'{family}' is not permitted as the {role} face — the suite design "
+                f"system (§24.6) specifies Geist for UI text and Plus Jakarta Sans "
+                f"for display.",
+            )
+
+
+@design_router.get("/surfaces")
+async def list_surfaces(user=Depends(current_user)):
+    """Taxonomy for the picker. Formats carry their own default surface so the
+    UI can preselect sensibly without a round trip to the model."""
+    return {
+        "surfaces": surface_catalog(),
+        "formats": [{"id": k, **v} for k, v in FORMATS.items()],
+        "slop_tells": SLOP_TELLS,
+    }
+
+
+@design_router.get("/systems")
+async def list_systems(user=Depends(current_user)):
+    return await db.design_systems.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).sort("updated_at", -1).to_list(100)
+
+
+@design_router.post("/systems")
+async def create_system(body: DesignSystemIn, user=Depends(current_user)):
+    _validate_tokens(body.tokens)
+    doc = {
+        "id": new_id(),
+        "workspace_id": user["workspace_id"],
+        "name": body.name,
+        "tokens": body.tokens,
+        "source": body.source,
+        "source_ref": body.source_ref,
+        "is_default": body.is_default,
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    if body.is_default:
+        await db.design_systems.update_many(
+            {"workspace_id": user["workspace_id"]}, {"$set": {"is_default": False}}
+        )
+    await db.design_systems.insert_one(doc)
+    await _audit(user, "design.system.create", {"system_id": doc["id"], "name": body.name})
+    doc.pop("_id", None)
+    return doc
+
+
+async def _resolve_system(workspace_id: str, system_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Explicit id wins; otherwise the workspace default; otherwise nothing and
+    the generator falls back to its own tokens. This is the middle rung of the
+    precedence chain — the caller's prompt still outranks whatever comes back."""
+    q = {"workspace_id": workspace_id}
+    if system_id:
+        q["id"] = system_id
+    else:
+        q["is_default"] = True
+    return await db.design_systems.find_one(q, {"_id": 0})
+
+
+# --------------------------------------------------------------------------
+# Surface routing
+# --------------------------------------------------------------------------
+
+class RouteIn(BaseModel):
+    brief: str
+    format: Optional[str] = None
+
+
+ROUTER_SYSTEM = (
+    "You classify a design brief onto exactly ONE surface archetype. The surface is "
+    "determined by what the USER DOES on the screen, never by what the thing is called "
+    "and never by how it should look.\n\n"
+    + "\n".join(f"  {k}: user is {v['does']}" for k, v in SURFACES.items())
+    + "\n\nIf a brief genuinely spans two surfaces, name the PRIMARY one and put the other "
+    "in `secondary` — never average them, and never return two primaries. A dashboard is "
+    "'monitor', not 'decide', even when it is being shown to a customer.\n"
+    'STRICT JSON only: {"surface":str,"secondary":str|null,"confidence":number,"why":str}'
+)
+
+
+async def route_surface(brief: str, user: Dict[str, Any], fmt: Optional[str] = None) -> Dict[str, Any]:
+    """Classify a brief onto one surface. Falls back to the format's default
+    rather than failing the request — a wrong-but-sane surface still produces a
+    usable artifact, whereas an error produces nothing."""
+    fallback = FORMATS.get(fmt or "", {}).get("surface_default", "decide")
+    if not _llm_configured():
+        return {"surface": fallback, "secondary": None, "confidence": 0.0,
+                "why": "No LLM configured — used the format's default surface."}
+    try:
+        resp = await _llm_chat(
+            ROUTER_SYSTEM, f"Brief: {brief}", f"deq-route-{user['id']}",
+            user=user, max_tokens=300, **_creq_llm_kwargs(),
+        )
+        parsed = _extract_json(resp) or {}
+        surface = parsed.get("surface")
+        if surface in SURFACES:
+            secondary = parsed.get("secondary")
+            return {
+                "surface": surface,
+                "secondary": secondary if secondary in SURFACES else None,
+                "confidence": float(parsed.get("confidence") or 0.0),
+                "why": str(parsed.get("why") or "")[:400],
+            }
+    except Exception as ex:
+        log.warning("design-eq surface routing fell back: %s", ex)
+    return {"surface": fallback, "secondary": None, "confidence": 0.0,
+            "why": "Routing did not return a known surface — used the format's default."}
+
+
+@design_router.post("/route")
+async def route_endpoint(body: RouteIn, user=Depends(current_user)):
+    """Exposed on its own so the UI can show the chosen surface and let the user
+    override it BEFORE paying for a generation."""
+    if not body.brief.strip():
+        raise HTTPException(400, "brief is required")
+    result = await route_surface(body.brief, user, body.format)
+    result["surface_detail"] = SURFACES[result["surface"]]
+    return result
+
+
+# --------------------------------------------------------------------------
+# Anti-slop audit
+# --------------------------------------------------------------------------
+
+GENERIC_HUES = {"#6366f1", "#4f46e5", "#818cf8", "#7c3aed", "#8b5cf6", "#a855f7"}
+
+
+def audit_slop(master: Dict[str, Any]) -> Dict[str, Any]:
+    """Deterministic half of the audit, run over the structured master.
+
+    Only the tells that can be checked from geometry and tokens are scored here;
+    the rest are returned unscored so the UI can show the full checklist without
+    implying we verified items we did not. Score is hits-out-of-checked, and
+    lower is better.
+    """
+    hits: List[Dict[str, str]] = []
+    slides = master.get("slides") or []
+    tokens = master.get("tokens") or {}
+
+    palette = " ".join(
+        str(v).lower() for v in (tokens.get("colors") or {}).values() if isinstance(v, str)
+    )
+    accent = str((tokens.get("colors") or {}).get("accent", "")).lower()
+
+    if accent in GENERIC_HUES:
+        hits.append({"id": "generic_hue", "detail": f"accent {accent} is a stock indigo/violet"})
+    if "gradient" in palette and ("#6366f1" in palette or "#8b5cf6" in palette):
+        hits.append({"id": "tech_gradient", "detail": "blue→violet gradient in the palette"})
+
+    fonts = {
+        str(e.get("font", "")).strip().lower()
+        for s in slides for e in (s.get("elements") or [])
+        if e.get("type") == "text" and e.get("font")
+    }
+    banned_used = fonts & BANNED_FONTS
+    if banned_used:
+        hits.append({"id": "default_type", "detail": f"uses {', '.join(sorted(banned_used))}"})
+
+    # Center stack: a surface where nearly every text block is centre-aligned
+    # reads as unconsidered regardless of how good the individual slides are.
+    text_els = [e for s in slides for e in (s.get("elements") or []) if e.get("type") == "text"]
+    if len(text_els) >= 4:
+        centered = sum(1 for e in text_els if e.get("align") == "center")
+        if centered / len(text_els) > 0.7:
+            hits.append({"id": "center_stack", "detail": f"{centered}/{len(text_els)} text blocks centered"})
+
+    checked = [t for t in SLOP_TELLS if t["auto"]]
+    return {
+        "score": len(hits),
+        "checked": len(checked),
+        "hits": hits,
+        "unchecked": [t["id"] for t in SLOP_TELLS if not t["auto"]],
+        "verdict": "clean" if not hits else ("minor" if len(hits) == 1 else "rework"),
+    }
+
+
+# --------------------------------------------------------------------------
+# Generation
+# --------------------------------------------------------------------------
+
+class DesignGenIn(BaseModel):
+    brief: str
+    fmt: str = "deck"
+    surface: Optional[str] = None       # omit to auto-route
+    section_count: int = 6
+    system_id: Optional[str] = None
+    tone: str = "confident, precise"
+    canvas: Optional[Dict[str, int]] = None
+
+
+def _system_clause(system: Optional[Dict[str, Any]]) -> str:
+    """Middle rung of the precedence chain, rendered into the prompt. Stated as
+    a constraint with the reason attached — a bare token dump gets ignored far
+    more often than one that says what it is."""
+    if not system:
+        return (
+            "No workspace design system is registered, so you also choose the visual "
+            "identity. Choose ONE small, coherent system and stay inside it. Do NOT use "
+            "Inter — it is banned by the house design system and reads as a default. "
+            "Do not invent many colours."
+        )
+    tok = system.get("tokens") or {}
+    return (
+        f"This workspace has a registered design system named '{system.get('name')}'. "
+        f"It is a HARD constraint, exactly like a real client's brand guidelines — you do "
+        f"not get to improve on it. Colours: {tok.get('colors')}. Type: {tok.get('type')}. "
+        f"Spacing: {tok.get('spacing')}. Radius: {tok.get('radius')}. Use these values and "
+        f"no others. The only thing that outranks this is an explicit instruction in the "
+        f"brief itself."
+    )
+
+
+def _build_system_prompt(surface_id: str, fmt: str, count: int, tone: str,
+                         system: Optional[Dict[str, Any]]) -> str:
+    s = SURFACES[surface_id]
+    fmt_label = FORMATS.get(fmt, {}).get("label", fmt)
+    tells = "\n".join(f"  - {t['label']}" for t in SLOP_TELLS)
+    return (
+        f"You are Design EQ, a senior designer. You are building a {fmt_label}.\n\n"
+        f"SURFACE — this is settled, do not renegotiate it: **{s['label']}**. "
+        f"The user is {s['does']}. {s['composition']}\n\n"
+        f"Everything you decide must follow from that surface. Layout is conditioned by what "
+        f"the surface does, never by what looks nice in isolation.\n\n"
+        f"{_system_clause(system)}\n\n"
+        f"Produce exactly {count} sections. Tone: {tone}.\n\n"
+        f"For each section choose an `archetype` from: cover, statement, stat, list, steps, "
+        f"two_column, quote, compare, closer. The archetype dictates which fields are "
+        f"REQUIRED, and a section missing them renders empty:\n"
+        f"  stat    -> stat.value (<=8 chars) and stat.label\n"
+        f"  list    -> items[] with label + text\n"
+        f"  steps   -> items[] with label + text, in a real order\n"
+        f"  compare -> exactly 2 items[]; item 2 is the favoured side\n"
+        f"  quote   -> quote.text and quote.attribution\n"
+        f"  closer  -> cta\n"
+        f"Never fabricate a statistic you were not given. If you lack the data for an "
+        f"archetype, choose a different archetype that fits what you actually have.\n\n"
+        f"COPY LIMITS — these are the real dimensions of the layout, not style advice:\n"
+        f"  eyebrow 1-3 words · title <=8 words · subtitle <=12 words\n"
+        f"  body 20-40 words (under 15 looks empty, over 45 overruns and is cut)\n"
+        f"  items[].label <=4 words · items[].text 10-20 words\n"
+        f"  Plain prose. No emojis, hashtags, markdown or citation brackets.\n\n"
+        f"Before returning, audit your own output against these known tells of "
+        f"machine-generated design and fix any you hit:\n{tells}\n\n"
+        f"Vary the archetype between adjacent sections. First section is 'cover', last is "
+        f"'closer'.\n\n"
+        'STRICT JSON only: {"sections":[{"archetype":str,"surface_intent":"light"|"dark",'
+        '"eyebrow":str,"title":str,"subtitle":str,"body":str,'
+        '"items":[{"label":str,"text":str}],"stat":{"value":str,"label":str},'
+        '"quote":{"text":str,"attribution":str},"cta":str}]}\n'
+        "Omit items/stat/quote entirely on sections whose archetype does not use them."
+    )
+
+
+@design_router.post("/generate")
+async def generate(body: DesignGenIn, user=Depends(current_user)):
+    if not body.brief.strip():
+        raise HTTPException(400, "brief is required")
+    if body.fmt not in FORMATS:
+        raise HTTPException(400, f"unknown format '{body.fmt}'")
+    if body.surface is not None and body.surface not in SURFACES:
+        raise HTTPException(400, f"unknown surface '{body.surface}'")
+    count = max(1, min(20, body.section_count))
+
+    # 1) Surface first — before any content or styling decision exists.
+    if body.surface:
+        routing = {"surface": body.surface, "secondary": None, "confidence": 1.0,
+                   "why": "Chosen explicitly by the user."}
+    else:
+        routing = await route_surface(body.brief, user, body.fmt)
+
+    # 2) Design system, resolved but NOT allowed to outrank the brief.
+    system = await _resolve_system(user["workspace_id"], body.system_id)
+
+    sections: List[Dict[str, Any]] = []
+    if _llm_configured():
+        await charge_credits(
+            user["workspace_id"], "design_generate",
+            meta={"format": body.fmt, "surface": routing["surface"], "sections": count},
+        )
+        try:
+            resp = await _llm_chat(
+                _build_system_prompt(routing["surface"], body.fmt, count, body.tone, system),
+                f"Brief: {body.brief}",
+                f"deq-gen-{user['id']}",
+                user=user,
+                max_tokens=min(8192, 600 + count * 600),
+                **_creq_llm_kwargs(),
+            )
+            parsed = _extract_json(resp)
+            if parsed and parsed.get("sections"):
+                sections = parsed["sections"][:count]
+        except Exception as ex:
+            log.warning("design-eq generation failed: %s", ex)
+
+    if not sections:
+        sections = [{"archetype": "cover", "title": body.brief[:80],
+                     "subtitle": "Draft — regenerate to fill this in."}]
+
+    canvas = body.canvas or {"w": 1080, "h": 1350}
+    doc = {
+        "id": new_id(),
+        "workspace_id": user["workspace_id"],
+        "owner_id": user["id"],
+        "brief": body.brief,
+        "format": body.fmt,
+        "master": FORMATS[body.fmt]["master"],
+        "surface": routing["surface"],
+        "surface_secondary": routing.get("secondary"),
+        "routing_why": routing.get("why"),
+        "system_id": (system or {}).get("id"),
+        "canvas": canvas,
+        # The structured master. The frontend composition engine turns these
+        # into positioned elements; nothing here is a rendered pixel, which is
+        # what keeps every export target lossless.
+        "sections": sections,
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.design_projects.insert_one(doc)
+    await _audit(user, "design.create", {"project_id": doc["id"], "surface": routing["surface"]})
+    doc.pop("_id", None)
+    doc["routing"] = routing
+    return doc
+
+
+# --------------------------------------------------------------------------
+# Projects
+# --------------------------------------------------------------------------
+
+@design_router.get("/projects")
+async def list_projects(user=Depends(current_user)):
+    return await db.design_projects.find(
+        {"workspace_id": user["workspace_id"]}, {"_id": 0}
+    ).sort("updated_at", -1).to_list(200)
+
+
+@design_router.get("/projects/{project_id}")
+async def get_project(project_id: str, user=Depends(current_user)):
+    doc = await db.design_projects.find_one(
+        {"id": project_id, "workspace_id": user["workspace_id"]}, {"_id": 0}
+    )
+    if not doc:
+        raise HTTPException(404, "not found")
+    return doc
+
+
+class ProjectUpdateIn(BaseModel):
+    sections: Optional[List[Dict[str, Any]]] = None
+    slides: Optional[List[Dict[str, Any]]] = None
+    tokens: Optional[Dict[str, Any]] = None
+    title: Optional[str] = None
+    canvas: Optional[Dict[str, int]] = None
+    surface: Optional[str] = None
+
+
+@design_router.put("/projects/{project_id}")
+async def update_project(project_id: str, body: ProjectUpdateIn, user=Depends(current_user)):
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not updates:
+        raise HTTPException(400, "nothing to update")
+    if "surface" in updates and updates["surface"] not in SURFACES:
+        raise HTTPException(400, "unknown surface")
+    updates["updated_at"] = now_iso()
+    res = await db.design_projects.update_one(
+        {"id": project_id, "workspace_id": user["workspace_id"]}, {"$set": updates}
+    )
+    if not res.matched_count:
+        raise HTTPException(404, "not found")
+    return await get_project(project_id, user)
+
+
+@design_router.post("/projects/{project_id}/audit")
+async def audit_project(project_id: str, user=Depends(current_user)):
+    """Run the deterministic anti-slop audit over a project's rendered master.
+    Deliberately a separate call: the audit is shown to the user as a visible
+    gate, which is the part Claude Design keeps internal."""
+    doc = await get_project(project_id, user)
+    return audit_slop(doc)
+
+
+@design_router.delete("/projects/{project_id}")
+async def delete_project(project_id: str, user=Depends(current_user)):
+    res = await db.design_projects.delete_one(
+        {"id": project_id, "workspace_id": user["workspace_id"]}
+    )
+    if not res.deleted_count:
+        raise HTTPException(404, "not found")
+    await _audit(user, "design.delete", {"project_id": project_id})
+    return {"ok": True}

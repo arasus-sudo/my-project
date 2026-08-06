@@ -6207,6 +6207,7 @@ from sms_eq import sms_router, sms_public_router
 from whatsapp_eq import whatsapp_router, whatsapp_public_router
 from hrms_eq import hrms_router
 from accounting_eq import accounting_router
+from design_eq import design_router
 api.include_router(pitch_router)
 api.include_router(crm_router)
 api.include_router(pitch_public_router)
@@ -6221,6 +6222,7 @@ api.include_router(social_router)
 api.include_router(social_public_router)
 api.include_router(site_router)
 api.include_router(site_public_router)
+api.include_router(design_router)
 api.include_router(billing_router)
 api.include_router(billing_public_router)
 api.include_router(company_intel_router)
