@@ -527,6 +527,11 @@ class ProjectUpdateIn(BaseModel):
     title: Optional[str] = None
     canvas: Optional[Dict[str, int]] = None
     surface: Optional[str] = None
+    # Colours derived from an uploaded logo, plus the logo itself as a data URI.
+    # Extraction happens client-side (node-vibrant) and the design system builds
+    # the surface set around these, so the server only stores them.
+    brand: Optional[Dict[str, Any]] = None
+    palette_family: Optional[str] = None
 
 
 @design_router.put("/projects/{project_id}")
@@ -588,7 +593,10 @@ async def handoff_to_editor(project_id: str, body: Optional[HandoffIn] = None,
         raise HTTPException(400, "This design has no sections to open")
 
     chosen_family = (body.palette_family if body else None) or doc.get("palette_family") or "claude"
-    if chosen_family not in CREQ_PALETTE_FAMILIES:
+    # "brand" is not a house family — it means "build the surfaces from this
+    # workspace's own logo colours", which the renderer resolves from the brand
+    # kit rather than from a lookup table.
+    if chosen_family != "brand" and chosen_family not in CREQ_PALETTE_FAMILIES:
         chosen_family = "claude"
 
     carousel_id = new_id()
@@ -598,8 +606,11 @@ async def handoff_to_editor(project_id: str, body: Optional[HandoffIn] = None,
         "owner_id": user["id"],
         "topic": doc.get("brief", "")[:200],
         "platform": "linkedin",
-        "brand": {"bg": "#0F1010", "accent": "#E85D3A", "text": "#FFFFFF",
-                  "font": "Geist", "logo_text": ""},
+        "brand": {
+            **{"bg": "#0F1010", "accent": "#E85D3A", "text": "#FFFFFF"},
+            **{k: v for k, v in (doc.get("brand") or {}).items() if k in ("bg", "accent", "text")},
+            "font": "Geist", "logo_text": "",
+        },
         # Copied verbatim: `archetype` on a slide is what routes it through the
         # premium composition engine on open.
         "slides": sections,

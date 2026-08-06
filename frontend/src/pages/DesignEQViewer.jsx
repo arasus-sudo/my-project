@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, PenSquare, ShieldCheck, AlertTriangle, Check, Download, Play } from "lucide-react";
+import { ArrowLeft, Loader2, PenSquare, ShieldCheck, AlertTriangle, Check, Download, Play, Image as ImageIcon } from "lucide-react";
 import { api, isCreditError } from "../lib/api";
 import { buildPremiumDeck, paletteForDeck } from "../lib/creqPremiumEngine";
 import { PALETTE_FAMILIES } from "../lib/creqClaudeDesign";
@@ -31,6 +31,7 @@ export default function DesignEQViewer() {
   const [exporting, setExporting] = useState(false);
   const [building, setBuilding] = useState(false);
   const [viewport, setViewport] = useState(1280);
+  const [extracting, setExtracting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -52,11 +53,59 @@ export default function DesignEQViewer() {
   const built = useMemo(() => {
     if (!proj?.sections?.length || proj.master !== "structured") return [];
     try {
-      return buildPremiumDeck(proj.sections, { canvas, familyId: family || "claude" });
+      return buildPremiumDeck(proj.sections, {
+        canvas,
+        familyId: family || "claude",
+        brand: family === "brand" ? proj.brand : null,
+      });
     } catch { return []; }
   }, [proj, family, canvas]);
 
-  const palette = useMemo(() => paletteForDeck(family || "claude"), [family]);
+  // A brand kit derived from an uploaded logo. When present it outranks the
+  // chosen family, because getFamily() builds surfaces from real brand colour
+  // rather than looking one up — the same precedence a real client's guidelines
+  // would have over a studio's house palette.
+  const brandKit = family === "brand" ? proj?.brand || null : null;
+  const palette = useMemo(
+    () => paletteForDeck(family || "claude", brandKit),
+    [family, brandKit],
+  );
+
+  const logoRef = useRef(null);
+
+  /** Derive a full theme from a logo. Vibrant gives us dominant swatches; the
+   * design system then builds paper/cloud/ink/clay surfaces around them and
+   * enforces contrast, so a low-contrast brand colour still produces a legible
+   * deck instead of unreadable one. */
+  const onLogo = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    if (!f.type.startsWith("image/")) { toast.error("Pick an image file"); return; }
+    if (f.size > 3 * 1024 * 1024) { toast.error("Logo too large (max ~3 MB)"); return; }
+    setExtracting(true);
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result || ""));
+        r.onerror = reject;
+        r.readAsDataURL(f);
+      });
+      const { Vibrant } = await import("node-vibrant/browser");
+      const sw = await Vibrant.from(dataUrl).getPalette();
+      const accent = sw.Vibrant?.hex || sw.DarkVibrant?.hex || sw.Muted?.hex;
+      if (!accent) { toast.error("Couldn't read colours from that logo"); return; }
+      const bg = sw.LightMuted?.hex || sw.LightVibrant?.hex || "#FAF9F5";
+      const text = sw.DarkMuted?.hex || sw.DarkVibrant?.hex || "#191919";
+      const brand = { bg, accent, text, logo: dataUrl };
+      await api.put(`/design-eq/projects/${id}`, { brand });
+      setProj((p) => ({ ...p, brand }));
+      setFamily("brand");
+      toast.success("Theme built from your logo");
+    } catch {
+      toast.error("Couldn't read that logo");
+    } finally { setExtracting(false); }
+  };
 
   // Measured so the preview can be scaled rather than clamped — see the frame.
   const frameWrapRef = useRef(null);
@@ -84,13 +133,13 @@ export default function DesignEQViewer() {
     // Hand off in whatever direction is on screen, not whatever the model
     // originally chose — the switcher above is free, so the two diverge.
     const { data } = await api.post(`/design-eq/projects/${id}/handoff`, { palette_family: family });
-    const composed = built.length ? built : buildPremiumDeck(proj.sections, { canvas, familyId: family });
+    const composed = built.length ? built : buildPremiumDeck(proj.sections, { canvas, familyId: family, brand: brandKit });
     try {
       await api.put(`/carousel/${data.carousel_id}`, {
         slides: composed,
         // The palette hexes live in the frontend design system, so they are
         // written from here rather than duplicated into Python.
-        ai_palette: paletteForDeck(data.palette_family || family),
+        ai_palette: paletteForDeck(data.palette_family || family, brandKit),
       });
     } catch { /* the editor recomposes from sections on open, so this is not fatal */ }
     setProj((p) => ({ ...p, carousel_id: data.carousel_id }));
@@ -143,7 +192,7 @@ export default function DesignEQViewer() {
       // default timeout, so this is bounded explicitly: a backend that dies
       // mid-build should surface as an error, not an endless spinner.
       const { data } = await api.post(`/design-eq/projects/${id}/build-code`, {
-        tokens: paletteForDeck(family || "claude"),
+        tokens: paletteForDeck(family || "claude", brandKit),
       }, { timeout: 180000 });
       setProj((p) => ({ ...p, code: data.code, code_audit: data.audit }));
       const n = data.audit?.hits?.length || 0;
@@ -303,11 +352,42 @@ export default function DesignEQViewer() {
                 re-composed locally — no credits, no regeneration
               </span>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Your own brand first — a real identity outranks a house palette. */}
+              <div className={`text-left p-2.5 rounded-xl border transition-colors ${
+                family === "brand" ? "border-ink bg-ash" : "border-line"}`}>
+                <div className="flex items-center gap-1.5">
+                  {proj.brand ? (
+                    <span className="flex gap-0.5">
+                      {[proj.brand.bg, proj.brand.accent, proj.brand.text].map((c, i) => (
+                        <span key={i} className="w-3 h-3 rounded-full border border-black/10" style={{ background: c }} />
+                      ))}
+                    </span>
+                  ) : <ImageIcon size={13} className="text-neutral-400" />}
+                  <span className="text-caption font-medium">From your logo</span>
+                  {family === "brand" && <Check size={12} className="ml-auto" />}
+                </div>
+                <div className="text-[10px] text-neutral-400 mt-1 leading-tight">
+                  {proj.brand ? "Built from your logo's own colours." : "Upload a logo and the theme is built from it."}
+                </div>
+                <div className="flex gap-1.5 mt-2">
+                  <button type="button" onClick={() => logoRef.current?.click()} disabled={extracting}
+                    data-testid="deq-upload-logo"
+                    className="text-[11px] px-2 py-1 rounded-lg border border-line hover:border-ink disabled:opacity-50">
+                    {extracting ? "Reading…" : proj.brand ? "Replace logo" : "Upload logo"}
+                  </button>
+                  {proj.brand && family !== "brand" && (
+                    <button type="button" onClick={() => setFamily("brand")} data-testid="deq-family-brand"
+                      className="text-[11px] px-2 py-1 rounded-lg border border-line hover:border-ink">Use it</button>
+                  )}
+                </div>
+                <input ref={logoRef} type="file" accept="image/*" onChange={onLogo} className="hidden" />
+              </div>
+
               {Object.values(PALETTE_FAMILIES).map((f) => (
                 <button key={f.id} type="button" onClick={() => setFamily(f.id)}
                   data-testid={`deq-family-${f.id}`}
-                  className={`text-left p-2.5 rounded-xl border transition-colors min-w-[190px] ${
+                  className={`text-left p-2.5 rounded-xl border transition-colors ${
                     family === f.id ? "border-ink bg-ash" : "border-line hover:border-neutral-400"}`}>
                   <div className="flex items-center gap-1.5">
                     <span className="flex gap-0.5">

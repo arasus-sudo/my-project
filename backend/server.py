@@ -4166,6 +4166,11 @@ CREQ_PALETTE_FAMILIES = {
     "claude": "Warm ivory paper, book-cloth clay accent, warm near-black ink. Editorial and human. The default — use unless the topic argues otherwise.",
     "sage": "Cool chalk paper, deep evergreen accent. Quieter and institutional — sustainability, health, research, policy.",
     "oxide": "Bone paper, oxidised steel-blue accent. Technical and precise — engineering, finance, data, infrastructure.",
+    "mocha": "Cream paper, espresso ink, caramel accent. Warm, tactile, premium — hospitality, food, beauty, craft.",
+    "cobalt": "Porcelain paper, true cobalt accent. Confident and modern — fintech, B2B software, enterprise.",
+    "amber": "Charcoal ground, signal-amber accent. High contrast and energetic — developer tools, data, events.",
+    "plum": "Blush paper, deep plum accent. Editorial and distinctive — fashion, media, culture, brand work.",
+    "teal": "Sand paper, deep teal accent. Calm and considered — healthcare, education, non-profit, wellbeing.",
 }
 CREQ_ARCHETYPES = {
     "cover": "Opening slide. Big display title anchored low, short eyebrow above, one supporting line.",
