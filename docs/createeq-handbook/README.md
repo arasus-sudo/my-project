@@ -33,6 +33,7 @@ the current codebase, written chapter by chapter.
 | 13 | Headless Export Engine (Satori, Resvg, OOXML) | ✅ Written |
 | 14 | Infrastructure (Azure Front Door, autoscaling, SKUs) | ✅ Written |
 | 15 | Engineering Standards (monorepo, CI/CD testing) | ✅ Written |
+| 16 | Creative Reasoning Engine (Story → Composition → Critique) | 🟢 Implemented — Claude Design system, §16.7 |
 
 ## Reading order
 
