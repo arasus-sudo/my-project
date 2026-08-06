@@ -1761,6 +1761,7 @@ export default function CreateEQEditor() {
                   ))}
                   <DeckOverlay proj={proj} slideIdx={activeSlide} palette={palette} />
                   <SelectionChrome
+                    canvas={CANVAS}
                     els={slide.elements.filter((e2) => selectedIds.has(e2.id) && e2.id !== editingId)}
                     zoom={zoom}
                     measured={measuredRef.current}
@@ -1968,6 +1969,7 @@ export default function CreateEQEditor() {
 
       {showPanorama && (
         <PanoramaDrawer
+          canvas={CANVAS}
           onClose={() => setShowPanorama(false)}
           panorama={proj.panorama} slideCount={proj.slides.length}
           onApply={(pano) => {

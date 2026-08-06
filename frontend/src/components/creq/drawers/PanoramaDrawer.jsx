@@ -1,16 +1,36 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useLayoutEffect } from "react";
 import { toast } from "sonner";
 import { Loader2, Mountain, Wand2 } from "lucide-react";
 import { api, isCreditError } from "../../../lib/api";
-import { CANVAS } from "../../../lib/creqTemplates";
+import { CANVAS as DEFAULT_CANVAS } from "../../../lib/creqTemplates";
 import { panoramaSliceStyle } from "../PanoramaLayer";
 
-export default function PanoramaDrawer({ onClose, panorama, slideCount, onApply }) {
+export default function PanoramaDrawer({ onClose, panorama, slideCount, onApply, canvas }) {
+  const CANVAS = canvas?.w && canvas?.h ? canvas : DEFAULT_CANVAS;
   const [src, setSrc] = useState(panorama?.src || "");
   const [mode, setMode] = useState(panorama?.mode || "same");
   const [busy, setBusy] = useState(false);
   const [prompt, setPrompt] = useState("");
   const fileRef = useRef(null);
+
+  // The preview slice is scaled by cellWidth/CANVAS.w, so that ratio must come
+  // from the cell's real width — a fixed scale only lines up at one grid width
+  // and one canvas format. Same contract as PdfExportDialog/BoardView.
+  const previewGridRef = useRef(null);
+  const [cellW, setCellW] = useState(0);
+  useLayoutEffect(() => {
+    const grid = previewGridRef.current;
+    if (!grid) return undefined;
+    const measure = () => {
+      const cell = grid.firstElementChild;
+      if (cell) setCellW(cell.getBoundingClientRect().width);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(grid);
+    return () => ro.disconnect();
+  }, [src, slideCount]);
+  const previewScale = cellW ? cellW / CANVAS.w : 0;
 
   const onFile = (e) => {
     const f = e.target.files?.[0];
@@ -104,12 +124,14 @@ export default function PanoramaDrawer({ onClose, panorama, slideCount, onApply 
           {src && (
             <div className="border-t border-line pt-4 space-y-2">
               <div className="ui-label">Per-slide preview</div>
-              <div className="grid grid-cols-4 gap-1.5">
+              <div ref={previewGridRef} className="grid grid-cols-4 gap-1.5">
                 {Array.from({ length: slideCount }).map((_, i) => (
-                  <div key={i} className="relative w-full aspect-[4/5] rounded-md overflow-hidden border border-line bg-neutral-100" data-testid={`pano-preview-slide-${i}`}>
-                    <div style={{ position: "absolute", inset: 0, transform: "scale(0.11)", transformOrigin: "top left", width: CANVAS.w, height: CANVAS.h }}>
-                      <PreviewSlice panorama={preview} slideIdx={i} totalSlides={slideCount} />
-                    </div>
+                  <div key={i} className="relative w-full rounded-md overflow-hidden border border-line bg-neutral-100" style={{ aspectRatio: `${CANVAS.w} / ${CANVAS.h}` }} data-testid={`pano-preview-slide-${i}`}>
+                    {previewScale > 0 && (
+                      <div style={{ position: "absolute", left: 0, top: 0, transform: `scale(${previewScale})`, transformOrigin: "top left", width: CANVAS.w, height: CANVAS.h }}>
+                        <PreviewSlice panorama={preview} slideIdx={i} totalSlides={slideCount} canvas={CANVAS} />
+                      </div>
+                    )}
                     <div className="absolute bottom-0.5 right-1 text-[9px] font-mono text-white mix-blend-difference">{i + 1}</div>
                   </div>
                 ))}
@@ -145,8 +167,8 @@ function ModeTile({ testid, active, onClick, label, hint }) {
   );
 }
 
-function PreviewSlice({ panorama, slideIdx, totalSlides }) {
-  const style = panoramaSliceStyle(panorama, slideIdx, totalSlides);
+function PreviewSlice({ panorama, slideIdx, totalSlides, canvas }) {
+  const style = panoramaSliceStyle(panorama, slideIdx, totalSlides, canvas);
   if (!style) return null;
   return <img src={panorama.src} alt="" style={{ ...style, pointerEvents: "none", userSelect: "none" }} draggable={false} />;
 }
