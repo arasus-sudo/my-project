@@ -527,62 +527,64 @@ async def generate_post(request: Request, body: PostGenIn, user=Depends(current_
 
 @social_router.post("/posts/from-create-eq", response_model=CreateEqPublishOut)
 @limiter.limit("20/minute", key_func=_workspace_or_ip_key)
-async def create_from_create_eq(request: Request, body: CreateEqPublishIn, user=Depends(current_user)):
+async def create_from_create_eq(request: Request, user=Depends(current_user)):
     """Publish a Create EQ deck/slide to LinkedIn, funnelled through Social EQ
     so every post gets the same caption/hashtag engine + approval gate that
     manual Compose uses. The user clicks "Publish to LinkedIn" inside Create EQ;
     this route receives the already-rendered file (PDF for a carousel, PNG for a
-    single slide), runs `_draft_post` + the organiser QC on `body.topic`, and
-    stores the post as `pending_approval` with the document linked via
-    `carousel_project_id` so the queue can "open in Create EQ"."""
+    single slide) as multipart/form-data, runs `_draft_post` + the organiser QC
+    on `topic`, and stores the post as `pending_approval` with the document
+    linked via `carousel_project_id` so the queue can "open in Create EQ"."""
 
-    if body.content_type not in ("carousel", "static"):
+    form = await request.form()
+    project_id = form.get("project_id")
+    topic = form.get("topic")
+    content_type = form.get("content_type", "carousel")
+    platform = form.get("platform", "linkedin")
+    tone = form.get("tone", "confident, professional")
+    first_comment = form.get("first_comment")
+    file = form.get("file")
+
+    if not topic or not file:
+        raise HTTPException(400, "topic and file are required")
+    if content_type not in ("carousel", "static"):
         raise HTTPException(400, "content_type must be carousel or static")
-    if body.platform != "linkedin":
+    if platform != "linkedin":
         raise HTTPException(400, "Create EQ publishing v1 is LinkedIn-only (documents are a LinkedIn format)")
 
-    if body.file_b64:
-        try:
-            file_bytes = base64.b64decode(body.file_b64, validate=True)
-        except Exception:
-            raise HTTPException(400, "file_b64 is not valid base64")
-    else:
-        file_bytes = b""
+    file_bytes = await file.read()
     if not file_bytes:
-        raise HTTPException(400, "missing rendered file (file_b64)")
+        raise HTTPException(400, "empty file")
     if len(file_bytes) > 100 * 1024 * 1024:
         raise HTTPException(400, "rendered file exceeds 100MB")
 
-    # Verify the project belongs to this workspace (keeps the carousel back-link
-    # honest — you can only link to your own deck).
-    if body.project_id:
+    # Verify the project belongs to this workspace
+    if project_id:
         proj = await db.carousels.find_one(
-            {"id": body.project_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
+            {"id": project_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
         if not proj:
             raise HTTPException(404, "carousel project not found in your workspace")
 
     from billing import charge_credits
-    await charge_credits(user["workspace_id"], "social_draft", meta={"platform": body.platform, "topic": body.topic})
+    await charge_credits(user["workspace_id"], "social_draft", meta={"platform": platform, "topic": topic})
 
     brand_voice = await _get_brand_voice(user["workspace_id"])
-    draft = await _draft_post(body.platform, body.topic, body.tone, None, brand_voice)
+    draft = await _draft_post(platform, topic, tone, None, brand_voice)
     qc = await _apply_organiser_check(draft, brand_voice, user["workspace_id"])
 
     post_id = new_id()
-    if body.content_type == "carousel":
-        filename = _save_document(post_id, file_bytes, ext="pdf")
-    else:
-        filename = _save_media(post_id, file_bytes, ext="png")
+    ext = "pdf" if content_type == "carousel" else "png"
+    filename = _save_document(post_id, file_bytes, ext=ext) if content_type == "carousel" else _save_media(post_id, file_bytes, ext="png")
     media_url = f"/social-eq/media/{post_id}/{filename}"
 
     doc = {
         "id": post_id, "workspace_id": user["workspace_id"], "owner_id": user["id"],
-        "lead_id": None, "platform": body.platform, "topic": body.topic,
+        "lead_id": None, "platform": platform, "topic": topic,
         "headline": draft.get("headline", ""), "body": draft.get("body", ""),
-        "hashtags": draft.get("hashtags", []), "media_url": media_url, "content_type": body.content_type,
-        "carousel_project_id": body.project_id or None, "source": "create_eq",
+        "hashtags": draft.get("hashtags", []), "media_url": media_url, "content_type": content_type,
+        "carousel_project_id": project_id or None, "source": "create_eq",
         "video_status": None, "video_operation_name": None,
-        "first_comment": body.first_comment, "first_comment_posted": False,
+        "first_comment": first_comment, "first_comment_posted": False,
         "status": "pending_approval", "scheduled_for": None, "approval_token": None,
         "approved_by": None, "approved_at": None, "organiser_issues": qc.get("issues", []),
         "published_at": None, "platform_post_id": None, "platform_post_url": None, "engagement": None,
@@ -590,7 +592,7 @@ async def create_from_create_eq(request: Request, body: CreateEqPublishIn, user=
     }
     await db.social_posts.insert_one(doc)
     doc.pop("_id", None)
-    await _audit(user, "social_eq.post.from_create_eq", {"id": doc["id"], "project_id": body.project_id})
+    await _audit(user, "social_eq.post.from_create_eq", {"id": doc["id"], "project_id": project_id})
     return CreateEqPublishOut(
         post_id=doc["id"], status=doc["status"], headline=doc["headline"], body=doc["body"],
         hashtags=doc["hashtags"], carousel_project_id=doc["carousel_project_id"], media_url=media_url)

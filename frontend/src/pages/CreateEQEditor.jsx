@@ -1447,12 +1447,12 @@ export default function CreateEQEditor() {
   /* --- Publish to LinkedIn (via Social EQ approval queue) --- */
   const publishToLinkedIn = async (mode, topic) => {
     if (!proj?.slides?.length) { toast.error("No slides to publish"); return; }
-    if (!topic.trim()) { toast.error("Enter a topic so Social EQ can draft the caption"); return; }
+    if (!topic.trim()) { toast.error("Enter a topic so the caption & hashtags can be generated"); return; }
     setBusy(true);
     setExportProgress({ done: 0, total: mode === "carousel" ? proj.slides.length : 1 });
     try {
       await waitForProjectFonts(proj.slides);
-      let fileB64, contentType;
+      let fileBlob, contentType, filename;
       if (mode === "carousel") {
         const scale = EXPORT_QUALITIES.find((q) => q.id === "standard")?.scale ?? 2;
         const pdf = new jsPDF({
@@ -1466,25 +1466,30 @@ export default function CreateEQEditor() {
           pdf.addImage(dataUrl, "PNG", 0, 0, CANVAS.w, CANVAS.h);
           setExportProgress({ done: k + 1, total: indices.length });
         }
-        fileB64 = pdf.output("datauristring").split(",")[1];
+        fileBlob = pdf.output("blob");
         contentType = "carousel";
+        filename = `${(proj.topic || "carousel").slice(0, 40).replace(/\W+/g, "-")}-${indices.length}-slides.pdf`;
       } else {
         const dataUrl = await renderSlideToDataUrl(activeSlide, 2);
-        fileB64 = dataUrl.split(",")[1];
+        const res = await fetch(dataUrl);
+        fileBlob = await res.blob();
         contentType = "static";
+        filename = `${(proj.topic || "slide").slice(0, 40).replace(/\W+/g, "-")}-${activeSlide + 1}.png`;
         setExportProgress({ done: 1, total: 1 });
       }
 
-      const { data } = await api.post("/social-eq/posts/from-create-eq", {
-        project_id: proj.id,
-        topic: topic.trim(),
-        content_type: contentType,
-        platform: "linkedin",
-        file_b64: fileB64,
+      const form = new FormData();
+      form.append("project_id", proj.id);
+      form.append("topic", topic.trim());
+      form.append("content_type", contentType);
+      form.append("platform", "linkedin");
+      form.append("file", fileBlob, filename);
+
+      const { data } = await api.post("/social-eq/posts/from-create-eq", form, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
-      toast.success("Draft sent to Social EQ approval queue");
+      toast.success("Draft sent to approval queue");
       setShowPublish(false);
-      // Drop the user into the queue to review/approve the caption + hashtags.
       nav("/app/social-eq/queue");
     } catch (err) {
       console.error(err);
