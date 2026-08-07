@@ -32,7 +32,7 @@ LINKEDIN_MOCKED = not (LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET)
 AUTH = "https://www.linkedin.com/oauth/v2/authorization"
 TOKEN = "https://www.linkedin.com/oauth/v2/accessToken"
 API_BASE = "https://api.linkedin.com"
-API_VERSION = "202505"  # LinkedIn-Version header; Posts API is version-pinned
+API_VERSION = "202606"  # LinkedIn-Version header; Posts API is version-pinned (202505 was sunset → 426)
 SCOPES = "openid profile w_member_social"
 
 
@@ -142,9 +142,17 @@ async def publish(integration: Dict[str, Any], text: str,
         "lifecycleState": "PUBLISHED",
         "isReshareDisabledByAuthor": False,
     }
+    media_omitted = False
     if image_bytes:
-        image_urn = await _upload_image(integration, image_bytes)
-        body["content"] = {"media": {"id": image_urn}}
+        try:
+            image_urn = await _upload_image(integration, image_bytes)
+            body["content"] = {"media": {"id": image_urn}}
+        except Exception as ex:
+            # Image upload is the most fragile step (426 from /rest/images on
+            # some apps/accounts). Don't strand the post — publish text-only
+            # and tell the caller media was omitted.
+            log.warning("image upload failed for post (%s); publishing text-only", ex)
+            media_omitted = True
 
     headers = {
         "Authorization": f"Bearer {token}",
@@ -159,12 +167,77 @@ async def publish(integration: Dict[str, Any], text: str,
         # not the JSON body (POST /rest/posts responds 201 with an empty body).
         post_urn = r.headers.get("x-restli-id", "")
 
-    # Store the FULL urn as platform_post_id (not just the numeric tail) —
-    # list_comments/create_comment need it whole to address
-    # /rest/socialActions/{urn}/comments, and it's opaque to the rest of the
-    # app anyway (each platform's post id format differs).
     url = f"https://www.linkedin.com/feed/update/{post_urn}" if post_urn else ""
-    return {"platform_post_id": post_urn, "url": url}
+    return {"platform_post_id": post_urn, "url": url, "media_omitted": media_omitted}
+
+
+# ----------------------------- Documents (PDF carousels) ----------------------
+async def publish_document(integration: Dict[str, Any], text: str, document_bytes: bytes,
+                           title: str = "deck.pdf") -> Dict[str, Any]:
+    """Publish a PDF as a native LinkedIn document post — the format LinkedIn
+    renders as a swipeable carousel in the feed (one page per card).
+
+    Flow (Documents API): POST /rest/documents?action=initializeUpload to get an
+    uploadUrl + document URN, PUT the raw bytes, then poll the document until
+    `status == AVAILABLE` (LinkedIn rasterizes each page into preview images —
+    posting before READY yields a document with no pages), then reference the
+    URN in the same /rest/posts share payload as images use.
+
+    Raises on failure; the caller (social_eq.py) decides how to surface it.
+    """
+    token = await _access_token(integration)
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "LinkedIn-Version": API_VERSION,
+        "X-Restli-Protocol-Version": "2.0.0",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=30) as c:
+        init = await c.post(
+            f"{API_BASE}/rest/documents?action=initializeUpload",
+            headers=headers,
+            json={"initializeUploadRequest": {"owner": _author_urn(integration)}},
+        )
+        init.raise_for_status()
+        value = init.json()["value"]
+        upload_url, document_urn = value["uploadUrl"], value["document"]
+
+        put = await c.put(upload_url, headers={"Authorization": f"Bearer {token}"},
+                          content=document_bytes)
+        put.raise_for_status()
+
+        # Poll until LinkedIn has finished rasterizing the document's pages.
+        # Documents process quickly for small PDFs but can take several seconds;
+        # this mirrors the "wait until AVAILABLE" requirement in the API docs.
+        import asyncio
+        for _ in range(30):
+            await asyncio.sleep(1)
+            check = await c.get(f"{API_BASE}/rest/documents/{document_urn}", headers=headers)
+            check.raise_for_status()
+            if (check.json().get("status") or "") == "AVAILABLE":
+                break
+        else:
+            raise RuntimeError("LinkedIn document processing did not reach AVAILABLE in time")
+
+        post_body: Dict[str, Any] = {
+            "author": _author_urn(integration),
+            "commentary": text,
+            "visibility": "PUBLIC",
+            "distribution": {
+                "feedDistribution": "MAIN_FEED",
+                "targetEntities": [],
+                "thirdPartyDistributionChannels": [],
+            },
+            "content": {"media": {"title": title, "id": document_urn}},
+            "lifecycleState": "PUBLISHED",
+            "isReshareDisabledByAuthor": False,
+        }
+        r = await c.post(f"{API_BASE}/rest/posts", headers=headers, json=post_body)
+        r.raise_for_status()
+        post_urn = r.headers.get("x-restli-id", "")
+
+    url = f"https://www.linkedin.com/feed/update/{post_urn}" if post_urn else ""
+    return {"platform_post_id": post_urn, "url": url, "media_omitted": False}
 
 
 # ----------------------------- Comments (socialActions) -------------------------

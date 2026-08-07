@@ -6,7 +6,7 @@ import jsPDF from "jspdf";
 import { toast } from "sonner";
 import {
   Save, Download, ChevronLeft, Loader2, Plus, Trash2, Copy,
-  Palette, Undo2, Redo2, PenSquare, ImagePlus, FileText, LayoutGrid, Maximize2, Mountain, Play, Image as ImageIcon, Search,
+  Palette, Undo2, Redo2, PenSquare, ImagePlus, FileText, LayoutGrid, Maximize2, Mountain, Play, Image as ImageIcon, Search, Send,
 } from "lucide-react";
 
 import { api, isCreditError } from "../lib/api";
@@ -34,6 +34,7 @@ import ImageGalleryDrawer from "../components/creq/drawers/ImageGalleryDrawer";
 import StockPhotoDrawer from "../components/creq/drawers/StockPhotoDrawer";
 import PanoramaDrawer from "../components/creq/drawers/PanoramaDrawer";
 import PdfExportDialog, { EXPORT_QUALITIES } from "../components/creq/drawers/PdfExportDialog";
+import PublishToLinkedInDialog from "../components/creq/drawers/PublishToLinkedInDialog";
 import { newId, renderBackground, renderBackgroundImageCss, stripLocalKeys, elementBounds } from "../components/creq/utils";
 import { makeFlow, fitToCanvas, contentBox, auditAndCorrect } from "../lib/creqLayoutFlow";
 
@@ -226,6 +227,7 @@ export default function CreateEQEditor() {
   const [showStockPhotos, setShowStockPhotos] = useState(false);
   const [showPanorama, setShowPanorama] = useState(false);
   const [showPdfPicker, setShowPdfPicker] = useState(false);
+  const [showPublish, setShowPublish] = useState(false);
   const [showGenerateContent, setShowGenerateContent] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [viewMode, setViewMode] = useState("focus");
@@ -1442,6 +1444,55 @@ export default function CreateEQEditor() {
     } finally { setBusy(false); setExportProgress(null); }
   };
 
+  /* --- Publish to LinkedIn (via Social EQ approval queue) --- */
+  const publishToLinkedIn = async (mode, topic) => {
+    if (!proj?.slides?.length) { toast.error("No slides to publish"); return; }
+    if (!topic.trim()) { toast.error("Enter a topic so Social EQ can draft the caption"); return; }
+    setBusy(true);
+    setExportProgress({ done: 0, total: mode === "carousel" ? proj.slides.length : 1 });
+    try {
+      await waitForProjectFonts(proj.slides);
+      let fileB64, contentType;
+      if (mode === "carousel") {
+        const scale = EXPORT_QUALITIES.find((q) => q.id === "standard")?.scale ?? 2;
+        const pdf = new jsPDF({
+          orientation: CANVAS.h > CANVAS.w ? "portrait" : "landscape",
+          unit: "px", format: [CANVAS.w, CANVAS.h], compress: true,
+        });
+        const indices = proj.slides.map((_, i) => i);
+        for (let k = 0; k < indices.length; k++) {
+          const dataUrl = await renderSlideToDataUrl(indices[k], scale);
+          if (k > 0) pdf.addPage([CANVAS.w, CANVAS.h], CANVAS.h > CANVAS.w ? "portrait" : "landscape");
+          pdf.addImage(dataUrl, "PNG", 0, 0, CANVAS.w, CANVAS.h);
+          setExportProgress({ done: k + 1, total: indices.length });
+        }
+        fileB64 = pdf.output("datauristring").split(",")[1];
+        contentType = "carousel";
+      } else {
+        const dataUrl = await renderSlideToDataUrl(activeSlide, 2);
+        fileB64 = dataUrl.split(",")[1];
+        contentType = "static";
+        setExportProgress({ done: 1, total: 1 });
+      }
+
+      const { data } = await api.post("/social-eq/posts/from-create-eq", {
+        project_id: proj.id,
+        topic: topic.trim(),
+        content_type: contentType,
+        platform: "linkedin",
+        file_b64: fileB64,
+      });
+      toast.success("Draft sent to Social EQ approval queue");
+      setShowPublish(false);
+      // Drop the user into the queue to review/approve the caption + hashtags.
+      nav("/app/social-eq/queue");
+    } catch (err) {
+      console.error(err);
+      if (isCreditError(err)) toast.error(err.response?.data?.detail || "Not enough credits");
+      else toast.error("Publish failed — try again");
+    } finally { setBusy(false); setExportProgress(null); }
+  };
+
   /* --- Styles & layouts --- */
   const handleApplyStyle = useCallback((styleId, allSlides) => {
     const style = STYLES.find((s) => s.id === styleId);
@@ -1589,6 +1640,7 @@ export default function CreateEQEditor() {
             <button onClick={() => setShowBrandKit(true)} title="Apply a brand kit" data-testid="brand-kit-open" className="btn-secondary btn-sm"><Palette size={14} /><span className="hidden 2xl:inline"> Brand kit</span></button>
             <button onClick={exportSlidePng} title="Export current slide as PNG" data-testid="export-png-btn" className="btn-secondary btn-sm"><Download size={14} /><span className="hidden 2xl:inline"> PNG</span></button>
             <button onClick={() => setShowPdfPicker(true)} disabled={busy} title="Export deck as PDF" data-testid="export-pdf-btn" className="btn-secondary btn-sm"><FileText size={14} /><span className="hidden 2xl:inline"> PDF</span></button>
+            <button onClick={() => setShowPublish(true)} disabled={busy} title="Publish to LinkedIn via Social EQ (approval queue)" data-testid="publish-linkedin-open" className="btn-secondary btn-sm"><Send size={14} /><span className="hidden 2xl:inline"> Publish</span></button>
             <span className="text-tiny text-ink-muted whitespace-nowrap" data-testid="autosave-status">
               {autosaveFailed
                 ? <span className="text-warning">Autosave failed — use Save</span>
@@ -1992,6 +2044,15 @@ export default function CreateEQEditor() {
             await exportPdfSlides(indices, quality);
             setShowPdfPicker(false);
           }}
+        />
+      )}
+
+      {showPublish && (
+        <PublishToLinkedInDialog
+          proj={proj}
+          busy={busy} progress={exportProgress}
+          onClose={() => setShowPublish(false)}
+          onPublish={publishToLinkedIn}
         />
       )}
 

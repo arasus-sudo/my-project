@@ -30,6 +30,7 @@ import io
 import json
 import logging
 import secrets
+import base64
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -79,8 +80,34 @@ class PostGenIn(BaseModel):
     topic: str
     tone: str = "confident, professional"
     lead_id: Optional[str] = None
-    content_type: str = "static"  # "static" | "carousel" | "video"
+    content_type: str = "static"  # "text" | "static" | "carousel" | "video"
     first_comment: Optional[str] = None
+
+
+class CreateEqPublishIn(BaseModel):
+    """A post drafted inside Create EQ and handed to Social EQ for caption
+    generation + approval. The file (PDF carousel or a single-slide PNG) is
+    sent base64; this route never rasterizes slides itself — Create EQ is the
+    browser-side renderer, and re-rendering server-side would need a browser
+    runtime. `project_id` is the Create EQ carousel doc's id, used only for
+    the back-link and stored on the post for the queue's "open in Create EQ"."""
+    project_id: str
+    topic: str
+    content_type: str = "carousel"  # "carousel" | "static"
+    platform: str = "linkedin"      # v1: only linkedin carries documents
+    tone: str = "confident, professional"
+    file_b64: str
+    first_comment: Optional[str] = None
+
+
+class CreateEqPublishOut(BaseModel):
+    post_id: str
+    status: str
+    headline: str
+    body: str
+    hashtags: List[str]
+    carousel_project_id: Optional[str] = None
+    media_url: Optional[str] = None
 
 
 class PostUpdateIn(BaseModel):
@@ -126,6 +153,19 @@ def _save_media(post_id: str, image_bytes: bytes, ext: str = "png") -> str:
     return filename
 
 
+def _save_document(post_id: str, document_bytes: bytes, ext: str = "pdf") -> str:
+    """Same bucket as `_save_media`, but name the file `document.<pdf>` so the
+    publish path can tell a document post apart from an image post by
+    extension — LinkedIn document uploads (PDF carousels) go through a
+    different API flow than images, so this must be distinguishable at
+    publish time without extra fields."""
+    folder = MEDIA_DIR / post_id
+    folder.mkdir(parents=True, exist_ok=True)
+    filename = f"document.{ext}"
+    (folder / filename).write_bytes(document_bytes)
+    return filename
+
+
 def _public_media_url(post: Dict[str, Any]) -> Optional[str]:
     if not post.get("media_url") or not PUBLIC_BASE_URL:
         return None
@@ -156,6 +196,10 @@ async def _generate_media(user: Dict[str, Any], post_id: str, topic: str,
     a same-request round trip) — this only submits the job and returns
     `video_status: "processing"` + `video_operation_name`; `media_url` stays
     None until `run_video_poll_tick` fills it in once Veo finishes."""
+    if content_type == "text":
+        return {"media_url": None, "carousel_project_id": None,
+                "video_status": None, "video_operation_name": None}
+
     if content_type == "video":
         colors = await _brand_kit_colors(user["workspace_id"], (brand_voice or {}).get("brand_kit_id"))
         style_hint = f" Visual style: clean, modern, on-brand, using a color palette of {', '.join(colors)}." \
@@ -442,7 +486,7 @@ def _compose_caption(post: Dict[str, Any]) -> str:
 async def generate_post(request: Request, body: PostGenIn, user=Depends(current_user)):
     if body.platform not in PROVIDERS:
         raise HTTPException(400, "unknown platform")
-    content_type = body.content_type if body.content_type in ("static", "carousel", "video") else "static"
+    content_type = body.content_type if body.content_type in ("text", "static", "carousel", "video") else "static"
     from billing import charge_credits
     await charge_credits(user["workspace_id"],
                          "social_video_generate" if content_type == "video" else "social_draft",
@@ -479,6 +523,77 @@ async def generate_post(request: Request, body: PostGenIn, user=Depends(current_
         await _log_activity(user["workspace_id"], lead_id, "social", "post_drafted",
                              f"Drafted a {body.platform} post: {doc['headline']}", {"post_id": doc["id"]})
     return doc
+
+
+@social_router.post("/posts/from-create-eq", response_model=CreateEqPublishOut)
+@limiter.limit("20/minute", key_func=_workspace_or_ip_key)
+async def create_from_create_eq(request: Request, body: CreateEqPublishIn, user=Depends(current_user)):
+    """Publish a Create EQ deck/slide to LinkedIn, funnelled through Social EQ
+    so every post gets the same caption/hashtag engine + approval gate that
+    manual Compose uses. The user clicks "Publish to LinkedIn" inside Create EQ;
+    this route receives the already-rendered file (PDF for a carousel, PNG for a
+    single slide), runs `_draft_post` + the organiser QC on `body.topic`, and
+    stores the post as `pending_approval` with the document linked via
+    `carousel_project_id` so the queue can "open in Create EQ"."""
+
+    if body.content_type not in ("carousel", "static"):
+        raise HTTPException(400, "content_type must be carousel or static")
+    if body.platform != "linkedin":
+        raise HTTPException(400, "Create EQ publishing v1 is LinkedIn-only (documents are a LinkedIn format)")
+
+    if body.file_b64:
+        try:
+            file_bytes = base64.b64decode(body.file_b64, validate=True)
+        except Exception:
+            raise HTTPException(400, "file_b64 is not valid base64")
+    else:
+        file_bytes = b""
+    if not file_bytes:
+        raise HTTPException(400, "missing rendered file (file_b64)")
+    if len(file_bytes) > 100 * 1024 * 1024:
+        raise HTTPException(400, "rendered file exceeds 100MB")
+
+    # Verify the project belongs to this workspace (keeps the carousel back-link
+    # honest — you can only link to your own deck).
+    if body.project_id:
+        proj = await db.carousels.find_one(
+            {"id": body.project_id, "workspace_id": user["workspace_id"]}, {"_id": 0})
+        if not proj:
+            raise HTTPException(404, "carousel project not found in your workspace")
+
+    from billing import charge_credits
+    await charge_credits(user["workspace_id"], "social_draft", meta={"platform": body.platform, "topic": body.topic})
+
+    brand_voice = await _get_brand_voice(user["workspace_id"])
+    draft = await _draft_post(body.platform, body.topic, body.tone, None, brand_voice)
+    qc = await _apply_organiser_check(draft, brand_voice, user["workspace_id"])
+
+    post_id = new_id()
+    if body.content_type == "carousel":
+        filename = _save_document(post_id, file_bytes, ext="pdf")
+    else:
+        filename = _save_media(post_id, file_bytes, ext="png")
+    media_url = f"/social-eq/media/{post_id}/{filename}"
+
+    doc = {
+        "id": post_id, "workspace_id": user["workspace_id"], "owner_id": user["id"],
+        "lead_id": None, "platform": body.platform, "topic": body.topic,
+        "headline": draft.get("headline", ""), "body": draft.get("body", ""),
+        "hashtags": draft.get("hashtags", []), "media_url": media_url, "content_type": body.content_type,
+        "carousel_project_id": body.project_id or None, "source": "create_eq",
+        "video_status": None, "video_operation_name": None,
+        "first_comment": body.first_comment, "first_comment_posted": False,
+        "status": "pending_approval", "scheduled_for": None, "approval_token": None,
+        "approved_by": None, "approved_at": None, "organiser_issues": qc.get("issues", []),
+        "published_at": None, "platform_post_id": None, "platform_post_url": None, "engagement": None,
+        "publish_charge_taken": False, "created_at": now_iso(), "updated_at": now_iso(),
+    }
+    await db.social_posts.insert_one(doc)
+    doc.pop("_id", None)
+    await _audit(user, "social_eq.post.from_create_eq", {"id": doc["id"], "project_id": body.project_id})
+    return CreateEqPublishOut(
+        post_id=doc["id"], status=doc["status"], headline=doc["headline"], body=doc["body"],
+        hashtags=doc["hashtags"], carousel_project_id=doc["carousel_project_id"], media_url=media_url)
 
 
 # ----------------------------- Posts CRUD + workflow ------------------------------
@@ -570,12 +685,24 @@ async def _publish_to_platform(workspace_id: str, p: Dict[str, Any]) -> Dict[str
             try:
                 caption = _compose_caption(p)
                 if p["platform"] == "linkedin":
-                    image_bytes = None
-                    if p.get("media_url"):
+                    if p.get("content_type") == "carousel" and (p.get("media_url") or "").endswith((".pdf", ".ppt", ".pptx")):
+                        # Create EQ document posts are uploaded as PDFs and go
+                        # through the LinkedIn Documents API (the flow that
+                        # produces native swipeable carousels), not the image path.
                         path = _media_path(p["id"], Path(p["media_url"]).name)
-                        if path.is_file():
-                            image_bytes = path.read_bytes()
-                    result = await client.publish(integration, caption, image_bytes=image_bytes)
+                        if not path.is_file():
+                            raise RuntimeError("document file missing for carousel post")
+                        document_bytes = path.read_bytes()
+                        result = await client.publish_document(
+                            integration, caption, document_bytes,
+                            title=f"{p.get('topic') or 'deck'}.pdf")
+                    else:
+                        image_bytes = None
+                        if p.get("media_url"):
+                            path = _media_path(p["id"], Path(p["media_url"]).name)
+                            if path.is_file():
+                                image_bytes = path.read_bytes()
+                        result = await client.publish(integration, caption, image_bytes=image_bytes)
                 elif p["platform"] == "instagram":
                     image_url = _public_media_url(p)
                     if not image_url:
@@ -586,6 +713,7 @@ async def _publish_to_platform(workspace_id: str, p: Dict[str, Any]) -> Dict[str
                 platform_post_id = result.get("platform_post_id")
                 post_url = result.get("url", "")
                 mocked = bool(result.get("simulated", False))
+                media_omitted = bool(result.get("media_omitted", False))
 
                 # First-comment scheduling — best-effort: a failed comment must
                 # never fail (or retroactively un-publish) the post itself.
@@ -610,6 +738,8 @@ async def _publish_to_platform(workspace_id: str, p: Dict[str, Any]) -> Dict[str
             "platform_post_id": platform_post_id, "platform_post_url": post_url,
             "engagement": engagement,
         }})
+        if media_omitted:
+            await db.social_posts.update_one({"id": p["id"]}, {"$set": {"media_omitted": True}})
         await _audit({"workspace_id": workspace_id, "id": None, "email": "system"},
                     "social_eq.post.publish", {"id": p["id"], "platform": p["platform"], "mocked": mocked})
         if p.get("lead_id"):
@@ -728,7 +858,7 @@ async def bulk_import(file: UploadFile = File(...), user=Depends(current_user)):
 
         platforms = [p.strip().lower() for p in row["platforms"].split(",") if p.strip()]
         content_type = (row.get("content_type") or "static").strip().lower()
-        if content_type not in ("static", "carousel", "video"):
+        if content_type not in ("text", "static", "carousel", "video"):
             content_type = "static"
         tone = (row.get("tone") or "confident, professional").strip()
         cta = (row.get("cta") or "").strip()

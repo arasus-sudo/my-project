@@ -49,6 +49,7 @@ export {
   RefreshCw,         // Sync
   Check,             // Confirm
   X,                 // Dismiss
+  Crop,              // Trim/crop image content
   Archive,           // Archive
   MoreHorizontal,    // Row overflow
   MoreVertical,      // Card overflow
@@ -98,6 +99,7 @@ export {
   Briefcase,         // Deal
   Image,             // Static image / photo content
   Video,             // Video content
+  Type,              // Text-only content
 
   // ---- Metrics & analytics ----
   DollarSign,        // Value / revenue

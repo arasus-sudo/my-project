@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api, isCreditError } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
 import { toast } from "sonner";
-import { PenSquare, Image as ImageIcon, Table as CarouselIcon, Tags, Video } from "../icons";
+import { PenSquare, Image as ImageIcon, Table as CarouselIcon, Tags, Video, Type } from "../icons";
 import Card from "../components/composites/Card";
 import Input from "../components/primitives/Input";
 import Button from "../components/primitives/Button";
@@ -15,6 +15,7 @@ const PLATFORMS = [
 ];
 
 const CONTENT_TYPES = [
+  { id: "text", label: "Text only", icon: Type },
   { id: "static", label: "Static image", icon: ImageIcon },
   { id: "carousel", label: "Carousel", icon: CarouselIcon },
   { id: "video", label: "Video", icon: Video },
@@ -81,7 +82,10 @@ export default function PostComposer() {
               <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>Platform</label>
               <div className="flex flex-wrap gap-2">
                 {PLATFORMS.map((p) => (
-                  <TogglePill key={p.id} selected={platform === p.id} onClick={() => setPlatform(p.id)} data-testid={`platform-${p.id}`}>
+                  <TogglePill key={p.id} selected={platform === p.id} onClick={() => {
+                    setPlatform(p.id);
+                    if (p.id === "instagram" && contentType === "text") setContentType("static");
+                  }} data-testid={`platform-${p.id}`}>
                     {p.label}
                   </TogglePill>
                 ))}
@@ -91,11 +95,19 @@ export default function PostComposer() {
               <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>Content type</label>
               <div className="flex flex-wrap gap-2">
                 {CONTENT_TYPES.map((c) => (
-                  <TogglePill key={c.id} selected={contentType === c.id} onClick={() => setContentType(c.id)} data-testid={`content-type-${c.id}`}>
+                  <TogglePill key={c.id} selected={contentType === c.id} onClick={() => {
+                    if (platform === "instagram" && c.id === "text") { toast.error("Instagram requires a media file — use Static image or Carousel."); return; }
+                    setContentType(c.id);
+                  }} data-testid={`content-type-${c.id}`}>
                     <c.icon size={14} strokeWidth={1.5} aria-hidden="true" /> {c.label}
                   </TogglePill>
                 ))}
               </div>
+              {contentType === "text" && (
+                <p style={{ fontSize: 11.5, color: "var(--text-tertiary)", marginTop: 6 }}>
+                  Text-only post — no image generated or uploaded. Best for LinkedIn. Instagram requires a media file.
+                </p>
+              )}
               {contentType === "carousel" && (
                 <p style={{ fontSize: 11.5, color: "var(--text-tertiary)", marginTop: 6 }}>
                   Generates a cover image for the feed post, plus a full editable multi-slide deck in Create EQ you can open afterward.

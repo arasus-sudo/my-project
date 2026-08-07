@@ -153,9 +153,24 @@ export default function Table({
   );
 }
 
+function paginateItems(page, pageCount) {
+  if (pageCount <= 7) return Array.from({ length: pageCount }, (_, i) => i + 1);
+  const set = new Set([1, pageCount, page - 1, page, page + 1]);
+  const nums = [...set].filter((p) => p >= 1 && p <= pageCount).sort((a, b) => a - b);
+  const out = [];
+  let prev = 0;
+  for (const p of nums) {
+    if (p - prev > 1) out.push("ellipsis");
+    out.push(p);
+    prev = p;
+  }
+  return out;
+}
+
 export function TableFooter({ page, pageCount, total, pageSize, onPageChange, className = "" }) {
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, total);
+  const items = pageCount <= 1 ? [] : paginateItems(page, pageCount);
   return (
     <div className={`flex items-center justify-between ${className}`} style={{
       height: 48, padding: "0 20px", borderTop: "1px solid var(--border-default)",
@@ -172,7 +187,9 @@ export function TableFooter({ page, pageCount, total, pageSize, onPageChange, cl
         >
           ‹
         </button>
-        {Array.from({ length: pageCount }, (_, i) => i + 1).slice(0, 5).map((p) => (
+        {items.map((p, i) => p === "ellipsis" ? (
+          <span key={`e${i}`} className="tnum" style={{ width: 28, height: 28, display: "inline-grid", placeItems: "center", fontSize: 12, color: "var(--text-tertiary)" }}>…</span>
+        ) : (
           <button
             key={p}
             type="button"

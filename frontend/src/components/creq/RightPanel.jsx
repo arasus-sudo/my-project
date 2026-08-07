@@ -5,12 +5,13 @@ import {
   FlipHorizontal2, FlipVertical2,
   AlignStartVertical, AlignCenterVertical, AlignEndVertical,
   AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
-  AlignHorizontalSpaceAround, AlignVerticalSpaceAround, Plus,
+  AlignHorizontalSpaceAround, AlignVerticalSpaceAround, Plus, Crop,
 } from "lucide-react";
 import { PALETTES, CANVAS as DEFAULT_CANVAS, resolveColor } from "../../lib/creqTemplates";
 import { IMAGE_FRAMES, FRAME_CATEGORIES, DECORATIVE_CATEGORIES } from "../../lib/creqDesignEngine";
 import { IMAGE_EFFECTS } from "../../lib/creqCharts";
 import PanoramaLayer from "./PanoramaLayer";
+import CropImageDialog from "./drawers/CropImageDialog";
 import { ICONS } from "./ElementRender";
 import GoogleFontPicker from "./GoogleFontPicker";
 
@@ -43,6 +44,7 @@ function RightPanel({
 }) {
   const showPanoManual = proj?.panorama?.mode === "manual";
   const imageInputRef = useRef(null);
+  const [cropOpen, setCropOpen] = useState(false);
   const [customPalettes, setCustomPalettes] = useState(loadCustomPalettes);
   const [editingPalette, setEditingPalette] = useState(null);
   useEffect(() => { saveCustomPalettes(customPalettes); }, [customPalettes]);
@@ -332,18 +334,19 @@ function RightPanel({
   const hasBoxShadow = isShape || isImage || isBadge;
 
   return (
-    <div className="p-4 space-y-4" {...gestureProps}>
-      <div className="flex items-center justify-between">
-        <div className="ui-label">Element · {el.type}</div>
-        <div className="flex gap-1">
-          <button onClick={() => onEditElement({ locked: !el.locked })} title={el.locked ? "Unlock element" : "Lock element"}
-            className={`btn-ghost text-caption py-1 ${el.locked ? "text-amber-600" : ""}`}>
-            {el.locked ? "🔒" : "🔓"}
-          </button>
-          <button onClick={onDuplicate} title="Duplicate" className="btn-ghost text-caption py-1"><Copy size={12} /></button>
-          <button onClick={onDelete} title="Delete" className="btn-ghost text-caption py-1 text-danger"><Trash2 size={12} /></button>
+    <>
+      <div className="p-4 space-y-4" {...gestureProps}>
+        <div className="flex items-center justify-between">
+          <div className="ui-label">Element · {el.type}</div>
+          <div className="flex gap-1">
+            <button onClick={() => onEditElement({ locked: !el.locked })} title={el.locked ? "Unlock element" : "Lock element"}
+              className={`btn-ghost text-caption py-1 ${el.locked ? "text-amber-600" : ""}`}>
+              {el.locked ? "🔒" : "🔓"}
+            </button>
+            <button onClick={onDuplicate} title="Duplicate" className="btn-ghost text-caption py-1"><Copy size={12} /></button>
+            <button onClick={onDelete} title="Delete" className="btn-ghost text-caption py-1 text-danger"><Trash2 size={12} /></button>
+          </div>
         </div>
-      </div>
 
       {/* Z-order — jump-to plus one-step, Canva-style */}
       <div className="flex items-center gap-1" data-testid="z-order-group">
@@ -580,6 +583,12 @@ function RightPanel({
                 e.target.value = "";
               }} />
           </div>
+          {el.src && (
+            <button onClick={() => setCropOpen(true)} data-testid="el-image-crop"
+              className="w-full text-tiny py-1.5 rounded-full border border-line hover:border-ink flex items-center justify-center gap-1">
+              <Crop size={12} /> Crop image
+            </button>
+          )}
           <label className="block"><span className="ui-label">Image frame</span>
               <select value={el.frame || ""} onChange={(e) => onEditElement({ frame: e.target.value || null })}
                 data-testid="el-image-frame"
@@ -843,6 +852,16 @@ function RightPanel({
         <label>H<input type="number" value={el.h || 0} onChange={(e) => { const n = parseNumInput(e.target.value); if (n !== undefined) onEditElement({ h: n }); }} className="w-full border border-line rounded px-1 py-0.5" /></label>
       </div>
     </div>
+
+    {cropOpen && el.src && (
+      <CropImageDialog
+        src={el.src}
+        elementRatio={(el.w && el.h) ? el.w / el.h : null}
+        onApply={(newSrc) => { onEditElement({ src: newSrc }); setCropOpen(false); toast.success("Image cropped"); }}
+        onClose={() => setCropOpen(false)}
+      />
+    )}
+    </>
   );
 }
 
