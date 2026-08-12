@@ -36,7 +36,7 @@ import PanoramaDrawer from "../components/creq/drawers/PanoramaDrawer";
 import PdfExportDialog, { EXPORT_QUALITIES } from "../components/creq/drawers/PdfExportDialog";
 import PublishToLinkedInDialog from "../components/creq/drawers/PublishToLinkedInDialog";
 import { newId, renderBackground, renderBackgroundImageCss, stripLocalKeys, elementBounds } from "../components/creq/utils";
-import { makeFlow, fitToCanvas, contentBox, auditAndCorrect } from "../lib/creqLayoutFlow";
+import { makeFlow, fitToCanvas, contentBox, auditAndCorrect, rescaleElements } from "../lib/creqLayoutFlow";
 
 /** Resolve a project's actual authoring canvas — real per-project sizing
  * (LinkedIn/Instagram Square/Instagram Story/custom, see PLATFORM_DIMS in
@@ -1275,6 +1275,28 @@ export default function CreateEQEditor() {
     mutate((n) => { n[key] = value; });
   }, [mutate]);
 
+  /** Change the deck's canvas size and re-fit every slide to it.
+   *
+   * Resizing without re-fitting would leave a deck's content sitting at its old
+   * coordinates on a canvas that is no longer that shape — clipped on a smaller
+   * format, marooned in the corner on a larger one. rescaleElements() carries
+   * the geometry across, preserving the type hierarchy and each slide's
+   * original anchoring rather than centring everything. It runs through the
+   * normal mutate(), so a resize is a single undo away. */
+  const resizeCanvas = useCallback((next) => {
+    if (!next?.w || !next?.h) return;
+    const from = CANVAS;
+    if (from.w === next.w && from.h === next.h) return;
+    mutate((n) => {
+      n.canvas = { w: next.w, h: next.h };
+      n.slides = n.slides.map((s) => ({
+        ...s,
+        elements: rescaleElements(s.elements || [], from, next),
+      }));
+    });
+    toast.success(`Canvas resized to ${next.w}×${next.h}`);
+  }, [mutate, CANVAS]);
+
   /* --- Save / export --- */
 
   /** The actual PUT, shared by the Save button and the autosave loop. Kept
@@ -1922,6 +1944,7 @@ export default function CreateEQEditor() {
               onPanoramaResetSlide={resetPanoSlide}
               onPanoramaApplyAll={applyPanoToAll}
               onDeckSetting={setDeckSetting}
+              onResizeCanvas={resizeCanvas}
               onGestureStart={beginGesture}
               onGestureEnd={endGesture}
               onGroup={groupElements}

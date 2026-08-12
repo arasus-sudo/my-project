@@ -199,6 +199,72 @@ export function anchorBlock(els, canvas, anchor = "top", { top, bottom, optical 
   return els.map((e) => (e._pin ? e : { ...e, y: e.y + dy }));
 }
 
+/* -------------------------------- Rescaling -------------------------------- */
+
+/**
+ * Re-fit a slide's elements from one canvas size to another.
+ *
+ * Two decisions carry this:
+ *
+ * Scale is uniform, at min(widthRatio, heightRatio). Scaling each axis
+ * independently would stretch the type — a 4:5 deck taken to 9:16 would render
+ * every letter 42% taller than it is wide — so the aspect change is absorbed by
+ * whitespace instead of by distortion.
+ *
+ * The leftover space is distributed in the SAME RATIO as the original margins
+ * rather than simply centred. Centring would silently redesign the deck: a
+ * cover whose title is deliberately anchored low would drift to the middle, and
+ * a top-flushed list would sink. Preserving the ratio keeps bottom-anchored
+ * content bottom-anchored and centred content centred, which is what "resize
+ * the canvas" should mean.
+ *
+ * Full-bleed elements — a background image or a panel covering the whole
+ * canvas — are snapped to the new bounds instead of scaled, since their intent
+ * is "cover everything", not "be this many pixels".
+ */
+export function rescaleElements(elements, from, to) {
+  if (!elements?.length || !from?.w || !to?.w) return elements || [];
+  const k = Math.min(to.w / from.w, to.h / from.h);
+  const fullBleed = (e) =>
+    e.x <= 1 && e.y <= 1 && (e.w || 0) >= from.w - 2 && (e.h || 0) >= from.h - 2;
+
+  const flow = elements.filter((e) => !fullBleed(e));
+  let minX = 0, minY = 0, maxX = from.w, maxY = from.h;
+  if (flow.length) {
+    minX = Math.min(...flow.map((e) => e.x));
+    minY = Math.min(...flow.map((e) => e.y));
+    maxX = Math.max(...flow.map((e) => e.x + (e.w || 0)));
+    maxY = Math.max(...flow.map((e) => e.y + (e.h || 0)));
+  }
+  const blockW = (maxX - minX) * k;
+  const blockH = (maxY - minY) * k;
+  // Original margins decide how the new slack is split.
+  const leadX = minX, trailX = Math.max(0, from.w - maxX);
+  const leadY = minY, trailY = Math.max(0, from.h - maxY);
+  const freeX = Math.max(0, to.w - blockW);
+  const freeY = Math.max(0, to.h - blockH);
+  const offX = leadX + trailX > 0 ? freeX * (leadX / (leadX + trailX)) : freeX / 2;
+  const offY = leadY + trailY > 0 ? freeY * (leadY / (leadY + trailY)) : freeY / 2;
+
+  return elements.map((e) => {
+    if (fullBleed(e)) return { ...e, x: 0, y: 0, w: to.w, h: to.h };
+    const out = {
+      ...e,
+      x: Math.round(offX + (e.x - minX) * k),
+      y: Math.round(offY + (e.y - minY) * k),
+      w: Math.round((e.w || 0) * k),
+      h: Math.round((e.h || 0) * k),
+    };
+    // Anything measured in px has to travel with the geometry, or the type
+    // stays at its old size on a canvas that is no longer that size.
+    if (typeof e.size === "number") out.size = Math.max(6, Math.round(e.size * k));
+    if (typeof e.radius === "number") out.radius = Math.round(e.radius * k);
+    if (typeof e.stroke_w === "number") out.stroke_w = Math.round(e.stroke_w * k * 100) / 100;
+    if (typeof e.border_w === "number") out.border_w = Math.max(1, Math.round(e.border_w * k));
+    return out;
+  });
+}
+
 /* ------------------------------ Geometry audit ----------------------------- */
 // The deterministic half of "loop engineering" (see ch16-creative-reasoning-
 // engine.md §16.3.1's Eye Tracking / Self Critique stages): after a slide's
