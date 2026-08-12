@@ -16,7 +16,7 @@ import { PALETTES, CANVAS as DEFAULT_CANVAS, blankSlide, slideFromTemplate } fro
 import { STYLES, LAYOUTS } from "../lib/creqStyles";
 import { ACCENT_ELEMENTS, DESIGN_THEMES, COMPOSITIONS, IMAGE_FRAMES } from "../lib/creqDesignEngine";
 import { ensureProjectFontsLoaded, waitForProjectFonts } from "../lib/googleFonts";
-import { buildPremiumDeck, isPremiumSlide } from "../lib/creqPremiumEngine";
+import { buildPremiumDeck, isPremiumSlide, recomposeSlide } from "../lib/creqPremiumEngine";
 import { DEFAULT_FAMILY } from "../lib/creqClaudeDesign";
 
 import LeftPanel from "../components/creq/LeftPanel";
@@ -115,6 +115,12 @@ function hydrate(project) {
       _k: s._k || newId(),
       bg: s.bg || { type: "solid", color: "bg" },
       elements: (s.elements || []).map((e) => ({ ...e, id: e.id || newId() })),
+      // Carried through, not dropped: these record how the slide was composed
+      // and from what. Rebuilding this object without them silently downgraded
+      // every reopened deck to rescale-only, because the engine had nothing
+      // left to lay out again from.
+      ...(s._premium ? { _premium: s._premium } : null),
+      ...(s._source ? { _source: s._source } : null),
     };
   });
   if (!p.slides.length) p.slides.push(blankSlide());
@@ -1287,14 +1293,35 @@ export default function CreateEQEditor() {
     if (!next?.w || !next?.h) return;
     const from = CANVAS;
     if (from.w === next.w && from.h === next.h) return;
+    // Computed here rather than inside the mutate() updater. React defers
+    // updaters and invokes them twice in development, so a counter incremented
+    // in there is both stale when the toast reads it and double-counted when it
+    // isn't — the resize itself was always correct, the report of it was not.
+    const current = projRef.current;
+    const source = current?.slides || [];
+    let recomposed = 0;
+    const nextSlides = source.map((s) => {
+      // Prefer a real re-layout: slides that still carry the section they were
+      // composed from, and that nobody has edited since, are rebuilt for the new
+      // shape rather than stretched into it. recomposeSlide() returns null when
+      // either is untrue, and rescaling is the honest fallback — it keeps
+      // hand-made edits instead of silently throwing them away.
+      const fresh = recomposeSlide(s, from, next, current?.brand);
+      if (fresh) { recomposed += 1; return fresh; }
+      return { ...s, elements: rescaleElements(s.elements || [], from, next) };
+    });
+
     mutate((n) => {
       n.canvas = { w: next.w, h: next.h };
-      n.slides = n.slides.map((s) => ({
-        ...s,
-        elements: rescaleElements(s.elements || [], from, next),
-      }));
+      n.slides = nextSlides;
     });
-    toast.success(`Canvas resized to ${next.w}×${next.h}`);
+
+    const refitted = source.length - recomposed;
+    toast.success(
+      refitted === 0
+        ? `Canvas resized to ${next.w}×${next.h} — every slide re-laid out`
+        : `Canvas resized to ${next.w}×${next.h} — ${recomposed} re-laid out, ${refitted} re-fitted`,
+    );
   }, [mutate, CANVAS]);
 
   /* --- Save / export --- */
@@ -1310,6 +1337,10 @@ export default function CreateEQEditor() {
       const clean = stripLocalKeys(snapshot);
       await api.put(`/carousel/${id}`, {
         slides: clean.slides, brand: snapshot.brand, platform: snapshot.platform,
+        // Canvas has to travel with the slides. Without it a resize saved
+        // geometry laid out for the new size against the old stored size, so
+        // reopening the deck rendered 1920-tall content on a 1350 canvas.
+        canvas: snapshot.canvas || null,
         topic: snapshot.topic, palette_id: snapshot.palette_id, panorama: snapshot.panorama || null,
         show_slide_numbers: !!snapshot.show_slide_numbers,
         show_progress_dots: !!snapshot.show_progress_dots,
