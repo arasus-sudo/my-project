@@ -265,6 +265,51 @@ export function rescaleElements(elements, from, to) {
   });
 }
 
+/** Stable shape of an element list, ignoring generated ids — used to tell
+ * geometry that is still exactly what a transform produced from geometry a
+ * person has since moved. */
+export function elementSignature(elements) {
+  return (elements || [])
+    .map((e) => [e.type, Math.round(e.x), Math.round(e.y), Math.round(e.w || 0),
+                 Math.round(e.h || 0), Math.round(e.size || 0), e.text || "",
+                 e.fill || e.color || ""].join("|"))
+    .join("~");
+}
+
+/**
+ * Rescale a slide across canvas sizes without the round trip losing size.
+ *
+ * Scaling from the CURRENT geometry is lossy in one direction. Going 4:5 to 1:1
+ * scales by min(1080/1080, 1080/1350) = 0.8, but coming back scales by
+ * min(1080/1080, 1350/1080) = 1.0, because the unchanged width pins the uniform
+ * factor at 1. The deck shrinks and then never grows back, which is exactly what
+ * it looks like: every visit to a shorter format permanently costs size.
+ *
+ * So the transform runs from a remembered base instead of from the current
+ * state. The first resize records the geometry it started from; later resizes
+ * re-derive from that, which makes A→B→A return the original values exactly
+ * rather than approximately.
+ *
+ * The base is only trusted while the slide still matches what it produces at the
+ * current size. Once someone edits the slide by hand that check fails, the
+ * edited geometry becomes the new base, and their work is carried forward
+ * instead of being reverted by a later resize.
+ */
+export function rescaleSlideGeometry(slide, from, to) {
+  const base = slide?._baseGeom;
+  if (base?.canvas?.w && Array.isArray(base.elements)) {
+    const atCurrent = rescaleElements(base.elements, base.canvas, from);
+    if (elementSignature(atCurrent) === elementSignature(slide.elements)) {
+      return { ...slide, elements: rescaleElements(base.elements, base.canvas, to) };
+    }
+  }
+  return {
+    ...slide,
+    _baseGeom: { canvas: { w: from.w, h: from.h }, elements: slide.elements },
+    elements: rescaleElements(slide.elements || [], from, to),
+  };
+}
+
 /* ------------------------------ Geometry audit ----------------------------- */
 // The deterministic half of "loop engineering" (see ch16-creative-reasoning-
 // engine.md §16.3.1's Eye Tracking / Self Critique stages): after a slide's

@@ -36,7 +36,7 @@ import PanoramaDrawer from "../components/creq/drawers/PanoramaDrawer";
 import PdfExportDialog, { EXPORT_QUALITIES } from "../components/creq/drawers/PdfExportDialog";
 import PublishToLinkedInDialog from "../components/creq/drawers/PublishToLinkedInDialog";
 import { newId, renderBackground, renderBackgroundImageCss, stripLocalKeys, elementBounds } from "../components/creq/utils";
-import { makeFlow, fitToCanvas, contentBox, auditAndCorrect, rescaleElements } from "../lib/creqLayoutFlow";
+import { makeFlow, fitToCanvas, contentBox, auditAndCorrect, rescaleSlideGeometry } from "../lib/creqLayoutFlow";
 
 /** Resolve a project's actual authoring canvas — real per-project sizing
  * (LinkedIn/Instagram Square/Instagram Story/custom, see PLATFORM_DIMS in
@@ -1308,7 +1308,9 @@ export default function CreateEQEditor() {
       // hand-made edits instead of silently throwing them away.
       const fresh = recomposeSlide(s, from, next, current?.brand);
       if (fresh) { recomposed += 1; return fresh; }
-      return { ...s, elements: rescaleElements(s.elements || [], from, next) };
+      // Rescales from the slide's remembered base, so returning to an earlier
+      // format restores the original size instead of compounding each shrink.
+      return rescaleSlideGeometry(s, from, next);
     });
 
     mutate((n) => {
