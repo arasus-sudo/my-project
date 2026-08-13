@@ -122,6 +122,7 @@ CREDIT_COSTS: Dict[str, int] = {
     "social_video_generate": 60,   # Veo generation, same tier as proposal_generate — priciest content type
     "whatsapp_ai_reply": 1,        # single grounded call, same tier as site_chat_reply
     "whatsapp_kb_crawl": 8,        # matches site_crawl — multi-page fetch
+    "reply_followup_send": 2,      # Reply EQ follow-up: grounded message + real outbound WhatsApp, parity with whatsapp_broadcast_send
     "signature_ai_assist": 1,      # single small LLM call, same tier as email_ai
     # whatsapp_kb_upload is deliberately absent = free: pure text extraction, no LLM
     # call, negligible compute — unlike crawl's real multi-page network fetching.
@@ -161,6 +162,7 @@ ACTION_LABELS = {
     "social_video_generate": "Social video generated",
     "whatsapp_ai_reply": "WhatsApp automated reply",
     "whatsapp_kb_crawl": "WhatsApp knowledge base crawled",
+    "reply_followup_send": "Reply EQ follow-up sent",
     "signature_ai_assist": "Signature AI assist",
 }
 
@@ -194,6 +196,7 @@ ACTION_AGENT = {
     "social_video_generate": "social",
     "whatsapp_ai_reply": "whatsapp",
     "whatsapp_kb_crawl": "whatsapp",
+    "reply_followup_send": "reply",
     "signature_ai_assist": "pitch",
 }
 
