@@ -285,7 +285,24 @@ export default function Leads() {
                 </>
               }
             />
-            <TableFooter page={page} pageCount={Math.max(1, Math.ceil(total / pageSize))} total={total} pageSize={pageSize} onPageChange={load} />
+            <div className="flex items-center justify-between gap-2" style={{ marginTop: 12 }}>
+              <label className="flex items-center gap-1.5" style={{ color: "var(--text-tertiary)", fontSize: 12 }}>
+                Show
+                <select
+                  value={pageSize}
+                  onChange={(e) => { const ps = Number(e.target.value); setPageSize(ps); load(1, ps); }}
+                  className="border rounded-md px-2 py-1 text-xs bg-surface"
+                  style={{ borderColor: "var(--border-default)", color: "var(--text-primary)", background: "var(--bg-surface)" }}
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={200}>200</option>
+                </select>
+                leads
+              </label>
+              <TableFooter page={page} pageCount={Math.max(1, Math.ceil(total / pageSize))} total={total} pageSize={pageSize} onPageChange={load} />
+            </div>
           </>
         )}
       </div>
