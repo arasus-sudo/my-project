@@ -6215,6 +6215,7 @@ from service_library import router as service_library_router
 from campaign_engine import router as campaign_engine_router
 from sms_eq import sms_router, sms_public_router
 from whatsapp_eq import whatsapp_router, whatsapp_public_router
+from reply_eq import reply_router
 from hrms_eq import hrms_router
 from accounting_eq import accounting_router
 from design_eq import design_router
@@ -6242,6 +6243,7 @@ api.include_router(sms_router)
 api.include_router(sms_public_router)
 api.include_router(whatsapp_router)
 api.include_router(whatsapp_public_router)
+api.include_router(reply_router)
 api.include_router(hrms_router)
 api.include_router(accounting_router)
 
@@ -7022,6 +7024,11 @@ async def _create_indexes():
         await db.whatsapp_kb_sources.create_index([("workspace_id", 1), ("id", 1)])
         await db.whatsapp_kb_chunks.create_index([("workspace_id", 1), ("source_id", 1)])
         await db.whatsapp_kb_chunks.create_index([("content", "text")])
+        await db.reply_customers.create_index([("workspace_id", 1), ("phone", 1)], unique=True)
+        await db.reply_customers.create_index([("workspace_id", 1), ("state.stage", 1)])
+        await db.reply_followups.create_index([("status", 1), ("due_at", 1)])
+        await db.reply_followups.create_index([("workspace_id", 1), ("customer_id", 1)])
+        await db.reply_settings.create_index("workspace_id", unique=True)
         # -- HRMS EQ indexes --
         await db.employees.create_index([("workspace_id", 1), ("id", 1)])
         await db.employees.create_index([("workspace_id", 1), ("email", 1)], unique=True)
@@ -7157,6 +7164,7 @@ async def _start_scheduler():
         from site_eq import run_site_recrawl_tick
         from sms_eq import run_sms_send_tick
         from whatsapp_eq import run_whatsapp_send_tick
+        from reply_eq import run_reply_eq_tick
         from crm import run_recycle_bin_purge_tick, run_dedup_scan_tick
         from banner_tick import run_signature_banner_tick
 
@@ -7202,6 +7210,10 @@ async def _start_scheduler():
         # sends.
         scheduler.add_job(_tracked_tick, "interval", minutes=2, args=["whatsapp_send", run_whatsapp_send_tick],
                           id="whatsapp_send", max_instances=1, coalesce=True)
+        # Reply EQ follow-up drain — due follow-ups are claimed atomically so
+        # overlapping ticks can't double-send; guardrails are enforced inside.
+        scheduler.add_job(_tracked_tick, "interval", minutes=5, args=["reply_followups", run_reply_eq_tick],
+                          id="reply_followups", max_instances=1, coalesce=True)
         # Recycle bin: hard-deletes anything soft-deleted (leads/companies/
         # lists) more than 30 days ago. Daily is plenty — this is cleanup,
         # not a user-facing latency path.

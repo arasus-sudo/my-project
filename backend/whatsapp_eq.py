@@ -783,7 +783,7 @@ async def _handle_callback_intent(conv: Dict[str, Any], wid: str, phone: str, ll
     await _send_and_log(cid, phone, reply)
 
 
-async def _handle_automated_reply(conv: Dict[str, Any], wid: str, phone: str, body: str, settings: Dict[str, Any]) -> None:
+async def _handle_automated_reply(conv: Dict[str, Any], wid: str, phone: str, body: str, settings: Dict[str, Any]) -> Optional[str]:
     """The automated agent's turn: KB retrieval + one grounded, intent-classifying
     LLM call, branched on `intent` in plain Python — the only LLM-integration
     pattern anywhere in this codebase (no tool-calling exists here to build on
@@ -791,7 +791,9 @@ async def _handle_automated_reply(conv: Dict[str, Any], wid: str, phone: str, bo
     *before* the LLM call, inside the same try, so an insufficient-credit
     failure short-circuits before spending real API cost on a reply that was
     going to be refused anyway. Never raises — any failure degrades to one
-    generic reply + human handoff."""
+    generic reply + human handoff. Returns the classified intent ("faq",
+    "book_meeting", "callback", "share_link", "handoff") so the webhook can
+    feed Reply EQ's customer state; None if the agent never ran."""
     cid = conv["id"]
 
     # Explicit "talk to a human" request — hand off immediately, no LLM call,
@@ -799,13 +801,13 @@ async def _handle_automated_reply(conv: Dict[str, Any], wid: str, phone: str, bo
     if HUMAN_REQUEST_RE.search(body):
         await _send_and_log(cid, phone, "Of course — I've flagged this for our team and someone will follow up with you shortly.")
         await db.whatsapp_conversations.update_one({"id": cid}, {"$set": {"status": "needs_human", "updated_at": now_iso()}})
-        return
+        return "handoff"
 
     try:
         if not ANTHROPIC_API_KEY:
             await _send_and_log(cid, phone, "I don't have that on file yet — I've let our team know so a person can follow up.")
             await db.whatsapp_conversations.update_one({"id": cid}, {"$set": {"status": "needs_human", "updated_at": now_iso()}})
-            return
+            return "handoff"
 
         # No KB match is only a dead end for FAQ intent — book_meeting/callback/
         # share_link don't depend on crawled content at all, so a "how do I pay"
@@ -880,6 +882,7 @@ async def _handle_automated_reply(conv: Dict[str, Any], wid: str, phone: str, bo
         else:
             await _send_and_log(cid, phone, reply)
             await db.whatsapp_conversations.update_one({"id": cid}, {"$set": {"pending_action": None}})
+        return intent
     except Exception as ex:
         log.warning("whatsapp automated reply failed for conversation %s: %s", cid, ex)
         try:
@@ -887,6 +890,7 @@ async def _handle_automated_reply(conv: Dict[str, Any], wid: str, phone: str, bo
         except Exception:
             pass
         await db.whatsapp_conversations.update_one({"id": cid}, {"$set": {"status": "needs_human", "updated_at": now_iso()}})
+        return "handoff"
 
 
 @whatsapp_public_router.post("/hooks/whatsapp-incoming/{token}")
@@ -951,14 +955,24 @@ async def whatsapp_incoming(token: str, request: Request):
     settings = {**_DEFAULT_SETTINGS, **(settings or {})}
 
     conv_now = await db.whatsapp_conversations.find_one({"id": conv_id}, {"_id": 0})
+    intent = None
     if settings.get("automated_agent_enabled") and not conv_now.get("bot_paused"):
         try:
-            await _handle_automated_reply(conv_now, wid, from_number, body, settings)
+            intent = await _handle_automated_reply(conv_now, wid, from_number, body, settings)
         except Exception as ex:
             # _handle_automated_reply already degrades gracefully internally;
             # this is a final backstop so a webhook call to Twilio never 500s
             # (which would just trigger a pointless retry of the same message).
             log.warning("whatsapp automated reply crashed for conversation %s: %s", conv_id, ex)
+
+    # Feed Reply EQ's customer state — every inbound message, agent on or off,
+    # so a conversation never goes un-tracked. Reply EQ must never break the
+    # Twilio webhook path, hence the backstop.
+    try:
+        from reply_eq import record_whatsapp_inbound
+        await record_whatsapp_inbound(wid, from_number, body, intent=intent)
+    except Exception as ex:
+        log.warning("reply_eq inbound record failed for conversation %s: %s", conv_id, ex)
 
     return {"ok": True}
 
