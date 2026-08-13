@@ -1,4 +1,4 @@
-<#
+﻿<#
     Starts the Innoira Agentic Suite locally.
 
     Three processes: MongoDB (Windows service), the FastAPI backend, and the

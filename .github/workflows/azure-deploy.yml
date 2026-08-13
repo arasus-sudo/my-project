@@ -131,6 +131,7 @@ jobs:
           npm run build
         env:
           REACT_APP_BACKEND_URL: ${{ env.BACKEND_URL }}
+          REACT_APP_GOOGLE_CLIENT_ID: 419082978927-4jkdncgsln81m8sq21ctrk25kh2gs4kp.apps.googleusercontent.com
           CI: false
 
       - name: Validate build output
