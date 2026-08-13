@@ -241,7 +241,7 @@ class SignatureIn(BaseModel):
 
 class MailboxIn(BaseModel):
     email: EmailStr
-    provider: str = "gmail"  # gmail / m365 / smtp
+    provider: str = "gmail"  # gmail / m365 / zoho
     display_name: str = ""
     daily_cap: int = 50
 
@@ -593,8 +593,13 @@ async def mailbox_oauth_url(mid: str, user=Depends(current_user)):
         "workspace_id": user["workspace_id"], "user_id": user["id"], "at": now_iso(),
     })
 
-    url = (mailbox_client.gmail_auth_url(state) if m.get("provider") == "gmail"
-           else mailbox_client.ms_auth_url(state))
+    provider = m.get("provider", "gmail")
+    if provider == "gmail":
+        url = mailbox_client.gmail_auth_url(state)
+    elif provider == "zoho":
+        url = mailbox_client.zoho_auth_url(state)
+    else:
+        url = mailbox_client.ms_auth_url(state)
     if not url:
         # Test mode: no OAuth app configured. Connect it so the flow is demoable,
         # but record honestly that nothing will actually leave the box.

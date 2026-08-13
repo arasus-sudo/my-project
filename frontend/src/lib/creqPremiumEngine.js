@@ -458,7 +458,43 @@ function buildSlide(slide, ctx, archetypeName) {
       archetype: archetypeName, surface: ctx.surfaceName, family: ctx.family.id,
       density: d.bucket, geometryFixes: audited.issues.length,
     },
+    // The section this slide was composed from, kept so the deck can be laid
+    // out again at a different canvas size instead of only being rescaled.
+    // Composition is cheap and deterministic, so storing the input is far more
+    // useful than storing only its output — without it a 4:5 deck taken to 9:16
+    // can gain whitespace but can never be re-designed for the new shape.
+    _source: slide,
   };
+}
+
+/** Stable shape of a slide's geometry, ignoring generated ids. Used to tell a
+ * freshly composed slide from one a person has since edited. */
+function elementSignature(elements) {
+  return (elements || [])
+    .map((e) => [e.type, Math.round(e.x), Math.round(e.y), Math.round(e.w || 0),
+                 Math.round(e.h || 0), Math.round(e.size || 0), e.text || "", e.fill || e.color || ""].join("|"))
+    .join("~");
+}
+
+/**
+ * Lay a slide out again at a new canvas size, from the section it came from.
+ *
+ * Returns null when that isn't possible or isn't safe:
+ *  - the slide has no retained source (composed before this existed, or built
+ *    by the standard engine), or
+ *  - its current geometry no longer matches what the engine produces at the old
+ *    size, which means somebody has edited it by hand. Recomposing then would
+ *    silently discard their work, so the caller falls back to rescaling.
+ */
+export function recomposeSlide(slide, from, to, brand = null) {
+  const src = slide?._source;
+  const meta = slide?._premium;
+  if (!src || !meta?.archetype) return null;
+  const family = getFamily(meta.family || DEFAULT_FAMILY, meta.family === "brand" ? brand : null);
+  const rebuiltAtOld = buildSlide(src, slideContext(from, family, meta.surface), meta.archetype);
+  if (elementSignature(rebuiltAtOld.elements) !== elementSignature(slide.elements)) return null;
+  const fresh = buildSlide(src, slideContext(to, family, meta.surface), meta.archetype);
+  return { ...fresh, _k: slide._k };
 }
 
 /**

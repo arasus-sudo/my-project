@@ -90,7 +90,7 @@ export default function Mailboxes() {
 
       <div className="animate-fade-in px-6 sm:px-8 pt-6">
         <InlineAlert tone="info" title="Why your own mailbox">
-          Outbound is sent through your connected Google or Microsoft mailbox, never a
+          Outbound is sent through your connected Google, Microsoft or Zoho mailbox, never a
           transactional provider — cold email through one of those violates their terms and gets
           your sending domain blocked. Warmup and per-mailbox daily caps are what keep you out of
           the spam folder.
@@ -143,8 +143,8 @@ export default function Mailboxes() {
               )}
               {connected && mocked && (
                 <div style={{ marginTop: 12, fontSize: 11.5, color: "var(--text-tertiary)", background: "var(--bg-surface-sunken)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-md)", padding: "8px 10px" }}>
-                  Queueing and drafting work, but no mail actually leaves the box until a Google or
-                  Microsoft OAuth app is configured.
+                  Queueing and drafting work, but no mail actually leaves the box until a Google,
+                  Microsoft or Zoho OAuth app is configured.
                 </div>
               )}
 
@@ -230,6 +230,7 @@ export default function Mailboxes() {
               options={[
                 { value: "gmail", label: "Google Workspace / Gmail" },
                 { value: "m365", label: "Microsoft 365 / Outlook" },
+                { value: "zoho", label: "Zoho Mail" },
               ]}
             />
             <Input required type="email" label="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="mailbox-email" />

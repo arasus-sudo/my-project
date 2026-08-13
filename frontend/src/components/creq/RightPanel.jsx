@@ -14,6 +14,7 @@ import PanoramaLayer from "./PanoramaLayer";
 import CropImageDialog from "./drawers/CropImageDialog";
 import { ICONS } from "./ElementRender";
 import GoogleFontPicker from "./GoogleFontPicker";
+import { FORMATS } from "./FormatPicker";
 
 /** Load custom palettes from localStorage, falling back to empty. */
 function loadCustomPalettes() {
@@ -39,7 +40,7 @@ function RightPanel({
   onAlign, onDeleteMulti,
   onPalette, onBg, onEditElement, onDelete, onDuplicate, onFront, onBack, onForward, onBackward, onAiAssist,
   onPanoramaViewport, onPanoramaResetSlide, onPanoramaApplyAll,
-  onDeckSetting,
+  onDeckSetting, onResizeCanvas,
   onGestureStart, onGestureEnd, onGroup, onUngroup,
 }) {
   const showPanoManual = proj?.panorama?.mode === "manual";
@@ -256,6 +257,11 @@ function RightPanel({
             onApplyAll={onPanoramaApplyAll}
           />
         )}
+
+        <div className="border-t border-line pt-4">
+          <div className="ui-label mb-2">Canvas size</div>
+          <CanvasSizeControl canvas={CANVAS_OF(proj)} onResize={onResizeCanvas} />
+        </div>
 
         <div className="border-t border-line pt-4">
           <div className="ui-label mb-2">Deck chrome</div>
@@ -1013,6 +1019,66 @@ function PanoramaManualControls({ proj, palette, activeSlide, onChange, onReset,
       <div className="text-tiny text-ink-muted leading-relaxed">
         Tip: you can also drag directly on the canvas to reposition. Scroll on the canvas to zoom.
       </div>
+    </div>
+  );
+}
+
+/** The deck's authoring size, falling back for decks saved before per-project
+ * canvas existed. */
+function CANVAS_OF(proj) {
+  return proj?.canvas?.w && proj?.canvas?.h ? proj.canvas : DEFAULT_CANVAS;
+}
+
+/**
+ * Change the deck's canvas after the fact.
+ *
+ * Format was previously a create-time decision that could not be revisited, so
+ * a deck drafted for LinkedIn had to be rebuilt from scratch to post as a Story.
+ * Picking here re-fits every slide (see rescaleElements) rather than just
+ * changing the frame, and the whole resize is one undo.
+ */
+function CanvasSizeControl({ canvas, onResize }) {
+  const [w, setW] = useState(canvas.w);
+  const [h, setH] = useState(canvas.h);
+  useEffect(() => { setW(canvas.w); setH(canvas.h); }, [canvas.w, canvas.h]);
+
+  const matches = (f) => f.w === canvas.w && f.h === canvas.h;
+  const custom = !FORMATS.some(matches);
+  const clamp = (v) => Math.max(320, Math.min(2160, Number(v) || 0));
+
+  return (
+    <div data-testid="canvas-size-control">
+      <div className="grid grid-cols-2 gap-1.5">
+        {FORMATS.map((f) => (
+          <button key={f.id} type="button" data-testid={`canvas-size-${f.id}`}
+            onClick={() => onResize?.({ w: f.w, h: f.h })}
+            className={`text-left p-1.5 rounded-lg border transition-colors ${
+              matches(f) ? "border-ink bg-ash" : "border-line hover:border-neutral-400"}`}>
+            <div className="text-tiny font-medium">{f.label}</div>
+            <div className="text-[9px] text-neutral-400 font-mono">{f.w}×{f.h}</div>
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-1.5 mt-2">
+        <input type="number" min={320} max={2160} value={w} data-testid="canvas-size-w"
+          onChange={(e) => setW(e.target.value)}
+          className="w-16 border border-line rounded-lg px-1.5 py-1 text-tiny font-mono" />
+        <span className="text-neutral-300 text-tiny">×</span>
+        <input type="number" min={320} max={2160} value={h} data-testid="canvas-size-h"
+          onChange={(e) => setH(e.target.value)}
+          className="w-16 border border-line rounded-lg px-1.5 py-1 text-tiny font-mono" />
+        <button type="button" data-testid="canvas-size-apply"
+          onClick={() => onResize?.({ w: clamp(w), h: clamp(h) })}
+          disabled={clamp(w) === canvas.w && clamp(h) === canvas.h}
+          className="text-tiny px-2 py-1 rounded-lg border border-line hover:border-ink disabled:opacity-40">
+          Apply
+        </button>
+        {custom && <span className="text-[9px] text-neutral-400 font-mono">custom</span>}
+      </div>
+      <p className="text-[10px] text-neutral-400 mt-1.5 leading-tight">
+        Slides are re-fitted to the new size — type scales with the canvas and each
+        slide keeps its original anchoring.
+      </p>
     </div>
   );
 }

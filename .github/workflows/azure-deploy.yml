@@ -202,17 +202,62 @@ jobs:
         id: push
         run: |
           ls -lh /tmp/deploy.zip
+          # --async: the package is ~58MB (vendored deps), and on this plan and
+          # region Kudu takes longer to accept-and-extract it than its gateway
+          # will hold a synchronous request open. The blocking form returned
+          # HTTP 504 GatewayTimeout after ~4m while the deployment itself was
+          # still progressing, failing the job over a timeout rather than a
+          # fault. Uploading asynchronously and then confirming the result out
+          # of band avoids reporting a slow deploy as a broken one.
           az webapp deploy \
             --resource-group ${{ env.AZURE_RG }} \
             --name ${{ env.BACKEND_NAME }} \
             --src-path /tmp/deploy.zip \
             --type zip \
+            --async true \
             --timeout 1200 \
             --verbose
-          # Only reached when the upload succeeded — deploy-status keys the
+          # Only reached when the upload was accepted — deploy-status keys the
           # split-brain check off this, not off the job's overall result, so a
           # later health-check failure still counts as "backend code shipped".
           echo "deployed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for extraction to finish
+        run: |
+          # Async upload returns before Kudu has unpacked the archive, so the
+          # health check below would otherwise race a site that is still being
+          # written. This polls Kudu's own deployment record for the terminal
+          # state instead of guessing with a fixed sleep.
+          # -o tsv returns the two fields tab-separated on ONE line, so they are
+          # split with cut rather than by line.
+          CREDS=$(az webapp deployment list-publishing-credentials \
+            --resource-group ${{ env.AZURE_RG }} --name ${{ env.BACKEND_NAME }} \
+            --query "[publishingUserName, publishingPassword]" -o tsv)
+          USER=$(printf '%s' "$CREDS" | cut -f1)
+          PASS=$(printf '%s' "$CREDS" | cut -f2)
+          if [ -z "$USER" ] || [ -z "$PASS" ]; then
+            echo "::warning::Could not read SCM credentials; skipping the extraction poll."
+            exit 0
+          fi
+          SCM="https://${{ env.BACKEND_NAME }}.scm.azurewebsites.net/api/deployments/latest"
+          for i in $(seq 1 60); do
+            BODY=$(curl -s -u "$USER:$PASS" "$SCM" || true)
+            COMPLETE=$(echo "$BODY" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('complete'))" 2>/dev/null || echo "")
+            STATUS=$(echo "$BODY" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('status'))" 2>/dev/null || echo "")
+            echo "poll $i: complete=$COMPLETE status=$STATUS"
+            # Kudu status 4 == success, 3 == failed.
+            if [ "$COMPLETE" = "True" ] && [ "$STATUS" = "4" ]; then
+              echo "Extraction finished successfully."; exit 0
+            fi
+            if [ "$STATUS" = "3" ]; then
+              echo "::error::Kudu reported the deployment as failed."
+              echo "$BODY" | head -c 2000; exit 1
+            fi
+            sleep 10
+          done
+          # Not fatal on its own: the health check is the real gate, and a slow
+          # unpack should not fail a deploy that then comes up clean.
+          echo "::warning::Deployment did not report completion within 10 minutes; relying on the health check."
 
       - name: Verify deployment
         run: |
@@ -230,7 +275,10 @@ jobs:
           echo "=== Auth response body ==="
           head -5 /tmp/auth_resp.txt 2>/dev/null || echo "(empty)"
           echo "=== Waiting for backend (health check) ==="
-          for i in $(seq 1 24); do
+          # 6 minutes, not 4: the site restarts after an async unpack, and a
+          # cold Python start on this plan can outlast the old window even when
+          # the deploy is perfectly healthy.
+          for i in $(seq 1 36); do
             status=$(curl -s -o /dev/null -w "%{http_code}" "$URL/api/health" 2>/dev/null)
             if [ "$status" = "200" ]; then
               echo "Backend is up (HTTP $status)"
@@ -239,7 +287,7 @@ jobs:
             echo "Attempt $i: HTTP $status — waiting..."
             sleep 10
           done
-          echo "Backend failed to start within 4 minutes"
+          echo "Backend failed to start within 6 minutes"
           # Final diagnostic dump
           echo "=== Final endpoint check ==="
           curl -s -w "\nHTTP %{http_code}\n" "$URL/" 2>/dev/null

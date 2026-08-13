@@ -1,4 +1,4 @@
-"""Real outbound mailboxes — Gmail API and Microsoft Graph.
+"""Real outbound mailboxes — Gmail API, Microsoft Graph and Zoho Mail API.
 
 Replaces mailbox "connection" that was pure theatre: the old create route stamped
 `status: "connected"` with no OAuth and no handshake, then invented a bounce rate
@@ -55,14 +55,26 @@ MS_CLIENT_SECRET = os.environ.get("MS_CLIENT_SECRET", "")
 MS_REDIRECT_URI = os.environ.get("MS_REDIRECT_URI", "")
 MS_SCOPES = "offline_access Mail.Send Mail.Read"
 
+# Zoho Mail OAuth. Sending needs ZohoMail.messages.CREATE; fetching the
+# accountId (which /api/accounts/{accountId}/messages requires) needs
+# ZohoMail.accounts.READ. access_type=offline is what gives us a refresh token.
+ZOHO_CLIENT_ID = os.environ.get("ZOHO_CLIENT_ID", "")
+ZOHO_CLIENT_SECRET = os.environ.get("ZOHO_CLIENT_SECRET", "")
+ZOHO_REDIRECT_URI = os.environ.get("ZOHO_REDIRECT_URI", "")
+ZOHO_SCOPES = "ZohoMail.messages.CREATE,ZohoMail.accounts.READ"
+ZOHO_ACCOUNTS_URL = os.environ.get("ZOHO_ACCOUNTS_URL", "https://accounts.zoho.com")
+ZOHO_API_URL = os.environ.get("ZOHO_API_URL", "https://mail.zoho.com/api")
+
 GMAIL_MOCKED = not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
 MS_MOCKED = not (MS_CLIENT_ID and MS_CLIENT_SECRET)
+ZOHO_MOCKED = not (ZOHO_CLIENT_ID and ZOHO_CLIENT_SECRET)
 
 
 def provider_status() -> Dict[str, str]:
     return {
         "gmail": "test_mode" if GMAIL_MOCKED else "live",
         "outlook": "test_mode" if MS_MOCKED else "live",
+        "zoho": "test_mode" if ZOHO_MOCKED else "live",
     }
 
 
@@ -230,6 +242,88 @@ async def _ms_send(mailbox: Dict[str, Any], msg: EmailMessage) -> Dict[str, Any]
             "message_id_header": msg["Message-ID"], "mocked": False}
 
 
+# ----------------------------- Zoho Mail --------------------------------------
+def zoho_auth_url(state: str) -> str:
+    if ZOHO_MOCKED:
+        return ""
+    from urllib.parse import urlencode
+    q = urlencode({
+        "scope": ZOHO_SCOPES, "client_id": ZOHO_CLIENT_ID,
+        "response_type": "code", "access_type": "offline",
+        "redirect_uri": ZOHO_REDIRECT_URI, "state": state,
+    })
+    return f"{ZOHO_ACCOUNTS_URL}/oauth/v2/auth?{q}"
+
+
+async def zoho_exchange(code: str) -> Dict[str, Any]:
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.post(
+            f"{ZOHO_ACCOUNTS_URL}/oauth/v2/token",
+            data={"client_id": ZOHO_CLIENT_ID, "client_secret": ZOHO_CLIENT_SECRET,
+                  "code": code, "grant_type": "authorization_code",
+                  "redirect_uri": ZOHO_REDIRECT_URI, "scope": ZOHO_SCOPES},
+        )
+        r.raise_for_status()
+        d = r.json()
+    return {"access_token": d["access_token"], "refresh_token": d.get("refresh_token"),
+            "expiry": None}
+
+
+async def _zoho_token(mailbox: Dict[str, Any]) -> str:
+    """Zoho access tokens live ~1h, so refresh on every use — same tradeoff as
+    the Graph flow: the refresh call is cheap next to a send."""
+    refresh = decrypt_token(mailbox.get("refresh_token_enc"))
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.post(
+            f"{ZOHO_ACCOUNTS_URL}/oauth/v2/token",
+            data={"client_id": ZOHO_CLIENT_ID, "client_secret": ZOHO_CLIENT_SECRET,
+                  "refresh_token": refresh, "grant_type": "refresh_token"},
+        )
+        r.raise_for_status()
+        return r.json()["access_token"]
+
+
+async def _zoho_account_id(token: str) -> str:
+    """Send goes through /api/accounts/{accountId}/messages — the accountId
+    must be looked up per token."""
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(f"{ZOHO_API_URL}/accounts",
+                             headers={"Authorization": f"Zoho-oauthtoken {token}"})
+        r.raise_for_status()
+        return r.json()["data"][0]["accountId"]
+
+
+async def _zoho_send(mailbox: Dict[str, Any], msg: EmailMessage) -> Dict[str, Any]:
+    token = await _zoho_token(mailbox)
+    account_id = await _zoho_account_id(token)
+    html_part = msg.get_body(preferencelist=("html",))
+    text_part = msg.get_body(preferencelist=("plain",))
+    # The Zoho API takes a single content field; prefer the HTML body for
+    # rendering, fall back to the text part when there is none.
+    if html_part:
+        content, mail_format = html_part.get_content(), "html"
+    else:
+        content, mail_format = (text_part or msg).get_content(), "plain"
+    payload = {
+        "fromAddress": mailbox["email"],
+        "toAddress": msg["To"],
+        "subject": msg["Subject"],
+        "content": content,
+        "mailFormat": mail_format,
+    }
+    async with httpx.AsyncClient(timeout=25) as client:
+        r = await client.post(
+            f"{ZOHO_API_URL}/accounts/{account_id}/messages",
+            headers={"Authorization": f"Zoho-oauthtoken {token}"},
+            json=payload,
+        )
+        r.raise_for_status()
+        d = r.json()
+    mid = ((d.get("data") or {}) or {}).get("messageId") if isinstance(d.get("data"), dict) else None
+    return {"provider_message_id": mid or f"zoho-{msg['Message-ID']}",
+            "thread_id": None, "message_id_header": msg["Message-ID"], "mocked": False}
+
+
 # ----------------------------- Public API --------------------------------------
 async def send(mailbox: Dict[str, Any], *, to_addr: str, subject: str,
                 html: str, text: str, reply_to: Optional[str] = None) -> Dict[str, Any]:
@@ -241,8 +335,11 @@ async def send(mailbox: Dict[str, Any], *, to_addr: str, subject: str,
         to_addr=to_addr, subject=subject, html=html, text=text, reply_to=reply_to,
     )
 
-    mocked = (provider == "gmail" and GMAIL_MOCKED) or (provider != "gmail" and MS_MOCKED) \
-        or not mailbox.get("refresh_token_enc")
+    mocked = not mailbox.get("refresh_token_enc") or (
+        (provider == "gmail" and GMAIL_MOCKED)
+        or (provider == "outlook" and MS_MOCKED)
+        or (provider == "zoho" and ZOHO_MOCKED)
+    )
     if mocked:
         return {"provider_message_id": f"mock-{make_msgid()[:24]}",
                 "thread_id": None, "message_id_header": msg["Message-ID"], "mocked": True}
@@ -250,6 +347,8 @@ async def send(mailbox: Dict[str, Any], *, to_addr: str, subject: str,
     import asyncio
     if provider == "gmail":
         return await asyncio.to_thread(_gmail_send, mailbox, msg)
+    if provider == "zoho":
+        return await _zoho_send(mailbox, msg)
     return await _ms_send(mailbox, msg)
 
 
