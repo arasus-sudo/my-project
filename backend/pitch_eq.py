@@ -48,6 +48,8 @@ async def mailbox_oauth_callback(code: str, state: str):
     try:
         if mbx.get("provider") == "gmail":
             tokens = mailbox_client.gmail_exchange(code)
+        elif mbx.get("provider") == "zoho":
+            tokens = await mailbox_client.zoho_exchange(code)
         else:
             tokens = await mailbox_client.ms_exchange(code)
     except Exception as ex:
