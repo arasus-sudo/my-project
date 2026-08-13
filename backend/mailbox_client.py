@@ -255,6 +255,13 @@ def zoho_auth_url(state: str) -> str:
     return f"{ZOHO_ACCOUNTS_URL}/oauth/v2/auth?{q}"
 
 
+async def _zoho_error(d: Dict[str, Any]) -> None:
+    """Zoho returns HTTP 200 even for OAuth failures, with {"error": ...} —
+    plain raise_for_status would swallow the reason."""
+    if isinstance(d, dict) and d.get("error"):
+        raise RuntimeError(f"Zoho OAuth error: {d['error']} {d.get('error_description') or ''}".strip())
+
+
 async def zoho_exchange(code: str) -> Dict[str, Any]:
     async with httpx.AsyncClient(timeout=15) as client:
         r = await client.post(
@@ -265,6 +272,7 @@ async def zoho_exchange(code: str) -> Dict[str, Any]:
         )
         r.raise_for_status()
         d = r.json()
+    await _zoho_error(d)
     return {"access_token": d["access_token"], "refresh_token": d.get("refresh_token"),
             "expiry": None}
 
@@ -280,7 +288,9 @@ async def _zoho_token(mailbox: Dict[str, Any]) -> str:
                   "refresh_token": refresh, "grant_type": "refresh_token"},
         )
         r.raise_for_status()
-        return r.json()["access_token"]
+        d = r.json()
+    await _zoho_error(d)
+    return d["access_token"]
 
 
 async def _zoho_account_id(token: str) -> str:
