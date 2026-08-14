@@ -1480,13 +1480,11 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
     ai_meta = campaign.get("ai_meta", {})
 
     opener_system = (
-        "You are Pitch EQ's personalization agent. Generate ONLY a personalized ice-breaker opener for a cold email.\n"
-        "Rules:\n"
-        "1. Use real specific details from the lead research — never invent\n"
-        "2. Write 1-2 sentences max — a genuine ice breaker tied to something real\n"
-        "3. Make it conversational and natural — not salesy\n"
-        "4. Do NOT include greeting, pitch, or CTA\n"
-        "5. Return STRICT JSON only: {\"opener\": \"...\"}"
+        "You write ONE ice-breaker sentence for a cold sales email. It must reference a REAL detail about the lead from their profile or research. "
+        "It must be 1-2 sentences, under 30 words, conversational, no greeting, no CTA, no subject line, no email body, no sign-off. "
+        "Output ONLY the opener text. No quotes, no JSON, no preamble.\n\n"
+        "Example:\nLEAD: Tom R., COO, Ridgeware — company raised $12M Series A last month\n"
+        "OUTPUT: Congrats on Ridgeware's Series A — the $12M round must have the operations team moving fast."
     )
     opener_prompt = (
         f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\n"
@@ -1499,8 +1497,7 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
     )
     try:
         raw2 = await _llm_chat(opener_system, opener_prompt, f"lead-opnr-{lead_id[:8]}", user=user, max_tokens=512)
-        opener_data = _extract_json(raw2) or {}
-        personalized_opener = opener_data.get("opener", "")
+        personalized_opener = _extract_opener(raw2)
     except Exception as ex:
         raise HTTPException(502, f"Opener generation failed: {ex}")
 
@@ -1886,12 +1883,11 @@ async def _run_generation_background(cid: str, wid: str, to_generate: list, camp
                     research_pack = await get_research(wid, lead)
                     research_summary = summarize_for_prompt(research_pack)
                     opener_raw = await _llm_chat(
-                        "You are Pitch EQ's personalization agent. Generate ONLY a personalized ice-breaker opener. Rules: 1) Use real details from research — never invent. 2) 1-2 sentences max. 3) Conversational, not salesy. 4) No greeting, pitch, or CTA. Return STRICT JSON: {\"opener\": \"...\"}",
-                        f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\nLEAD RESEARCH:\n{research_summary}\n\nCAMPAIGN SERVICE: {campaign_name}\nCAMPAIGN GOAL: {campaign_goal}\nCAMPAIGN TONE: {campaign_tone}\n\nGenerate a personalized ice-breaker opener for this specific lead.",
-                        f"gen-{lid[:8]}", user=user, max_tokens=512
+                        "You write ONE ice-breaker sentence for a cold sales email. Reference a REAL detail about the lead from their profile or research. 1-2 sentences, under 30 words, conversational, no greeting, no CTA, no subject line, no email body, no sign-off. Output ONLY the opener text. No quotes, no JSON, no preamble.\n\nExample:\nLEAD: Tom R., COO, Ridgeware — raised $12M Series A last month\nOUTPUT: Congrats on Ridgeware's Series A — the $12M round must have the operations team moving fast.",
+                        f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\nLEAD RESEARCH:\n{research_summary}\n\nCAMPAIGN SERVICE: {campaign_name}\nCAMPAIGN GOAL: {campaign_goal}\nCAMPAIGN TONE: {campaign_tone}\n\nWrite the ice-breaker sentence:",
+                        f"gen-{lid[:8]}", user=user, max_tokens=120
                     )
-                    opener_data = _extract_json(opener_raw) or {}
-                    personalized_opener = (opener_data.get("opener", "") or "").strip()
+                    personalized_opener = _extract_opener(opener_raw)
                     merged_body = (step_template.get("body", "") or "").replace("{{personalized_opener}}", personalized_opener)
                     merged_html = (step_template.get("body_html", "") or "").replace("{{personalized_opener}}", personalized_opener) if step_template.get("body_html") else ""
                     await db.campaigns.update_one(
@@ -2298,12 +2294,11 @@ async def regenerate_all_lead_emails(cid: str, user=Depends(current_user)):
                 research_pack = await get_research(wid, lead)
                 research_summary = summarize_for_prompt(research_pack)
                 opener_raw = await _llm_chat(
-                    "You are Pitch EQ's personalization agent. Generate ONLY a personalized ice-breaker opener. Rules: 1) Use real details from research — never invent. 2) 1-2 sentences max. 3) Conversational, not salesy. 4) No greeting, pitch, or CTA. Return STRICT JSON: {\"opener\": \"...\"}",
-                    f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\nLEAD RESEARCH:\n{research_summary}\n\nCAMPAIGN SERVICE: {campaign_name}\nCAMPAIGN GOAL: {campaign_goal}\nCAMPAIGN TONE: {campaign_tone}\n\nGenerate a personalized ice-breaker opener for this specific lead.",
-                    f"regenall-opnr-{lid[:8]}", user=user, max_tokens=512
+                    "You write ONE ice-breaker sentence for a cold sales email. Reference a REAL detail about the lead from their profile or research. 1-2 sentences, under 30 words, conversational, no greeting, no CTA, no subject line, no email body, no sign-off. Output ONLY the opener text. No quotes, no JSON, no preamble.\n\nExample:\nLEAD: Tom R., COO, Ridgeware — raised $12M Series A last month\nOUTPUT: Congrats on Ridgeware's Series A — the $12M round must have the operations team moving fast.",
+                    f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\nLEAD RESEARCH:\n{research_summary}\n\nCAMPAIGN SERVICE: {campaign_name}\nCAMPAIGN GOAL: {campaign_goal}\nCAMPAIGN TONE: {campaign_tone}\n\nWrite the ice-breaker sentence:",
+                    f"regenall-opnr-{lid[:8]}", user=user, max_tokens=120
                 )
-                opener_data = _extract_json(opener_raw) or {}
-                personalized_opener = opener_data.get("opener", "")
+                personalized_opener = _extract_opener(opener_raw)
                 merged_body = template_body.replace("{{personalized_opener}}", personalized_opener)
                 merged_html = template_html.replace("{{personalized_opener}}", personalized_opener) if template_html else ""
 
@@ -2963,6 +2958,45 @@ def _walk_and_fix(text: str) -> str:
             out.append(ch)
         i += 1
     return ''.join(out)
+
+
+def _extract_opener(raw: str) -> str:
+    """Best-effort extraction of a generated ice-breaker opener.
+
+    Prefers strict JSON ({"opener": "..."}), then falls back to plain prose
+    — Phi-4-mini frequently ignores the STRICT-JSON instruction and answers
+    with a sentence, a quoted line, or even a whole email draft. Returns the
+    opener text or "".
+    """
+    if not raw:
+        return ""
+    raw = raw.strip()
+    parsed = _extract_json(raw) or {}
+    opener = parsed.get("opener") if isinstance(parsed, dict) else None
+    if opener:
+        return str(opener).strip()
+    m = re.search(r'"opener"\s*:\s*"([^"]*)"', raw)
+    if m:
+        return m.group(1).strip()
+    text = raw
+    # Drop a chatty preamble ("Sure, here's an opener: ...").
+    m = re.match(r'^(?:sure|certainly|here\'s|here is|of course)[^"\n]*?[:.]\s*"?(.*?)(?:"\s*)?$', text, re.S | re.I)
+    if m:
+        text = m.group(1).strip()
+    # Phi-4 wraps prose answers in smart or ASCII quotes — peel both.
+    text = text.strip().strip('\u201c\u201d"').strip()
+    # A whole email draft sometimes sneaks out — drop the subject line and
+    # greeting lines, then keep only the first real sentence.
+    lines = [ln.strip().strip('\u201c\u201d"').strip() for ln in re.split(r"\n{2,}", text)]
+    lines = [ln for ln in lines if ln and not re.match(r"^(subject|re):", ln, re.I)]
+    lines = [ln for ln in lines if not re.match(r"^(dear|hi|hello|hey|good\s+(morning|afternoon|evening))\b.*[.!?,]?\s*$", ln, re.I)]
+    if lines:
+        text = lines[0]
+    # Trim an inline greeting prefix ("Hi Sarah — ..." / "Dear Sarah, ...").
+    text = re.sub(r"^(dear|hi|hello|hey|good\s+(morning|afternoon|evening))\b[^.!?]*?[.,:;]\s+", "", text, flags=re.I).strip()
+    text = re.sub(r"^[^\w\d\u2018\u201c'\"]", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:512]
 
 
 def _extract_json(text: str) -> Optional[Dict[str, Any]]:
