@@ -1356,6 +1356,33 @@ _NO_SIGNOFF_RULE = (
 )
 
 
+async def _sender_context(campaign: Dict[str, Any], user: Dict[str, Any]) -> Dict[str, str]:
+    """Resolve WHO is sending the email — the identity the LLM must write as.
+
+    Precedence: campaign's from_mailbox (display_name/email) → campaign owner
+    user. The workspace's brand_voice.offer (business summary from onboarding)
+    becomes "what we do", so the model talks about the sender's own business
+    instead of absorbing the lead's profile as its identity. Every field falls
+    back to "" so callers can interpolate unconditionally.
+    """
+    name = (user.get("name") or "").strip()
+    email = (user.get("email") or "").strip()
+    mb_id = campaign.get("from_mailbox_id") or campaign.get("from_mailbox")
+    if mb_id:
+        mb = await db.mailboxes.find_one({"id": mb_id, "workspace_id": user["workspace_id"]}, {"_id": 0, "email": 1, "display_name": 1})
+        if mb:
+            email = (mb.get("email") or email).strip()
+            name = (mb.get("display_name") or name).strip()
+    ws = await db.workspaces.find_one({"id": user["workspace_id"]}, {"_id": 0, "name": 1, "brand_voice": 1})
+    bv = ((ws or {}).get("brand_voice") or {})
+    return {
+        "name": name,
+        "email": email,
+        "company": ((ws or {}).get("name") or "").strip(),
+        "what_we_do": (bv.get("offer") or "").strip(),
+    }
+
+
 async def _ai_write_step(*, step: Dict[str, Any], step_idx: int, total_steps: int,
                          lead_context: Dict[str, Any], research_summary: str,
                          campaign: Dict[str, Any], ai_meta: Dict[str, Any],
@@ -1368,6 +1395,18 @@ async def _ai_write_step(*, step: Dict[str, Any], step_idx: int, total_steps: in
     research. Earlier steps of the same sequence are included so follow-ups
     build on what was already said instead of restating it.
     """
+    sender = await _sender_context(campaign, user)
+    sender_block = (
+        f"YOU — the sender of this email:\n"
+        f"  Name: {sender['name'] or '(sender will sign automatically)'}\n"
+        f"  Email: {sender['email'] or '(sender will send automatically)'}\n"
+        f"  Company: {sender['company'] or '(your company)'}\n"
+        f"  What your company does: {sender['what_we_do'] or 'Our product/service for this campaign is described in the template intent below.'}\n"
+        "You write FROM this sender TO the lead. The lead is the RECIPIENT — never "
+        "write as the lead, never use their name/title/company as your own identity, "
+        "never open with 'My name is...' using their details. Talk about THEIR situation, "
+        "not what your own company 'is looking for'.\n"
+    )
     asks = []
     if want_subject:
         asks.append('"subject": "<new subject line>"')
@@ -1400,7 +1439,8 @@ async def _ai_write_step(*, step: Dict[str, Any], step_idx: int, total_steps: in
 
     day_note = f" (sent on day {step.get('day')})" if step.get("day") else ""
     prompt = (
-        f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\n"
+        f"{sender_block}\n"
+        f"LEAD PROFILE (the recipient):\n{json.dumps(lead_context, indent=2)}\n\n"
         f"RESEARCH ON THE PERSON AND COMPANY:\n{research_summary}\n\n"
         f"CAMPAIGN SERVICE: {ai_meta.get('service_name', campaign.get('goal', ''))}\n"
         f"CAMPAIGN GOAL: {campaign.get('goal', '')}\n"
@@ -1409,7 +1449,8 @@ async def _ai_write_step(*, step: Dict[str, Any], step_idx: int, total_steps: in
         f"TEMPLATE SUBJECT (intent): {step.get('subject', '')}\n"
         f"TEMPLATE BODY (intent):\n{step.get('body', '') or step.get('body_text', '')}\n"
         f"{prior_txt}\n"
-        "Write this email for this specific lead."
+        "Write this email FROM the sender TO the lead. The lead is your prospect, "
+        "not you — never write as them."
     )
     raw = await _llm_chat(system, prompt, f"creq-step-{step_idx}-{lead_context.get('email', '')[:12]}",
                           user=user, max_tokens=1200)
@@ -1480,19 +1521,30 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
     ai_meta = campaign.get("ai_meta", {})
 
     opener_system = (
-        "You write ONE ice-breaker sentence for a cold sales email. It must reference a REAL detail about the lead from their profile or research. "
-        "It must be 1-2 sentences, under 30 words, conversational, no greeting, no CTA, no subject line, no email body, no sign-off. "
-        "Output ONLY the opener text. No quotes, no JSON, no preamble.\n\n"
-        "Example:\nLEAD: Tom R., COO, Ridgeware — company raised $12M Series A last month\n"
+        "You write ONE ice-breaker sentence that a cold sender opens their email with. "
+        "You are the SENDER — never write as the lead, never use the lead's name, title "
+        "or company as your own identity. The LEAD (the person receiving the email) is "
+        "your prospect.\n"
+        "The opener must reference a REAL detail about the LEAD from their profile or "
+        "research. It must be 1-2 sentences, under 30 words, conversational, no greeting, "
+        "no CTA, no subject line, no email body, no sign-off. Output ONLY the opener text. "
+        "No quotes, no JSON, no preamble.\n\n"
+        "Example:\nSENDER: Alex from Nova Web Works\nLEAD: Tom R., COO, Ridgeware — company raised $12M Series A last month\n"
         "OUTPUT: Congrats on Ridgeware's Series A — the $12M round must have the operations team moving fast."
     )
+    sender = await _sender_context(campaign, user)
     opener_prompt = (
-        f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\n"
+        f"SENDER (you, who writes this email):\n"
+        f"  Name: {sender['name'] or '(sender)'}\n"
+        f"  Company: {sender['company'] or '(your company)'}\n"
+        f"  What your company does: {sender['what_we_do'] or 'Described by the campaign below.'}\n"
+        f"You write TO the lead — the lead is your prospect, not you.\n\n"
+        f"LEAD PROFILE (the recipient):\n{json.dumps(lead_context, indent=2)}\n\n"
         f"LEAD RESEARCH:\n{research_summary}\n\n"
         f"CAMPAIGN SERVICE: {ai_meta.get('service_name', campaign.get('goal', ''))}\n"
         f"CAMPAIGN GOAL: {campaign.get('goal', '')}\n"
         f"CAMPAIGN TONE: {campaign.get('tone', 'professional')}\n\n"
-        f"Generate a personalized ice-breaker opener for this specific lead. "
+        f"Generate a personalized ice-breaker opener FROM the sender TO this lead. "
         f"This will be inserted into the {{personalized_opener}} placeholder in the email template."
     )
     try:
@@ -1880,11 +1932,12 @@ async def _run_generation_background(cid: str, wid: str, to_generate: list, camp
                         }}}
                     )
                 else:
+                    snd = await _sender_context(campaign, user)
                     research_pack = await get_research(wid, lead)
                     research_summary = summarize_for_prompt(research_pack)
                     opener_raw = await _llm_chat(
-                        "You write ONE ice-breaker sentence for a cold sales email. Reference a REAL detail about the lead from their profile or research. 1-2 sentences, under 30 words, conversational, no greeting, no CTA, no subject line, no email body, no sign-off. Output ONLY the opener text. No quotes, no JSON, no preamble.\n\nExample:\nLEAD: Tom R., COO, Ridgeware — raised $12M Series A last month\nOUTPUT: Congrats on Ridgeware's Series A — the $12M round must have the operations team moving fast.",
-                        f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\nLEAD RESEARCH:\n{research_summary}\n\nCAMPAIGN SERVICE: {campaign_name}\nCAMPAIGN GOAL: {campaign_goal}\nCAMPAIGN TONE: {campaign_tone}\n\nWrite the ice-breaker sentence:",
+                        "You write ONE ice-breaker sentence that a cold sender opens their email with. You are the SENDER — never write as the lead or use their name/title/company as your identity; the LEAD is your prospect. Reference a REAL detail about the LEAD. 1-2 sentences, under 30 words, conversational, no greeting, no CTA, no subject line, no email body, no sign-off. Output ONLY the opener text. No quotes, no JSON, no preamble.\n\nExample:\nSENDER: Alex from Nova Web Works\nLEAD: Tom R., COO, Ridgeware — raised $12M Series A last month\nOUTPUT: Congrats on Ridgeware's Series A — the $12M round must have the operations team moving fast.",
+                        f"SENDER (you): {snd['name'] or '(sender)'} at {snd['company'] or 'your company'} — {snd['what_we_do'] or 'Described by the campaign below.'}\nYou write TO the lead — the lead is your prospect, not you.\n\nLEAD PROFILE (recipient):\n{json.dumps(lead_context, indent=2)}\n\nLEAD RESEARCH:\n{research_summary}\n\nCAMPAIGN SERVICE: {campaign_name}\nCAMPAIGN GOAL: {campaign_goal}\nCAMPAIGN TONE: {campaign_tone}\n\nWrite the ice-breaker sentence FROM the sender TO this lead:",
                         f"gen-{lid[:8]}", user=user, max_tokens=120
                     )
                     personalized_opener = _extract_opener(opener_raw)
@@ -2291,11 +2344,12 @@ async def regenerate_all_lead_emails(cid: str, user=Depends(current_user)):
                 if not lead:
                     return
                 lead_context = {k: lead.get(k) for k in ("first_name", "last_name", "title", "company", "email", "linkedin_url")}
+                snd = await _sender_context(campaign, user)
                 research_pack = await get_research(wid, lead)
                 research_summary = summarize_for_prompt(research_pack)
                 opener_raw = await _llm_chat(
-                    "You write ONE ice-breaker sentence for a cold sales email. Reference a REAL detail about the lead from their profile or research. 1-2 sentences, under 30 words, conversational, no greeting, no CTA, no subject line, no email body, no sign-off. Output ONLY the opener text. No quotes, no JSON, no preamble.\n\nExample:\nLEAD: Tom R., COO, Ridgeware — raised $12M Series A last month\nOUTPUT: Congrats on Ridgeware's Series A — the $12M round must have the operations team moving fast.",
-                    f"LEAD PROFILE:\n{json.dumps(lead_context, indent=2)}\n\nLEAD RESEARCH:\n{research_summary}\n\nCAMPAIGN SERVICE: {campaign_name}\nCAMPAIGN GOAL: {campaign_goal}\nCAMPAIGN TONE: {campaign_tone}\n\nWrite the ice-breaker sentence:",
+                    "You write ONE ice-breaker sentence that a cold sender opens their email with. You are the SENDER — never write as the lead or use their name/title/company as your identity; the LEAD is your prospect. Reference a REAL detail about the LEAD. 1-2 sentences, under 30 words, conversational, no greeting, no CTA, no subject line, no email body, no sign-off. Output ONLY the opener text. No quotes, no JSON, no preamble.\n\nExample:\nSENDER: Alex from Nova Web Works\nLEAD: Tom R., COO, Ridgeware — raised $12M Series A last month\nOUTPUT: Congrats on Ridgeware's Series A — the $12M round must have the operations team moving fast.",
+                    f"SENDER (you): {snd['name'] or '(sender)'} at {snd['company'] or 'your company'} — {snd['what_we_do'] or 'Described by the campaign below.'}\nYou write TO the lead — the lead is your prospect, not you.\n\nLEAD PROFILE (recipient):\n{json.dumps(lead_context, indent=2)}\n\nLEAD RESEARCH:\n{research_summary}\n\nCAMPAIGN SERVICE: {campaign_name}\nCAMPAIGN GOAL: {campaign_goal}\nCAMPAIGN TONE: {campaign_tone}\n\nWrite the ice-breaker sentence FROM the sender TO this lead:",
                     f"regenall-opnr-{lid[:8]}", user=user, max_tokens=120
                 )
                 personalized_opener = _extract_opener(opener_raw)
