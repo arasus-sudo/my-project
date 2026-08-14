@@ -6,6 +6,11 @@ probability, objection, next action) and an autonomous Follow-up Agent that
 re-engages customers on a dynamic cadence through the existing WhatsApp
 infrastructure, with explicit guardrails at every step.
 
+Phase 6 (after-sales): a purchase closes the sales cadence and schedules one
+nurture check-in (`kind: nurture`) a few days after the purchase — thank +
+feedback invite, never a pitch. Repeat customers get no automated touch; a
+`needs_template` stop still applies once the 24h session closes.
+
 Wired into the existing inbound flow: `whatsapp_eq.whatsapp_incoming` calls
 `record_whatsapp_inbound()` after the automated agent's turn, so *every*
 WhatsApp conversation — agent on or off — produces and maintains a customer
@@ -205,6 +210,7 @@ _DEFAULT_SETTINGS: Dict[str, Any] = {
     "cadence_hours": None,           # None = dynamic from purchase probability
     "template_id": None,             # approved WA template for closed-session sends (reserved)
     "reengage_after_days": 14,
+    "after_sales_hours": 72,         # post-purchase nurture check-in delay
 }
 
 
@@ -234,27 +240,49 @@ async def _cancel_planned_followups(customer_id: str, reason: str) -> None:
 async def plan_followups(customer: Dict[str, Any], settings: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Cancel the customer's pending plan and lay down the next one from the
     current state — called after every inbound (fresh cycle from last contact)
-    and after any state override. Returns the new plan's documents."""
+    and after any state override. Returns the new plan's documents.
+
+    Stage -> plan:
+      - purchased      : one nurture check-in (kind "nurture") after
+                         `after_sales_hours` — thank + feedback, never a pitch
+      - repeat_customer: no automated touch; the repeat buyer re-engages on
+                         their own cadence
+      - no_response    : a single re-engage nudge `reengage_after_days` out
+      - not_interested / lost : no plan at all
+      - active stage   : the probability-driven sales cadence
+    """
     cid = customer["id"]
     await _cancel_planned_followups(cid, "replanned")
 
     stage = customer["state"]["stage"]
-    if stage in ("purchased", "repeat_customer", "not_interested", "lost"):
+    now = now_iso()
+
+    if stage in ("not_interested", "lost"):
         await db.reply_customers.update_one(
             {"id": cid},
             {"$set": {"state.next_action": _next_action_for(stage), "state.next_action_at": None}})
         return []
 
-    if stage == "no_response":
+    if stage == "purchased":
+        offsets = [int(settings.get("after_sales_hours", 72))]
+        kind = "nurture"
+        next_action = "nurture"
+    elif stage == "repeat_customer":
+        await db.reply_customers.update_one(
+            {"id": cid},
+            {"$set": {"state.next_action": "nurture", "state.next_action_at": None}})
+        return []
+    elif stage == "no_response":
         offsets = [settings.get("reengage_after_days", 14) * 24]
         kind = "re_engage"
+        next_action = "re_engage_in_14d"
     else:
         prob = customer["state"]["purchase_probability"]
         base = settings.get("cadence_hours") or cadence_for(prob, settings.get("max_attempts", 4))
         offsets = enforce_min_gap(list(base), settings.get("min_gap_hours", 6))
         kind = "follow_up"
+        next_action = "follow_up"
 
-    now = now_iso()
     last_contact = customer.get("last_contact_at") or now
     docs = []
     for attempt, hours in enumerate(offsets, start=1):
@@ -268,9 +296,15 @@ async def plan_followups(customer: Dict[str, Any], settings: Dict[str, Any]) -> 
         })
     if docs:
         await db.reply_followups.insert_many(docs)
-        await db.reply_customers.update_one(
-            {"id": cid},
-            {"$set": {"state.next_action": "follow_up", "state.next_action_at": docs[0]["due_at"]}})
+        updates = {"state.next_action": next_action,
+                   "state.next_action_at": docs[0]["due_at"]}
+        if kind == "nurture":
+            entry = {"at": now, "event": "nurture_scheduled", "note": f"after-sales check-in in {offsets[0]}h"}
+            await db.reply_customers.update_one(
+                {"id": cid},
+                {"$set": updates, "$push": {"history": {"$each": [entry], "$slice": -50}}})
+        else:
+            await db.reply_customers.update_one({"id": cid}, {"$set": updates})
     return docs
 
 
@@ -359,13 +393,34 @@ async def _set_followup_status(fid: str, status: str, reason: str) -> None:
 
 
 async def _generate_followup_message(wid: str, customer: Dict[str, Any],
-                                     conv: Dict[str, Any], settings: Dict[str, Any]) -> Optional[str]:
+                                     conv: Dict[str, Any], settings: Dict[str, Any],
+                                     kind: str = "follow_up") -> Optional[str]:
     """One grounded LLM call for the follow-up body — brand voice from the same
     whatsapp_settings the live agent uses, context from the customer's memory
     and the last messages. Returns None if the model is unconfigured or the
-    reply is empty; credits are charged by the caller *before* this runs."""
+    reply is empty; credits are charged by the caller *before* this runs.
+    The system prompt is kind-aware: a nurture message after purchase checks
+    in and invites feedback; a re-engage nudge is pressure-free."""
     if not ANTHROPIC_API_KEY:
         return None
+    if kind == "nurture":
+        purpose = (
+            "The customer has ALREADY PURCHASED. This is a post-purchase check-in: "
+            "thank them, ask how they're finding it, and invite feedback or questions. "
+            "Do NOT pitch, upsell, or push a new sale in this message."
+        )
+    elif kind == "re_engage":
+        purpose = (
+            "This customer went silent long ago and this is a soft, pressure-free "
+            "re-engagement after weeks of no contact. A single warm line, no hard ask, "
+            "no urgency — make it easy to ignore."
+        )
+    else:
+        purpose = (
+            "This is a follow-up on an active sales conversation. Reference the "
+            "customer's stated concern or intent if there is one, and end with one "
+            "soft question or a single clear next step."
+        )
     memory = customer.get("memory", {})
     memory_lines = []
     if memory.get("objections"):
@@ -387,9 +442,8 @@ async def _generate_followup_message(wid: str, customer: Dict[str, Any],
         "You are composing ONE follow-up WhatsApp message for a sales conversation. "
         "Plain text only — no markdown, no bullet lists, no quotes around the message. "
         "One message, at most 240 characters. It must:\n"
+        f"- {purpose}\n"
         "- sound like a person texting, warm but not pushy\n"
-        "- reference the customer's stated concern or intent if there is one\n"
-        "- end with one soft question or a single clear next step\n"
         "- NOT invent discounts, prices, or urgency that are not in the context\n"
         "- NOT repeat wording already sent to this customer\n"
         "Respond with STRICT JSON only: {\"message\": \"...\"}\n"
@@ -457,7 +511,9 @@ async def _process_followup(fu: Dict[str, Any]) -> None:
     if stage in ("not_interested",):
         await _set_followup_status(fid, "cancelled", "customer_not_interested")
         return
-    if stage in ("purchased", "repeat_customer"):
+    # A nurture check-in is exactly what a purchaser is waiting on — it must
+    # survive the purchase_completed guardrail that cancels straggler sale docs.
+    if stage in ("purchased", "repeat_customer") and fu.get("kind") != "nurture":
         await _set_followup_status(fid, "cancelled", "purchase_completed")
         return
 
@@ -483,12 +539,13 @@ async def _process_followup(fu: Dict[str, Any]) -> None:
         # Session open: a freeform message is licensed. Charge before the LLM
         # call, same convention as every other agent here.
         await charge_credits(wid, "reply_followup_send", meta={"customer_id": cust["id"], "followup_id": fid})
-        body = await _generate_followup_message(wid, cust, conv, settings)
+        kind = fu.get("kind", "follow_up")
+        body = await _generate_followup_message(wid, cust, conv, settings, kind)
         if not body:
             await _set_followup_status(fid, "failed", "message_generation")
             return
         msg = {"id": new_id(), "direction": "agent", "body": body, "at": now_iso(),
-               "automated": True, "kind": "followup"}
+               "automated": True, "kind": kind}
         try:
             await twilio_client.send_whatsapp(to_number=phone, body=body)
         except Exception as ex:
@@ -501,11 +558,18 @@ async def _process_followup(fu: Dict[str, Any]) -> None:
         await db.reply_followups.update_one(
             {"id": fid},
             {"$set": {"status": "sent", "sent_at": now_iso(), "sent_body": body, "updated_at": now_iso()}})
-        await db.reply_customers.update_one(
-            {"id": cust["id"]},
-            {"$inc": {"stats.followups_sent": 1, "stats.messages_out": 1, "stats.no_response_streak": 1}})
-        if fu.get("attempt", 1) >= settings.get("max_attempts", 4):
-            await _mark_no_response(cust, settings)
+        # Sales-cycle stats only — a silent nurture check-in must never count
+        # against the customer as a "no response" streak.
+        if kind in ("follow_up", "re_engage"):
+            await db.reply_customers.update_one(
+                {"id": cust["id"]},
+                {"$inc": {"stats.followups_sent": 1, "stats.messages_out": 1, "stats.no_response_streak": 1}})
+            if fu.get("attempt", 1) >= settings.get("max_attempts", 4) and kind == "follow_up":
+                await _mark_no_response(cust, settings)
+        else:
+            await db.reply_customers.update_one(
+                {"id": cust["id"]},
+                {"$inc": {"stats.messages_out": 1, "stats.after_sales_sends": 1}})
         return
 
     # Session closed and no approved-template channel exists in this MVP yet —
@@ -559,6 +623,7 @@ class SettingsIn(BaseModel):
     cadence_hours: Optional[List[int]] = None
     template_id: Optional[str] = None
     reengage_after_days: Optional[int] = None
+    after_sales_hours: Optional[int] = None
 
 
 # ---- Routes ----
@@ -769,6 +834,8 @@ async def update_settings(body: SettingsIn, user=Depends(require_role("org_admin
         raise HTTPException(400, "min_gap_hours must be between 1 and 72")
     if body.reengage_after_days is not None and not 3 <= body.reengage_after_days <= 60:
         raise HTTPException(400, "reengage_after_days must be between 3 and 60")
+    if body.after_sales_hours is not None and not 6 <= body.after_sales_hours <= 24 * 90:
+        raise HTTPException(400, "after_sales_hours must be between 6 and 2160")
     if body.cadence_hours is not None:
         for hours in body.cadence_hours:
             if not 1 <= hours <= 24 * 90:
