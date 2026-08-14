@@ -3039,6 +3039,21 @@ def _extract_opener(raw: str) -> str:
         text = m.group(1).strip()
     # Phi-4 wraps prose answers in smart or ASCII quotes — peel both.
     text = text.strip().strip('\u201c\u201d"').strip()
+    # Chop any email-style sign-off the model sneaked in ("Best regards,
+    # [Your Name]" / "Thanks, ..."). A sign-off belongs in the template body,
+    # never in an opener.
+    m = re.search(
+        r"(?i)(?:^|[.\n])\s*"
+        r"((?:best|kind|warm|warmest|kindest|many|sincere)\s+regards"
+        r"|regards|sincerely|yours\s+(?:truly|sincerely|faithfully)"
+        r"|cheers|thanks(?:\s+(?:so\s+)?much)?|thank\s+you(?:\s+(?:so\s+)?much)?"
+        r"|respectfully)\s*[,:]?\s*(?:\[?your\s+(?:name|company|signature)\]?)?",
+        text,
+    )
+    if m:
+        text = text[: m.start()].rstrip()
+    # Drop a dangling "[Your Name]" placeholder with no preceding marker.
+    text = re.sub(r"(?i)[\s,]*\[?your\s+(?:name|signature)\]?$", "", text).rstrip()
     # A whole email draft sometimes sneaks out — drop the subject line and
     # greeting lines, then keep only the first real sentence.
     lines = [ln.strip().strip('\u201c\u201d"').strip() for ln in re.split(r"\n{2,}", text)]
