@@ -2564,7 +2564,7 @@ async def signature_ai_assist(body: AiAssistIn, user=Depends(current_user)):
     system = prompts.get(body.action)
     if not system:
         raise HTTPException(400, "Unknown AI assist action")
-    if not PERPLEXITY_API_KEY:
+    if not _llm_configured():
         raise HTTPException(503, "AI assistant is not configured")
     from billing import charge_credits
     await charge_credits(user["workspace_id"], "signature_ai_assist", meta={"kind": body.action})
@@ -2805,12 +2805,15 @@ async def reply(cid: str, body: ReplyIn, user=Depends(current_user)):
 
 
 # ----------------------------- AI --------------------------------------------
+PHI4_API_KEY = os.environ.get("PHI4_API_KEY", "")
+PHI4_BASE_URL = os.environ.get("PHI4_BASE_URL", "https://agenticsuite-resource.services.ai.azure.com/openai/v1")
+PHI4_MODEL = os.environ.get("PHI4_MODEL", "phi-4-mini-instruct")
 ANTHROPIC_API_KEY_RAW = os.environ.get("ANTHROPIC_API_KEY", "")
 PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "")
 # Legacy alias — existing modules gate on `if ANTHROPIC_API_KEY` to mean "some
 # LLM provider is configured". Keep that semantic WITHOUT clobbering the real
 # Anthropic key (that used to make it impossible to use both providers).
-ANTHROPIC_API_KEY = ANTHROPIC_API_KEY_RAW or PERPLEXITY_API_KEY
+ANTHROPIC_API_KEY = ANTHROPIC_API_KEY_RAW or PERPLEXITY_API_KEY or PHI4_API_KEY
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
 # Create EQ is short-form text generation — slide copy, a one-slide rewrite, a
@@ -2851,29 +2854,32 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 def _llm_configured() -> bool:
     """True when any LLM provider key is configured."""
-    return bool(ANTHROPIC_API_KEY_RAW or PERPLEXITY_API_KEY or OPENAI_API_KEY or GEMINI_API_KEY)
+    return bool(PHI4_API_KEY or ANTHROPIC_API_KEY_RAW or PERPLEXITY_API_KEY or OPENAI_API_KEY or GEMINI_API_KEY)
 
 
 def _resolve_provider(requested: Optional[str]) -> str:
-    """perplexity | anthropic | openai — explicit provider param > LLM_PROVIDER
-    env > auto. Auto prefers Perplexity when its key is set (current production
-    default), then Anthropic, then OpenAI. Perplexity is OpenAI-API-compatible
-    and spoken through the openai SDK (base_url → api.perplexity.ai)."""
+    """phi-4 | perplexity | anthropic | openai — explicit provider param >
+    LLM_PROVIDER env > auto. Auto prefers Phi-4 when its key is set (current
+    production default), then Perplexity, then Anthropic, then OpenAI.
+    Perplexity is OpenAI-API-compatible and spoken through the openai SDK
+    (base_url → api.perplexity.ai); Phi-4 is the Azure serverless endpoint."""
     if requested:
         p = requested.strip().lower()
-        if p in ("perplexity", "anthropic", "openai"):
+        if p in ("phi-4", "perplexity", "anthropic", "openai"):
             return p
         raise RuntimeError(f"unknown LLM provider: {requested}")
     env = LLM_PROVIDER
-    if env in ("perplexity", "anthropic", "openai"):
+    if env in ("phi-4", "perplexity", "anthropic", "openai"):
         return env
+    if PHI4_API_KEY:
+        return "phi-4"
     if PERPLEXITY_API_KEY:
         return "perplexity"
     if ANTHROPIC_API_KEY_RAW:
         return "anthropic"
     if OPENAI_API_KEY:
         return "openai"
-    raise RuntimeError("no LLM API key configured (set PERPLEXITY_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY)")
+    raise RuntimeError("no LLM API key configured (set PHI4_API_KEY, PERPLEXITY_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY)")
 
 
 def _fix_json(candidate: str) -> Optional[Dict[str, Any]]:
@@ -2972,20 +2978,56 @@ def _extract_json(text: str) -> Optional[Dict[str, Any]]:
 async def _llm_chat(system: str, user_text: str, session_id: str, user: Optional[Dict[str, Any]] = None, max_tokens: int = 2048,
                      agent: Optional[str] = None, action: Optional[str] = None,
                      provider: Optional[str] = None, model: Optional[str] = None) -> str:
-    """Shared LLM chat — routes to perplexity | anthropic (see _resolve_provider).
+    """Shared LLM chat — routes to phi-4 | perplexity | anthropic (see _resolve_provider).
 
     Both providers: rate-limited, retried with backoff, metered into
     token_usage_log, and gated on the daily LLM quota when `user` is passed."""
     if not _llm_configured():
-        raise RuntimeError("no LLM API key configured (set PERPLEXITY_API_KEY or ANTHROPIC_API_KEY)")
+        raise RuntimeError("no LLM API key configured (set PHI4_API_KEY, PERPLEXITY_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY)")
     if user and not await _rate_ok(user):
         raise RuntimeError("daily LLM quota exceeded")
     prov = _resolve_provider(provider)
+    if prov == "phi-4":
+        return await _llm_chat_phi4(system, user_text, user, max_tokens, agent, action, model)
     if prov == "perplexity":
         return await _llm_chat_perplexity(system, user_text, user, max_tokens, agent, action, model)
     if prov == "openai":
         return await _llm_chat_openai(system, user_text, user, max_tokens, agent, action, model)
     return await _llm_chat_anthropic(system, user_text, user, max_tokens, agent, action, model)
+
+
+async def _llm_chat_phi4(system: str, user_text: str, user: Optional[Dict[str, Any]] = None,
+                         max_tokens: int = 2048, agent: Optional[str] = None,
+                         action: Optional[str] = None, model: Optional[str] = None) -> str:
+    """Phi-4-mini-instruct via the Azure serverless OpenAI-compatible endpoint."""
+    import openai
+    client = openai.AsyncOpenAI(api_key=PHI4_API_KEY, base_url=PHI4_BASE_URL)
+    mdl = model or PHI4_MODEL
+    last_err = None
+    for attempt in range(3):
+        try:
+            resp = await client.chat.completions.create(
+                model=mdl,
+                max_tokens=max_tokens,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_text},
+                ],
+            )
+            if user and resp.usage:
+                from token_usage import record_llm_usage
+                await record_llm_usage(
+                    user.get("workspace_id"), mdl,
+                    resp.usage.prompt_tokens, resp.usage.completion_tokens,
+                    agent=agent, action=action, user_id=user.get("id"),
+                )
+            return resp.choices[0].message.content or ""
+        except openai.RateLimitError as ex:
+            last_err = ex
+            await asyncio.sleep(2 ** attempt)
+        except Exception as ex:
+            raise RuntimeError(f"LLM call failed: {ex}") from ex
+    raise RuntimeError(f"LLM call failed after retries: {last_err}")
 
 
 async def _llm_chat_perplexity(system: str, user_text: str, user: Optional[Dict[str, Any]] = None,
