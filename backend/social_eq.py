@@ -61,6 +61,19 @@ social_public_router = APIRouter()
 PROVIDERS = ("linkedin", "instagram", "youtube")
 CLIENTS = {"linkedin": linkedin_client, "instagram": instagram_client, "youtube": youtube_client}
 
+# Which platforms accept which manually-uploaded content types. Text and
+# article are LinkedIn-only (Instagram requires a media file; YouTube's Data
+# API has no text/community-post endpoint at all), images go to LinkedIn +
+# Instagram, videos to all three.
+CONTENT_TYPE_PLATFORMS = {
+    "text": ("linkedin",),
+    "article": ("linkedin",),
+    "static": ("linkedin", "instagram"),
+    "video": ("linkedin", "instagram", "youtube"),
+}
+IMAGE_EXTS = {"png", "jpg", "jpeg", "webp", "gif"}
+VIDEO_EXTS = {"mp4", "mov", "webm", "m4v"}
+
 PLATFORM_GUIDANCE = {
     "linkedin": "LinkedIn: 1-3 short paragraphs, professional but human, hook in the first line, at most 3 hashtags.",
     "instagram": "Instagram: punchy, visual caption, light emoji use is fine, up to 8 relevant hashtags.",
@@ -196,7 +209,7 @@ async def _generate_media(user: Dict[str, Any], post_id: str, topic: str,
     a same-request round trip) — this only submits the job and returns
     `video_status: "processing"` + `video_operation_name`; `media_url` stays
     None until `run_video_poll_tick` fills it in once Veo finishes."""
-    if content_type == "text":
+    if content_type in ("text", "article"):
         return {"media_url": None, "carousel_project_id": None,
                 "video_status": None, "video_operation_name": None}
 
@@ -596,6 +609,102 @@ async def create_from_create_eq(request: Request, user=Depends(current_user)):
     return CreateEqPublishOut(
         post_id=doc["id"], status=doc["status"], headline=doc["headline"], body=doc["body"],
         hashtags=doc["hashtags"], carousel_project_id=doc["carousel_project_id"], media_url=media_url)
+
+
+# ----------------------------- Manual schedule (calendar uploads) ------------------
+@social_router.post("/posts/manual")
+@limiter.limit("20/minute", key_func=_workspace_or_ip_key)
+async def create_manual_post(request: Request, user=Depends(current_user)):
+    """Schedule content a human wrote/uploaded themselves, straight from the
+    Calendar — no LLM drafting, no media generation. Content types: text,
+    article (long-form text), static (uploaded image), video (uploaded video
+    file). One post is created per chosen platform, filtered by what each
+    platform actually supports for that content type (see
+    CONTENT_TYPE_PLATFORMS). Posts land as `pending_approval` with the chosen
+    schedule, so they ride the same approve -> auto-publish tick every other
+    source uses."""
+    form = await request.form()
+    content_type = (form.get("content_type") or "").strip().lower()
+    if content_type not in CONTENT_TYPE_PLATFORMS:
+        raise HTTPException(400, f"content_type must be one of: {', '.join(CONTENT_TYPE_PLATFORMS)}")
+
+    platforms = [p.strip().lower() for p in (form.get("platforms") or "").split(",") if p.strip()]
+    if not platforms:
+        raise HTTPException(400, "choose at least one platform")
+    unknown = [p for p in platforms if p not in PROVIDERS]
+    if unknown:
+        raise HTTPException(400, f"unknown platform(s): {', '.join(unknown)}")
+    unsupported = [p for p in platforms if p not in CONTENT_TYPE_PLATFORMS[content_type]]
+    if unsupported:
+        raise HTTPException(400,
+            f"{content_type} content can't go to: {', '.join(unsupported)}. "
+            f"Allowed: {', '.join(CONTENT_TYPE_PLATFORMS[content_type])}")
+
+    headline = (form.get("headline") or "").strip()
+    body = (form.get("body") or "").strip()
+    if not headline:
+        raise HTTPException(400, "headline is required")
+    if content_type in ("text", "article") and not body:
+        raise HTTPException(400, "body is required for text and article posts")
+
+    scheduled_for = None
+    if (form.get("scheduled_for") or "").strip():
+        try:
+            parsed = datetime.fromisoformat(form["scheduled_for"].replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            scheduled_for = parsed.astimezone(timezone.utc).isoformat()
+        except ValueError:
+            raise HTTPException(400, "scheduled_for must be an ISO datetime")
+
+    file = form.get("file")
+    file_bytes = await file.read() if file else None
+    if content_type in ("static", "video") and not file_bytes:
+        raise HTTPException(400, f"a file is required for {content_type} posts")
+    if content_type in ("text", "article") and file_bytes:
+        raise HTTPException(400, "text and article posts don't take a file")
+    if file_bytes and len(file_bytes) > 100 * 1024 * 1024:
+        raise HTTPException(400, "file exceeds 100MB")
+
+    media_ext = None
+    if file_bytes:
+        ext = (file.filename or "").rsplit(".", 1)[-1].lower()
+        valid = IMAGE_EXTS if content_type == "static" else VIDEO_EXTS
+        if ext not in valid:
+            raise HTTPException(400, f"unsupported file type '.{ext}' — allowed: {', '.join(sorted(valid))}")
+        media_ext = "mp4" if content_type == "video" else ext
+
+    created = []
+    for platform in platforms:
+        post_id = new_id()
+        media_url = None
+        if file_bytes:
+            filename = _save_media(post_id, file_bytes, ext=media_ext)
+            media_url = f"/social-eq/media/{post_id}/{filename}"
+        doc = {
+            "id": post_id, "workspace_id": user["workspace_id"], "owner_id": user["id"],
+            "lead_id": None, "platform": platform, "topic": headline,
+            "headline": headline, "body": body,
+            "hashtags": [], "media_url": media_url, "content_type": content_type,
+            "carousel_project_id": None, "source": "manual",
+            "video_status": None, "video_operation_name": None,
+            "first_comment": None, "first_comment_posted": False,
+            "status": "pending_approval", "scheduled_for": scheduled_for,
+            "approval_token": None,
+            "approved_by": None, "approved_at": None, "organiser_issues": [],
+            "published_at": None, "platform_post_id": None, "platform_post_url": None,
+            "engagement": None, "publish_charge_taken": False,
+            "created_at": now_iso(), "updated_at": now_iso(),
+        }
+        await db.social_posts.insert_one(doc)
+        doc.pop("_id", None)
+        created.append(doc)
+
+    await _audit(user, "social_eq.post.manual_schedule", {
+        "content_type": content_type, "platforms": platforms,
+        "created": len(created), "scheduled_for": scheduled_for,
+    })
+    return {"created": created}
 
 
 # ----------------------------- Posts CRUD + workflow ------------------------------
