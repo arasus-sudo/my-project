@@ -791,7 +791,7 @@ async def _publish_to_platform(workspace_id: str, p: Dict[str, Any]) -> Dict[str
         client_mocked = client.status()["mocked"]
         real_publish_supported = client.status().get("real_publish_supported", True)
 
-        platform_post_id, post_url, mocked = None, "", True
+        platform_post_id, post_url, mocked, media_omitted = None, "", True, False
         if not client_mocked and integration and integration.get("connected") \
                 and not integration.get("mocked") and real_publish_supported:
             try:
