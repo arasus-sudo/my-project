@@ -792,7 +792,8 @@ async def _publish_to_platform(workspace_id: str, p: Dict[str, Any]) -> Dict[str
         real_publish_supported = client.status().get("real_publish_supported", True)
 
         platform_post_id, post_url, mocked = None, "", True
-        if not client_mocked and integration and integration.get("connected") and real_publish_supported:
+        if not client_mocked and integration and integration.get("connected") \
+                and not integration.get("mocked") and real_publish_supported:
             try:
                 caption = _compose_caption(p)
                 if p["platform"] == "linkedin":
