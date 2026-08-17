@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
-import { ChevronLeft, ChevronRight, Plus, Upload, Image as ImageIcon, Video, Type, FileText, CalendarClock, X } from "../icons";
+import { ChevronLeft, ChevronRight, Plus, Upload, Image as ImageIcon, Video, Type, FileText, CalendarClock, X, Trash2, LayoutGrid } from "../icons";
 import { Modal, ModalContent } from "../components/composites/Modal";
 import StatusPill from "../components/primitives/StatusPill";
 import Button from "../components/primitives/Button";
@@ -24,12 +24,14 @@ const CONTENT_TYPES = [
   { id: "article", label: "Article", icon: FileText },
   { id: "static", label: "Image", icon: ImageIcon },
   { id: "video", label: "Video", icon: Video },
+  { id: "carousel", label: "Carousel", icon: LayoutGrid },
 ];
 const PLATFORM_BY_TYPE = {
   text: ["linkedin"],
   article: ["linkedin"],
   static: ["linkedin", "instagram"],
   video: ["linkedin", "instagram", "youtube"],
+  carousel: ["linkedin"],
 };
 const PLATFORM_LABEL = { linkedin: "LinkedIn", instagram: "Instagram", youtube: "YouTube" };
 
@@ -78,6 +80,8 @@ function ComposeForm({ prefillDate, onCreated, onCancel }) {
   const [platforms, setPlatforms] = useState(PLATFORM_BY_TYPE.static);
   const [headline, setHeadline] = useState("");
   const [body, setBody] = useState("");
+  const [hashtags, setHashtags] = useState("");
+  const [firstComment, setFirstComment] = useState("");
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [scheduledFor, setScheduledFor] = useState(prefillDate || nextHour());
@@ -109,12 +113,17 @@ function ComposeForm({ prefillDate, onCreated, onCancel }) {
     if (!platforms.length) { toast.error("Choose at least one platform"); return; }
     if (!headline.trim()) { toast.error("Add a headline"); return; }
     if ((contentType === "text" || contentType === "article") && !body.trim()) { toast.error("Add the post body"); return; }
-    if ((contentType === "static" || contentType === "video") && !file) { toast.error(contentType === "static" ? "Upload an image" : "Upload a video"); return; }
+    if ((contentType === "static" || contentType === "video" || contentType === "carousel") && !file) {
+      toast.error(contentType === "static" ? "Upload an image" : contentType === "video" ? "Upload a video" : "Upload a PDF");
+      return;
+    }
     const fd = new FormData();
     fd.append("content_type", contentType);
     fd.append("platforms", platforms.join(","));
     fd.append("headline", headline.trim());
     fd.append("body", body.trim());
+    if (hashtags.trim()) fd.append("hashtags", hashtags.trim());
+    if (firstComment.trim()) fd.append("first_comment", firstComment.trim());
     if (scheduledFor) fd.append("scheduled_for", new Date(scheduledFor).toISOString());
     if (file) fd.append("file", file);
     setBusy(true);
@@ -128,6 +137,7 @@ function ComposeForm({ prefillDate, onCreated, onCancel }) {
   };
 
   const isMedia = contentType === "static" || contentType === "video";
+  const needsFile = isMedia || contentType === "carousel";
 
   return (
     <>
@@ -156,21 +166,27 @@ function ComposeForm({ prefillDate, onCreated, onCancel }) {
               ? "Text and articles are LinkedIn-only. Instagram requires a media file; YouTube has no text/community-post endpoint."
               : contentType === "static"
                 ? "Images go to LinkedIn and Instagram."
-                : "Videos go to LinkedIn, Instagram and YouTube."}
+                : contentType === "carousel"
+                  ? "Upload the carousel as a multi-page PDF — LinkedIn-only."
+                  : "Videos go to LinkedIn, Instagram and YouTube."}
           </p>
         </div>
         <Input label="Headline" value={headline} onChange={(e) => setHeadline(e.target.value)}
           placeholder="Shown on the calendar and in the queue" data-testid="cal-headline" />
         <Input as="textarea" rows={contentType === "article" ? 8 : 4}
-          label={contentType === "article" ? "Article body" : isMedia ? "Caption" : "Post body"}
-          help={isMedia ? "Optional — the caption that publishes with the media" : "The post itself — write it here"}
+          label={contentType === "article" ? "Article body" : needsFile ? "Caption" : "Post body"}
+          help={needsFile ? "Optional — the caption that publishes with the media" : "The post itself — write it here"}
           value={body} onChange={(e) => setBody(e.target.value)}
-          placeholder={contentType === "article" ? "Write the full article…" : isMedia ? "Caption for the media…" : "Write the post…"}
+          placeholder={contentType === "article" ? "Write the full article…" : needsFile ? "Caption for the media…" : "Write the post…"}
           data-testid="cal-body" />
-        {isMedia && (
+        <Input label="Hashtags" optional value={hashtags} onChange={(e) => setHashtags(e.target.value)}
+          placeholder="comma, separated, no # needed" data-testid="cal-hashtags" />
+        <Input label="First comment" optional value={firstComment} onChange={(e) => setFirstComment(e.target.value)}
+          placeholder="Posted under the post after publishing" data-testid="cal-first-comment" />
+        {needsFile && (
           <div>
             <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>
-              {contentType === "static" ? "Image" : "Video"} file
+              {contentType === "static" ? "Image" : contentType === "video" ? "Video" : "Carousel PDF"} file
             </label>
             <div onClick={() => fileRef.current?.click()} data-testid="cal-media-dropzone"
               className="cursor-pointer"
@@ -178,12 +194,20 @@ function ComposeForm({ prefillDate, onCreated, onCancel }) {
               {previewUrl ? (
                 contentType === "video"
                   ? <video src={previewUrl} controls className="w-full" style={{ borderRadius: "var(--radius-md)", maxHeight: 200 }} />
-                  : <img src={previewUrl} alt="" className="w-full object-cover" style={{ borderRadius: "var(--radius-md)", maxHeight: 200 }} />
+                  : contentType === "carousel"
+                    ? (
+                      <embed src={previewUrl} type="application/pdf" className="w-full" style={{ borderRadius: "var(--radius-md)", maxHeight: 200 }} />
+                    )
+                    : <img src={previewUrl} alt="" className="w-full object-cover" style={{ borderRadius: "var(--radius-md)", maxHeight: 200 }} />
               ) : (
                 <div className="flex flex-col items-center gap-1" style={{ color: "var(--text-tertiary)" }}>
                   <Upload size={20} strokeWidth={1.5} aria-hidden="true" />
-                  <p style={{ fontSize: 12.5 }}>Click to upload {contentType === "static" ? "an image" : "a video"}</p>
-                  <p style={{ fontSize: 11 }}>{contentType === "static" ? "PNG, JPG, WEBP or GIF" : "MP4, MOV, WEBM or M4V — up to 100MB"}</p>
+                  <p style={{ fontSize: 12.5 }}>Click to upload {contentType === "static" ? "an image" : contentType === "video" ? "a video" : "a PDF"}</p>
+                  <p style={{ fontSize: 11 }}>
+                    {contentType === "static" ? "PNG, JPG, WEBP or GIF"
+                      : contentType === "video" ? "MP4, MOV, WEBM or M4V — up to 100MB"
+                        : "Multi-page PDF — up to 100MB"}
+                  </p>
                 </div>
               )}
             </div>
@@ -193,7 +217,8 @@ function ComposeForm({ prefillDate, onCreated, onCancel }) {
                 <X size={12} strokeWidth={1.5} aria-hidden="true" /> Remove {file.name}
               </button>
             )}
-            <input ref={fileRef} type="file" hidden accept={contentType === "static" ? "image/*" : "video/*"}
+            <input ref={fileRef} type="file" hidden
+              accept={contentType === "static" ? "image/*" : contentType === "video" ? "video/*" : "application/pdf"}
               onChange={pickFile} data-testid="cal-media-file" />
           </div>
         )}
@@ -317,15 +342,40 @@ export default function SocialCalendar() {
             }>
             <div className="space-y-2">
               {(byDay[dayModal] || []).map((p) => (
-                <button key={p.id} onClick={() => nav(`/app/social-eq/queue?post=${p.id}`)} className="w-full text-left"
+                <div key={p.id} className="flex items-center gap-2"
                   style={{ border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", padding: 12 }}>
-                  <div className="flex items-center gap-2">
-                    <span style={{ width: 8, height: 8, borderRadius: "var(--radius-full)", background: DOT_COLOR[STATUS_TONE[p.status]] || DOT_COLOR.neutral }} />
-                    <span className="capitalize" style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{p.platform}</span>
-                    <StatusPill status={p.status} tone={STATUS_TONE[p.status]} />
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", marginTop: 4 }}>{p.headline}</div>
-                </button>
+                  <button onClick={() => nav(`/app/social-eq/queue?post=${p.id}`)} className="flex-1 text-left min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span style={{ width: 8, height: 8, borderRadius: "var(--radius-full)", background: DOT_COLOR[STATUS_TONE[p.status]] || DOT_COLOR.neutral }} />
+                      <span className="capitalize" style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{p.platform}</span>
+                      <StatusPill status={p.status} tone={STATUS_TONE[p.status]} />
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", marginTop: 4 }}>{p.headline}</div>
+                  </button>
+                  {p.status !== "published" && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!window.confirm(`Delete "${p.headline}"? This can't be undone.`)) return;
+                        try {
+                          await api.delete(`/social-eq/posts/${p.id}`);
+                          toast.success("Post deleted");
+                          load();
+                        } catch (err) {
+                          toast.error(err?.response?.data?.detail || "Could not delete the post");
+                        }
+                      }}
+                      data-testid={`cal-delete-${p.id}`}
+                      aria-label="Delete post"
+                      className="shrink-0 flex items-center justify-center"
+                      style={{ width: 28, height: 28, borderRadius: "var(--radius-md)", color: "var(--text-tertiary)" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-danger)"; e.currentTarget.style.background = "var(--color-danger-subtle)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-tertiary)"; e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <Trash2 size={14} strokeWidth={1.5} aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
               ))}
               {(byDay[dayModal] || []).length === 0 && (
                 <p style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Nothing scheduled — add a post for this day.</p>

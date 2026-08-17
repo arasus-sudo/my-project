@@ -70,6 +70,7 @@ CONTENT_TYPE_PLATFORMS = {
     "article": ("linkedin",),
     "static": ("linkedin", "instagram"),
     "video": ("linkedin", "instagram", "youtube"),
+    "carousel": ("linkedin",),
 }
 IMAGE_EXTS = {"png", "jpg", "jpeg", "webp", "gif"}
 VIDEO_EXTS = {"mp4", "mov", "webm", "m4v"}
@@ -659,36 +660,47 @@ async def create_manual_post(request: Request, user=Depends(current_user)):
 
     file = form.get("file")
     file_bytes = await file.read() if file else None
-    if content_type in ("static", "video") and not file_bytes:
+    if content_type in ("static", "video", "carousel") and not file_bytes:
         raise HTTPException(400, f"a file is required for {content_type} posts")
     if content_type in ("text", "article") and file_bytes:
         raise HTTPException(400, "text and article posts don't take a file")
     if file_bytes and len(file_bytes) > 100 * 1024 * 1024:
         raise HTTPException(400, "file exceeds 100MB")
 
+    hashtags = [h.strip().lstrip("#") for h in (form.get("hashtags") or "").split(",") if h.strip()]
+    first_comment = (form.get("first_comment") or "").strip() or None
+
     media_ext = None
     if file_bytes:
         ext = (file.filename or "").rsplit(".", 1)[-1].lower()
-        valid = IMAGE_EXTS if content_type == "static" else VIDEO_EXTS
-        if ext not in valid:
-            raise HTTPException(400, f"unsupported file type '.{ext}' — allowed: {', '.join(sorted(valid))}")
-        media_ext = "mp4" if content_type == "video" else ext
+        if content_type == "carousel":
+            if ext != "pdf":
+                raise HTTPException(400, "carousel file must be a PDF")
+            media_ext = "pdf"
+        else:
+            valid = IMAGE_EXTS if content_type == "static" else VIDEO_EXTS
+            if ext not in valid:
+                raise HTTPException(400, f"unsupported file type '.{ext}' — allowed: {', '.join(sorted(valid))}")
+            media_ext = "mp4" if content_type == "video" else ext
 
     created = []
     for platform in platforms:
         post_id = new_id()
         media_url = None
         if file_bytes:
-            filename = _save_media(post_id, file_bytes, ext=media_ext)
+            if content_type == "carousel":
+                filename = _save_document(post_id, file_bytes, ext="pdf")
+            else:
+                filename = _save_media(post_id, file_bytes, ext=media_ext)
             media_url = f"/social-eq/media/{post_id}/{filename}"
         doc = {
             "id": post_id, "workspace_id": user["workspace_id"], "owner_id": user["id"],
             "lead_id": None, "platform": platform, "topic": headline,
             "headline": headline, "body": body,
-            "hashtags": [], "media_url": media_url, "content_type": content_type,
+            "hashtags": hashtags, "media_url": media_url, "content_type": content_type,
             "carousel_project_id": None, "source": "manual",
             "video_status": None, "video_operation_name": None,
-            "first_comment": None, "first_comment_posted": False,
+            "first_comment": first_comment, "first_comment_posted": False,
             "status": "pending_approval", "scheduled_for": scheduled_for,
             "approval_token": None,
             "approved_by": None, "approved_at": None, "organiser_issues": [],
