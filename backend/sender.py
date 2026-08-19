@@ -675,8 +675,14 @@ async def _eval_step_condition(row: Dict[str, Any], campaign: Dict[str, Any]) ->
 # ----------------------------- Helpers ------------------------------------------
 async def _pick_mailbox(workspace_id: str) -> Optional[Dict[str, Any]]:
     """Round-robin across connected mailboxes for a workspace."""
-    mailboxes = await db.mailboxes.find(
+    all_mailboxes = await db.mailboxes.find(
         {"workspace_id": workspace_id, "status": "connected"}, {"_id": 0}).to_list(20)
+    # A mailbox with no refresh token can never send for real (the expired
+    # access token can't be refreshed) — it would silently mock every send.
+    # Prefer token-bearing mailboxes; only fall back to token-less ones when
+    # no real mailbox exists (demo mode, where mock sends are the point).
+    real = [m for m in all_mailboxes if m.get("refresh_token_enc")]
+    mailboxes = real or all_mailboxes
     if not mailboxes:
         return None
     today = datetime.now(dt_timezone.utc).isoformat()[:10]

@@ -351,6 +351,18 @@ async def send(mailbox: Dict[str, Any], *, to_addr: str, subject: str,
         or (provider == "zoho" and ZOHO_MOCKED)
     )
     if mocked:
+        # A connected mailbox that mocks because its OAuth session is broken
+        # (expired access token, no refresh token to renew it) is silently
+        # swallowing every send — say so where a human can see it.
+        if not mailbox.get("refresh_token_enc") and not (
+            (provider == "gmail" and GMAIL_MOCKED)
+            or (provider == "outlook" and MS_MOCKED)
+            or (provider == "zoho" and ZOHO_MOCKED)
+        ):
+            log.warning(
+                "mailbox %s has no refresh token — send mocked, nothing left the box",
+                mailbox.get("email"),
+            )
         return {"provider_message_id": f"mock-{make_msgid()[:24]}",
                 "thread_id": None, "message_id_header": msg["Message-ID"], "mocked": True}
 

@@ -59,19 +59,42 @@ async def send_email(
                 {"_id": 0},
             ).to_list(20)
             if mailboxes:
+                # Prefer mailboxes that can actually send (have a refresh
+                # token). A mailbox with an expired access token and no refresh
+                # token silently mocks every send — picking mailboxes[0] blindly
+                # meant a broken first mailbox quietly swallowed every test-send
+                # and booking confirmation. Only fall back to token-less
+                # (demo/mocked) mailboxes when no real one exists at all.
+                candidates = [m for m in mailboxes if m.get("refresh_token_enc")] or mailboxes
                 text = re.sub(r"<[^>]+>", "", html).strip()
-                result = await mailbox_client.send(
-                    mailboxes[0],
-                    to_addr=to, subject=subject, html=html, text=text,
-                    reply_to=reply,
-                )
+                chosen, result = None, None
+                for m in candidates:
+                    try:
+                        result = await mailbox_client.send(
+                            m,
+                            to_addr=to, subject=subject, html=html, text=text,
+                            reply_to=reply,
+                        )
+                    except Exception as ex:
+                        log.warning("mailbox send failed via %s: %s", m.get("email"), ex)
+                        result = None
+                        continue
+                    # A mocked result from a token-bearing mailbox means that
+                    # provider is disabled (missing creds) — try the next one.
+                    if result.get("mocked") and len(candidates) > 1:
+                        result = None
+                        continue
+                    chosen, result = m, result
+                    break
+                if result is None or chosen is None:
+                    raise RuntimeError("no mailbox could send")
                 # Count the send against the mailbox's daily usage so the
                 # Mailboxes/Analytics "sent today" counters include
                 # transactional mail (inbox replies, test sends, bookings),
                 # not just campaign dispatches.
                 try:
                     from sender import _mark_sent
-                    await _mark_sent(mailboxes[0])
+                    await _mark_sent(chosen)
                 except Exception:
                     pass
                 # Even if the mailbox send is mocked, record it as mocked=False
