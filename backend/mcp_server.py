@@ -380,6 +380,134 @@ def build_mcp_app(db, issuer_url: str, resource_server_url: str) -> FastMCP:
                                                       "via": "mcp", "client_id": user.get("_mcp_client_id")})
         return sig
 
+    # ------------------------- Email template maker -------------------------
+    # The block-based template library (Templates page) had no named tools, so a
+    # connected client could only see signatures and full campaigns and would
+    # work around the gap by building single-step campaigns — even though the
+    # /email-templates routes were reachable. Named tools are what make the
+    # capability discoverable (same gap as Create EQ carousels below).
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def list_email_templates(
+        step_position: Optional[str] = None,
+        tone: Optional[str] = None,
+        service_line: Optional[str] = None,
+        q: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """List the workspace's email template library. Each template is a
+        reusable, block-built email (blocks_json) with a rendered `html` and
+        `body` ready to paste into a campaign step, plus an EQ score.
+        `step_position` filters by sequence slot: intro, followup_1, followup_2,
+        reframe, or breakup."""
+        user = await current_mcp_user(db)
+        from email_templates import list_email_templates as _list
+        result = await _call(_list(step_position=step_position, tone=tone,
+                                   service_line=service_line, q=q, user=user))
+        return result.get("items", [])
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_email_template(template_id: str) -> Dict[str, Any]:
+        """Get one email template by ID — its blocks, style, tone, step
+        position, rendered html/body, compliance settings, and EQ score."""
+        user = await current_mcp_user(db)
+        from email_templates import get_email_template as _get
+        return await _call(_get(tid=template_id, user=user))
+
+    @mcp.tool(annotations=SAFE_WRITE)
+    async def create_email_template(
+        name: str,
+        subject: str = "",
+        blocks_json: Optional[List[Dict[str, Any]]] = None,
+        style_json: Optional[Dict[str, Any]] = None,
+        tone: str = "none",
+        step_position: str = "intro",
+        tags: Optional[List[str]] = None,
+        service_line: str = "",
+        persona: str = "",
+        compliance: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Save a new email template to the workspace library. `blocks_json` is
+        an ordered block array; each block is {"type": <type>, "data": {...}}
+        with types: greeting {value}, opening {value}, body {value},
+        proof {highlight, value}, cta {type: "button"|"link", label, href},
+        signature {signature_id: "default" or a signature id}, divider {}.
+        Merge fields like {{first_name}}, {{company}}, {{calendly_link}},
+        {{industry_pain_point}} are supported in any text value. `style_json`
+        takes an optional accent_color (#rrggbb). `step_position` is the
+        sequence slot (intro/followup_1/followup_2/reframe/breakup) so the
+        template plugs into the campaign's if_no_reply logic. `compliance`
+        defaults to {"enabled": true, "regions": ["ca"]} — the CASL footer
+        (legal name, address, one-click unsubscribe) is auto-appended when the
+        workspace settings cover the region. Returns the saved template with
+        rendered html/body and any overlap warnings (a follow-up that repeats
+        >70% of an earlier step's wording)."""
+        user = await current_mcp_user(db)
+        require_scope(user, "write")
+        from email_templates import TemplateMakerIn, create_email_template as _create
+        from server import _audit
+        body = TemplateMakerIn(
+            name=name, subject=subject,
+            blocks_json=blocks_json or [], style_json=style_json or {},
+            tone=tone, step_position=step_position, tags=tags or [],
+            service_line=service_line, persona=persona, compliance=compliance,
+        )
+        template = await _call(_create(body=body, user=user))
+        await _audit(user, "mcp.create_email_template", {"template_id": template.get("id"), "name": name,
+                                                            "via": "mcp", "client_id": user.get("_mcp_client_id")})
+        return template
+
+    @mcp.tool(annotations=SAFE_WRITE)
+    async def update_email_template(
+        template_id: str,
+        name: Optional[str] = None,
+        subject: Optional[str] = None,
+        blocks_json: Optional[List[Dict[str, Any]]] = None,
+        style_json: Optional[Dict[str, Any]] = None,
+        tone: Optional[str] = None,
+        step_position: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        service_line: Optional[str] = None,
+        persona: Optional[str] = None,
+        compliance: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Update an existing email template — pass only the fields you want to
+        change; the rendered html/body and EQ score are recomputed on save."""
+        user = await current_mcp_user(db)
+        require_scope(user, "write")
+        from email_templates import TemplateMakerIn, update_email_template as _update
+        from email_templates import get_email_template as _get
+        from server import _audit
+        existing = await _call(_get(tid=template_id, user=user))
+        body = TemplateMakerIn(
+            name=name if name is not None else existing.get("name", ""),
+            subject=subject if subject is not None else existing.get("subject", ""),
+            blocks_json=blocks_json if blocks_json is not None else existing.get("blocks_json", []),
+            style_json=style_json if style_json is not None else existing.get("style_json", {}),
+            tone=tone if tone is not None else existing.get("tone", "none"),
+            step_position=step_position if step_position is not None else existing.get("step_position", "intro"),
+            tags=tags if tags is not None else existing.get("tags", []),
+            service_line=service_line if service_line is not None else existing.get("service_line", ""),
+            persona=persona if persona is not None else existing.get("persona", ""),
+            compliance=compliance if compliance is not None else existing.get("compliance"),
+        )
+        updated = await _call(_update(tid=template_id, body=body, user=user))
+        await _audit(user, "mcp.update_email_template", {"template_id": template_id,
+                                                            "via": "mcp", "client_id": user.get("_mcp_client_id")})
+        return updated
+
+    @mcp.tool(annotations=SAFE_WRITE)
+    async def delete_email_template(template_id: str) -> Dict[str, Any]:
+        """Permanently delete an email template from the workspace library.
+        Templates already copied into a campaign are unaffected."""
+        user = await current_mcp_user(db)
+        require_scope(user, "write")
+        from email_templates import delete_email_template as _delete
+        from server import _audit
+        result = await _call(_delete(tid=template_id, user=user))
+        await _audit(user, "mcp.delete_email_template", {"template_id": template_id,
+                                                            "via": "mcp", "client_id": user.get("_mcp_client_id")})
+        return result
+
     # ------------------------- Create EQ (carousels) -------------------------
     # Create EQ had no named tool at all, so a connected client saw nothing in
     # its tool list that makes a carousel and would just report it couldn't —
