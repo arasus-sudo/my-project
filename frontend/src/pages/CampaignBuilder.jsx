@@ -1101,6 +1101,7 @@ function AudienceSection({
 }
 
 function ChannelEditor({ step, updateStep }) {
+  const [templatePicker, setTemplatePicker] = useState(false);
   return (
     <>
       {(step.channel || "email") === "email" && (
@@ -1111,7 +1112,13 @@ function ChannelEditor({ step, updateStep }) {
             className="w-full text-caption font-medium border-0 border-b border-line-default py-1.5 focus:outline-none focus:border-primary bg-transparent"
             placeholder="Quick idea for {{company}}" />
           <div className="mt-2 flex items-center justify-between">
-            <div className="text-tiny font-mono text-fg-tertiary">Body</div>
+            <div className="flex items-center gap-2">
+              <div className="text-tiny font-mono text-fg-tertiary">Body</div>
+              <button onClick={() => setTemplatePicker(true)} data-testid="insert-template-btn"
+                className="text-tiny font-medium text-primary hover:underline">
+                <LayoutTemplate size={12} className="inline mr-0.5" /> Insert template
+              </button>
+            </div>
             <div className="flex items-center gap-2">
               <label className="text-tiny text-fg-tertiary font-mono">day</label>
               <input type="number" min={0} value={step.day}
@@ -1229,6 +1236,16 @@ function ChannelEditor({ step, updateStep }) {
               className="w-14 border border-line-default px-1.5 py-0.5 rounded font-mono text-tiny text-fg" />
           </div>
         </>
+      )}
+      {templatePicker && (
+        <TemplatePickerModal
+          onClose={() => setTemplatePicker(false)}
+          onPick={(t) => {
+            updateStep({ body_html: t.html || "", body: t.body || "", subject: t.subject || "" });
+            setTemplatePicker(false);
+            toast.success(`Template "${t.name}" inserted into this step`);
+          }}
+        />
       )}
     </>
   );
@@ -1349,6 +1366,44 @@ function EqPanel({ eq, setShowEqPanel }) {
         )) : <li className="text-fg-tertiary">Looking sharp. Send it.</li>}
       </ul>
     </aside>
+  );
+}
+
+function TemplatePickerModal({ onClose, onPick }) {
+  const [items, setItems] = useState(null);
+  useEffect(() => {
+    api.get("/email-templates").then((r) => setItems(r.data?.items || [])).catch(() => setItems([]));
+  }, []);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-ds-surface rounded-lg shadow-card p-5 w-full max-w-xl mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-subheading font-display font-semibold">Insert template</div>
+          <button onClick={onClose} className="btn-ghost text-caption">Close</button>
+        </div>
+        <p className="text-tiny text-fg-tertiary mb-3">
+          Picks the template's rendered body (blocks, accent colour, signature and compliance footer included) into this step.
+        </p>
+        <div className="flex-1 overflow-y-auto space-y-2">
+          {items === null ? (
+            <div className="text-caption text-fg-tertiary py-6 text-center">Loading templates…</div>
+          ) : items.length === 0 ? (
+            <div className="text-caption text-fg-tertiary py-6 text-center">
+              No templates yet — build one in Templates.
+            </div>
+          ) : items.map((t) => (
+            <button key={t.id} onClick={() => onPick(t)} data-testid={`picker-template-${t.id}`}
+              className="w-full text-left border border-line-default rounded-lg p-3 hover:border-primary transition-colors">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-caption font-medium text-fg truncate">{t.name}</div>
+                <div className="text-tiny font-mono text-fg-tertiary shrink-0">EQ {t.eq_score}</div>
+              </div>
+              <div className="text-tiny text-fg-tertiary mt-0.5 truncate">{t.subject || "No subject"}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

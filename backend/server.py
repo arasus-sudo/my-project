@@ -6364,6 +6364,7 @@ from reply_eq import reply_router
 from hrms_eq import hrms_router
 from accounting_eq import accounting_router
 from design_eq import design_router
+from email_templates import email_template_router, email_public_router
 api.include_router(pitch_router)
 api.include_router(crm_router)
 api.include_router(pitch_public_router)
@@ -6379,6 +6380,8 @@ api.include_router(social_public_router)
 api.include_router(site_router)
 api.include_router(site_public_router)
 api.include_router(design_router)
+api.include_router(email_template_router)
+api.include_router(email_public_router)
 api.include_router(billing_router)
 api.include_router(billing_public_router)
 api.include_router(company_intel_router)
