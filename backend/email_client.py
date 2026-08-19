@@ -65,6 +65,15 @@ async def send_email(
                     to_addr=to, subject=subject, html=html, text=text,
                     reply_to=reply,
                 )
+                # Count the send against the mailbox's daily usage so the
+                # Mailboxes/Analytics "sent today" counters include
+                # transactional mail (inbox replies, test sends, bookings),
+                # not just campaign dispatches.
+                try:
+                    from sender import _mark_sent
+                    await _mark_sent(mailboxes[0])
+                except Exception:
+                    pass
                 # Even if the mailbox send is mocked, record it as mocked=False
                 # since a real mailbox was actually configured
                 return {

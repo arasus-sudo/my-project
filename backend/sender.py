@@ -702,6 +702,20 @@ async def _mark_sent(mailbox: Dict[str, Any]):
          "$setOnInsert": {"workspace_id": mailbox["workspace_id"], "date": today}},
         upsert=True,
     )
+    # Keep the mailbox doc's own counters in sync — the Mailboxes/Analytics
+    # pages render "sent today" straight off the doc, and it was stamped 0 at
+    # creation with nothing ever writing it again, so the page always read 0
+    # no matter how much actually went out.
+    if mailbox.get("sent_date") != today:
+        await db.mailboxes.update_one(
+            {"id": mailbox["id"]},
+            {"$set": {"sent_today": 1, "sent_date": today}},
+        )
+    else:
+        await db.mailboxes.update_one(
+            {"id": mailbox["id"]},
+            {"$inc": {"sent_today": 1}},
+        )
     # Advance warmup day
     warmup_enabled = mailbox.get("warmup_enabled", True)
     if warmup_enabled:
