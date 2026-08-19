@@ -318,3 +318,24 @@ def test_chain_call_rejects_json_missing_required_keys(monkeypatch):
 
     with pytest.raises(draft_chain.ChainError):
         asyncio.run(draft_chain._chain_call("sys", "user", required=["subject", "cta"]))
+
+
+def test_inject_tracking_urls_include_api_prefix():
+    """The open pixel and click-wrapped links must point at the real routes
+    (/api/t/o and /api/t/c). For a long time they omitted the /api prefix, so
+    every pixel 404'd and open/click stats stayed at zero no matter how much
+    mail was actually read."""
+    html = '<a href="https://example.com/offer">Go</a><p>Hi</p>'
+    out = server.inject_tracking(html, "ws1", "q1", "https://innoira-api.azurewebsites.net")
+    assert 'src="https://innoira-api.azurewebsites.net/api/t/o/q1"' in out
+    assert 'href="https://innoira-api.azurewebsites.net/api/t/c/q1?u=' in out
+    # mailto: links are never wrapped, and http(s) links are never left raw.
+    assert 'href="https://example.com/offer"' not in out
+
+
+def test_tracking_routes_are_mounted_under_api_prefix():
+    """The route table is the source of truth for where the beacon lives."""
+    schema = server.app.openapi()
+    assert "/api/t/o/{queue_id}" in schema["paths"]
+    assert "/api/t/c/{queue_id}" in schema["paths"]
+    assert "/api/t/sig/{signature_id}" in schema["paths"]

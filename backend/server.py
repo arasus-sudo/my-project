@@ -2627,15 +2627,20 @@ async def signature_ai_assist(body: AiAssistIn, user=Depends(current_user)):
 
 
 def inject_tracking(html: str, workspace_id: str, queue_id: str, base_url: str) -> str:
-    """Inject open-tracking pixel and wrap links for click tracking."""
-    pixel_url = f"{base_url}/t/o/{queue_id}"
+    """Inject open-tracking pixel and wrap links for click tracking.
+
+    The routes live on the /api-prefixed router (/api/t/o, /api/t/c), so the
+    injected URLs must carry the prefix too — they didn't for a long time, which
+    made every pixel and wrapped link 404 and silently killed open/click stats.
+    """
+    pixel_url = f"{base_url}/api/t/o/{queue_id}"
     pixel = f'<img src="{pixel_url}" width="1" height="1" style="display:none" alt="" />'
 
     def _wrap(m):
         u = m.group(1)
         if u.startswith("#") or u.startswith("mailto:"):
             return m.group(0)
-        return f'href="{base_url}/t/c/{queue_id}?u={quote(u, safe="")}"'
+        return f'href="{base_url}/api/t/c/{queue_id}?u={quote(u, safe="")}"'
 
     html = re.sub(r'href="([^"]+)"', _wrap, html)
 
