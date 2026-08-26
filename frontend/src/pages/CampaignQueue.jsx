@@ -9,6 +9,7 @@ import { EmptyState, EmptyFilteredState } from "../components/composites/EmptySt
 import Input from "../components/primitives/Input";
 import Button from "../components/primitives/Button";
 import StatusPill from "../components/primitives/StatusPill";
+import SegmentedControl from "../components/primitives/SegmentedControl";
 
 const STATUS_META = {
   pending: { icon: Clock, tone: "warning" },
@@ -20,6 +21,7 @@ const STATUS_META = {
 
 export default function CampaignQueue() {
   const [data, setData] = useState(null);
+  const [box, setBox] = useState("queued"); // queued | sent
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -29,17 +31,27 @@ export default function CampaignQueue() {
   const perPage = 25;
 
   const load = useCallback(() => {
-    const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+    const params = new URLSearchParams({ page: String(page), per_page: String(perPage), box });
     if (search) params.set("search", search);
     api.get(`/queue?${params}`).then((r) => {
       setData(r.data);
       setSelected([]);
     });
-  }, [page, search]);
+  }, [page, search, box]);
 
   useEffect(() => { load(); }, [load]);
 
+  const switchBox = (next) => {
+    if (next === box) return;
+    setBox(next);
+    setPage(1);
+    setSearch("");
+    setSearchInput("");
+  };
+
   const totalPages = data ? Math.max(1, Math.ceil(data.total / perPage)) : 1;
+  const counts = data?.counts || {};
+  const isSentBox = box === "sent";
 
   const toggleSelect = (id) => {
     setSelected((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
@@ -53,7 +65,7 @@ export default function CampaignQueue() {
     const n = parseInt(selectN, 10);
     if (!n || n < 1 || !data) return;
     try {
-      const params = {};
+      const params = { box };
       if (search) params.search = search;
       const { data: allData } = await api.get("/queue/all-ids", { params });
       setSelected((allData.ids || []).slice(0, n));
@@ -107,16 +119,32 @@ export default function CampaignQueue() {
       },
     },
     {
-      key: "scheduled", label: "Scheduled",
-      render: (r) => <span className="tnum" style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-mono)", fontSize: 11.5 }}>{r.send_at ? new Date(r.send_at).toLocaleString() : "—"}</span>,
+      key: "scheduled", label: isSentBox ? "Sent at" : "Scheduled",
+      render: (r) => {
+        const at = isSentBox ? r.sent_at : r.send_at;
+        return <span className="tnum" style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-mono)", fontSize: 11.5 }}>{at ? new Date(at).toLocaleString() : "—"}</span>;
+      },
     },
   ];
 
   return (
     <div className="animate-fade-in">
-      <PageHeader title="Send Queue" subtitle="Emails scheduled to go out, listed chronologically." />
+      <PageHeader
+        title="Send Queue"
+        subtitle={isSentBox
+          ? "Delivered email history, newest first."
+          : "Emails waiting to go out — scheduled, in-flight, or retrying."}
+      />
       <div className="px-6 sm:px-8 py-6 space-y-4">
         <div className="flex items-center gap-2 flex-wrap">
+          <SegmentedControl
+            value={box}
+            onChange={switchBox}
+            options={[
+              { value: "queued", label: `Queue${counts.queued != null ? ` (${counts.queued.toLocaleString()})` : ""}` },
+              { value: "sent", label: `Sent${counts.sent != null ? ` (${counts.sent.toLocaleString()})` : ""}` },
+            ]}
+          />
           <form onSubmit={handleSearch} className="flex items-center gap-2">
             <Input
               leadingIcon={Search} size="sm" value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
@@ -126,12 +154,14 @@ export default function CampaignQueue() {
             <Button type="submit" variant="secondary" size="sm" icon={Search}>Search</Button>
             {search && <span className="tnum" style={{ fontSize: 11.5, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>Filtered: "{search}"</span>}
           </form>
-          <div className="flex items-center gap-1.5 ml-auto">
-            <Input size="sm" value={selectN} onChange={(e) => setSelectN(e.target.value.replace(/\D/g, ""))} placeholder="N" className="w-16" />
-            <Button variant="tertiary" size="sm" icon={ListChecks} onClick={selectFirstN} isDisabled={!selectN || parseInt(selectN, 10) < 1}>
-              Select {selectN || "N"}
-            </Button>
-          </div>
+          {!isSentBox && (
+            <div className="flex items-center gap-1.5 ml-auto">
+              <Input size="sm" value={selectN} onChange={(e) => setSelectN(e.target.value.replace(/\D/g, ""))} placeholder="N" className="w-16" />
+              <Button variant="tertiary" size="sm" icon={ListChecks} onClick={selectFirstN} isDisabled={!selectN || parseInt(selectN, 10) < 1}>
+                Select {selectN || "N"}
+              </Button>
+            </div>
+          )}
         </div>
 
         {!data ? (
@@ -139,6 +169,8 @@ export default function CampaignQueue() {
         ) : data.rows.length === 0 ? (
           search ? (
             <EmptyFilteredState query={search} onClear={() => { setSearch(""); setSearchInput(""); setPage(1); }} />
+          ) : isSentBox ? (
+            <EmptyState icon={CheckCircle2} title="No sent emails yet" description="Delivered mail moves here automatically once a campaign sends." />
           ) : (
             <EmptyState icon={Send} title="No queued emails" description="Emails appear here once a campaign is launched." />
           )
@@ -146,8 +178,10 @@ export default function CampaignQueue() {
           <>
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
-                <span className="tnum" style={{ fontSize: 11.5, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>{data.total} queued</span>
-                {selected.length > 0 && (
+                <span className="tnum" style={{ fontSize: 11.5, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>
+                  {data.total.toLocaleString()} {isSentBox ? "sent" : "queued"}
+                </span>
+                {!isSentBox && selected.length > 0 && (
                   <Button variant="danger-subtle" size="xs" icon={Trash2} onClick={deleteSelected} isLoading={deleting}>
                     Delete {selected.length}
                   </Button>
@@ -158,10 +192,10 @@ export default function CampaignQueue() {
               columns={columns}
               rows={data.rows}
               rowKey={(r) => r.id}
-              selectable
-              selected={selected}
-              onSelectRow={toggleSelect}
-              onSelectAll={selectAll}
+              selectable={!isSentBox}
+              selected={isSentBox ? [] : selected}
+              onSelectRow={isSentBox ? undefined : toggleSelect}
+              onSelectAll={isSentBox ? undefined : selectAll}
             />
             <TableFooter page={page} pageCount={totalPages} total={data.total} pageSize={perPage} onPageChange={setPage} />
           </>

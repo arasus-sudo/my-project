@@ -3325,10 +3325,18 @@ async def ai_personalize(body: AIPersonalizeIn, user=Depends(current_user)):
 
 # ----------------------------- Dashboard -------------------------------------
 @api.get("/queue")
-async def list_queue(user=Depends(current_user), page: int = 1, per_page: int = 20, search: str = ""):
+async def list_queue(user=Depends(current_user), page: int = 1, per_page: int = 20, search: str = "", box: str = "queued"):
+    """The outbound mail view, split into two boxes.
+
+    `box=queued` (default) shows only mail that still needs to go out —
+    pending, in-flight, and failed-retryable rows. `box=sent` shows delivered
+    mail, newest first. It used to be one undifferentiated list: every
+    historical 'sent' row sat alongside the live schedule, burying the actual
+    queue under months of delivery history.
+    """
     wid = user["workspace_id"]
     skip = (page - 1) * per_page
-    query: Dict[str, Any] = {"workspace_id": wid}
+    base_query: Dict[str, Any] = {"workspace_id": wid}
     if search:
         leads = await db.leads.find({
             "workspace_id": wid,
@@ -3344,14 +3352,21 @@ async def list_queue(user=Depends(current_user), page: int = 1, per_page: int = 
             "name": {"$regex": search, "$options": "i"},
         }, {"_id": 0, "id": 1}).to_list(500)
         campaign_ids = [c["id"] for c in campaigns]
-        query["$or"] = [
+        base_query["$or"] = [
             {"lead_id": {"$in": lead_ids}},
             {"campaign_id": {"$in": campaign_ids}},
             {"subject": {"$regex": search, "$options": "i"}},
             {"id": {"$regex": search, "$options": "i"}},
         ]
+    QUEUED_STATUSES = ["pending", "sending", "failed"]
+    if box == "sent":
+        status_q: Dict[str, Any] = {"status": "sent"}
+    else:
+        status_q = {"status": {"$in": QUEUED_STATUSES}}
+    query = {**base_query, **status_q}
     total = await db.send_queue.count_documents(query)
-    rows = await db.send_queue.find(query, {"_id": 0}).sort("send_at", 1).skip(skip).limit(per_page).to_list(per_page)
+    sort = [("sent_at", -1)] if box == "sent" else [("send_at", 1)]
+    rows = await db.send_queue.find(query, {"_id": 0}).sort(sort).skip(skip).limit(per_page).to_list(per_page)
     for r in rows:
         lead = await db.leads.find_one({"id": r.get("lead_id")}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1, "company": 1})
         if lead:
@@ -3361,12 +3376,18 @@ async def list_queue(user=Depends(current_user), page: int = 1, per_page: int = 
         campaign = await db.campaigns.find_one({"id": r.get("campaign_id")}, {"_id": 0, "name": 1})
         if campaign:
             r["campaign_name"] = campaign.get("name", "")
-    return {"total": total, "page": page, "per_page": per_page, "rows": rows}
+    # Tab counts honor the active search filter, so the numbers always match
+    # what each box would actually show.
+    counts = {
+        "queued": await db.send_queue.count_documents({**base_query, "status": {"$in": QUEUED_STATUSES}}),
+        "sent": await db.send_queue.count_documents({**base_query, "status": "sent"}),
+    }
+    return {"total": total, "page": page, "per_page": per_page, "counts": counts, "rows": rows}
 
 @api.get("/queue/all-ids")
-async def list_queue_ids(user=Depends(current_user), search: str = ""):
+async def list_queue_ids(user=Depends(current_user), search: str = "", box: str = "queued"):
     wid = user["workspace_id"]
-    query: Dict[str, Any] = {"workspace_id": wid}
+    base_query: Dict[str, Any] = {"workspace_id": wid}
     if search:
         leads = await db.leads.find({
             "workspace_id": wid,
@@ -3382,13 +3403,17 @@ async def list_queue_ids(user=Depends(current_user), search: str = ""):
             "name": {"$regex": search, "$options": "i"},
         }, {"_id": 0, "id": 1}).to_list(500)
         campaign_ids = [c["id"] for c in campaigns]
-        query["$or"] = [
+        base_query["$or"] = [
             {"lead_id": {"$in": lead_ids}},
             {"campaign_id": {"$in": campaign_ids}},
             {"subject": {"$regex": search, "$options": "i"}},
             {"id": {"$regex": search, "$options": "i"}},
         ]
-    ids = await db.send_queue.find(query, {"_id": 0, "id": 1}).sort("send_at", 1).to_list(5000)
+    if box == "sent":
+        base_query["status"] = "sent"
+    else:
+        base_query["status"] = {"$in": ["pending", "sending", "failed"]}
+    ids = await db.send_queue.find(base_query, {"_id": 0, "id": 1}).sort("send_at", 1).to_list(5000)
     return {"ids": [r["id"] for r in ids]}
 
 @api.post("/queue/delete")
@@ -3396,7 +3421,12 @@ async def delete_queue_items(body: Dict[str, Any], user=Depends(current_user)):
     ids = body.get("ids", [])
     if not ids:
         raise HTTPException(400, "No ids provided")
-    result = await db.send_queue.delete_many({"id": {"$in": ids}, "workspace_id": user["workspace_id"]})
+    # Sent rows are never deletable here: track_open/track_click resolve the
+    # queue id through them and reply polling reads them to fetch thread
+    # replies — deleting one silently kills analytics and reply detection for
+    # that conversation. Delivery history lives in the Sent box, read-only.
+    result = await db.send_queue.delete_many(
+        {"id": {"$in": ids}, "workspace_id": user["workspace_id"], "status": {"$ne": "sent"}})
     return {"deleted": result.deleted_count}
 
 def _pct_change(current: float, previous: float) -> Optional[float]:
@@ -7306,6 +7336,19 @@ async def _start_scheduler():
                 logger.info("reset %s failed send_queue item(s) for inject_tracking retry", _reset.modified_count)
         except Exception:
             pass
+
+        # Follow-ups in campaigns launched before dynamic anchoring existed are
+        # pinned to launch+N days; where caps delayed the first touches, those
+        # pinned dates now produce same-day double-sends. Push every stale
+        # follow-up out to (last real send + configured gap). Later-only, so
+        # it's safe on every boot.
+        try:
+            from sender import repair_followup_anchors
+            _anchored = await repair_followup_anchors()
+            if _anchored:
+                logger.info("re-anchored %s stale follow-up queue item(s) to actual send history", _anchored)
+        except Exception as ex:
+            logger.warning("follow-up anchor repair skipped: %s", ex)
 
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         from schedule_eq import run_reminder_tick

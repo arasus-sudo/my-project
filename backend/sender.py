@@ -33,6 +33,14 @@ SEND_LAUNCH_GRACE_SECONDS = 60
 # Bounce threshold for auto-quarantine (>2%).
 BOUNCE_QUARANTINE_THRESHOLD = 0.02
 
+# Hard per-lead contact-frequency cap: a lead never receives more than this
+# many emails in one UTC day, no matter how many queued steps or campaigns
+# come due. This is the same invariant Apollo/Lemlist enforce ("one email per
+# contact per day") — the last line of defense behind dynamic follow-up
+# anchoring, and the thing that stands between a cap-deferral burst and a
+# spam complaint.
+MAX_EMAILS_PER_LEAD_PER_DAY = 1
+
 
 def _resolve_spintax(text: str) -> str:
     """Parse and resolve spintax: '{Hi|Hello|Hey}' -> random pick."""
@@ -283,6 +291,65 @@ async def _defer_row(row: Dict[str, Any], campaign: Dict[str, Any], now: datetim
     return slot_utc.isoformat()
 
 
+def _followup_slot(actual_sent: datetime, prev_day: int, next_day: int,
+                   win_start: str, win_end: str, tz) -> datetime:
+    """The earliest window slot a follow-up may go out, anchored to when the
+    previous step ACTUALLY sent — not to the launch calendar.
+
+    Follow-ups used to be pinned to launch+N days at enqueue time. When
+    throughput constraints (window spill across days, daily caps) delayed the
+    first touches, those pinned dates stayed put and follow-ups caught up to
+    first touches — a lead whose intro went out on day 2 got their "day 3"
+    follow-up on day 3, one day later, or together with it. Anchoring each
+    follow-up to its own lead's real last touch makes the sequence stretch
+    with throughput instead of compressing.
+
+    Pure function (no DB) so the spacing rules are unit-testable.
+    """
+    gap_days = max(1, int(next_day or 0) - int(prev_day or 0))
+    target_local = actual_sent.astimezone(tz) + timedelta(days=gap_days)
+    return _next_window_slot(target_local, win_start, win_end, tz, not_before=target_local)
+
+
+async def _restamp_next_step(row: Dict[str, Any], campaign: Dict[str, Any],
+                             actual_sent: datetime) -> Optional[str]:
+    """Re-anchor this lead's next pending follow-up to a real delivery.
+
+    Called after any channel's step dispatches successfully. Only a row still
+    in `pending` is touched — one already claimed by an in-flight tick is left
+    alone. Returns the new send_at (UTC isoformat) when a row was moved.
+    """
+    steps = campaign.get("steps") or []
+    prev_idx = int(row.get("step", 0))
+    nxt_idx = prev_idx + 1
+    if nxt_idx >= len(steps):
+        return None
+    next_row = await db.send_queue.find_one({
+        "workspace_id": row["workspace_id"], "campaign_id": row["campaign_id"],
+        "lead_id": row["lead_id"], "step": nxt_idx, "status": "pending",
+    })
+    if not next_row:
+        return None
+    tz, win_start, win_end = _campaign_window(campaign)
+    try:
+        slot = _followup_slot(
+            actual_sent,
+            steps[prev_idx].get("day") or 0,
+            steps[nxt_idx].get("day") or 0,
+            win_start, win_end, tz,
+        )
+    except Exception:
+        return None
+    slot_iso = slot.astimezone(dt_timezone.utc).isoformat()
+    result = await db.send_queue.update_one(
+        {"id": next_row["id"], "status": "pending"},
+        {"$set": {"send_at": slot_iso, "anchored_to_step": prev_idx}},
+    )
+    if result.modified_count:
+        return slot_iso
+    return None
+
+
 async def run_send_tick(base_url: str = "") -> int:
     now = datetime.now(dt_timezone.utc)
 
@@ -329,6 +396,26 @@ async def run_send_tick(base_url: str = "") -> int:
             continue
 
         channel = row.get("channel", "email")
+
+        # Per-lead contact-frequency cap: if this lead already received an
+        # email today (any campaign), roll this row onto tomorrow's window.
+        # Dynamic anchoring keeps a lead's own sequence spaced out; this guard
+        # additionally covers cross-campaign stacking and any residual race,
+        # and is what makes "max 1 email per contact per day" an invariant
+        # rather than an intention.
+        if channel == "email":
+            day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            sent_today = await db.send_queue.count_documents({
+                "workspace_id": row["workspace_id"], "lead_id": row["lead_id"],
+                "channel": "email", "status": "sent",
+                "sent_at": {"$gte": day_start.isoformat()},
+            })
+            if sent_today >= MAX_EMAILS_PER_LEAD_PER_DAY:
+                when = await _defer_row(row, campaign, now,
+                                        "lead_daily_frequency_cap", next_day=True)
+                log.info("run_send_tick: deferred queue %s to %s — lead emailed today",
+                         row["id"], when)
+                continue
 
         # Claim it.
         claimed = await db.send_queue.find_one_and_update(
@@ -388,6 +475,16 @@ async def run_send_tick(base_url: str = "") -> int:
         sent += 1
         sent_keys.add((row["workspace_id"], row["campaign_id"]))
 
+        # The step actually went out just now — re-anchor this lead's next
+        # pending follow-up to it, so their sequence stretches with real
+        # throughput instead of follow-ups catching up to delayed first
+        # touches. Applies to every channel: a call that went out late delays
+        # the email follow-up just the same.
+        anchored = await _restamp_next_step(row, campaign, datetime.now(dt_timezone.utc))
+        if anchored:
+            log.info("run_send_tick: anchored lead %s's step %s to %s",
+                     row["lead_id"], row.get("step", 0) + 1, anchored)
+
     for wid, cid in sent_keys:
         events = await db.events.find(
             {"campaign_id": cid, "workspace_id": wid},
@@ -438,6 +535,74 @@ async def run_send_tick(base_url: str = "") -> int:
 
     log.info("run_send_tick: sent %s item(s)", sent)
     return sent
+
+
+# ----------------------------- Anchor repair (startup) ---------------------------
+async def repair_followup_anchors() -> int:
+    """Re-stamp pending follow-ups in resumable campaigns from real send history.
+
+    Campaigns launched before dynamic anchoring existed carry follow-up rows
+    pinned to launch+N days; where first touches drained slowly past those
+    dates, follow-ups are due to catch up and stack on the same day. This pass
+    moves each stale row to `last actually-sent step time + configured gap`
+    and ONLY ever pushes later — never earlier — so it is safe to run at every
+    startup and cannot disturb healthy schedules.
+
+    Returns the number of rows moved (for the startup log line).
+    """
+    fixed = 0
+    campaigns = await db.campaigns.find(
+        {"status": {"$in": ["active", "paused"]}},
+        {"_id": 0, "id": 1, "workspace_id": 1, "steps": 1,
+         "timezone": 1, "send_window_start": 1, "send_window_end": 1},
+    ).to_list(200)
+    for c in campaigns:
+        steps = c.get("steps") or []
+        if len(steps) < 2:
+            continue
+        wid = c["workspace_id"]
+        pend = await db.send_queue.find(
+            {"workspace_id": wid, "campaign_id": c["id"], "status": "pending",
+             "step": {"$gte": 1}},
+            {"_id": 0, "id": 1, "lead_id": 1, "step": 1, "send_at": 1},
+        ).to_list(5000)
+        if not pend:
+            continue
+        # Latest actually-sent step per lead in this campaign.
+        lead_ids = list({r["lead_id"] for r in pend})
+        last_sent: Dict[str, tuple] = {}
+        cursor = db.send_queue.find(
+            {"workspace_id": wid, "campaign_id": c["id"], "status": "sent",
+             "lead_id": {"$in": lead_ids}, "step": {"$lt": len(steps)}},
+            {"_id": 0, "lead_id": 1, "step": 1, "sent_at": 1},
+        )
+        async for s in cursor:
+            cur = last_sent.get(s["lead_id"])
+            if not cur or s["step"] > cur[0]:
+                last_sent[s["lead_id"]] = (s["step"], s["sent_at"])
+        tz, win_start, win_end = _campaign_window(c)
+        for r in pend:
+            anchor = last_sent.get(r["lead_id"])
+            if not anchor or anchor[0] >= r["step"] or not anchor[1]:
+                continue
+            try:
+                anchor_dt = datetime.fromisoformat(anchor[1])
+                slot = _followup_slot(anchor_dt, steps[anchor[0]].get("day") or 0,
+                                      steps[r["step"]].get("day") or 0,
+                                      win_start, win_end, tz)
+                slot_iso = slot.astimezone(dt_timezone.utc).isoformat()
+            except Exception:
+                continue
+            # Later only: a row already scheduled beyond the computed slot is
+            # either correctly spaced or deliberately deferred — leave it be.
+            if slot_iso > r["send_at"]:
+                res = await db.send_queue.update_one(
+                    {"id": r["id"], "status": "pending"},
+                    {"$set": {"send_at": slot_iso, "anchored_to_step": anchor[0],
+                              "deferred_reason": "anchor_repair"}},
+                )
+                fixed += res.modified_count
+    return fixed
 
 
 # ----------------------------- Email sender ------------------------------------

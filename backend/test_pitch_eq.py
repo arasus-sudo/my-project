@@ -339,3 +339,64 @@ def test_tracking_routes_are_mounted_under_api_prefix():
     assert "/api/t/o/{queue_id}" in schema["paths"]
     assert "/api/t/c/{queue_id}" in schema["paths"]
     assert "/api/t/sig/{signature_id}" in schema["paths"]
+
+
+# ============================ Follow-up anchor spacing =========================
+# Follow-ups must be anchored to when the previous step ACTUALLY sent, not to
+# the launch calendar — otherwise cap-delayed first touches get caught by
+# their own pinned follow-ups (two emails in one day). _followup_slot is the
+# pure spacing rule behind that anchoring.
+
+from datetime import datetime as _dt, date as _date
+from zoneinfo import ZoneInfo as _ZoneInfo
+
+_ET = _ZoneInfo("America/New_York")
+
+
+def test_followup_slot_anchors_to_actual_send_date():
+    """Sent Monday 09:00, gap of 3 configured days -> Thursday 09:00 same window."""
+    from sender import _followup_slot
+    sent = _dt(2026, 8, 24, 9, 0, tzinfo=_ET)   # Monday
+    slot = _followup_slot(sent, prev_day=0, next_day=3,
+                          win_start="09:00", win_end="17:00", tz=_ET)
+    assert slot.date() == _date(2026, 8, 27)    # Thursday
+    assert slot.hour == 9 and slot.minute == 0
+
+
+def test_followup_slot_rolls_weekend_to_next_business_window():
+    """A weekend landing rolls forward to the next open window's start."""
+    from sender import _followup_slot
+    sent = _dt(2026, 8, 27, 12, 0, tzinfo=_ET)  # Thursday
+    slot = _followup_slot(sent, prev_day=0, next_day=2,
+                          win_start="09:00", win_end="17:00", tz=_ET)
+    # +2 days = Saturday -> first open slot is Monday at window open
+    # (_next_window_slot lands rolled targets at the window start).
+    assert slot.date() == _date(2026, 8, 31)
+    assert slot.hour == 9
+
+
+def test_followup_slot_clamps_gap_below_one_day():
+    """Steps configured <1 day apart still keep a minimum 1-day per-lead gap."""
+    from sender import _followup_slot
+    sent = _dt(2026, 8, 26, 16, 30, tzinfo=_ET)  # Wednesday, inside window
+    slot = _followup_slot(sent, prev_day=5, next_day=5,
+                          win_start="09:00", win_end="17:00", tz=_ET)
+    assert slot.date() == _date(2026, 8, 27)
+    assert slot.hour == 16 and slot.minute == 30
+
+
+def test_followup_slot_moves_late_sends_into_next_open_window():
+    """An after-window send pushes the follow-up's whole clock into the window."""
+    from sender import _followup_slot
+    sent = _dt(2026, 8, 24, 18, 0, tzinfo=_ET)  # Monday, after the 17:00 close
+    slot = _followup_slot(sent, prev_day=0, next_day=1,
+                          win_start="09:00", win_end="17:00", tz=_ET)
+    # Target Tue 18:00 is outside the window -> Wed 09:00 open.
+    assert slot.date() == _date(2026, 8, 26)
+    assert slot.hour == 9
+
+
+def test_per_lead_daily_cap_constant_is_enforced_value():
+    """The invariant the tick guard relies on: at most one email per lead/day."""
+    import sender
+    assert sender.MAX_EMAILS_PER_LEAD_PER_DAY == 1
