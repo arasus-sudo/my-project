@@ -28,6 +28,7 @@ const Mailboxes = lazy(() => import("./pages/Mailboxes"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const UnifiedInbox = lazy(() => import("./pages/UnifiedInbox"));
 const CRM = lazy(() => import("./pages/CRM"));
+const Projects = lazy(() => import("./pages/Projects"));
 const Pipeline = lazy(() => import("./pages/Pipeline"));
 const LeadLists = lazy(() => import("./pages/LeadLists"));
 const CustomFieldsSettings = lazy(() => import("./pages/CustomFieldsSettings"));
@@ -159,6 +160,8 @@ function App() {
               <Route path="campaigns/:id" element={<CampaignBuilder />} />
               {/* CRM routes */}
               <Route path="crm" element={<CRM />} />
+              {/* Projects — agentic work management */}
+              <Route path="projects" element={<Projects />} />
               <Route path="crm/leads" element={<Leads />} />
               <Route path="crm/leads/:id" element={<LeadDetail />} />
               <Route path="crm/search" element={<LeadSearch />} />

@@ -6400,8 +6400,10 @@ from hrms_eq import hrms_router
 from accounting_eq import accounting_router
 from design_eq import design_router
 from email_templates import email_template_router, email_public_router
+from projects import projects_router
 api.include_router(pitch_router)
 api.include_router(crm_router)
+api.include_router(projects_router)
 api.include_router(pitch_public_router)
 api.include_router(voice_router)
 api.include_router(voice_public_router)
@@ -7254,6 +7256,12 @@ async def _create_indexes():
         await db.oauth_refresh_tokens.create_index("token", unique=True)
         await db.oauth_refresh_tokens.create_index("grant_id", unique=True, sparse=True)
         await db.mcp_rate_limits.create_index([("workspace_id", 1), ("minute", 1)], unique=True)
+        await db.projects.create_index([("workspace_id", 1), ("id", 1)])
+        await db.projects.create_index([("workspace_id", 1), ("created_at", -1)])
+        await db.project_tasks.create_index([("workspace_id", 1), ("project_id", 1), ("status", 1)])
+        await db.project_tasks.create_index([("workspace_id", 1), ("project_id", 1), ("order", 1)])
+        await db.project_tasks.create_index([("parent_task_id", 1)])
+        await db.project_comments.create_index([("workspace_id", 1), ("task_id", 1), ("created_at", 1)])
         logger.info("indexes ensured")
     except Exception as ex:
         logger.warning("index setup: %s", ex)
