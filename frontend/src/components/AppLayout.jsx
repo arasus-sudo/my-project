@@ -140,6 +140,10 @@ const PROJECTS_NAV = [
   { to: "/app/projects", label: "Board", icon: Kanban, end: true, tid: "proj-nav-board" },
 ];
 
+const COMMAND_NAV = [
+  { to: "/app/command", label: "Chat", icon: MessageSquare, end: true, tid: "cmd-nav-chat" },
+];
+
 export const AGENTS = [
   // Pitch EQ must stay first: its root ("/app") is a prefix of every other
   // agent's routes too, so the matcher below deliberately skips it in the
@@ -174,6 +178,8 @@ export const AGENTS = [
     category: "operations", blurb: "Double-entry ledger, invoicing, AP bills, and financial reports." },
   { k: "projects", label: "Projects", tag: "Work", root: "/app/projects", nav: PROJECTS_NAV, tid: "agent-projects", icon: Kanban,
     category: "operations", blurb: "Plan and run work — kanban boards, tasks, subtasks, and comments across every agent." },
+  { k: "command", label: "Command EQ", tag: "OS", root: "/app/command", nav: COMMAND_NAV, tid: "agent-command", icon: MessageSquare,
+    category: "operations", blurb: "One conversational interface to plan and run work across every agent." },
 ];
 
 // Command-center grouping (SuiteHome.jsx) — sales/revenue agents, brand &
@@ -185,7 +191,7 @@ export const AGENT_CATEGORIES = [
   { key: "operations", label: "Operations" },
 ];
 
-export const AGENT_BADGE = { crm: "M", pitch: "P", create: "C", design: "D", voice: "V", schedule: "S", proposal: "R", social: "O", site: "W", sms: "T", whatsapp: "WA", hrms: "H", accounting: "F", projects: "PJ" };
+export const AGENT_BADGE = { crm: "M", pitch: "P", create: "C", design: "D", voice: "V", schedule: "S", proposal: "R", social: "O", site: "W", sms: "T", whatsapp: "WA", hrms: "H", accounting: "F", projects: "PJ", command: "CQ" };
 
 export default function AppLayout() {
   const { user, workspace, logout } = useAuth();

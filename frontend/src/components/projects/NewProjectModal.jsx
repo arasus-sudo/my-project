@@ -45,7 +45,7 @@ export default function NewProjectModal({ onClose, onCreated }) {
         className="fixed z-50 animate-scale-in"
         style={{
           top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-          width: 480, maxWidth: "calc(100vw - 32px)",
+          maxWidth: "calc(100vw - 32px)", width: "min(480px, 100vw - 32px)",
           background: "var(--bg-surface)", border: "1px solid var(--border-default)",
           borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-lg)", padding: 22,
         }}>

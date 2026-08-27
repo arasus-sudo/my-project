@@ -6401,9 +6401,13 @@ from accounting_eq import accounting_router
 from design_eq import design_router
 from email_templates import email_template_router, email_public_router
 from projects import projects_router
+from knowledge import kb_router
+from command_eq import command_router
 api.include_router(pitch_router)
 api.include_router(crm_router)
 api.include_router(projects_router)
+api.include_router(kb_router)
+api.include_router(command_router)
 api.include_router(pitch_public_router)
 api.include_router(voice_router)
 api.include_router(voice_public_router)
@@ -7262,6 +7266,10 @@ async def _create_indexes():
         await db.project_tasks.create_index([("workspace_id", 1), ("project_id", 1), ("order", 1)])
         await db.project_tasks.create_index([("parent_task_id", 1)])
         await db.project_comments.create_index([("workspace_id", 1), ("task_id", 1), ("created_at", 1)])
+        await db.kb_docs.create_index([("workspace_id", 1), ("created_at", -1)])
+        await db.kb_chunks.create_index([("workspace_id", 1), ("doc_id", 1)])
+        await db.command_sessions.create_index([("workspace_id", 1), ("user_id", 1), ("updated_at", -1)])
+        await db.command_runs.create_index([("workspace_id", 1), ("created_at", -1)])
         logger.info("indexes ensured")
     except Exception as ex:
         logger.warning("index setup: %s", ex)

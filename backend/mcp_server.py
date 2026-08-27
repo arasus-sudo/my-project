@@ -508,6 +508,20 @@ def build_mcp_app(db, issuer_url: str, resource_server_url: str) -> FastMCP:
                                                             "via": "mcp", "client_id": user.get("_mcp_client_id")})
         return result
 
+    # ------------------------- Knowledge base -------------------------------
+    # The shared company KB grounds every agent; exposing it over MCP means an
+    # external LLM inherits the workspace's real policies/notes/site content
+    # instead of guessing.
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def search_company_knowledge(query: str, k: int = 5) -> Dict[str, Any]:
+        """Semantic search over the connected workspace's shared knowledge base
+        — ingested documents, site content, WhatsApp sources, and notes.
+        Returns top-k chunks with titles and similarity scores."""
+        user = await current_mcp_user(db)
+        from knowledge import kb_search
+        return await _call(kb_search(user["workspace_id"], query, k))
+
     # ------------------------- Create EQ (carousels) -------------------------
     # Create EQ had no named tool at all, so a connected client saw nothing in
     # its tool list that makes a carousel and would just report it couldn't —

@@ -125,6 +125,7 @@ CREDIT_COSTS: Dict[str, int] = {
     "reply_followup_send": 2,      # Reply EQ follow-up: grounded message + real outbound WhatsApp, parity with whatsapp_broadcast_send
     "signature_ai_assist": 1,      # single small LLM call, same tier as email_ai
     "project_create": 5,           # Projects workspace bootstrap (default views + seq init); task CRUD is free
+    "command_turn": 2,             # Command EQ orchestrated turn: plan + synthesize (tools themselves bill their own actions)
     # whatsapp_kb_upload is deliberately absent = free: pure text extraction, no LLM
     # call, negligible compute — unlike crawl's real multi-page network fetching.
     # Sending, tracking and reply-polling are deliberately absent = free. We never
@@ -166,6 +167,7 @@ ACTION_LABELS = {
     "reply_followup_send": "Reply EQ follow-up sent",
     "signature_ai_assist": "Signature AI assist",
     "project_create": "Project created",
+    "command_turn": "Command Center turn",
 }
 
 ACTION_AGENT = {
@@ -201,6 +203,7 @@ ACTION_AGENT = {
     "reply_followup_send": "reply",
     "signature_ai_assist": "pitch",
     "project_create": "projects",
+    "command_turn": "command",
 }
 
 

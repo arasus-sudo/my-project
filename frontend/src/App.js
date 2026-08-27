@@ -29,6 +29,7 @@ const Inbox = lazy(() => import("./pages/Inbox"));
 const UnifiedInbox = lazy(() => import("./pages/UnifiedInbox"));
 const CRM = lazy(() => import("./pages/CRM"));
 const Projects = lazy(() => import("./pages/Projects"));
+const CommandEQ = lazy(() => import("./pages/CommandEQ"));
 const Pipeline = lazy(() => import("./pages/Pipeline"));
 const LeadLists = lazy(() => import("./pages/LeadLists"));
 const CustomFieldsSettings = lazy(() => import("./pages/CustomFieldsSettings"));
@@ -158,9 +159,10 @@ function App() {
               <Route path="campaigns/queue" element={<CampaignQueue />} />
               <Route path="campaigns/new" element={<CampaignBuilder />} />
               <Route path="campaigns/:id" element={<CampaignBuilder />} />
-              {/* CRM routes */}
+{/* CRM routes */}
               <Route path="crm" element={<CRM />} />
-              {/* Projects — agentic work management */}
+              {/* Command EQ — conversational orchestrator */}
+              <Route path="command" element={<CommandEQ />} />
               <Route path="projects" element={<Projects />} />
               <Route path="crm/leads" element={<Leads />} />
               <Route path="crm/leads/:id" element={<LeadDetail />} />
