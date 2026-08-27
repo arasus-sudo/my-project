@@ -11,7 +11,7 @@ import {
   Bot, PhoneCall, History, Radio, Clock, CalendarClock, CalendarCheck, CalendarRange, FileBarChart, Tags,
   Share2, PenSquare, ListChecks, LayoutGrid, Menu, X, Search, Upload, Globe, Loader2, Compass,
   Building2, Briefcase, BookOpen, DollarSign, FileDown, Scale, TrendingUp,
-  Smartphone, Phone, Zap, KeyRound,
+  Smartphone, Phone, Zap, KeyRound, MessageSquare,
 } from "lucide-react";
 
 const FONT_FAMILIES = {
