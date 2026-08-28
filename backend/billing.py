@@ -126,6 +126,10 @@ CREDIT_COSTS: Dict[str, int] = {
     "signature_ai_assist": 1,      # single small LLM call, same tier as email_ai
     "project_create": 5,           # Projects workspace bootstrap (default views + seq init); task CRUD is free
     "command_turn": 2,             # Command EQ orchestrated turn: plan + synthesize (tools themselves bill their own actions)
+    "project_ai_breakdown": 10,    # Epic → tasks (3-7 structured tasks)
+    "project_standup": 5,          # Daily standup summary (1 LLM call over recent tasks/comments)
+    "project_retro": 8,            # Retro (2 LLM calls: stats + narrative)
+    "doc_to_tasks": 12,            # Spec/doc → tasks (parsing + generation)
     # whatsapp_kb_upload is deliberately absent = free: pure text extraction, no LLM
     # call, negligible compute — unlike crawl's real multi-page network fetching.
     # Sending, tracking and reply-polling are deliberately absent = free. We never
@@ -168,6 +172,10 @@ ACTION_LABELS = {
     "signature_ai_assist": "Signature AI assist",
     "project_create": "Project created",
     "command_turn": "Command Center turn",
+    "project_ai_breakdown": "Project breakdown",
+    "project_standup": "Project standup",
+    "project_retro": "Project retro",
+    "doc_to_tasks": "Doc to tasks",
 }
 
 ACTION_AGENT = {
@@ -204,6 +212,10 @@ ACTION_AGENT = {
     "signature_ai_assist": "pitch",
     "project_create": "projects",
     "command_turn": "command",
+    "project_ai_breakdown": "projects",
+    "project_standup": "projects",
+    "project_retro": "projects",
+    "doc_to_tasks": "projects",
 }
 
 

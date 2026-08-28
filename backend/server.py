@@ -7461,6 +7461,8 @@ async def _create_indexes():
         await db.project_tasks.create_index([("workspace_id", 1), ("project_id", 1), ("order", 1)])
         await db.project_tasks.create_index([("parent_task_id", 1)])
         await db.project_comments.create_index([("workspace_id", 1), ("task_id", 1), ("created_at", 1)])
+        await db.project_docs.create_index([("workspace_id", 1), ("project_id", 1)])
+        await db.project_automations.create_index([("workspace_id", 1), ("project_id", 1)])
         await db.kb_docs.create_index([("workspace_id", 1), ("created_at", -1)])
         await db.kb_chunks.create_index([("workspace_id", 1), ("doc_id", 1)])
         await db.command_sessions.create_index([("workspace_id", 1), ("user_id", 1), ("updated_at", -1)])

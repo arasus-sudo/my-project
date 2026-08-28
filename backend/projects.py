@@ -143,6 +143,32 @@ class CommentIn(BaseModel):
     body: str
 
 
+class DocIn(BaseModel):
+    title: str
+    content: str = ""
+    parent_doc_id: Optional[str] = None
+
+
+class DocUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    parent_doc_id: Optional[str] = None
+
+
+class AutomationIn(BaseModel):
+    name: str
+    trigger: Dict[str, Any]
+    actions: List[Dict[str, Any]]
+    enabled: bool = True
+
+
+class AutomationUpdate(BaseModel):
+    name: Optional[str] = None
+    trigger: Optional[Dict[str, Any]] = None
+    actions: Optional[List[Dict[str, Any]]] = None
+    enabled: Optional[bool] = None
+
+
 class FromTemplateIn(BaseModel):
     template_key: str
     name: str
@@ -497,3 +523,287 @@ async def add_comment(pid: str, body: CommentIn, user=Depends(current_user)):
     await db.project_tasks.update_one(
         {"id": body.task_id}, {"$set": {"updated_at": now_iso()}})
     return doc
+
+
+# ----------------------------- Docs --------------------------------------------
+@projects_router.get("/{pid}/docs")
+async def list_docs(pid: str, user=Depends(current_user)):
+    await _get_project(user["workspace_id"], pid)
+    return await db.project_docs.find(
+        {"workspace_id": user["workspace_id"], "project_id": pid}, {"_id": 0}
+    ).sort("created_at", 1).to_list(500)
+
+
+@projects_router.post("/{pid}/docs")
+async def create_doc(pid: str, body: DocIn, user=Depends(current_user)):
+    await _get_project(user["workspace_id"], pid)
+    title = (body.title or "").strip()
+    if not title:
+        raise HTTPException(400, "Doc title is required")
+    doc = {
+        "id": new_id(), "workspace_id": user["workspace_id"], "project_id": pid,
+        "title": title[:200], "content": (body.content or "").strip()[:50000],
+        "parent_doc_id": body.parent_doc_id,
+        "created_by": user["id"], "created_at": now_iso(), "updated_at": now_iso(),
+    }
+    await db.project_docs.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@projects_router.put("/{pid}/docs/{did}")
+async def update_doc(pid: str, did: str, body: DocUpdate, user=Depends(current_user)):
+    await _get_project(user["workspace_id"], pid)
+    updates: Dict[str, Any] = {}
+    data = body.model_dump(exclude_none=True)
+    if "title" in data:
+        t = data["title"].strip()
+        if not t:
+            raise HTTPException(400, "Title cannot be empty")
+        updates["title"] = t[:200]
+    if "content" in data:
+        updates["content"] = data["content"].strip()[:50000]
+    if "parent_doc_id" in data:
+        updates["parent_doc_id"] = data["parent_doc_id"]
+    if not updates:
+        raise HTTPException(400, "No fields to update")
+    updates["updated_at"] = now_iso()
+    r = await db.project_docs.update_one(
+        {"id": did, "workspace_id": user["workspace_id"], "project_id": pid}, {"$set": updates})
+    if r.matched_count == 0:
+        raise HTTPException(404, "doc not found")
+    return await db.project_docs.find_one({"id": did}, {"_id": 0})
+
+
+@projects_router.delete("/{pid}/docs/{did}")
+async def delete_doc(pid: str, did: str, user=Depends(current_user)):
+    r = await db.project_docs.delete_one(
+        {"id": did, "workspace_id": user["workspace_id"], "project_id": pid})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "doc not found")
+    await db.project_docs.delete_many({"parent_doc_id": did})
+    return {"ok": True}
+
+
+# ----------------------------- Automations -------------------------------------
+@projects_router.get("/{pid}/automations")
+async def list_automations(pid: str, user=Depends(current_user)):
+    await _get_project(user["workspace_id"], pid)
+    return await db.project_automations.find(
+        {"workspace_id": user["workspace_id"], "project_id": pid}, {"_id": 0}
+    ).sort("created_at", 1).to_list(100)
+
+
+@projects_router.post("/{pid}/automations")
+async def create_automation(pid: str, body: AutomationIn, user=Depends(current_user)):
+    await _get_project(user["workspace_id"], pid)
+    if not body.name.strip():
+        raise HTTPException(400, "Automation name is required")
+    doc = {
+        "id": new_id(), "workspace_id": user["workspace_id"], "project_id": pid,
+        "name": body.name.strip()[:100], "trigger": body.trigger, "actions": body.actions,
+        "enabled": body.enabled, "created_by": user["id"], "created_at": now_iso(),
+    }
+    await db.project_automations.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@projects_router.put("/{pid}/automations/{aid}")
+async def update_automation(pid: str, aid: str, body: AutomationUpdate, user=Depends(current_user)):
+    await _get_project(user["workspace_id"], pid)
+    data = body.model_dump(exclude_none=True)
+    if not data:
+        raise HTTPException(400, "No fields to update")
+    r = await db.project_automations.update_one(
+        {"id": aid, "workspace_id": user["workspace_id"], "project_id": pid}, {"$set": data})
+    if r.matched_count == 0:
+        raise HTTPException(404, "not found")
+    return await db.project_automations.find_one({"id": aid}, {"_id": 0})
+
+
+@projects_router.delete("/{pid}/automations/{aid}")
+async def delete_automation(pid: str, aid: str, user=Depends(current_user)):
+    r = await db.project_automations.delete_one(
+        {"id": aid, "workspace_id": user["workspace_id"], "project_id": pid})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "not found")
+    return {"ok": True}
+
+
+# ----------------------------- Stats & Workload --------------------------------
+@projects_router.get("/{pid}/stats")
+async def project_stats(pid: str, user=Depends(current_user)):
+    await _get_project(user["workspace_id"], pid)
+    tasks = await db.project_tasks.find(
+        {"workspace_id": user["workspace_id"], "project_id": pid}, {"_id": 0}
+    ).to_list(5000)
+    now_str = now_iso()
+    stats = _task_stats(tasks, now_str)
+    # Burndown: created vs completed per day (last 14 days)
+    from collections import defaultdict
+    created_by_day: Dict[str, int] = defaultdict(int)
+    done_by_day: Dict[str, int] = defaultdict(int)
+    for t in tasks:
+        d = (t.get("created_at") or "")[:10]
+        if d:
+            created_by_day[d] += 1
+        if t.get("completed_at"):
+            d2 = t["completed_at"][:10]
+            done_by_day[d2] += 1
+    days = sorted(set(list(created_by_day.keys()) + list(done_by_day.keys())))[-14:]
+    burndown = [{"date": d, "created": created_by_day.get(d, 0), "done": done_by_day.get(d, 0)} for d in days]
+    return {**stats, "burndown": burndown}
+
+
+@projects_router.get("/{pid}/workload")
+async def project_workload(pid: str, user=Depends(current_user)):
+    await _get_project(user["workspace_id"], pid)
+    tasks = await db.project_tasks.find(
+        {"workspace_id": user["workspace_id"], "project_id": pid, "status": {"$ne": DONE_STATUS}},
+        {"_id": 0, "assignee_id": 1, "estimated_hours": 1, "due_at": 1},
+    ).to_list(5000)
+    by_user: Dict[str, Dict[str, Any]] = {}
+    for t in tasks:
+        uid = t.get("assignee_id") or "__unassigned"
+        entry = by_user.setdefault(uid, {"assignee_id": uid, "hours": 0, "tasks": 0, "overdue": 0})
+        entry["hours"] += float(t.get("estimated_hours") or 0)
+        entry["tasks"] += 1
+        if t.get("due_at") and t["due_at"] < now_iso():
+            entry["overdue"] += 1
+    # Enrich names
+    uids = [k for k in by_user if k != "__unassigned"]
+    if uids:
+        users = await db.users.find({"id": {"$in": uids}}, {"_id": 0, "id": 1, "name": 1}).to_list(None)
+        names = {u["id"]: u.get("name") for u in users}
+        for k, v in by_user.items():
+            if k != "__unassigned":
+                v["assignee_name"] = names.get(k)
+    return list(by_user.values())
+
+
+# ----------------------------- AI ------------------------------------------------
+class BreakdownIn(BaseModel):
+    title: str
+    description: str = ""
+
+
+@projects_router.post("/{pid}/ai/breakdown")
+async def ai_breakdown(pid: str, body: BreakdownIn, user=Depends(current_user)):
+    await _get_project(user["workspace_id"], pid)
+    await charge_credits(user["workspace_id"], "project_ai_breakdown")
+    from server import _llm_chat, _extract_json
+    system = (
+        "You are a senior project manager. Break the given epic into 3-7 concrete tasks. "
+        "Each task: title (imperative, <=60 chars), description (1 sentence), priority "
+        "(low|medium|high|urgent), estimated_hours (0.5-16). "
+        "STRICT JSON only: {\"tasks\": [{\"title\": str, \"description\": str, \"priority\": str, \"estimated_hours\": float}]}"
+    )
+    try:
+        raw = await _llm_chat(system, f"Epic: {body.title}\n{body.description}", f"proj-{pid}", user=user, max_tokens=800)
+        parsed = _extract_json(raw) or {}
+        tasks = parsed.get("tasks") or []
+    except Exception as ex:
+        raise HTTPException(502, f"AI breakdown failed: {ex}")
+    # Persist as real tasks so the board reflects them immediately
+    created = []
+    for t in tasks[:7]:
+        proj_doc = await db.projects.find_one_and_update(
+            {"id": pid, "workspace_id": user["workspace_id"]},
+            {"$inc": {"task_seq": 1}}, return_document=True,
+        )
+        doc = {
+            "id": new_id(), "workspace_id": user["workspace_id"], "project_id": pid,
+            "number": proj_doc["task_seq"], "key": (await _get_project(user["workspace_id"], pid)).get("key", "PRJ"),
+            "title": str(t.get("title", ""))[:120], "description": str(t.get("description", ""))[:500],
+            "status": "todo", "priority": t.get("priority", "medium") if t.get("priority") in PRIORITIES else "medium",
+            "assignee_id": None, "due_at": None, "start_at": None,
+            "estimated_hours": float(t.get("estimated_hours", 1)) if t.get("estimated_hours") else None,
+            "parent_task_id": None, "depends_on": [], "tags": ["ai-breakdown"],
+            "order": float(proj_doc["task_seq"]), "created_by": user["id"],
+            "created_at": now_iso(), "updated_at": now_iso(), "completed_at": None,
+        }
+        await db.project_tasks.insert_one(doc)
+        doc.pop("_id", None)
+        created.append(doc)
+    return {"tasks": created}
+
+
+@projects_router.post("/{pid}/ai/standup")
+async def ai_standup(pid: str, user=Depends(current_user)):
+    await _get_project(user["workspace_id"], pid)
+    await charge_credits(user["workspace_id"], "project_standup")
+    tasks = await db.project_tasks.find(
+        {"workspace_id": user["workspace_id"], "project_id": pid}, {"_id": 0}
+    ).sort("updated_at", -1).to_list(100)
+    comments = await db.project_comments.find(
+        {"workspace_id": user["workspace_id"], "project_id": pid}, {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    from server import _llm_chat
+    system = "You are a concise standup bot. Summarize yesterday's progress, today's focus, and blockers. Keep it under 120 words, bullet points."
+    user_text = f"Tasks: {tasks[:20]}\nComments: {comments[:10]}"
+    try:
+        text = await _llm_chat(system, user_text, f"proj-standup-{pid}", user=user, max_tokens=400)
+    except Exception as ex:
+        raise HTTPException(502, f"Standup failed: {ex}")
+    return {"summary": text.strip()}
+
+
+@projects_router.post("/{pid}/ai/retro")
+async def ai_retro(pid: str, user=Depends(current_user)):
+    await _get_project(user["workspace_id"], pid)
+    await charge_credits(user["workspace_id"], "project_retro")
+    tasks = await db.project_tasks.find(
+        {"workspace_id": user["workspace_id"], "project_id": pid}, {"_id": 0}
+    ).to_list(5000)
+    from server import _llm_chat
+    system = "You are a retro facilitator. Given task stats, write a short retro: What shipped, what slipped, velocity, and 2 action items. Under 150 words."
+    stats = _task_stats(tasks, now_iso())
+    try:
+        text = await _llm_chat(system, f"Stats: {stats}\nTasks: {tasks[:30]}", f"proj-retro-{pid}", user=user, max_tokens=500)
+    except Exception as ex:
+        raise HTTPException(502, f"Retro failed: {ex}")
+    return {"retro": text.strip(), "stats": stats}
+
+
+@projects_router.post("/{pid}/ai/doc-to-tasks")
+async def ai_doc_to_tasks(pid: str, body: Dict[str, Any], user=Depends(current_user)):
+    doc_id = body.get("doc_id")
+    if not doc_id:
+        raise HTTPException(400, "doc_id is required")
+    doc = await db.project_docs.find_one(
+        {"id": doc_id, "workspace_id": user["workspace_id"], "project_id": pid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "doc not found")
+    await charge_credits(user["workspace_id"], "doc_to_tasks")
+    from server import _llm_chat, _extract_json
+    system = (
+        "Turn the given spec/doc into 3-8 actionable tasks. "
+        "STRICT JSON only: {\"tasks\": [{\"title\": str, \"description\": str, \"priority\": str}]}"
+    )
+    try:
+        raw = await _llm_chat(system, doc.get("content", "")[:8000], f"proj-doc2task-{pid}", user=user, max_tokens=800)
+        parsed = _extract_json(raw) or {}
+        tasks = parsed.get("tasks") or []
+    except Exception as ex:
+        raise HTTPException(502, f"Doc→tasks failed: {ex}")
+    created = []
+    for t in tasks[:8]:
+        proj_doc = await db.projects.find_one_and_update(
+            {"id": pid, "workspace_id": user["workspace_id"]},
+            {"$inc": {"task_seq": 1}}, return_document=True,
+        )
+        nd = {
+            "id": new_id(), "workspace_id": user["workspace_id"], "project_id": pid,
+            "number": proj_doc["task_seq"], "key": (await _get_project(user["workspace_id"], pid)).get("key", "PRJ"),
+            "title": str(t.get("title", ""))[:120], "description": str(t.get("description", ""))[:500],
+            "status": "todo", "priority": "medium",
+            "assignee_id": None, "due_at": None, "start_at": None, "estimated_hours": None,
+            "parent_task_id": None, "depends_on": [], "tags": ["from-doc"],
+            "order": float(proj_doc["task_seq"]), "created_by": user["id"],
+            "created_at": now_iso(), "updated_at": now_iso(), "completed_at": None,
+        }
+        await db.project_tasks.insert_one(nd)
+        nd.pop("_id", None)
+        created.append(nd)
+    return {"tasks": created}

@@ -15,6 +15,12 @@ import KanbanBoard from "../components/projects/KanbanBoard";
 import TaskList from "../components/projects/TaskList";
 import TaskDrawer from "../components/projects/TaskDrawer";
 import NewProjectModal from "../components/projects/NewProjectModal";
+import GanttView from "../components/projects/GanttView";
+import CalendarView from "../components/projects/CalendarView";
+import WorkloadView from "../components/projects/WorkloadView";
+import DashboardView from "../components/projects/DashboardView";
+import DocsView from "../components/projects/DocsView";
+import AutomationsView from "../components/projects/AutomationsView";
 
 /* Projects — agentic work management. Left rail lists projects; the main pane
  * renders one project's board or list. All edits flow through TaskDrawer /
@@ -228,23 +234,49 @@ export default function Projects() {
 
             {/* Toolbar */}
             <div className="flex items-center gap-2 flex-wrap" style={{ marginTop: 12 }}>
-              <SegmentedControl
-                value={view} onChange={setView}
+              <Select size="sm" value={view} onChange={setView} className="w-36"
                 options={[
                   { value: "kanban", label: "Kanban" },
                   { value: "list", label: "List" },
-                ]}
-              />
+                  { value: "gantt", label: "Gantt" },
+                  { value: "calendar", label: "Calendar" },
+                  { value: "workload", label: "Workload" },
+                  { value: "dashboard", label: "Dashboard" },
+                  { value: "docs", label: "Docs" },
+                  { value: "automations", label: "Automations" },
+                ]} data-testid="proj-view-select" />
               <Input leadingIcon={Search} size="sm" value={q} onChange={(e) => setQ(e.target.value)}
-                placeholder="Filter by title or tag…" className="w-56" data-testid="proj-search" />
+                placeholder="Filter by title or tag…" className="w-48" data-testid="proj-search" />
               <Select size="sm" placeholder="Everyone"
                 options={[
                   { value: "", label: "Everyone" },
                   ...team.map((m) => ({ value: m.id, label: m.name || m.email })),
                   { value: "__un", label: "Unassigned" },
                 ]}
-                value={assignee} onChange={setAssignee} className="w-40" />
-              <div className="ml-auto">
+                value={assignee} onChange={setAssignee} className="w-36" />
+              <div className="ml-auto flex items-center gap-1.5">
+                <Button variant="tertiary" size="xs" onClick={async () => {
+                  const title = window.prompt("Epic title to break down:");
+                  if (!title) return;
+                  const desc = window.prompt("Description (optional):") || "";
+                  try {
+                    await api.post(`/projects/${project.id}/ai/breakdown`, { title, description: desc });
+                    toast.success("Breakdown created");
+                    loadTasks(project.id); refreshCounts();
+                  } catch (err) { toast.error(err?.response?.data?.detail || "Breakdown failed"); }
+                }} data-testid="proj-ai-breakdown">Breakdown</Button>
+                <Button variant="tertiary" size="xs" onClick={async () => {
+                  try {
+                    const { data } = await api.post(`/projects/${project.id}/ai/standup`);
+                    toast.message(data.summary || "Standup ready");
+                  } catch (err) { toast.error(err?.response?.data?.detail || "Standup failed"); }
+                }}>Standup</Button>
+                <Button variant="tertiary" size="xs" onClick={async () => {
+                  try {
+                    const { data } = await api.post(`/projects/${project.id}/ai/retro`);
+                    toast.message(data.retro || "Retro ready");
+                  } catch (err) { toast.error(err?.response?.data?.detail || "Retro failed"); }
+                }}>Retro</Button>
                 <Button variant="primary" size="sm" icon={Plus}
                   onClick={() => { document.getElementById("proj-quick-add")?.focus(); }}
                   data-testid="proj-add-task-btn">
@@ -253,20 +285,36 @@ export default function Projects() {
               </div>
             </div>
 
-            {/* Quick add */}
-            <div className="flex items-center gap-2" style={{ marginTop: 8 }}>
-              <Input id="proj-quick-add" size="sm" value={quickTitle} className="w-80"
-                onChange={(e) => setQuickTitle(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") createQuickTask(); }}
-                placeholder="Quick-add a task to the first column…" data-testid="proj-quick-add" />
-              {quickTitle.trim() && (
-                <Button variant="secondary" size="sm" onClick={createQuickTask}>Add</Button>
-              )}
-            </div>
+            {/* Quick add — only for task board views */}
+            {["kanban","list","gantt"].includes(view) && (
+              <div className="flex items-center gap-2" style={{ marginTop: 8 }}>
+                <Input id="proj-quick-add" size="sm" value={quickTitle} className="w-80"
+                  onChange={(e) => setQuickTitle(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") createQuickTask(); }}
+                  placeholder="Quick-add a task to the first column…" data-testid="proj-quick-add" />
+                {quickTitle.trim() && (
+                  <Button variant="secondary" size="sm" onClick={createQuickTask}>Add</Button>
+                )}
+              </div>
+            )}
 
-            {/* Board / list */}
+            {/* Board / list / gantt / calendar / workload / dashboard / docs / automations */}
             <div className="flex-1 min-h-0" style={{ marginTop: 10 }}>
-              {visibleTasks.length === 0 && tasks.length === 0 ? (
+              {view === "docs" ? (
+                <DocsView project={project} />
+              ) : view === "automations" ? (
+                <AutomationsView project={project} />
+              ) : view === "gantt" ? (
+                visibleTasks.length === 0 && tasks.length === 0 ? (
+                  <EmptyState icon={KanbanIcon} title="No tasks yet" description="Add tasks to see them on the Gantt timeline." />
+                ) : <GanttView project={project} tasks={visibleTasks} nowIso={new Date().toISOString()} onOpen={setOpenTask} />
+              ) : view === "calendar" ? (
+                <CalendarView tasks={visibleTasks} onOpen={setOpenTask} />
+              ) : view === "workload" ? (
+                <WorkloadView tasks={tasks} team={team} />
+              ) : view === "dashboard" ? (
+                <DashboardView project={project} />
+              ) : visibleTasks.length === 0 && tasks.length === 0 ? (
                 <EmptyState
                   icon={view === "kanban" ? KanbanIcon : ListIcon}
                   title="No tasks yet"
