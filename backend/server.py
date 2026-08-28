@@ -699,17 +699,71 @@ async def delete_mailbox(mid: str, user=Depends(current_user)):
 # ----------------------------- Campaigns -------------------------------------
 @api.get("/campaigns")
 async def list_campaigns(user=Depends(current_user)):
-    items = await db.campaigns.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(500)
+    wid = user["workspace_id"]
+    items = await db.campaigns.find({"workspace_id": wid}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    if not items:
+        return []
+    cids = [c["id"] for c in items]
+
+    # One aggregation per collection instead of N× per-campaign queries.
+    # The previous loop did `events.find + 3× count_documents` per campaign —
+    # with 10 campaigns that's 40 round-trips and full scans on (workspace_id,
+    # campaign_id) which had no index. With 242 chunks already in the SWA
+    # build, the page felt instant everywhere except here.
+    event_counts: Dict[str, Dict[str, int]] = {}
+    async for doc in db.events.aggregate([
+        {"$match": {"workspace_id": wid, "campaign_id": {"$in": cids}}},
+        {"$group": {"_id": {"cid": "$campaign_id", "type": "$type"}, "count": {"$sum": 1}}},
+    ]):
+        cid = doc["_id"]["cid"]
+        typ = doc["_id"]["type"]
+        event_counts.setdefault(cid, {})[typ] = doc["count"]
+
+    queue_counts: Dict[str, Dict[str, int]] = {}
+    async for doc in db.send_queue.aggregate([
+        {"$match": {"workspace_id": wid, "campaign_id": {"$in": cids},
+                    "status": {"$in": ["pending", "sending", "failed"]}}},
+        {"$group": {"_id": {"cid": "$campaign_id", "status": "$status"}, "count": {"$sum": 1}}},
+    ]):
+        cid = doc["_id"]["cid"]
+        status = doc["_id"]["status"]
+        queue_counts.setdefault(cid, {})[status] = doc["count"]
+
     for c in items:
-        c["stats"] = await _campaign_stats(c["id"], user["workspace_id"])
+        ec = event_counts.get(c["id"], {})
+        qc = queue_counts.get(c["id"], {})
+        sent = ec.get("sent", 0)
+        opened = ec.get("opened", 0)
+        clicked = ec.get("clicked", 0)
+        replied = ec.get("replied", 0)
+        meetings = ec.get("meeting_booked", 0)
+        bounced = ec.get("bounced", 0)
+        c["stats"] = {
+            "sent": sent,
+            "opened": opened,
+            "clicked": clicked,
+            "replied": replied,
+            "meetings": meetings,
+            "bounced": bounced,
+            "open_rate": round(opened / sent * 100, 1) if sent else 0,
+            "reply_rate": round(replied / sent * 100, 1) if sent else 0,
+            "click_rate": round(clicked / sent * 100, 1) if sent else 0,
+            "bounce_rate": round(bounced / sent * 100, 1) if sent else 0,
+            "meeting_rate": round(meetings / sent * 100, 1) if sent else 0,
+            "queue_pending": qc.get("pending", 0),
+            "queue_sending": qc.get("sending", 0),
+            "queue_failed": qc.get("failed", 0),
+        }
         c["lead_count"] = len(c.get("lead_ids") or [])
         c["step_count"] = len(c.get("steps") or [])
-        steps = c.get("steps") or []
-        c["duration_days"] = max((s.get("day", 0) for s in steps), default=0)
+        c["duration_days"] = max((s.get("day", 0) for s in (c.get("steps") or [])), default=0)
     return items
 
 
 async def _campaign_stats(cid: str, wid: str) -> Dict[str, Any]:
+    # Kept for single-campaign callers (get_campaign, analytics). For the
+    # list view we now use the batched aggregation above — single source
+    # so the two paths cannot drift.
     events = await db.events.find({"campaign_id": cid, "workspace_id": wid}, {"_id": 0}).to_list(5000)
     sent = sum(1 for e in events if e["type"] == "sent")
     opened = sum(1 for e in events if e["type"] == "opened")
@@ -7176,6 +7230,7 @@ async def _create_indexes():
         await db.lead_tasks.create_index([("workspace_id", 1), ("status", 1), ("due_at", 1)])
         await db.lead_tasks.create_index([("workspace_id", 1), ("lead_id", 1)])
         await db.events.create_index([("workspace_id", 1), ("type", 1)])
+        await db.events.create_index([("workspace_id", 1), ("campaign_id", 1)])
         await db.events.create_index([("workspace_id", 1), ("at", -1)])
         await db.suppressions.create_index([("workspace_id", 1), ("email", 1)], unique=True)
         await db.calls.create_index([("workspace_id", 1), ("created_at", -1)])
@@ -7260,6 +7315,7 @@ async def _create_indexes():
         await db.oauth_refresh_tokens.create_index("token", unique=True)
         await db.oauth_refresh_tokens.create_index("grant_id", unique=True, sparse=True)
         await db.mcp_rate_limits.create_index([("workspace_id", 1), ("minute", 1)], unique=True)
+        await db.campaigns.create_index([("workspace_id", 1), ("created_at", -1)])
         await db.projects.create_index([("workspace_id", 1), ("id", 1)])
         await db.projects.create_index([("workspace_id", 1), ("created_at", -1)])
         await db.project_tasks.create_index([("workspace_id", 1), ("project_id", 1), ("status", 1)])
