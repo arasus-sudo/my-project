@@ -80,6 +80,20 @@ export default function Mailboxes() {
     } catch { toast.error("Failed to remove mailbox"); }
   };
 
+  const [editingCap, setEditingCap] = useState({});
+  const [capDraft, setCapDraft] = useState({});
+
+  const updateCap = async (id) => {
+    const cap = Number(capDraft[id]);
+    if (!cap || cap < 1 || cap > 1000) { toast.error("Daily cap must be between 1 and 1000"); return; }
+    try {
+      await api.put(`/mailboxes/${id}`, { daily_cap: cap });
+      toast.success(`Daily limit updated to ${cap}/day`);
+      setEditingCap((s) => ({ ...s, [id]: false }));
+      load();
+    } catch (err) { toast.error(err?.response?.data?.detail || "Failed to update limit"); }
+  };
+
   return (
     <div>
       <PageHeader
@@ -194,7 +208,7 @@ export default function Mailboxes() {
                   </button>
                   {m.warmup_enabled && (
                     <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 4, lineHeight: "15px" }}>
-                      caps sends at {Math.min(cap, 5 + (m.warmup_day || 1) * 5)}/day while ramping
+                      warming — Day {m.warmup_day} · {cap}/day{m.warmup_target && m.warmup_target !== cap ? ` → ${m.warmup_target}/day target` : ""}
                     </div>
                   )}
                 </div>
@@ -205,6 +219,23 @@ export default function Mailboxes() {
                   </div>
                   <ProgressBar className="mt-1.5" segments={[{ value: m.sent_today || 0, color: "var(--color-primary)" }]} total={cap} />
                 </div>
+              </div>
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border-subtle)", fontSize: 11.5 }}>
+                <div style={{ color: "var(--text-tertiary)" }}>Daily limit</div>
+                {editingCap[m.id] ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Input type="number" min={1} max={1000} value={capDraft[m.id] ?? cap} onChange={(e) => setCapDraft({ ...capDraft, [m.id]: e.target.value })} className="w-24" data-testid={`cap-input-${m.id}`} />
+                    <Button size="xs" variant="primary" onClick={() => updateCap(m.id)} data-testid={`cap-save-${m.id}`}>Save</Button>
+                    <Button size="xs" variant="tertiary" onClick={() => setEditingCap({ ...editingCap, [m.id]: false })}>Cancel</Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="tnum" style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{cap}/day</span>
+                    <button onClick={() => { setEditingCap({ ...editingCap, [m.id]: true }); setCapDraft({ ...capDraft, [m.id]: String(cap) }); }} data-testid={`cap-edit-${m.id}`} style={{ fontSize: 11.5, color: "var(--text-link)", textDecoration: "underline" }}>Edit</button>
+                    {m.warmup_enabled && <span style={{ fontSize: 10.5, color: "var(--text-tertiary)" }}>warming to {m.warmup_target || cap}/day</span>}
+                  </div>
+                )}
+                {cap > 500 && <div style={{ fontSize: 10.5, color: "var(--color-warning)", marginTop: 4 }}>High volume — ensure domain authentication passes and mailbox is fully warmed.</div>}
               </div>
             </Card>
           );
@@ -236,10 +267,10 @@ export default function Mailboxes() {
             <Input required type="email" label="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="mailbox-email" />
             <Input label="Display name" optional value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} data-testid="mailbox-display" />
             <Input
-              type="number" min={10} max={500} label="Daily cap" value={form.daily_cap}
+              type="number" min={1} max={1000} label="Daily cap" value={form.daily_cap}
               onChange={(e) => setForm({ ...form, daily_cap: Number(e.target.value) })}
               data-testid="mailbox-cap"
-              help="50/day is a safe ceiling for a warmed mailbox. More than that and you're gambling."
+              help={form.daily_cap > 500 ? "High volume — ensure SPF/DKIM/DMARC pass and warmup is complete, or deliverability will suffer." : "50/day is safe for warmed mailboxes. You can raise this to 1000/day once deliverability is proven."}
             />
           </form>
         </ModalContent>

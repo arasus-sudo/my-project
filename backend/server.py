@@ -559,6 +559,9 @@ async def create_mailbox(body: MailboxIn, user=Depends(current_user)):
     import mailbox_client
 
     m = body.model_dump()
+    cap = int(m.get("daily_cap", 50) or 50)
+    if not 1 <= cap <= 1000:
+        raise HTTPException(400, "daily_cap must be between 1 and 1000")
     m.update({
         "id": new_id(),
         "workspace_id": user["workspace_id"],
@@ -566,7 +569,8 @@ async def create_mailbox(body: MailboxIn, user=Depends(current_user)):
         "status": "disconnected",
         "warmup_enabled": True,
         "warmup_day": 1,
-        "warmup_target": m.get("daily_cap", 50),
+        "warmup_target": cap,
+        "daily_cap": _warmup_daily_cap(1, cap),
         # Unknown until we actually resolve it — not True by default.
         "dns": {"spf": False, "dkim": False, "dmarc": False, "checked": False},
         "sent_today": 0,
@@ -629,12 +633,12 @@ async def get_warmup_status(mid: str, user=Depends(current_user)):
     if not m:
         raise HTTPException(404, "not found")
     current_day = m.get("warmup_day", 1)
-    max_daily = _warmup_daily_cap(current_day)
+    max_daily = _warmup_daily_cap(current_day, m.get("warmup_target", WARMUP_DEFAULT_TARGET))
     today = datetime.utcnow().isoformat()[:10]
     usage = await db.mailbox_usage.find_one(
         {"workspace_id": user["workspace_id"], "date": today})
     sent_today = (usage.get("by_mailbox") or {}).get(mid, 0) if usage else 0
-    schedule = [_warmup_daily_cap(d) for d in range(1, 31)]
+    schedule = [_warmup_daily_cap(d, m.get("warmup_target", WARMUP_DEFAULT_TARGET)) for d in range(1, 31)]
     return {
         "enabled": m.get("warmup_enabled", True),
         "current_day": current_day,
@@ -645,13 +649,15 @@ async def get_warmup_status(mid: str, user=Depends(current_user)):
     }
 
 
-def _warmup_daily_cap(day: int) -> int:
-    """Gradual ramp: week 1=5/day, week2=10, wk3=20, wk4=30, then target."""
-    if day <= 7: return 5
-    if day <= 14: return 10
-    if day <= 21: return 20
-    if day <= 28: return 30
-    return 50
+WARMUP_START_CAP = 5
+WARMUP_DAILY_INCREMENT = 3
+WARMUP_DEFAULT_TARGET = 50
+
+
+def _warmup_daily_cap(day: int, target: int = WARMUP_DEFAULT_TARGET) -> int:
+    """Sends allowed on warmup day `day`, ramping toward `target`."""
+    target = max(1, int(target or WARMUP_DEFAULT_TARGET))
+    return max(1, min(target, WARMUP_START_CAP + (day - 1) * WARMUP_DAILY_INCREMENT))
 
 
 @api.post("/mailboxes/{mid}/warmup/start")
@@ -676,15 +682,41 @@ async def toggle_warmup(mid: str, user=Depends(current_user)):
     update = {"warmup_enabled": enabled}
     if enabled:
         day = m.get("warmup_day", 1)
-        update["daily_cap"] = _warmup_daily_cap(day)
+        update["daily_cap"] = _warmup_daily_cap(day, m.get("warmup_target", WARMUP_DEFAULT_TARGET))
     else:
         # Pausing warmup must actually unblock sending — `_pick_mailbox` gates
         # on daily_cap alone, so leaving the ramped-down cap in place would keep
         # failing every send with "no eligible mailbox" right after the user
         # paused warmup. Restore the full cap.
-        update["daily_cap"] = m.get("warmup_target", 50)
+        update["daily_cap"] = m.get("warmup_target", WARMUP_DEFAULT_TARGET)
     await db.mailboxes.update_one({"id": mid}, {"$set": update})
     return {"warmup_enabled": enabled}
+
+
+@api.put("/mailboxes/{mid}")
+async def update_mailbox(mid: str, body: Dict[str, Any], user=Depends(current_user)):
+    m = await db.mailboxes.find_one({"id": mid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not m:
+        raise HTTPException(404, "not found")
+    updates: Dict[str, Any] = {}
+    if "daily_cap" in body:
+        try:
+            cap = int(body["daily_cap"])
+        except Exception:
+            raise HTTPException(400, "daily_cap must be a number")
+        if not 1 <= cap <= 1000:
+            raise HTTPException(400, "daily_cap must be between 1 and 1000")
+        updates["warmup_target"] = cap
+        if m.get("warmup_enabled"):
+            updates["daily_cap"] = _warmup_daily_cap(m.get("warmup_day", 1), cap)
+        else:
+            updates["daily_cap"] = cap
+    if "display_name" in body:
+        updates["display_name"] = str(body["display_name"])[:100]
+    if not updates:
+        raise HTTPException(400, "No fields to update")
+    await db.mailboxes.update_one({"id": mid}, {"$set": updates})
+    return await db.mailboxes.find_one({"id": mid, "workspace_id": user["workspace_id"]}, {"_id": 0})
 
 
 @api.delete("/mailboxes/{mid}")
