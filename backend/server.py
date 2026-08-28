@@ -700,7 +700,12 @@ async def delete_mailbox(mid: str, user=Depends(current_user)):
 @api.get("/campaigns")
 async def list_campaigns(user=Depends(current_user)):
     wid = user["workspace_id"]
-    items = await db.campaigns.find({"workspace_id": wid}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Exclude the per-lead personalized payload (can be MBs for a 1k-lead
+    # campaign) — the list view only needs counts/stats, never the bodies.
+    # Without this projection a 10-campaign list ships ~5–10 MB of HTML.
+    items = await db.campaigns.find(
+        {"workspace_id": wid}, {"_id": 0, "personalized_emails": 0}
+    ).sort("created_at", -1).to_list(500)
     if not items:
         return []
     cids = [c["id"] for c in items]
