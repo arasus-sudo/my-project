@@ -107,6 +107,7 @@ const HrmseqRecruitment = lazy(() => import("./pages/HrmseqRecruitment"));
 const HrmseqOnboarding = lazy(() => import("./pages/HrmseqOnboarding"));
 const HrmseqLeave = lazy(() => import("./pages/HrmseqLeave"));
 const HrmseqReviews = lazy(() => import("./pages/HrmseqReviews"));
+const ControlTower = lazy(() => import("./pages/ControlTower"));
 const AccountingOverview = lazy(() => import("./pages/AccountingOverview"));
 const ChartOfAccounts = lazy(() => import("./pages/ChartOfAccounts"));
 const JournalEntries = lazy(() => import("./pages/JournalEntries"));
@@ -245,6 +246,7 @@ function App() {
               <Route path="accounting-eq/invoices" element={<AccountingInvoices />} />
               <Route path="accounting-eq/bills" element={<AccountingBills />} />
               <Route path="accounting-eq/reports" element={<AccountingReports />} />
+              <Route path="control-tower" element={<ControlTower />} />
               <Route path="webhooks" element={<Webhooks />} />
               <Route path="hubspot" element={<HubSpotSettings />} />
               <Route path="inbox" element={<Inbox />} />

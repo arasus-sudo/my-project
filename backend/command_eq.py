@@ -180,6 +180,27 @@ def _build_tools() -> List[Dict[str, Any]]:
 TOOLS = _build_tools()
 TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
 
+# Maps each tool to its owning agent for kill-switch governance.
+TOOL_AGENT: Dict[str, str] = {
+    "workspace_search": "command",
+    "search_leads": "crm",
+    "get_lead": "crm",
+    "list_campaigns": "pitch",
+    "get_campaign": "pitch",
+    "deals_overview": "crm",
+    "analytics_dashboard": "pitch",
+    "recent_activities": "command",
+    "team_overview": "command",
+    "bookings_upcoming": "schedule",
+    "knowledge_search": "knowledge",
+    "projects_overview": "projects",
+    "billing_status": "command",
+    "create_lead": "crm",
+    "add_lead_note": "crm",
+    "create_project": "projects",
+    "create_project_task": "projects",
+}
+
 
 def _tools_block() -> str:
     lines = []
@@ -306,6 +327,16 @@ async def chat(body: ChatIn, user=Depends(current_user)):
             step_results.append({"tool": name, "status": "denied",
                                  "excerpt": "write actions need org_admin/campaign_manager"})
             continue
+        # Control Tower kill-switch — an org_admin can disable an agent workspace-wide.
+        try:
+            from control_tower import is_agent_enabled
+            agent_key = TOOL_AGENT.get(name, "command")
+            if not await is_agent_enabled(wid, agent_key):
+                step_results.append({"tool": name, "status": "blocked",
+                                     "excerpt": f"agent '{agent_key}' is disabled via Control Tower"})
+                continue
+        except Exception:
+            pass
         args = step.get("args") or {}
         missing = [r for r in spec["required"] if not args.get(r)]
         if missing:

@@ -3143,19 +3143,41 @@ async def _llm_chat(system: str, user_text: str, session_id: str, user: Optional
     """Shared LLM chat — routes to phi-4 | perplexity | anthropic (see _resolve_provider).
 
     Both providers: rate-limited, retried with backoff, metered into
-    token_usage_log, and gated on the daily LLM quota when `user` is passed."""
-    if not _llm_configured():
-        raise RuntimeError("no LLM API key configured (set PHI4_API_KEY, PERPLEXITY_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY)")
-    if user and not await _rate_ok(user):
-        raise RuntimeError("daily LLM quota exceeded")
-    prov = _resolve_provider(provider)
-    if prov == "phi-4":
-        return await _llm_chat_phi4(system, user_text, user, max_tokens, agent, action, model)
-    if prov == "perplexity":
-        return await _llm_chat_perplexity(system, user_text, user, max_tokens, agent, action, model)
-    if prov == "openai":
-        return await _llm_chat_openai(system, user_text, user, max_tokens, agent, action, model)
-    return await _llm_chat_anthropic(system, user_text, user, max_tokens, agent, action, model)
+    token_usage_log, and gated on the daily LLM quota when `user` is passed.
+    Every call also emits an OTel GenAI span into agent_traces (via
+    observability.record_genai_span) — the Control Tower's Observe layer."""
+    t0 = datetime.now(timezone.utc)
+    try:
+        if not _llm_configured():
+            raise RuntimeError("no LLM API key configured (set PHI4_API_KEY, PERPLEXITY_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY)")
+        if user and not await _rate_ok(user):
+            raise RuntimeError("daily LLM quota exceeded")
+        prov = _resolve_provider(provider)
+        if prov == "phi-4":
+            return await _llm_chat_phi4(system, user_text, user, max_tokens, agent, action, model)
+        if prov == "perplexity":
+            return await _llm_chat_perplexity(system, user_text, user, max_tokens, agent, action, model)
+        if prov == "openai":
+            return await _llm_chat_openai(system, user_text, user, max_tokens, agent, action, model)
+        return await _llm_chat_anthropic(system, user_text, user, max_tokens, agent, action, model)
+    except Exception as ex:
+        try:
+            from observability import record_genai_span
+            await record_genai_span(
+                workspace_id=(user or {}).get("workspace_id"),
+                user_id=(user or {}).get("id"),
+                gen_ai_system="unknown",
+                gen_ai_operation="chat",
+                gen_ai_agent_name=agent,
+                gen_ai_tool_name=action,
+                latency_ms=int((datetime.now(timezone.utc) - t0).total_seconds() * 1000),
+                status="error",
+                error=str(ex)[:500],
+                session_id=session_id,
+            )
+        except Exception:
+            pass
+        raise
 
 
 async def _llm_chat_phi4(system: str, user_text: str, user: Optional[Dict[str, Any]] = None,
@@ -3167,6 +3189,7 @@ async def _llm_chat_phi4(system: str, user_text: str, user: Optional[Dict[str, A
     mdl = model or PHI4_MODEL
     last_err = None
     for attempt in range(3):
+        t0 = datetime.now(timezone.utc)
         try:
             resp = await client.chat.completions.create(
                 model=mdl,
@@ -3183,6 +3206,25 @@ async def _llm_chat_phi4(system: str, user_text: str, user: Optional[Dict[str, A
                     resp.usage.prompt_tokens, resp.usage.completion_tokens,
                     agent=agent, action=action, user_id=user.get("id"),
                 )
+            # OTel GenAI span — Control Tower Observe layer
+            try:
+                from observability import record_genai_span
+                await record_genai_span(
+                    workspace_id=(user or {}).get("workspace_id"),
+                    user_id=(user or {}).get("id"),
+                    gen_ai_system="phi-4",
+                    gen_ai_operation="chat",
+                    gen_ai_request_model=mdl,
+                    gen_ai_response_model=mdl,
+                    gen_ai_agent_name=agent,
+                    gen_ai_tool_name=action,
+                    input_tokens=getattr(getattr(resp, "usage", None), "prompt_tokens", 0) or 0,
+                    output_tokens=getattr(getattr(resp, "usage", None), "completion_tokens", 0) or 0,
+                    latency_ms=int((datetime.now(timezone.utc) - t0).total_seconds() * 1000),
+                    status="ok",
+                )
+            except Exception:
+                pass
             return resp.choices[0].message.content or ""
         except openai.RateLimitError as ex:
             last_err = ex
@@ -3201,6 +3243,7 @@ async def _llm_chat_perplexity(system: str, user_text: str, user: Optional[Dict[
     mdl = model or PERPLEXITY_MODEL
     last_err = None
     for attempt in range(3):
+        t0 = datetime.now(timezone.utc)
         try:
             resp = await client.chat.completions.create(
                 model=mdl,
@@ -3217,6 +3260,24 @@ async def _llm_chat_perplexity(system: str, user_text: str, user: Optional[Dict[
                     resp.usage.prompt_tokens, resp.usage.completion_tokens,
                     agent=agent, action=action, user_id=user.get("id"),
                 )
+            try:
+                from observability import record_genai_span
+                await record_genai_span(
+                    workspace_id=(user or {}).get("workspace_id"),
+                    user_id=(user or {}).get("id"),
+                    gen_ai_system="perplexity",
+                    gen_ai_operation="chat",
+                    gen_ai_request_model=mdl,
+                    gen_ai_response_model=mdl,
+                    gen_ai_agent_name=agent,
+                    gen_ai_tool_name=action,
+                    input_tokens=getattr(getattr(resp, "usage", None), "prompt_tokens", 0) or 0,
+                    output_tokens=getattr(getattr(resp, "usage", None), "completion_tokens", 0) or 0,
+                    latency_ms=int((datetime.now(timezone.utc) - t0).total_seconds() * 1000),
+                    status="ok",
+                )
+            except Exception:
+                pass
             return resp.choices[0].message.content or ""
         except openai.RateLimitError as ex:
             last_err = ex
@@ -3235,6 +3296,7 @@ async def _llm_chat_openai(system: str, user_text: str, user: Optional[Dict[str,
     mdl = model or OPENAI_MODEL
     last_err = None
     for attempt in range(3):
+        t0 = datetime.now(timezone.utc)
         try:
             resp = await client.chat.completions.create(
                 model=mdl,
@@ -3251,6 +3313,24 @@ async def _llm_chat_openai(system: str, user_text: str, user: Optional[Dict[str,
                     resp.usage.prompt_tokens, resp.usage.completion_tokens,
                     agent=agent, action=action, user_id=user.get("id"),
                 )
+            try:
+                from observability import record_genai_span
+                await record_genai_span(
+                    workspace_id=(user or {}).get("workspace_id"),
+                    user_id=(user or {}).get("id"),
+                    gen_ai_system="openai",
+                    gen_ai_operation="chat",
+                    gen_ai_request_model=mdl,
+                    gen_ai_response_model=mdl,
+                    gen_ai_agent_name=agent,
+                    gen_ai_tool_name=action,
+                    input_tokens=getattr(getattr(resp, "usage", None), "prompt_tokens", 0) or 0,
+                    output_tokens=getattr(getattr(resp, "usage", None), "completion_tokens", 0) or 0,
+                    latency_ms=int((datetime.now(timezone.utc) - t0).total_seconds() * 1000),
+                    status="ok",
+                )
+            except Exception:
+                pass
             return resp.choices[0].message.content or ""
         except openai.RateLimitError as ex:
             last_err = ex
@@ -3269,6 +3349,7 @@ async def _llm_chat_anthropic(system: str, user_text: str, user: Optional[Dict[s
     mdl = model or ANTHROPIC_MODEL
     last_err = None
     for attempt in range(3):
+        t0 = datetime.now(timezone.utc)
         try:
             resp = await client.messages.create(
                 model=mdl,
@@ -3283,6 +3364,24 @@ async def _llm_chat_anthropic(system: str, user_text: str, user: Optional[Dict[s
                     resp.usage.input_tokens, resp.usage.output_tokens,
                     agent=agent, action=action, user_id=user.get("id"),
                 )
+            try:
+                from observability import record_genai_span
+                await record_genai_span(
+                    workspace_id=(user or {}).get("workspace_id"),
+                    user_id=(user or {}).get("id"),
+                    gen_ai_system="anthropic",
+                    gen_ai_operation="chat",
+                    gen_ai_request_model=mdl,
+                    gen_ai_response_model=mdl,
+                    gen_ai_agent_name=agent,
+                    gen_ai_tool_name=action,
+                    input_tokens=getattr(getattr(resp, "usage", None), "input_tokens", 0) or 0,
+                    output_tokens=getattr(getattr(resp, "usage", None), "output_tokens", 0) or 0,
+                    latency_ms=int((datetime.now(timezone.utc) - t0).total_seconds() * 1000),
+                    status="ok",
+                )
+            except Exception:
+                pass
             return "".join(b.text for b in resp.content if b.type == "text") or ""
         except anthropic.RateLimitError as ex:
             last_err = ex
@@ -6457,11 +6556,14 @@ from email_templates import email_template_router, email_public_router
 from projects import projects_router
 from knowledge import kb_router
 from command_eq import command_router
+from control_tower import control_router, admin_control_router
 api.include_router(pitch_router)
 api.include_router(crm_router)
 api.include_router(projects_router)
 api.include_router(kb_router)
 api.include_router(command_router)
+api.include_router(control_router)
+api.include_router(admin_control_router)
 api.include_router(pitch_public_router)
 api.include_router(voice_router)
 api.include_router(voice_public_router)
@@ -7326,6 +7428,10 @@ async def _create_indexes():
         await db.kb_chunks.create_index([("workspace_id", 1), ("doc_id", 1)])
         await db.command_sessions.create_index([("workspace_id", 1), ("user_id", 1), ("updated_at", -1)])
         await db.command_runs.create_index([("workspace_id", 1), ("created_at", -1)])
+        await db.agent_traces.create_index([("workspace_id", 1), ("at", -1)])
+        await db.agent_traces.create_index([("workspace_id", 1), ("gen_ai_agent_name", 1)])
+        await db.agent_traces.create_index([("trace_id", 1)])
+        await db.agent_registry.create_index([("workspace_id", 1), ("agent_key", 1)], unique=True)
         logger.info("indexes ensured")
     except Exception as ex:
         logger.warning("index setup: %s", ex)
@@ -7513,6 +7619,10 @@ async def _start_scheduler():
         # rather than a full re-render.
         scheduler.add_job(_tracked_tick, "interval", hours=24, args=["signature_banner_refresh", run_signature_banner_tick],
                           id="signature_banner_refresh", max_instances=1, coalesce=True)
+        # Nightly LLM-as-judge sampling over recent traces — drift detection for the Observe layer.
+        from control_tower import run_eval_sampling_tick
+        scheduler.add_job(_tracked_tick, "interval", hours=6, args=["eval_sampling", run_eval_sampling_tick],
+                          id="eval_sampling", max_instances=1, coalesce=True)
         scheduler.start()
         logger.info("scheduler started (reminders 15m, sends 2m, reply polling 10m, "
                    "social publish 2m, social engagement 10m, RSS poll 30m, site recrawl 24h, "
