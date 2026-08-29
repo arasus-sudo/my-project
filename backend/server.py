@@ -215,6 +215,7 @@ class CampaignIn(BaseModel):
     signature_id: Optional[str] = None
     batch_size: int = 10
     phased_generation: bool = False
+    auto_advance: bool = False
     folder_id: Optional[str] = None
     tags: List[str] = []
 
@@ -1979,17 +1980,35 @@ async def run_campaign_engine(cid: str, user=Depends(current_user)):
                     "personalized_opener": "",
                     "status": "draft",
                     "generated_at": now_iso(),
-                }}}
-            )
+                }}})
         return {"generated": len(to_generate), "job_id": "", "message": f"Emails ready for {len(to_generate)} leads"}
 
+    # Create a generation job record for tracking
     gen_id = new_id()
-    await db.campaigns.update_one({"id": cid}, {"$set": {f"generation_{gen_id}": {"status": "running", "total": len(to_generate), "done": 0, "errors": []}}})
-    asyncio.create_task(_run_generation_background(cid, wid, to_generate, campaign, user, gen_id))
+    job_doc = {
+        "id": gen_id,
+        "workspace_id": wid,
+        "campaign_id": cid,
+        "status": "pending",
+        "total": len(to_generate),
+        "done": 0,
+        "errors": [],
+        "lead_ids": to_generate,
+        "current_batch_index": 0,
+        "batch_size": 50,  # Process in batches of 50 for better reliability
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+        "user_id": user["id"],
+        "campaign_type": campaign.get("campaign_type", "ai"),
+    }
+    await db.generation_jobs.insert_one(job_doc)
+
+    # Start background processing
+    asyncio.create_task(_run_generation_job(gen_id, wid, cid, to_generate, campaign, user))
     return {"job_id": gen_id, "generating": len(to_generate), "message": f"Generating emails for {len(to_generate)} leads in background"}
 
-async def _run_generation_background(cid: str, wid: str, to_generate: list, campaign: dict, user: dict, gen_id: str):
-    """Background task: generate personalized emails, update campaign doc with progress."""
+async def _run_generation_job(gen_id: str, wid: str, cid: str, to_generate: list, campaign: dict, user: dict):
+    """Background task: generate personalized emails in batches with retry logic."""
     from research_worker import get_research, summarize_for_prompt
     campaign_steps = campaign.get("steps", [])
     step_template = campaign_steps[0] if campaign_steps else {}
@@ -1997,71 +2016,162 @@ async def _run_generation_background(cid: str, wid: str, to_generate: list, camp
     campaign_name = ai_meta.get("service_name", campaign.get("goal", ""))
     campaign_goal = campaign.get("goal", "")
     campaign_tone = campaign.get("tone", "professional")
-    sem = asyncio.Semaphore(4)
-    done_count = 0
-
-    async def _gen_one(lid: str):
-        nonlocal done_count
-        async with sem:
-            try:
-                lead = await db.leads.find_one({"id": lid, "workspace_id": wid}, {"_id": 0})
-                if not lead:
-                    return
-                is_template = campaign.get("campaign_type") == "template"
-                lead_context = {k: lead.get(k) for k in ("first_name", "last_name", "title", "company", "email", "linkedin_url")}
-                if is_template:
-                    # Template campaign — no personalized opener, basic merge fields only
-                    body = step_template.get("body", "") or ""
-                    body_html = step_template.get("body_html", "") or ""
-                    await db.campaigns.update_one(
-                        {"id": cid},
-                        {"$push": {"personalized_emails": {
-                            "lead_id": lid, "subject": step_template.get("subject", ""),
-                            "body": body, "body_html": body_html,
-                            "personalized_opener": "",
-                            "status": "draft", "generated_at": now_iso(),
-                        }}}
-                    )
-                else:
-                    snd = await _sender_context(campaign, user)
-                    research_pack = await get_research(wid, lead)
-                    research_summary = summarize_for_prompt(research_pack)
-                    opener_raw = await _llm_chat(
-                        "You write ONE ice-breaker sentence that a cold sender opens their email with. You are the SENDER — never write as the lead or use their name/title/company as your identity; the LEAD is your prospect. Reference a REAL detail about the LEAD. 1-2 sentences, under 30 words, conversational, no greeting, no CTA, no subject line, no email body, no sign-off. Output ONLY the opener text. No quotes, no JSON, no preamble.\n\nExample:\nSENDER: Alex from Nova Web Works\nLEAD: Tom R., COO, Ridgeware — raised $12M Series A last month\nOUTPUT: Congrats on Ridgeware's Series A — the $12M round must have the operations team moving fast.",
-                        f"SENDER (you): {snd['name'] or '(sender)'} at {snd['company'] or 'your company'} — {snd['what_we_do'] or 'Described by the campaign below.'}\nYou write TO the lead — the lead is your prospect, not you.\n\nLEAD PROFILE (recipient):\n{json.dumps(lead_context, indent=2)}\n\nLEAD RESEARCH:\n{research_summary}\n\nCAMPAIGN SERVICE: {campaign_name}\nCAMPAIGN GOAL: {campaign_goal}\nCAMPAIGN TONE: {campaign_tone}\n\nWrite the ice-breaker sentence FROM the sender TO this lead:",
-                        f"gen-{lid[:8]}", user=user, max_tokens=120
-                    )
-                    personalized_opener = _extract_opener(opener_raw)
-                    merged_body = (step_template.get("body", "") or "").replace("{{personalized_opener}}", personalized_opener)
-                    merged_html = (step_template.get("body_html", "") or "").replace("{{personalized_opener}}", personalized_opener) if step_template.get("body_html") else ""
-                    await db.campaigns.update_one(
-                        {"id": cid},
-                        {"$push": {"personalized_emails": {
-                            "lead_id": lid, "subject": step_template.get("subject", ""),
-                            "body": merged_body, "body_html": merged_html,
+    
+    # Update job status to running
+    await db.generation_jobs.update_one(
+        {"id": gen_id},
+        {"$set": {"status": "running", "updated_at": now_iso()}}
+    )
+    
+    batch_size = 50  # Process 50 leads at a time
+    max_retries = 3
+    sem = asyncio.Semaphore(3)  # Max 3 concurrent generations to avoid rate limits
+    
+    for batch_start in range(0, len(to_generate), batch_size):
+        batch_leads = to_generate[batch_start:batch_start + batch_size]
+        
+        # Update batch progress
+        await db.generation_jobs.update_one(
+            {"id": gen_id},
+            {"$set": {
+                "current_batch_index": batch_start // batch_size,
+                "updated_at": now_iso()
+            }}
+        )
+        
+        # Process batch with semaphore
+        async def _gen_one(lid: str):
+            for attempt in range(max_retries):
+                async with sem:
+                    try:
+                        lead = await db.leads.find_one({"id": lid, "workspace_id": wid}, {"_id": 0})
+                        if not lead:
+                            return
+                        lead_context = {k: lead.get(k) for k in ("first_name", "last_name", "title", "company", "email", "linkedin_url")}
+                        
+                        snd = await _sender_context(campaign, user)
+                        research_pack = await get_research(wid, lead)
+                        research_summary = summarize_for_prompt(research_pack)
+                        opener_raw = await _llm_chat(
+                            "You write ONE ice-breaker sentence that a cold sender opens their email with. You are the SENDER — never write as the lead or use their name/title/company as your identity; the LEAD is your prospect. Reference a REAL detail about the LEAD. 1-2 sentences, under 30 words, conversational, no greeting, no CTA, no subject line, no email body, no sign-off. Output ONLY the opener text. No quotes, no JSON, no preamble.\n\nExample:\nSENDER: Alex from Nova Web Works\nLEAD: Tom R., COO, Ridgeware — raised $12M Series A last month\nOUTPUT: Congrats on Ridgeware's Series A — the $12M round must have the operations team moving fast.",
+                            f"SENDER (you): {snd['name'] or '(sender)'} at {snd['company'] or 'your company'} — {snd['what_we_do'] or 'Described by the campaign below.'}\nYou write TO the lead — the lead is your prospect, not you.\n\nLEAD PROFILE (recipient):\n{json.dumps(lead_context, indent=2)}\n\nLEAD RESEARCH:\n{research_summary}\n\nCAMPAIGN SERVICE: {campaign_name}\nCAMPAIGN GOAL: {campaign_goal}\nCAMPAIGN TONE: {campaign_tone}\n\nWrite the ice-breaker sentence FROM the sender TO this lead:",
+                            f"gen-{lid[:8]}", user=user, max_tokens=120
+                        )
+                        personalized_opener = _extract_opener(opener_raw)
+                        merged_body = (step_template.get("body", "") or "").replace("{{personalized_opener}}", personalized_opener)
+                        merged_html = (step_template.get("body_html", "") or "").replace("{{personalized_opener}}", personalized_opener) if step_template.get("body_html") else ""
+                        
+                        # Upsert personalized email
+                        entry = {
+                            "lead_id": lid,
+                            "subject": step_template.get("subject", ""),
+                            "body": merged_body,
+                            "body_html": merged_html,
                             "personalized_opener": personalized_opener,
                             "research": {"summary": research_summary, "has_signal": research_pack.get("has_signal", False)},
-                            "status": "draft", "generated_at": now_iso(),
-                        }}}
-                    )
-            except Exception as ex:
-                await db.campaigns.update_one({"id": cid}, {"$push": {f"generation_{gen_id}.errors": {"lead_id": lid, "error": str(ex)}}})
-            finally:
-                done_count += 1
-                await db.campaigns.update_one({"id": cid}, {"$set": {f"generation_{gen_id}.done": done_count}})
-
-    await asyncio.gather(*(_gen_one(lid) for lid in to_generate), return_exceptions=True)
-    await db.campaigns.update_one({"id": cid}, {"$set": {f"generation_{gen_id}.status": "complete"}})
+                            "status": "draft",
+                            "generated_at": now_iso(),
+                        }
+                        await db.campaigns.update_one(
+                            {"id": cid, "personalized_emails.lead_id": lid},
+                            {"$set": {"personalized_emails.$": entry}}
+                        )
+                        # If no existing entry, push new one
+                        result = await db.campaigns.update_one(
+                            {"id": cid, "personalized_emails.lead_id": {"$ne": lid}},
+                            {"$push": {"personalized_emails": entry}}
+                        )
+                        
+                        # Update job progress
+                        await db.generation_jobs.update_one(
+                            {"id": gen_id},
+                            {"$inc": {"done": 1}, "$set": {"updated_at": now_iso()}}
+                        )
+                        return  # Success, exit retry loop
+                        
+                    except Exception as ex:
+                        if attempt == max_retries - 1:
+                            # Last attempt failed, record error
+                            await db.generation_jobs.update_one(
+                                {"id": gen_id},
+                                {"$push": {"errors": {"lead_id": lid, "error": str(ex), "attempts": attempt + 1}}, "$set": {"updated_at": now_iso()}}
+                            )
+                            # Still count as done for progress tracking
+                            await db.generation_jobs.update_one(
+                                {"id": gen_id},
+                                {"$inc": {"done": 1}, "$set": {"updated_at": now_iso()}}
+                            )
+                        else:
+                            # Wait before retry with exponential backoff
+                            await asyncio.sleep(2 ** attempt)
+        
+        # Process all leads in this batch concurrently
+        await asyncio.gather(*(_gen_one(lid) for lid in batch_leads), return_exceptions=True)
+        
+        # Small delay between batches to avoid overwhelming the API
+        if batch_start + batch_size < len(to_generate):
+            await asyncio.sleep(1)
+    
+    # Mark job as complete
+    await db.generation_jobs.update_one(
+        {"id": gen_id},
+        {"$set": {"status": "complete", "updated_at": now_iso()}}
+    )
 
 @api.get("/campaigns/{cid}/generation-status")
 async def campaign_generation_status(cid: str, user=Depends(current_user)):
-    """Check the status of a background generation job."""
-    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
-    if not campaign:
-        raise HTTPException(404, "not found")
-    jobs = {k: v for k, v in campaign.items() if k.startswith("generation_")}
-    return {"jobs": jobs}
+    """Check the status of background generation jobs."""
+    wid = user["workspace_id"]
+    # Get latest generation job for this campaign
+    job = await db.generation_jobs.find_one(
+        {"campaign_id": cid, "workspace_id": wid},
+        {"_id": 0}
+    ).sort("created_at", -1)
+    
+    if not job:
+        # Fallback to legacy generation_ fields in campaign doc
+        campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
+        if not campaign:
+            raise HTTPException(404, "not found")
+        jobs = {k: v for k, v in campaign.items() if k.startswith("generation_")}
+        return {"jobs": jobs}
+    
+    return {"jobs": {job["id"]: job}}
 
+@api.post("/campaigns/{cid}/generation-pause")
+async def pause_generation_job(cid: str, user=Depends(current_user)):
+    """Pause a running generation job."""
+    wid = user["workspace_id"]
+    result = await db.generation_jobs.update_one(
+        {"campaign_id": cid, "workspace_id": wid, "status": "running"},
+        {"$set": {"status": "paused", "updated_at": now_iso()}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "No running generation job found")
+    return {"status": "paused"}
+
+@api.post("/campaigns/{cid}/generation-resume")
+async def resume_generation_job(cid: str, user=Depends(current_user)):
+    """Resume a paused generation job."""
+    wid = user["workspace_id"]
+    job = await db.generation_jobs.find_one(
+        {"campaign_id": cid, "workspace_id": wid, "status": "paused"},
+        {"_id": 0}
+    ).sort("created_at", -1)
+    
+    if not job:
+        raise HTTPException(404, "No paused generation job found")
+    
+    # Resume from where it left off
+    job["status"] = "pending"
+    await db.generation_jobs.update_one(
+        {"id": job["id"]},
+        {"$set": {"status": "pending", "updated_at": now_iso()}}
+    )
+    
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
+    asyncio.create_task(_run_generation_job(job["id"], wid, cid, job["lead_ids"], campaign, user))
+    return {"job_id": job["id"], "status": "resumed"}
 
 @api.post("/campaigns/{cid}/advance-batch")
 async def advance_campaign_batch(cid: str, user=Depends(current_user)):
@@ -2085,15 +2195,31 @@ async def advance_campaign_batch(cid: str, user=Depends(current_user)):
             return {"advanced": False, "message": "All batches have been generated — campaign is complete"}
         return {"advanced": False, "message": f"Batch {next_batch} has no leads assigned yet"}
     await db.campaigns.update_one({"id": cid}, {"$set": {"current_batch": next_batch}})
-    # Trigger generation for the new batch
+    # Trigger generation for the new batch using new job system
     if not await _rate_ok(user):
         raise HTTPException(429, "Daily AI quota exceeded")
     personalized = campaign.get("personalized_emails", [])
     to_generate = [lid for lid in batch_lead_ids if lid not in {p["lead_id"] for p in personalized}]
     if to_generate:
         gen_id = new_id()
-        await db.campaigns.update_one({"id": cid}, {"$set": {f"generation_{gen_id}": {"status": "running", "total": len(to_generate), "done": 0, "errors": []}}})
-        asyncio.create_task(_run_generation_background(cid, wid, to_generate, campaign, user, gen_id))
+        job_doc = {
+            "id": gen_id,
+            "workspace_id": wid,
+            "campaign_id": cid,
+            "status": "pending",
+            "total": len(to_generate),
+            "done": 0,
+            "errors": [],
+            "lead_ids": to_generate,
+            "current_batch_index": next_batch - 1,
+            "batch_size": 50,
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+            "user_id": user["id"],
+            "campaign_type": campaign.get("campaign_type", "ai"),
+        }
+        await db.generation_jobs.insert_one(job_doc)
+        asyncio.create_task(_run_generation_job(gen_id, wid, cid, to_generate, campaign, user))
         return {"advanced": True, "batch": next_batch, "generating": len(to_generate), "job_id": gen_id}
     return {"advanced": True, "batch": next_batch, "generating": 0, "message": "All leads in this batch already have emails"}
 
@@ -2140,6 +2266,7 @@ async def campaign_batch_status(cid: str, user=Depends(current_user)):
         "total_leads": len(lead_ids),
         "batches": batches,
         "all_batches_complete": all_approved and current_batch >= total_batches,
+        "auto_advance": campaign.get("auto_advance", False),
     }
 
 
@@ -6594,6 +6721,7 @@ from projects import projects_router
 from knowledge import kb_router
 from command_eq import command_router
 from control_tower import control_router, admin_control_router
+from optout import optout_router, optout_admin_router, optout_public_router
 api.include_router(pitch_router)
 api.include_router(crm_router)
 api.include_router(projects_router)
@@ -6601,6 +6729,9 @@ api.include_router(kb_router)
 api.include_router(command_router)
 api.include_router(control_router)
 api.include_router(admin_control_router)
+api.include_router(optout_router)
+api.include_router(optout_admin_router)
+api.include_router(optout_public_router)
 api.include_router(pitch_public_router)
 api.include_router(voice_router)
 api.include_router(voice_public_router)
@@ -7383,6 +7514,8 @@ async def _create_indexes():
         await db.dedup_candidates.create_index([("workspace_id", 1), ("lead_id_a", 1), ("lead_id_b", 1)])
         await db.custom_field_defs.create_index([("workspace_id", 1), ("entity", 1), ("order", 1)])
         await db.social_insights.create_index([("workspace_id", 1), ("generated_at", -1)])
+        await db.generation_jobs.create_index([("workspace_id", 1), ("campaign_id", 1), ("created_at", -1)])
+        await db.generation_jobs.create_index([("workspace_id", 1), ("status", 1)])
         # -- SMS EQ indexes --
         await db.sms_templates.create_index([("workspace_id", 1), ("id", 1)])
         await db.sms_contacts.create_index([("workspace_id", 1), ("id", 1)])
@@ -7471,6 +7604,8 @@ async def _create_indexes():
         await db.agent_traces.create_index([("workspace_id", 1), ("gen_ai_agent_name", 1)])
         await db.agent_traces.create_index([("trace_id", 1)])
         await db.agent_registry.create_index([("workspace_id", 1), ("agent_key", 1)], unique=True)
+        await db.optout.create_index([("workspace_id", 1), ("email", 1)], unique=True)
+        await db.optout.create_index([("workspace_id", 1), ("active", 1)])
         logger.info("indexes ensured")
     except Exception as ex:
         logger.warning("index setup: %s", ex)

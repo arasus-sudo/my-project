@@ -1552,6 +1552,82 @@ async def dismiss_duplicate(candidate_id: str, user=Depends(require_role("org_ad
     return {"ok": True}
 
 
+class DedupeByEmailIn(BaseModel):
+    keep_first: bool = True  # If true, keep the oldest lead; if false, keep the newest
+
+
+@crm_router.post("/crm/deduplicate-by-email")
+async def deduplicate_by_email(body: DedupeByEmailIn, user=Depends(require_role("org_admin", "campaign_manager"))):
+    """
+    Find and merge duplicate leads by email address.
+    Groups leads by email, and for each group with >1 lead, merges them keeping either
+    the oldest (first created) or newest lead based on keep_first parameter.
+    """
+    wid = user["workspace_id"]
+    
+    # Find all leads with duplicate emails
+    pipeline = [
+        {"$match": {"workspace_id": wid, "deleted_at": None, "email": {"$ne": None, "$ne": ""}}},
+        {"$group": {"_id": "$email", "count": {"$sum": 1}, "leads": {"$push": {"id": "$id", "created_at": "$created_at", "first_name": "$first_name", "last_name": "$last_name"}}}},
+        {"$match": {"count": {"$gt": 1}}}
+    ]
+    
+    duplicate_groups = await db.leads.aggregate(pipeline).to_list(None)
+    
+    if not duplicate_groups:
+        return {"merged": 0, "groups_found": 0, "message": "No duplicate emails found"}
+    
+    merged_count = 0
+    errors = []
+    
+    for group in duplicate_groups:
+        email = group["_id"]
+        leads = group["leads"]
+        
+        # Sort by created_at
+        leads.sort(key=lambda x: x.get("created_at", ""))
+        
+        if body.keep_first:
+            survivor = leads[0]  # Keep oldest
+            losers = leads[1:]
+        else:
+            survivor = leads[-1]  # Keep newest
+            losers = leads[:-1]
+        
+        for loser in losers:
+            try:
+                # Reassign all related data to survivor
+                for col in (db.lead_notes, db.lead_tasks, db.activities, db.deals):
+                    await col.update_many(
+                        {"lead_id": loser["id"], "workspace_id": wid},
+                        {"$set": {"lead_id": survivor["id"]}}
+                    )
+                
+                # Soft delete the loser
+                await db.leads.update_one(
+                    {"id": loser["id"], "workspace_id": wid},
+                    {"$set": {"deleted_at": now_iso(), "deleted_by": user["id"]}}
+                )
+                
+                # Add to recycle bin / audit
+                await _log_activity(wid, survivor["id"], "crm", "leads_merged",
+                    f"Merged duplicate lead (email: {email}) into this one",
+                    {"merged_lead_id": loser["id"], "email": email})
+                
+                merged_count += 1
+            except Exception as ex:
+                errors.append({"email": email, "survivor_id": survivor["id"], "loser_id": loser["id"], "error": str(ex)})
+    
+    await _audit(user, "crm.deduplicate_by_email", {"merged": merged_count, "groups_processed": len(duplicate_groups)})
+    
+    return {
+        "merged": merged_count,
+        "groups_found": len(duplicate_groups),
+        "errors": errors,
+        "message": f"Merged {merged_count} duplicate leads across {len(duplicate_groups)} email groups"
+    }
+
+
 # ----------------------------- Custom fields -----------------------------------
 # v1 scope: leads only (the same "leads first, extend later" pattern the rest
 # of this module already follows), 4 simple types — matches what Twenty itself

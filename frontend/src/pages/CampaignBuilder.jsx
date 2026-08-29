@@ -2,14 +2,15 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { PageHeader } from "../components/AppLayout";
-import RichEmailEditor, { sanitizeEmailHtml } from "../components/RichEmailEditor";
 import { toast } from "sonner";
+import { Modal, ModalContent } from "../components/composites/Modal";
 import {
   Save, Play, Pause, Plus, Trash2, Loader2, Check, AlertTriangle, LayoutTemplate,
   Mail, Eye, Signature, Search,
   Zap, ChevronLeft, ChevronRight, ChevronDown,
   Edit2, RotateCw, Flag, X, PenSquare,
   Phone, MessageSquare, Send, MessageCircle,
+  Sparkles, FileText, Layers, Bot,
 } from "lucide-react";
 
 const TIMEZONES = [
@@ -97,9 +98,10 @@ export default function CampaignBuilder() {
   const [signatures, setSignatures] = useState([]);
   const [signatureId, setSignatureId] = useState("");
   const [includeSignature, setIncludeSignature] = useState(true);
-  const [campaignType, setCampaignType] = useState("ai"); // "ai" or "template"
-  const isTemplate = campaignType === "template";
+  const [campaignMode, setCampaignMode] = useState("blank"); // "blank", "template", "ai"
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [mailboxView, setMailboxView] = useState(false);
+  const [showCampaignTypePicker, setShowCampaignTypePicker] = useState(false);
 
   const fillMergeFields = useCallback((text, lead) => {
     if (!text) return text;
@@ -142,6 +144,7 @@ export default function CampaignBuilder() {
   const [showEqPanel, setShowEqPanel] = useState(true);
   const [railSection, setRailSection] = useState("sequence"); // sequence|audience|sending|signature|basics
   const [reviewCollapsed, setReviewCollapsed] = useState({ leadRail: false });
+  const [autoAdvance, setAutoAdvance] = useState(false);
 
   // Track actual campaign ID — may differ from useParams id when creating new
   const [activeCampaignId, setActiveCampaignId] = useState(id);
@@ -202,9 +205,17 @@ export default function CampaignBuilder() {
         if (c.tags?.length) setCampaignTags(c.tags.join(", "));
         setBatchSize(c.batch_size || 10);
         setPhasedGeneration(c.phased_generation || false);
+        setAutoAdvance(c.auto_advance || false);
       });
       loadCampaignLeads();
       api.get(`/campaigns/${id}/batch-status`).then((r) => setBatchStatus(r.data)).catch(() => {});
+    }
+  }, [id]);
+
+  // Show campaign type picker for new campaigns
+  useEffect(() => {
+    if (!id) {
+      setShowCampaignTypePicker(true);
     }
   }, [id]);
 
@@ -512,6 +523,28 @@ export default function CampaignBuilder() {
     setSteps(next); setActiveStep(Math.max(0, activeStep - (i <= activeStep ? 1 : 0)));
   };
 
+  // Campaign type selection handler
+  const handleCampaignTypeSelect = (type) => {
+    setCampaignMode(type);
+    setShowCampaignTypePicker(false);
+    
+    // Initialize defaults based on type
+    if (type === "template") {
+      setShowTemplatePicker(true);
+    } else if (type === "ai") {
+      // AI mode - keep default step with AI-friendly template
+      setSteps([{
+        ...DEFAULT_STEP(),
+        subject: "Quick idea for {{company}}",
+        body_html: "<p>Hi {{first_name}},</p><p>{{personalized_opener}}</p><p>Worth 15 minutes to compare notes?</p>",
+        body: "Hi {{first_name}},\n\n{{personalized_opener}}\n\nWorth 15 minutes to compare notes?",
+      }]);
+    } else {
+      // Blank mode - keep default step
+      setSteps([DEFAULT_STEP()]);
+    }
+  };
+
   const save = async () => {
     setBusy(true);
     try {
@@ -520,7 +553,7 @@ export default function CampaignBuilder() {
         body_html: sanitizeEmailHtml(rest.body_html || rest.body || ""),
         body_text: htmlToText(rest.body_html || "") || rest.body || "",
       }));
-      const payload = { name, goal, campaign_type: campaignType, steps: cleanSteps, lead_ids: selectedLeads, signature_id: (includeSignature && signatureId) ? signatureId : null, send_window_start: sendWindowStart, send_window_end: sendWindowEnd, timezone, batch_size: batchSize, phased_generation: phasedGeneration, folder_id: folderId || null, tags: campaignTags ? campaignTags.split(",").map((t) => t.trim()).filter(Boolean) : [] };
+      const payload = { name, goal, campaign_type: campaignMode, steps: cleanSteps, lead_ids: selectedLeads, signature_id: (includeSignature && signatureId) ? signatureId : null, send_window_start: sendWindowStart, send_window_end: sendWindowEnd, timezone, batch_size: batchSize, phased_generation: phasedGeneration, auto_advance: autoAdvance, folder_id: folderId || null, tags: campaignTags ? campaignTags.split(",").map((t) => t.trim()).filter(Boolean) : [] };
       let cid = activeCampaignId || id;
       if (!cid) {
         const { data } = await api.post("/campaigns", payload);
@@ -688,20 +721,13 @@ export default function CampaignBuilder() {
           </div>
         </div>
       )}
-      {/* Campaign Type Toggle */}
-      <div className="px-3 sm:px-4 pt-2 pb-1.5 flex items-center gap-3">
-        <div className="ui-label shrink-0">Campaign type</div>
-        <div className="flex items-center gap-1 bg-canvas border border-line-default rounded-xl p-0.5">
-          <button onClick={() => setCampaignType("ai")}
-            className={`px-3 py-1.5 rounded-lg text-caption font-medium transition-colors ${campaignType === "ai" ? "bg-primary text-white shadow-sm" : "text-fg-tertiary hover:text-fg"}`}>
-            AI Campaign <span className="text-tiny opacity-70">(personal openers)</span>
-          </button>
-          <button onClick={() => setCampaignType("template")}
-            className={`px-3 py-1.5 rounded-lg text-caption font-medium transition-colors ${campaignType === "template" ? "bg-primary text-white shadow-sm" : "text-fg-tertiary hover:text-fg"}`}>
-            Template <span className="text-tiny opacity-70">(basic merge fields)</span>
+      {!id && (
+        <div className="px-3 sm:px-4 pt-2 pb-1.5">
+          <button onClick={() => setShowCampaignTypePicker(true)} className="btn-secondary w-full sm:w-auto" data-testid="change-campaign-type">
+            <RotateCw size={12} className="mr-1.5" /> Change campaign type
           </button>
         </div>
-      </div>
+      )}
 
       {/* Build / Review & Send tabs */}
       <div className="px-3 sm:px-4 border-b border-line-default">
@@ -801,6 +827,7 @@ export default function CampaignBuilder() {
                 goal={goal} setGoal={setGoal}
                 folderId={folderId} setFolderId={setFolderId} folders={folders}
                 campaignTags={campaignTags} setCampaignTags={setCampaignTags}
+                autoAdvance={autoAdvance} setAutoAdvance={setAutoAdvance}
               />
             )}
           </div>
@@ -813,6 +840,12 @@ export default function CampaignBuilder() {
           signatureName={signatureName} setSignatureName={setSignatureName}
           signatureHtml={signatureHtml} setSignatureHtml={setSignatureHtml}
           savingSignature={savingSignature} onCreate={createSignature}
+        />
+      )}
+      {showCampaignTypePicker && (
+        <CampaignTypePickerModal
+          onClose={() => setShowCampaignTypePicker(false)}
+          onSelect={handleCampaignTypeSelect}
         />
       )}
     </div>
@@ -847,7 +880,7 @@ function CollapsibleCard({ title, testid, defaultOpen = true, className = "max-w
   );
 }
 
-function BasicsSection({ goal, setGoal, folderId, setFolderId, folders, campaignTags, setCampaignTags }) {
+function BasicsSection({ goal, setGoal, folderId, setFolderId, folders, campaignTags, setCampaignTags, autoAdvance, setAutoAdvance }) {
   return (
     <CollapsibleCard title="Basics" testid="collapse-basics">
       <div className="space-y-3">
@@ -870,6 +903,13 @@ function BasicsSection({ goal, setGoal, folderId, setFolderId, folders, campaign
           <input value={campaignTags} onChange={(e) => setCampaignTags(e.target.value)}
             placeholder="e.g. outbound, q4, ae-target"
             className="w-full border border-line-default px-3 py-2 rounded-lg text-input mt-1" />
+        </div>
+        <div>
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" checked={autoAdvance} onChange={(e) => setAutoAdvance(e.target.checked)} className="w-3 h-3" />
+            <span className="form-label">Auto-advance phases</span>
+          </label>
+          <p className="text-tiny text-fg-tertiary ml-6 mt-0.5">Automatically generate the next phase when current phase is fully approved</p>
         </div>
       </div>
     </CollapsibleCard>
@@ -1066,30 +1106,75 @@ function AudienceSection({
           {phasedGeneration && (
             <div className="space-y-1.5 ml-4">
               <label className="flex items-center gap-1.5 text-tiny text-fg-tertiary">
-                <span>Batch:</span>
+                <span>Batch size:</span>
                 <input type="number" min={1} max={500} value={batchSize}
                   onChange={(e) => setBatchSize(Math.max(1, parseInt(e.target.value, 10) || 1))}
                   className="w-14 border border-line-default rounded px-1 py-0.5 text-tiny text-center" />
               </label>
-              {batchStatus && batchStatus.phased && (
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-tiny">
-                    <span className="text-fg-tertiary">Batch {batchStatus.current_batch}/{batchStatus.total_batches}</span>
-                    <span className="text-fg-tertiary">
-                      {Object.values(batchStatus.batches || {}).reduce((s, b) => s + b.approved, 0)}/{batchStatus.total_leads}
-                    </span>
+              
+              {/* Phase selector */}
+              {batchStatus && batchStatus.phased && batchStatus.total_batches > 1 && (
+                <div className="space-y-1.5">
+                  <label className="flex items-center gap-1.5 text-tiny text-fg-tertiary">
+                    <span>View phase:</span>
+                    <select value={previewStep + 1} onChange={(e) => setPreviewStep(parseInt(e.target.value, 10) - 1)}
+                      className="w-24 border border-line-default rounded px-1.5 py-0.5 text-tiny font-mono bg-ds-surface">
+                      {Array.from({ length: batchStatus.total_batches }, (_, i) => i + 1).map((bn) => (
+                        <option key={bn} value={bn}>
+                          Phase {bn} ({batchStatus.batches?.[bn]?.total || 0} leads)
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  
+                  {/* Auto-advance toggle */}
+                  <label className="flex items-center gap-1.5 text-tiny cursor-pointer">
+                    <input type="checkbox" checked={batchStatus.auto_advance}
+                      onChange={(e) => { /* backend doesn't have this yet, UI only */ }} className="w-3 h-3" />
+                    Auto-advance to next phase when current phase fully approved
+                  </label>
+                  
+                  {/* Phase progress */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-tiny">
+                      <span className="text-fg-tertiary">Phase {batchStatus.current_batch}/{batchStatus.total_batches}</span>
+                      <span className="text-fg-tertiary">
+                        {Object.values(batchStatus.batches || {}).reduce((s, b) => s + b.approved, 0)}/{batchStatus.total_leads} approved
+                      </span>
+                    </div>
+                    <div className="w-full bg-line rounded-full h-1 overflow-hidden">
+                      <div className="bg-primary h-full rounded-full transition-all duration-300"
+                        style={{ width: `${batchStatus.total_leads > 0 ? (Object.values(batchStatus.batches || {}).reduce((s, b) => s + b.approved, 0) / batchStatus.total_leads) * 100 : 0}%` }} />
+                    </div>
+                    
+                    {/* Current phase details */}
+                    {batchStatus.batches && batchStatus.batches[batchStatus.current_batch] && (
+                      <div className="text-tiny text-fg-tertiary flex items-center gap-2">
+                        <span>Phase {batchStatus.current_batch}: {batchStatus.batches[batchStatus.current_batch].approved}/{batchStatus.batches[batchStatus.current_batch].total} approved</span>
+                        {batchStatus.batches[batchStatus.current_batch].approved >= batchStatus.batches[batchStatus.current_batch].total && batchStatus.current_batch < batchStatus.total_batches && !batchStatus.all_batches_complete && (
+                          <button onClick={advanceBatch} disabled={advancingBatch}
+                            className="text-primary hover:underline flex items-center gap-0.5 ml-2">
+                            {advancingBatch ? <Loader2 size={10} className="animate-spin" /> : <ChevronRight size={10} />}
+                            Advance to phase {batchStatus.current_batch + 1}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* All phases complete */}
+                    {batchStatus.all_batches_complete && (
+                      <div className="text-tiny text-success flex items-center gap-1">
+                        <Check size={10} /> All phases complete — campaign ready to launch
+                      </div>
+                    )}
                   </div>
-                  <div className="w-full bg-line rounded-full h-1 overflow-hidden">
-                    <div className="bg-primary h-full rounded-full transition-all duration-300"
-                      style={{ width: `${batchStatus.total_leads > 0 ? (Object.values(batchStatus.batches || {}).reduce((s, b) => s + b.approved, 0) / batchStatus.total_leads) * 100 : 0}%` }} />
-                  </div>
-                  {!batchStatus.all_batches_complete && batchApproved(batchStatus, batchStatus.current_batch) >= batchTotal(batchStatus, batchStatus.current_batch) && (
-                    <button onClick={advanceBatch} disabled={advancingBatch}
-                      className="text-tiny text-primary hover:underline flex items-center gap-0.5">
-                      {advancingBatch ? <Loader2 size={10} className="animate-spin" /> : <ChevronRight size={10} />}
-                      Next batch ({batchStatus.current_batch + 1}/{batchStatus.total_batches})
-                    </button>
-                  )}
+                </div>
+              )}
+              
+              {/* Single phase or no batch status yet */}
+              {(!batchStatus || !batchStatus.phased || batchStatus.total_batches <= 1) && (
+                <div className="text-tiny text-fg-tertiary">
+                  Phased generation splits leads into batches of {batchSize}. Generate and approve one phase at a time.
                 </div>
               )}
             </div>
@@ -1757,3 +1842,4 @@ function ReviewAndSendView({
     </div>
   );
 }
+

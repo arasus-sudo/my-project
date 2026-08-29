@@ -7,7 +7,7 @@ import {
   Users, ListChecks, Kanban, BarChart3, Plus, Target, Activity, Phone, Mail,
   CalendarClock, FileText, MessageSquare, ArrowRight, Share2, Search,
   AlertTriangle, ChevronDown, ChevronRight, Building2, Trash2, RotateCcw, Copy,
-  Loader2, ListChecks as ListOrdered,
+  Loader2, ListChecks as ListOrdered, CheckCircle2,
 } from "../icons";
 import { SkeletonKpiGrid, SkeletonListRows } from "../components/ui/loading-states";
 import MetricCard from "../components/composites/MetricCard";
@@ -42,6 +42,9 @@ export default function CRM() {
   const [purging, setPurging] = useState(false);
   const [duplicates, setDuplicates] = useState([]);
   const [duplicatesOpen, setDuplicatesOpen] = useState(true);
+  const [dedupeLoading, setDedupeLoading] = useState(false);
+  const [dedupeResult, setDedupeResult] = useState(null);
+  const [dedupeKeepFirst, setDedupeKeepFirst] = useState(true);
 
   const load = async () => {
     const [leadsRes, dealsRes, listsRes, activityRes, tasksRes, quarantineRes, companiesRes, recycleBinRes, duplicatesRes] = await Promise.all([
@@ -157,6 +160,25 @@ export default function CRM() {
       await api.post(`/crm/duplicates/${candidateId}/dismiss`);
       setDuplicates((d) => d.filter((x) => x.id !== candidateId));
     } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
+  };
+
+  const deduplicateByEmail = async () => {
+    setDedupeLoading(true);
+    setDedupeResult(null);
+    try {
+      const { data } = await api.post("/crm/deduplicate-by-email", { keep_first: dedupeKeepFirst });
+      setDedupeResult(data);
+      if (data.merged > 0) {
+        toast.success(`Merged ${data.merged} duplicate leads across ${data.groups_found} email groups`);
+        load(); // Refresh all data
+      } else {
+        toast.info(data.message || "No duplicate emails found");
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Deduplication failed");
+    } finally {
+      setDedupeLoading(false);
+    }
   };
 
   const ACTIVITY_ICON = {
@@ -315,40 +337,78 @@ export default function CRM() {
         </div>
 
         {/* Possible duplicates */}
-        {duplicates.length > 0 && (
-          <div>
-            <button onClick={() => setDuplicatesOpen((o) => !o)} className="flex items-center gap-1.5 w-full"
-              style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 12 }}>
-              <Copy size={14} strokeWidth={1.5} aria-hidden="true" /> Possible duplicates ({duplicates.length})
-              {duplicatesOpen ? <ChevronDown size={14} strokeWidth={1.5} aria-hidden="true" /> : <ChevronRight size={14} strokeWidth={1.5} aria-hidden="true" />}
-            </button>
-            {duplicatesOpen && (
-              <div className="space-y-2">
-                {duplicates.map((c) => (
-                  <Card key={c.id}>
-                    <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
-                      <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-                        Matched on {c.match_reason?.replace("_", " + ")} · {Math.round((c.confidence || 0) * 100)}% confidence
+        <div>
+          <button onClick={() => setDuplicatesOpen((o) => !o)} className="flex items-center gap-1.5 w-full"
+            style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 12 }}>
+            <Copy size={14} strokeWidth={1.5} aria-hidden="true" /> Possible duplicates ({duplicates.length})
+            {duplicatesOpen ? <ChevronDown size={14} strokeWidth={1.5} aria-hidden="true" /> : <ChevronRight size={14} strokeWidth={1.5} aria-hidden="true" />}
+          </button>
+          {duplicatesOpen && (
+            <div className="space-y-2">
+              {/* Deduplicate by Email */}
+              <Card padding="compact" className="bg-canvas/50 border-intel-border/30">
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-primary)" }}>Remove duplicates by email</span>
+                    <span className="text-tiny text-intel">Finds leads sharing the same email address</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-1.5 text-tiny cursor-pointer">
+                      <input type="checkbox" checked={dedupeKeepFirst} onChange={(e) => setDedupeKeepFirst(e.target.checked)} className="w-3 h-3" />
+                      Keep oldest lead (uncheck to keep newest)
+                    </label>
+                    <Button variant="secondary" size="sm" icon={RotateCw} onClick={deduplicateByEmail} isLoading={dedupeLoading} isDisabled={dedupeLoading}>
+                      {dedupeLoading ? <Loader2 size={10} className="animate-spin" /> : <RotateCw size={10} />} Deduplicate by email
+                    </Button>
+                  </div>
+                </div>
+                {dedupeResult && (
+                  <div className="flex items-center gap-2 text-tiny">
+                    <span className={dedupeResult.merged > 0 ? "text-success" : "text-fg-tertiary"}>
+                      {dedupeResult.merged > 0 ? (
+                        <>
+                          <CheckCircle2 size={10} className="inline" /> Merged {dedupeResult.merged} leads across {dedupeResult.groups_found} email groups
+                        </>
+                      ) : (
+                        <>
+                          <Info size={10} className="inline" /> {dedupeResult.message || "No duplicate emails found"}
+                        </>
+                      )}
+                    </span>
+                    {dedupeResult.errors?.length > 0 && (
+                      <span className="text-danger ml-2">
+                        <AlertTriangle size={10} className="inline" /> {dedupeResult.errors.length} errors
                       </span>
-                      <button onClick={() => dismissDuplicate(c.id)} style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Not a duplicate</button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      {[c.lead_a, c.lead_b].map((l) => (
-                        <div key={l.id} style={{ border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", padding: 12 }}>
-                          <div className="truncate" style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text-primary)" }}>{l.first_name} {l.last_name}</div>
-                          <div className="tnum truncate" style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--text-tertiary)" }}>{l.email}</div>
-                          {l.phone && <div className="tnum" style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--text-tertiary)" }}>{l.phone}</div>}
-                          {l.company && <div className="truncate" style={{ fontSize: 11.5, color: "var(--text-tertiary)" }}>{l.company}</div>}
-                          <Button variant="secondary" size="sm" onClick={() => mergeDuplicate(c, l.id)} className="w-full justify-center mt-2">Keep this one</Button>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                    )}
+                  </div>
+                )}
+              </Card>
+              
+              {/* Existing fuzzy duplicates */}
+              {duplicates.map((c) => (
+                <Card key={c.id}>
+                  <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
+                    <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                      Matched on {c.match_reason?.replace("_", " + ")} · {Math.round((c.confidence || 0) * 100)}% confidence
+                    </span>
+                    <button onClick={() => dismissDuplicate(c.id)} style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Not a duplicate</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[c.lead_a, c.lead_b].map((l) => (
+                      <div key={l.id} style={{ border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)", padding: 12 }}>
+                        <div className="truncate" style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text-primary)" }}>{l.first_name} {l.last_name}</div>
+                        <div className="tnum truncate" style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--text-tertiary)" }}>{l.email}</div>
+                        {l.phone && <div className="tnum" style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--text-tertiary)" }}>{l.phone}</div>}
+                        {l.company && <div className="truncate" style={{ fontSize: 11.5, color: "var(--text-tertiary)" }}>{l.company}</div>}
+                        <Button variant="secondary" size="sm" onClick={() => mergeDuplicate(c, l.id)} className="w-full justify-center mt-2">Keep this one</Button>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Quarantined leads */}
         {quarantine.length > 0 && (
