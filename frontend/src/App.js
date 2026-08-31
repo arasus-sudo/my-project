@@ -19,9 +19,17 @@ const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 const Signup = lazy(() => import("./pages/Signup"));
 const SuiteHome = lazy(() => import("./pages/SuiteHome"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
-const Campaigns = lazy(() => import("./pages/Campaigns"));
+const Campaigns = lazy(() => import("./pages/campaigns/CampaignLanding"));
 const CampaignQueue = lazy(() => import("./pages/CampaignQueue"));
 const CampaignBuilder = lazy(() => import("./pages/CampaignBuilder"));
+const CampaignDetail = lazy(() => import("./pages/campaigns/CampaignDetail"));
+const PlainCampaignBuilder = lazy(() => import("./pages/campaigns/PlainCampaignBuilder"));
+const TemplateCategories = lazy(() => import("./pages/campaigns/TemplateCategories"));
+const TemplateLibrary = lazy(() => import("./pages/campaigns/TemplateLibrary"));
+const TemplateDetail = lazy(() => import("./pages/campaigns/TemplateDetail"));
+const AITemplateWorkflow = lazy(() => import("./pages/campaigns/AITemplateWorkflow"));
+const FullAICampaign = lazy(() => import("./pages/campaigns/FullAICampaign"));
+const MarketingCampaignBuilder = lazy(() => import("./pages/campaigns/MarketingCampaignBuilder"));
 const Leads = lazy(() => import("./pages/Leads"));
 const LeadDetail = lazy(() => import("./pages/LeadDetail"));
 const Mailboxes = lazy(() => import("./pages/Mailboxes"));
@@ -48,7 +56,6 @@ const DesignEQProjects = lazy(() => import("./pages/DesignEQProjects"));
 const DesignEQViewer = lazy(() => import("./pages/DesignEQViewer"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Team = lazy(() => import("./pages/Team"));
-const Templates = lazy(() => import("./pages/Templates"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Billing = lazy(() => import("./pages/Billing"));
 const Webhooks = lazy(() => import("./pages/Webhooks"));
@@ -158,8 +165,15 @@ function App() {
               <Route index element={<Dashboard />} />
               <Route path="campaigns" element={<Campaigns />} />
               <Route path="campaigns/queue" element={<CampaignQueue />} />
-              <Route path="campaigns/new" element={<CampaignBuilder />} />
-              <Route path="campaigns/:id" element={<CampaignBuilder />} />
+              <Route path="campaigns/new" element={<Navigate to="/app/campaigns" replace />} />
+              <Route path="campaigns/create/plain" element={<PlainCampaignBuilder />} />
+              <Route path="campaigns/create/template" element={<TemplateCategories />} />
+              <Route path="campaigns/create/template/:category" element={<TemplateLibrary />} />
+              <Route path="campaigns/create/template/:category/:templateId" element={<TemplateDetail />} />
+              <Route path="campaigns/create/ai-template" element={<AITemplateWorkflow />} />
+              <Route path="campaigns/create/ai" element={<FullAICampaign />} />
+              <Route path="campaigns/create/marketing" element={<MarketingCampaignBuilder />} />
+              <Route path="campaigns/:id" element={<CampaignDetail />} />
 {/* CRM routes */}
               <Route path="crm" element={<CRM />} />
               {/* Command EQ — conversational orchestrator */}
@@ -180,7 +194,6 @@ function App() {
               <Route path="leads" element={<Navigate to="/app/crm/leads" replace />} />
               <Route path="leads/:id" element={<Navigate to="/app/crm/leads/:id" replace />} />
               <Route path="mailboxes" element={<Mailboxes />} />
-              <Route path="templates" element={<Templates />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="team" element={<Team />} />
               <Route path="audit-log" element={<AuditLog />} />

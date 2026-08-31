@@ -227,7 +227,7 @@ class SequenceStep(BaseModel):
 class CampaignIn(BaseModel):
     name: str
     goal: str = "Book meetings"
-    campaign_type: str = "ai"  # "ai" = personalized openers, "template" = basic merge fields only
+    campaign_type: str = "ai"  # "blank"|"template"|"marketing"|"ai" — only chosen type is generated/previewed
     from_mailbox_id: Optional[str] = None
     steps: List[SequenceStep]
     lead_ids: List[str] = []
@@ -1603,7 +1603,7 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
     campaign_steps = campaign.get("steps", [])
     step_template = campaign_steps[0] if campaign_steps else {}
 
-    is_template = campaign.get("campaign_type") == "template"
+    is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain")
     if is_template:
         # Template campaign — no AI research or opener, just store the template body as-is
         personalized = {
@@ -1858,7 +1858,7 @@ async def generate_all_lead_emails(cid: str, user=Depends(current_user)):
     step_template = campaign_steps[0] if campaign_steps else {}
     results, errors = [], []
 
-    is_template = campaign.get("campaign_type") == "template"
+    is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain")
     if is_template:
         # Bulk insert all personalized emails in one operation instead of N sequential update_one.
         now = now_iso()
@@ -1973,7 +1973,7 @@ async def run_campaign_engine(cid: str, user=Depends(current_user)):
     if not lead_ids:
         raise HTTPException(400, "No leads assigned to campaign. Add leads first.")
 
-    is_template = campaign.get("campaign_type") == "template"
+    is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain")
     if not is_template:
         if not await _rate_ok(user):
             raise HTTPException(429, "Daily AI quota exceeded")
@@ -2345,7 +2345,7 @@ async def approve_campaign_lead_email(cid: str, lead_id: str, user=Depends(curre
     if result.modified_count == 0:
         # Template campaigns may not have a personalized_emails entry yet —
         # auto-create one so the user can approve without a separate generation step.
-        is_template = campaign.get("campaign_type") == "template"
+        is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain")
         if is_template:
             step_template = (campaign.get("steps") or [{}])[0]
             await db.campaigns.update_one(
@@ -2391,7 +2391,7 @@ async def approve_all_campaign_emails(cid: str, user=Depends(current_user)):
     if not campaign:
         raise HTTPException(404, "not found")
     # For template campaigns, auto-generate entries for any leads that don't have one yet.
-    is_template = campaign.get("campaign_type") == "template"
+    is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain")
     if is_template:
         step_template = (campaign.get("steps") or [{}])[0]
         existing = {p["lead_id"] for p in campaign.get("personalized_emails", [])}

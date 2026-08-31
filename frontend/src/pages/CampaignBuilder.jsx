@@ -10,6 +10,7 @@ import {
   Zap, ChevronLeft, ChevronRight, ChevronDown,
   Edit2, RotateCw, Flag, X, PenSquare,
   Phone, MessageSquare, Send, MessageCircle,
+  FileText, Sparkles, Megaphone,
 } from "lucide-react";
 
 const TIMEZONES = [
@@ -97,9 +98,11 @@ export default function CampaignBuilder() {
   const [signatures, setSignatures] = useState([]);
   const [signatureId, setSignatureId] = useState("");
   const [includeSignature, setIncludeSignature] = useState(true);
-  const [campaignType, setCampaignType] = useState("ai"); // "ai" or "template"
-  const isTemplate = campaignType === "template";
+  const [campaignType, setCampaignType] = useState("blank"); // "blank" | "template" | "marketing" | "ai"
+  const isTemplate = campaignType === "template" || campaignType === "blank" || campaignType === "marketing";
+  const isAI = campaignType === "ai";
   const [mailboxView, setMailboxView] = useState(false);
+  const [showCampaignTypePicker, setShowCampaignTypePicker] = useState(false);
 
   const fillMergeFields = useCallback((text, lead) => {
     if (!text) return text;
@@ -178,6 +181,35 @@ export default function CampaignBuilder() {
 
 
 
+  // Show 4-way picker for new campaigns
+  useEffect(() => {
+    if (!id) setShowCampaignTypePicker(true);
+  }, [id]);
+
+  const handleCampaignTypeSelect = (type) => {
+    setCampaignType(type);
+    setShowCampaignTypePicker(false);
+    if (type === "template") {
+      // template picker will be triggered by UI after selection
+    } else if (type === "ai") {
+      setSteps([{
+        ...DEFAULT_STEP(),
+        subject: "Quick idea for {{company}}",
+        body_html: "<p>Hi {{first_name}},</p><p>{{personalized_opener}}</p><p>Worth 15 minutes to compare notes?</p>",
+        body: "Hi {{first_name}},\n\n{{personalized_opener}}\n\nWorth 15 minutes to compare notes?",
+      }]);
+    } else if (type === "marketing") {
+      setSteps([{
+        ...DEFAULT_STEP(),
+        subject: "New from {{company}} — {{first_name}}, quick update",
+        body_html: "<p>Hi {{first_name}},</p><p>Excited to share what's new at {{company}} — here's a quick update worth 2 mins.</p>",
+        body: "Hi {{first_name}},\n\nExcited to share what's new at {{company}} — here's a quick update worth 2 mins.",
+      }]);
+    } else {
+      setSteps([DEFAULT_STEP()]);
+    }
+  };
+
   useEffect(() => {
     api.get("/leads?page_size=2000").then((r) => setLeads(r.data.items || r.data));
     api.get("/crm/lists").then((r) => setLeadLists(r.data || [])).catch(() => {});
@@ -202,6 +234,7 @@ export default function CampaignBuilder() {
         if (c.tags?.length) setCampaignTags(c.tags.join(", "));
         setBatchSize(c.batch_size || 10);
         setPhasedGeneration(c.phased_generation || false);
+        if (c.campaign_type) setCampaignType(c.campaign_type);
       });
       loadCampaignLeads();
       api.get(`/campaigns/${id}/batch-status`).then((r) => setBatchStatus(r.data)).catch(() => {});
@@ -688,19 +721,37 @@ export default function CampaignBuilder() {
           </div>
         </div>
       )}
-      {/* Campaign Type Toggle */}
+      {/* Current campaign type — 4 way, isolated per choice */}
       <div className="px-3 sm:px-4 pt-2 pb-1.5 flex items-center gap-3">
         <div className="ui-label shrink-0">Campaign type</div>
         <div className="flex items-center gap-1 bg-canvas border border-line-default rounded-xl p-0.5">
-          <button onClick={() => setCampaignType("ai")}
-            className={`px-3 py-1.5 rounded-lg text-caption font-medium transition-colors ${campaignType === "ai" ? "bg-primary text-white shadow-sm" : "text-fg-tertiary hover:text-fg"}`}>
-            AI Campaign <span className="text-tiny opacity-70">(personal openers)</span>
+          <button onClick={() => setCampaignType("blank")}
+            className={`px-3 py-1.5 rounded-lg text-caption font-medium transition-colors ${campaignType === "blank" ? "bg-primary text-white shadow-sm" : "text-fg-tertiary hover:text-fg"}`}>
+            Blank
           </button>
           <button onClick={() => setCampaignType("template")}
             className={`px-3 py-1.5 rounded-lg text-caption font-medium transition-colors ${campaignType === "template" ? "bg-primary text-white shadow-sm" : "text-fg-tertiary hover:text-fg"}`}>
-            Template <span className="text-tiny opacity-70">(basic merge fields)</span>
+            Template
+          </button>
+          <button onClick={() => setCampaignType("marketing")}
+            className={`px-3 py-1.5 rounded-lg text-caption font-medium transition-colors ${campaignType === "marketing" ? "bg-primary text-white shadow-sm" : "text-fg-tertiary hover:text-fg"}`}>
+            Marketing
+          </button>
+          <button onClick={() => setCampaignType("ai")}
+            className={`px-3 py-1.5 rounded-lg text-caption font-medium transition-colors ${campaignType === "ai" ? "bg-primary text-white shadow-sm" : "text-fg-tertiary hover:text-fg"}`}>
+            AI Campaign
           </button>
         </div>
+        {!id && (
+          <button onClick={() => setShowCampaignTypePicker(true)} className="btn-ghost text-tiny">Change</button>
+        )}
+      </div>
+      {/* Helper: only generation/preview for chosen type */}
+      <div className="px-3 sm:px-4 pb-1 text-tiny text-fg-tertiary">
+        {campaignType === "blank" && "Blank — you build every step; no AI generation, only merge-field preview."}
+        {campaignType === "template" && "Template — inserts saved template blocks; basic merge preview, no AI opener."}
+        {campaignType === "marketing" && "Marketing — campaign-style sequence; preview uses template merge, no AI opener."}
+        {campaignType === "ai" && "AI — generates personalized opener per lead; preview shows AI opener merged."}
       </div>
 
       {/* Build / Review & Send tabs */}
@@ -815,6 +866,42 @@ export default function CampaignBuilder() {
           savingSignature={savingSignature} onCreate={createSignature}
         />
       )}
+      {showCampaignTypePicker && (
+        <CampaignTypePickerModal onClose={() => setShowCampaignTypePicker(false)} onSelect={handleCampaignTypeSelect} />
+      )}
+    </div>
+  );
+}
+
+function CampaignTypePickerModal({ onClose, onSelect }) {
+  const opts = [
+    { key: "blank", label: "Blank", sub: "Start empty", icon: FileText, desc: "Build every step yourself. No generation, merge-field preview only." },
+    { key: "template", label: "Template", sub: "From library", icon: LayoutTemplate, desc: "Insert saved template. Basic merge preview, no AI." },
+    { key: "marketing", label: "Marketing", sub: "Campaign style", icon: Megaphone, desc: "Marketing sequence. Template merge preview, no AI opener." },
+    { key: "ai", label: "AI Campaign", sub: "Personalized", icon: Sparkles, desc: "AI generates opener per lead. Preview shows AI merge." },
+  ];
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-ds-surface rounded-xl shadow-card p-5 w-full max-w-2xl mx-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-subheading font-display font-semibold">Choose campaign type</div>
+          <button onClick={onClose} className="btn-ghost text-caption">Close</button>
+        </div>
+        <p className="text-tiny text-fg-tertiary mb-4">Only the chosen type will be generated and previewed.</p>
+        <div className="grid grid-cols-2 gap-3">
+          {opts.map((o) => (
+            <button key={o.key} onClick={() => onSelect(o.key)} data-testid={`picker-type-${o.key}`}
+              className="text-left border border-line-default rounded-xl p-4 hover:border-primary hover:bg-surfacehover transition-colors">
+              <div className="flex items-center gap-2 mb-1">
+                <o.icon size={16} strokeWidth={1.5} className="text-primary" />
+                <span className="text-body font-medium">{o.label}</span>
+                <span className="text-tiny text-fg-tertiary">{o.sub}</span>
+              </div>
+              <div className="text-tiny text-fg-tertiary">{o.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
