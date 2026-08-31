@@ -46,9 +46,12 @@ load_dotenv(ROOT_DIR / ".env")
 # /health even when the full config isn't ready (e.g. fresh deploy before
 # app settings are applied). The actual business routes already gate on
 # these being set; the startup crash was preventing ALL routes.
-mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+_raw_mongo = os.environ.get("MONGO_URL")
+MONGO_IS_FALLBACK = not _raw_mongo
+mongo_url = _raw_mongo or "mongodb://localhost:27017"
 DB_NAME = os.environ.get("DB_NAME", "pitcheq_dev")
-client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
+# Short timeout so fallback localhost doesn't block startup for 10m (each index = 5s * 40 = 200s)
+client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=2000, connectTimeoutMS=2000)
 db = client[DB_NAME]
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "")
@@ -7471,6 +7474,11 @@ async def _stop_mcp_session_manager():
 @app.on_event("startup")
 async def _create_indexes():
     """Ensure indexes for multi-tenant queries and lookups. Idempotent."""
+    # Don't block startup for 3+ minutes when running on fallback localhost (no MONGO_URL).
+    # Real Atlas will succeed quickly; fallback would retry each index with 2s timeout.
+    if MONGO_IS_FALLBACK:
+        logger.warning("skipping index creation — MONGO_URL not set (fallback DB)")
+        return
     try:
         await db.users.create_index("email", unique=True)
         await db.users.create_index("id", unique=True)
@@ -7679,6 +7687,9 @@ async def _tracked_tick(tick_id: str, fn, *args) -> None:
 @app.on_event("startup")
 async def _start_scheduler():
     global scheduler
+    if MONGO_IS_FALLBACK:
+        logger.warning("skipping scheduler startup — MONGO_URL not set (fallback DB)")
+        return
     try:
         # Fix existing send_queue items with timezone-aware send_at strings
         # (bug: pre-2026-07-28 versions stored local-time ISO strings instead of UTC,
