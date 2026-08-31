@@ -30,7 +30,7 @@ Write-Host "▶ [4/6] Configuring startup command..." -ForegroundColor Yellow
 # NOTE: --workers=1 is required because the APScheduler runs in-process.
 # With 2+ workers, each gets its own scheduler instance, causing duplicate
 # background jobs and race conditions on the send queue.
-az webapp config set --name $WebAppName --resource-group $ResourceGroup --startup-file "gunicorn --bind=0.0.0.0:8000 --workers=1 --timeout=120 -k uvicorn.workers.UvicornWorker server:app" --output table
+az webapp config set --name $WebAppName --resource-group $ResourceGroup --startup-file "/home/site/wwwroot/startup.sh" --output table
 
 Write-Host "▶ Setting Python version..." -ForegroundColor Yellow
 az webapp config set --name $WebAppName --resource-group $ResourceGroup --linux-fx-version "PYTHON|3.11" --output table
@@ -41,7 +41,7 @@ $zipPath = "$env:TEMP\backend-deploy.zip"
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 python -c "
 import zipfile, os
-exclude_ext = {'.log', '.txt', '.zip', '.err'}
+exclude_ext = {'.log', '.zip', '.err'}
 exclude_files = {'deploy.zip', 'backend-deploy.zip'}
 z = zipfile.ZipFile('$zipPath', 'w', zipfile.ZIP_DEFLATED)
 for r, dirs, fs in os.walk('D:/SUITEOFAGETNS/backend'):

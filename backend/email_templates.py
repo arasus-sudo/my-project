@@ -636,7 +636,14 @@ async def unsubscribe_landing(token: str):
         await db.unsubscribes.insert_one({
             "id": new_id(), "token": token, "at": now_iso(), "source": "template_footer",
         })
-    return _unsub_page("You've been unsubscribed. You won't hear from us on this thread again.")
+    # Also add to opt-out list for permanent suppression
+    if found:
+        workspace_id = found.get("workspace_id")
+        email = found.get("email")
+        if workspace_id and email:
+            from optout import add_to_optout
+            await add_to_optout(workspace_id, email, "unsubscribed_via_link", "unsubscribe_link")
+    return _unsub_page("You've been unsubscribed. You've been removed from our mailing list and added to our opt-out list. You won't receive any emails from us unless you're manually re-added in the CRM.")
 
 
 def _unsub_page(message: str, muted: bool = False) -> str:

@@ -273,20 +273,34 @@ async def resolve_conversation(cid: str, user=Depends(current_user)):
 # ----------------------------- Analytics --------------------------------------
 @site_router.get("/analytics")
 async def get_analytics(user=Depends(current_user)):
-    convos = await db.site_conversations.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(5000)
-    total = len(convos)
-    resolved = sum(1 for c in convos if c["status"] == "resolved")
-    needs_human = sum(1 for c in convos if c["status"] == "needs_human")
-    leads_captured = sum(1 for c in convos if c.get("lead_id"))
-    by_day: Dict[str, int] = {}
-    for c in convos:
-        day = (c.get("created_at") or "")[:10]
-        by_day[day] = by_day.get(day, 0) + 1
+    """Compute site EQ analytics using aggregation instead of loading all conversations."""
+    wid = user["workspace_id"]
+    # Single aggregation for all stats
+    stats = await db.site_conversations.aggregate([
+        {"$match": {"workspace_id": wid}},
+        {"$group": {
+            "_id": None,
+            "total": {"$sum": 1},
+            "resolved": {"$sum": {"$cond": [{"$eq": ["$status", "resolved"]}, 1, 0]}},
+            "needs_human": {"$sum": {"$cond": [{"$eq": ["$status", "needs_human"]}, 1, 0]}},
+            "leads_captured": {"$sum": {"$cond": [{"$ne": ["$lead_id", None]}, 1, 0]}},
+        }},
+    ]).to_list(1)
+    s = stats[0] if stats else {"total": 0, "resolved": 0, "needs_human": 0, "leads_captured": 0}
+    total = s["total"]
+    # Daily breakdown
+    by_day_raw = await db.site_conversations.aggregate([
+        {"$match": {"workspace_id": wid}},
+        {"$addFields": {"day": {"$substr": ["$created_at", 0, 10]}}},
+        {"$group": {"_id": "$day", "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}},
+    ]).to_list(365)
+    by_day = {d["_id"]: d["count"] for d in by_day_raw if d.get("_id")}
     return {
-        "total_conversations": total, "resolved": resolved, "needs_human": needs_human,
-        "leads_captured": leads_captured,
-        "resolution_rate": round(resolved / total * 100) if total else 0,
-        "by_day": dict(sorted(by_day.items())),
+        "total_conversations": total, "resolved": s["resolved"], "needs_human": s["needs_human"],
+        "leads_captured": s["leads_captured"],
+        "resolution_rate": round(s["resolved"] / total * 100) if total else 0,
+        "by_day": by_day,
     }
 
 

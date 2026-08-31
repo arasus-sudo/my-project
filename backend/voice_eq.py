@@ -840,16 +840,33 @@ async def add_phone_to_dnc(body: Dict[str, str], user=Depends(current_user)):
 # ---------------------------------------------------------------------------
 
 async def _voice_campaign_stats(cid: str, wid: str) -> Dict[str, Any]:
-    calls = await db.calls.find({"campaign_id": cid, "workspace_id": wid}, {"_id": 0}).to_list(5000)
-    total_seconds = sum(c.get("duration_seconds") or 0 for c in calls)
+    """Compute voice campaign stats using aggregation instead of loading all calls."""
+    pipeline = [
+        {"$match": {"campaign_id": cid, "workspace_id": wid}},
+        {"$group": {
+            "_id": None,
+            "total": {"$sum": 1},
+            "total_seconds": {"$sum": {"$ifNull": ["$duration_seconds", 0]}},
+            "connected": {"$sum": {"$cond": [{"$in": ["$status", ["ended", "ongoing"]]}, 1, 0]}},
+            "voicemail": {"$sum": {"$cond": [{"$eq": ["$disconnection_reason", "voicemail"]}, 1, 0]}},
+            "qualified": {"$sum": {"$cond": ["$call_successful", 1, 0]}},
+            "meetings_booked": {"$sum": {"$cond": [{"$ne": ["$deal_id", None]}, 1, 0]}},
+        }},
+    ]
+    results = await db.calls.aggregate(pipeline).to_list(1)
+    if not results:
+        return {"calls_placed": 0, "connected": 0, "voicemail": 0,
+                "qualified": 0, "meetings_booked": 0, "avg_duration": 0, "total_minutes": 0}
+    r = results[0]
+    total = r["total"]
     return {
-        "calls_placed": len(calls),
-        "connected": sum(1 for c in calls if c["status"] in ("ended", "ongoing")),
-        "voicemail": sum(1 for c in calls if c.get("disconnection_reason") == "voicemail"),
-        "qualified": sum(1 for c in calls if c.get("call_successful")),
-        "meetings_booked": sum(1 for c in calls if c.get("deal_id")),
-        "avg_duration": round(total_seconds / len(calls), 1) if calls else 0,
-        "total_minutes": round(total_seconds / 60, 1),
+        "calls_placed": total,
+        "connected": r["connected"],
+        "voicemail": r["voicemail"],
+        "qualified": r["qualified"],
+        "meetings_booked": r["meetings_booked"],
+        "avg_duration": round(r["total_seconds"] / total, 1) if total else 0,
+        "total_minutes": round(r["total_seconds"] / 60, 1),
     }
 
 
@@ -976,26 +993,42 @@ async def pause_voice_campaign(cid: str, user=Depends(current_user)):
 
 @voice_router.get("/analytics/usage")
 async def voice_usage_analytics(user=Depends(current_user)):
-    calls = await db.calls.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(5000)
-    total_minutes = round(sum(c.get("duration_seconds") or 0 for c in calls) / 60, 1)
-    total_cost_cents = sum(c.get("cost_cents") or 0 for c in calls)
-    by_day: Dict[str, Dict[str, Any]] = {}
-    for c in calls:
-        day = (c.get("created_at") or "")[:10]
-        if not day:
-            continue
-        d = by_day.setdefault(day, {"day": day, "calls": 0, "minutes": 0.0, "connected": 0, "qualified": 0})
-        d["calls"] += 1
-        d["minutes"] += round((c.get("duration_seconds") or 0) / 60, 1)
-        if c.get("status") == "ended":
-            d["connected"] += 1
-        if c.get("call_successful"):
-            d["qualified"] += 1
+    """Compute voice usage analytics using aggregation instead of loading all calls."""
+    wid = user["workspace_id"]
+    # Totals in one aggregation pass
+    totals = await db.calls.aggregate([
+        {"$match": {"workspace_id": wid}},
+        {"$group": {
+            "_id": None,
+            "total_calls": {"$sum": 1},
+            "total_seconds": {"$sum": {"$ifNull": ["$duration_seconds", 0]}},
+            "total_cost_cents": {"$sum": {"$ifNull": ["$cost_cents", 0]}},
+        }},
+    ]).to_list(1)
+    t = totals[0] if totals else {"total_calls": 0, "total_seconds": 0, "total_cost_cents": 0}
+    # Daily breakdown in one aggregation pass
+    by_day_raw = await db.calls.aggregate([
+        {"$match": {"workspace_id": wid}},
+        {"$addFields": {"day": {"$substr": ["$created_at", 0, 10]}}},
+        {"$group": {
+            "_id": "$day",
+            "calls": {"$sum": 1},
+            "total_seconds": {"$sum": {"$ifNull": ["$duration_seconds", 0]}},
+            "connected": {"$sum": {"$cond": [{"$eq": ["$status", "ended"]}, 1, 0]}},
+            "qualified": {"$sum": {"$cond": ["$call_successful", 1, 0]}},
+        }},
+        {"$sort": {"_id": -1}},
+        {"$limit": 30},
+    ]).to_list(30)
+    by_day = [{"day": d["_id"], "calls": d["calls"],
+               "minutes": round(d["total_seconds"] / 60, 1),
+               "connected": d["connected"], "qualified": d["qualified"]}
+              for d in by_day_raw if d.get("_id")]
     return {
-        "total_calls": len(calls),
-        "total_minutes": total_minutes,
-        "total_cost_cents": total_cost_cents,
-        "by_day": sorted(by_day.values(), key=lambda x: x["day"], reverse=True)[:30],
+        "total_calls": t["total_calls"],
+        "total_minutes": round(t["total_seconds"] / 60, 1),
+        "total_cost_cents": t["total_cost_cents"],
+        "by_day": by_day,
         "provider": "twilio_openai",
         "twilio_mocked": TWILIO_MOCKED,
         "openai_mocked": OPENAI_MOCKED,

@@ -75,6 +75,8 @@ jobs:
           # Copy pre-installed deps into vendor/
           mkdir -p vendor
           cp -r /tmp/backend-vendor/* vendor/
+          # Ensure startup script is executable
+          chmod +x startup.sh
           # Zip without stale artifacts
           zip -r /tmp/deploy.zip . \
             -x "*__pycache__*" \
@@ -188,7 +190,7 @@ jobs:
           az webapp config set \
             --resource-group ${{ env.AZURE_RG }} \
             --name ${{ env.BACKEND_NAME }} \
-            --startup-file "python -m uvicorn server:app --host 0.0.0.0 --port 8000 --workers 1 --timeout-keep-alive 120"
+            --startup-file "/home/site/wwwroot/startup.sh"
 
       - name: Wait for SCM container to settle after config changes
         run: |

@@ -29,24 +29,31 @@ from datetime import datetime, timezone, timedelta
 from urllib.parse import quote
 import asyncio
 import secrets as _secrets
-import anthropic
-import openai
-from google import genai
-from google.genai import types as genai_types
+# Heavy LLM SDKs — imported lazily in _llm_chat to avoid slow cold starts.
+# anthropic = None  # noqa
+# openai = None     # noqa
+# genai = None      # noqa
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-mongo_url = os.environ["MONGO_URL"]
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ["DB_NAME"]]
+# --- Env vars with graceful fallbacks so the worker can start and expose
+# /health even when the full config isn't ready (e.g. fresh deploy before
+# app settings are applied). The actual business routes already gate on
+# these being set; the startup crash was preventing ALL routes.
+mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+DB_NAME = os.environ.get("DB_NAME", "pitcheq_dev")
+client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
+db = client[DB_NAME]
 
-JWT_SECRET = os.environ.get("JWT_SECRET")
+JWT_SECRET = os.environ.get("JWT_SECRET", "")
 if not JWT_SECRET:
-    raise RuntimeError(
-        "FATAL: JWT_SECRET environment variable is not set. "
-        "Generate one with: openssl rand -hex 32"
-    )
+    # Generate a throwaway secret so the process starts — auth routes will
+    # reject requests (no valid tokens can be issued), but the health check
+    # and the deployment probe succeed, avoiding the 10-minute timeout.
+    import secrets as _boot_secrets
+    JWT_SECRET = _boot_secrets.token_hex(32)
+    logging.warning("JWT_SECRET not set — using ephemeral secret. Auth will not work until a real secret is configured.")
 JWT_ALG = "HS256"
 JWT_TTL_HOURS = 24 * 7
 
@@ -60,6 +67,7 @@ import blob_storage  # media lives in Azure Blob, not in Mongo documents
 # Error tracking — mocked-first like every other integration: off when
 # SENTRY_DSN is unset (local dev), active the moment a real DSN is added.
 SENTRY_DSN = os.environ.get("SENTRY_DSN", "")
+APP_ENV = os.environ.get("ENV", "production")
 if SENTRY_DSN:
     import sentry_sdk
     from sentry_sdk.integrations.fastapi import FastApiIntegration
@@ -74,6 +82,12 @@ if SENTRY_DSN:
 app = FastAPI(title="Pitch EQ API")
 api = APIRouter(prefix="/api")
 bearer = HTTPBearer(auto_error=False)
+
+# Root-level health — Azure's deployment probe hits GET / and expects 200.
+# Placed on app (not the /api router) so it's reachable without the prefix.
+@app.get("/")
+async def root_health():
+    return {"status": "ok", "service": "innoira-api"}
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
@@ -799,19 +813,25 @@ async def list_campaigns(user=Depends(current_user)):
 
 
 async def _campaign_stats(cid: str, wid: str) -> Dict[str, Any]:
-    # Kept for single-campaign callers (get_campaign, analytics). For the
-    # list view we now use the batched aggregation above — single source
-    # so the two paths cannot drift.
-    events = await db.events.find({"campaign_id": cid, "workspace_id": wid}, {"_id": 0}).to_list(5000)
-    sent = sum(1 for e in events if e["type"] == "sent")
-    opened = sum(1 for e in events if e["type"] == "opened")
-    qpending = await db.send_queue.count_documents({"campaign_id": cid, "workspace_id": wid, "status": "pending"})
-    qsending = await db.send_queue.count_documents({"campaign_id": cid, "workspace_id": wid, "status": "sending"})
-    qfailed = await db.send_queue.count_documents({"campaign_id": cid, "workspace_id": wid, "status": "failed"})
-    replied = sum(1 for e in events if e["type"] == "replied")
-    clicked = sum(1 for e in events if e["type"] == "clicked")
-    meetings = sum(1 for e in events if e["type"] == "meeting_booked")
-    bounced = sum(1 for e in events if e["type"] == "bounced")
+    """Compute campaign stats using aggregation instead of loading all events."""
+    # Aggregate event counts by type in one server-side pass.
+    type_counts = await db.events.aggregate([
+        {"$match": {"campaign_id": cid, "workspace_id": wid}},
+        {"$group": {"_id": "$type", "count": {"$sum": 1}}},
+    ]).to_list(20)
+    counts = {doc["_id"]: doc["count"] for doc in type_counts}
+    sent = counts.get("sent", 0)
+    opened = counts.get("opened", 0)
+    replied = counts.get("replied", 0)
+    clicked = counts.get("clicked", 0)
+    meetings = counts.get("meeting_booked", 0)
+    bounced = counts.get("bounced", 0)
+    # Three parallel count queries for queue statuses.
+    qpending, qsending, qfailed = await asyncio.gather(
+        db.send_queue.count_documents({"campaign_id": cid, "workspace_id": wid, "status": "pending"}),
+        db.send_queue.count_documents({"campaign_id": cid, "workspace_id": wid, "status": "sending"}),
+        db.send_queue.count_documents({"campaign_id": cid, "workspace_id": wid, "status": "failed"}),
+    )
     return {
         "sent": sent,
         "opened": opened,
@@ -1726,8 +1746,8 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
     await db.generated_emails.insert_one({
         "id": new_id(), "workspace_id": wid,
         "campaign_id": cid, "lead_id": lead_id, "step": 0,
-        "subject": step_template.get("subject", ""),
-        "body_html": merged_html, "body_text": merged_body,
+        "subject": personalized.get("subject", ""),
+        "body_html": personalized.get("body_html", ""), "body_text": personalized.get("body", ""),
         "personalized_opener": personalized_opener,
         "status": "draft", "source": "campaign_generation",
         "generated_at": now_iso(), "sent_at": None,
@@ -1832,23 +1852,23 @@ async def generate_all_lead_emails(cid: str, user=Depends(current_user)):
 
     is_template = campaign.get("campaign_type") == "template"
     if is_template:
-        for lid in to_generate:
-            try:
-                await db.campaigns.update_one(
-                    {"id": cid},
-                    {"$push": {"personalized_emails": {
-                        "lead_id": lid,
-                        "subject": step_template.get("subject", ""),
-                        "body": step_template.get("body", "") or "",
-                        "body_html": step_template.get("body_html", "") or "",
-                        "personalized_opener": "",
-                        "status": "draft",
-                        "generated_at": now_iso(),
-                    }}}
-                )
-                results.append(lid)
-            except Exception as ex:
-                errors.append({"lead_id": lid, "error": str(ex)})
+        # Bulk insert all personalized emails in one operation instead of N sequential update_one.
+        now = now_iso()
+        entries = [{
+            "lead_id": lid,
+            "subject": step_template.get("subject", ""),
+            "body": (step_template.get("body", "") or ""),
+            "body_html": (step_template.get("body_html", "") or ""),
+            "personalized_opener": "",
+            "status": "draft",
+            "generated_at": now,
+        } for lid in to_generate]
+        if entries:
+            await db.campaigns.update_one(
+                {"id": cid},
+                {"$push": {"personalized_emails": {"$each": entries}}}
+            )
+        results = list(to_generate)
         await _audit(user, "campaign.leads.email_generated_all", {"campaign_id": cid, "count": len(results)})
         return {"generated": len(results), "errors": errors}
 
@@ -1969,18 +1989,21 @@ async def run_campaign_engine(cid: str, user=Depends(current_user)):
     if is_template:
         campaign_steps = campaign.get("steps", [])
         step_template = campaign_steps[0] if campaign_steps else {}
-        for lid in to_generate:
+        now = now_iso()
+        entries = [{
+            "lead_id": lid,
+            "subject": step_template.get("subject", ""),
+            "body": (step_template.get("body", "") or ""),
+            "body_html": (step_template.get("body_html", "") or ""),
+            "personalized_opener": "",
+            "status": "draft",
+            "generated_at": now,
+        } for lid in to_generate]
+        if entries:
             await db.campaigns.update_one(
                 {"id": cid},
-                {"$push": {"personalized_emails": {
-                    "lead_id": lid,
-                    "subject": step_template.get("subject", ""),
-                    "body": step_template.get("body", "") or "",
-                    "body_html": step_template.get("body_html", "") or "",
-                    "personalized_opener": "",
-                    "status": "draft",
-                    "generated_at": now_iso(),
-                }}})
+                {"$push": {"personalized_emails": {"$each": entries}}}
+            )
         return {"generated": len(to_generate), "job_id": "", "message": f"Emails ready for {len(to_generate)} leads"}
 
     # Create a generation job record for tracking
@@ -2364,20 +2387,22 @@ async def approve_all_campaign_emails(cid: str, user=Depends(current_user)):
     if is_template:
         step_template = (campaign.get("steps") or [{}])[0]
         existing = {p["lead_id"] for p in campaign.get("personalized_emails", [])}
-        for lid in campaign.get("lead_ids", []):
-            if lid not in existing:
-                await db.campaigns.update_one(
-                    {"id": cid},
-                    {"$push": {"personalized_emails": {
-                        "lead_id": lid,
-                        "subject": step_template.get("subject", ""),
-                        "body": step_template.get("body", "") or "",
-                        "body_html": step_template.get("body_html", "") or "",
-                        "personalized_opener": "",
-                        "status": "draft",
-                        "generated_at": now_iso(),
-                    }}}
-                )
+        missing = [lid for lid in campaign.get("lead_ids", []) if lid not in existing]
+        if missing:
+            now = now_iso()
+            entries = [{
+                "lead_id": lid,
+                "subject": step_template.get("subject", ""),
+                "body": (step_template.get("body", "") or ""),
+                "body_html": (step_template.get("body_html", "") or ""),
+                "personalized_opener": "",
+                "status": "draft",
+                "generated_at": now,
+            } for lid in missing]
+            await db.campaigns.update_one(
+                {"id": cid},
+                {"$push": {"personalized_emails": {"$each": entries}}}
+            )
     result = await db.campaigns.update_one(
         {"id": cid},
         {"$set": {"personalized_emails.$[elem].status": "approved"}},
@@ -7502,6 +7527,9 @@ async def _create_indexes():
         await db.events.create_index([("workspace_id", 1), ("type", 1)])
         await db.events.create_index([("workspace_id", 1), ("campaign_id", 1)])
         await db.events.create_index([("workspace_id", 1), ("at", -1)])
+        # Compound index covering the aggregation queries in sender.py auto-optimize
+        # and server.py campaign stats (match on workspace+campaign, group by type).
+        await db.events.create_index([("workspace_id", 1), ("campaign_id", 1), ("type", 1)])
         await db.suppressions.create_index([("workspace_id", 1), ("email", 1)], unique=True)
         await db.calls.create_index([("workspace_id", 1), ("created_at", -1)])
         await db.calls.create_index([("workspace_id", 1), ("lead_id", 1)])

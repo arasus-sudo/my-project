@@ -111,8 +111,15 @@ async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[
     not_before = now_local + timedelta(seconds=SEND_LAUNCH_GRACE_SECONDS)
 
     queued, skipped = 0, 0
+
+    # Batch-fetch all leads in one query instead of N individual find_one calls.
+    lead_docs = await db.leads.find(
+        {"id": {"$in": lead_ids}, "workspace_id": workspace_id}, {"_id": 0}
+    ).to_list(len(lead_ids))
+    leads_by_id: Dict[str, Any] = {l["id"]: l for l in lead_docs}
+
     for lid in lead_ids:
-        lead = await db.leads.find_one({"id": lid, "workspace_id": workspace_id}, {"_id": 0})
+        lead = leads_by_id.get(lid)
         if not lead:
             skipped += 1
             continue
@@ -486,20 +493,18 @@ async def run_send_tick(base_url: str = "") -> int:
                      row["lead_id"], row.get("step", 0) + 1, anchored)
 
     for wid, cid in sent_keys:
-        events = await db.events.find(
-            {"campaign_id": cid, "workspace_id": wid},
-            {"_id": 0, "type": 1},
-        ).to_list(2000)
-        total = len(events)
-        bounces = sum(1 for e in events if e.get("type") == "bounced")
+        # Use aggregation instead of loading all events into Python.
+        type_counts = await db.events.aggregate([
+            {"$match": {"campaign_id": cid, "workspace_id": wid}},
+            {"$group": {"_id": "$type", "count": {"$sum": 1}}},
+        ]).to_list(10)
+        counts = {doc["_id"]: doc["count"] for doc in type_counts}
+        total = sum(counts.values())
+        bounces = counts.get("bounced", 0)
         if total > 20 and bounces / total > BOUNCE_QUARANTINE_THRESHOLD:
             await db.campaigns.update_one({"id": cid}, {"$set": {"status": "quarantined", "quarantined_at": now_iso()}})
             log.warning("auto-quarantined campaign %s: bounce rate %.1f%%", cid, bounces / total * 100)
             continue
-        # "sending" rows are mid-dispatch on another tick, so they still count as
-        # outstanding — completing on pending==0 alone would mark a campaign done
-        # while its last items were in flight, flipping the UI back to a
-        # relaunchable state.
         remaining = await db.send_queue.count_documents(
             {"campaign_id": cid, "workspace_id": wid, "status": {"$in": ["pending", "sending"]}}
         )
@@ -508,28 +513,43 @@ async def run_send_tick(base_url: str = "") -> int:
             log.info("auto-completed campaign %s", cid)
 
     if sent:
-        # Lightweight auto-optimize: check every active campaign for issues
+        # Auto-optimize: use aggregation to compute stats per campaign server-side.
         try:
             wid_set = set(wid for wid, _ in sent_keys)
             for wid in wid_set:
-                campaigns = await db.campaigns.find(
-                    {"workspace_id": wid, "status": "active"}, {"_id": 0}).to_list(50)
-                for c in campaigns:
-                    evs = await db.events.find(
-                        {"campaign_id": c["id"], "workspace_id": wid},
-                        {"_id": 0, "type": 1}).to_list(2000)
-                    s = sum(1 for e in evs if e["type"] == "sent")
-                    b = sum(1 for e in evs if e["type"] == "bounced")
-                    r = sum(1 for e in evs if e["type"] == "replied")
+                # One aggregation across ALL active campaigns instead of N queries.
+                campaign_ids = [c["id"] async for c in db.campaigns.find(
+                    {"workspace_id": wid, "status": "active"}, {"_id": 0, "id": 1})]
+                if not campaign_ids:
+                    continue
+                stats = await db.events.aggregate([
+                    {"$match": {"workspace_id": wid, "campaign_id": {"$in": campaign_ids}}},
+                    {"$group": {
+                        "_id": {"cid": "$campaign_id", "type": "$type"},
+                        "count": {"$sum": 1},
+                    }},
+                ]).to_list(1000)
+                # Build per-campaign type counts
+                camp_stats: Dict[str, Dict[str, int]] = {}
+                for doc in stats:
+                    cid = doc["_id"]["cid"]
+                    camp_stats.setdefault(cid, {})[doc["_id"]["type"]] = doc["count"]
+                for cid in campaign_ids:
+                    cs = camp_stats.get(cid, {})
+                    s = cs.get("sent", 0)
+                    b = cs.get("bounced", 0)
+                    r = cs.get("replied", 0)
                     if s > 10 and b / s > 0.05:
-                        await db.campaigns.update_one({"id": c["id"]}, {"$set": {"status": "paused"}})
-                        log.warning("auto-optimize: paused %s (ws:%s) bounce %.0f%%", c["id"], wid, b/s*100)
+                        await db.campaigns.update_one({"id": cid}, {"$set": {"status": "paused"}})
+                        log.warning("auto-optimize: paused %s (ws:%s) bounce %.0f%%", cid, wid, b/s*100)
                     if s > 30 and r / s > 0.05:
-                        cur = c.get("batch_size", 10)
+                        # Need batch_size from campaign doc — fetch it once.
+                        camp_doc = await db.campaigns.find_one({"id": cid}, {"_id": 0, "batch_size": 1})
+                        cur = (camp_doc or {}).get("batch_size", 10)
                         new_b = min(cur + 5, 50)
                         if new_b > cur:
-                            await db.campaigns.update_one({"id": c["id"]}, {"$set": {"batch_size": new_b}})
-                            log.info("auto-optimize: ramped %s batch %s→%s", c["id"], cur, new_b)
+                            await db.campaigns.update_one({"id": cid}, {"$set": {"batch_size": new_b}})
+                            log.info("auto-optimize: ramped %s batch %s→%s", cid, cur, new_b)
         except Exception as ex:
             log.warning("auto-optimize tick error: %s", ex)
 
@@ -609,6 +629,7 @@ async def repair_followup_anchors() -> int:
 async def _send_email(row: Dict[str, Any], lead: Dict[str, Any], base_url: str,
                       campaign: Dict[str, Any]):
     from server import inject_tracking
+    from optout import check_optout_before_send
 
     mailbox = await _pick_mailbox(row["workspace_id"])
     if not mailbox:
@@ -621,6 +642,17 @@ async def _send_email(row: Dict[str, Any], lead: Dict[str, Any], base_url: str,
         if connected:
             raise DailyCapReached(f"all {connected} mailbox(es) at daily cap")
         raise RuntimeError("no eligible mailbox")
+
+    # Check opt-out before sending
+    if await check_optout_before_send(row["workspace_id"], lead["email"]):
+        log.info("optout: skipping email to %s (opted out)", lead["email"])
+        # Mark as skipped due to opt-out
+        await db.send_queue.update_one({"id": row["id"]}, {"$set": {
+            "status": "cancelled", "error": "recipient opted out",
+            "attempts": row.get("attempts", 0) + 1,
+            "send_at": (datetime.now(dt_timezone.utc) + timedelta(days=1)).isoformat(),
+        }})
+        return
 
     subject, html, text = _render(row, lead)
     if base_url:

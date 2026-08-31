@@ -688,9 +688,38 @@ def build_mcp_app(db, issuer_url: str, resource_server_url: str) -> FastMCP:
                                                           "via": "mcp", "client_id": user.get("_mcp_client_id")})
         return result
 
+    # ------------------------- Opt-out management ------------------------------
+    # Allow MCP clients to manage the opt-out list directly.
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def list_optouts(active_only: bool = True, limit: int = 100) -> List[Dict[str, Any]]:
+        """List all opted-out emails for the connected workspace."""
+        user = await current_mcp_user(db)
+        from optout import get_optout_list
+        return await get_optout_list(user["workspace_id"], active_only, limit)
+
+    @mcp.tool(annotations=SAFE_WRITE)
+    async def add_optout(email: str, reason: str = "manual", source: str = "mcp") -> Dict[str, Any]:
+        """Add an email to the opt-out list (suppress all future emails)."""
+        user = await current_mcp_user(db)
+        require_scope(user, "write")
+        from optout import add_to_optout
+        result = await add_to_optout(user["workspace_id"], email, reason, source, user["id"])
+        return result
+
+    @mcp.tool(annotations=SAFE_WRITE)
+    async def remove_optout(email: str) -> Dict[str, Any]:
+        """Remove an email from the opt-out list (re-opt-in)."""
+        user = await current_mcp_user(db)
+        require_scope(user, "write")
+        from optout import remove_from_optout
+        success = await remove_from_optout(user["workspace_id"], email, user["id"])
+        if not success:
+            raise ValueError("email not found in opt-out list")
+        return {"ok": True, "email": email}
+
+
     # ------------------------- Generic OpenAPI escape hatch ------------------
-    # Covers the ~490 routes with no curated tool above. search_endpoints/
-    # describe_endpoint read app.openapi() directly, so they can never go
     # stale. call_endpoint dispatches through a real in-process ASGI request
     # (not a direct Python call like the curated tools above) — that means it
     # picks up every mounted route's OWN Depends(...) (auth, role gates,
