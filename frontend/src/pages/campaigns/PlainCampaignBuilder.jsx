@@ -14,12 +14,13 @@ import { api } from "../../lib/api";
 import { toast } from "sonner";
 import {
   ArrowLeft, Save, Plus, Trash2, Mail, Users, Settings,
-  Loader2, Play, Check, Eye, RotateCw, Send,
+  Loader2, Play, Check, Eye, RotateCw, Send, Variable,
 } from "lucide-react";
 import RichEmailEditor, { sanitizeEmailHtml } from "../../components/RichEmailEditor";
 import CampaignReview from "./CampaignReview";
 import AudiencePicker from "./AudiencePicker";
 import SignaturePicker from "./SignaturePicker";
+import VariablePicker from "./VariablePicker";
 
 const stepKey = () => `s_${Math.random().toString(36).slice(2, 10)}`;
 
@@ -78,6 +79,7 @@ export default function PlainCampaignBuilder() {
   const [busy, setBusy] = useState(false);
   const [savedCampaignId, setSavedCampaignId] = useState(id || null);
   const [showAudience, setShowAudience] = useState(false);
+  const [showSubjectVars, setShowSubjectVars] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -359,17 +361,52 @@ export default function PlainCampaignBuilder() {
               {/* Subject */}
               <div style={{ marginBottom: 16 }}>
                 <label style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", display: "block", marginBottom: 6 }}>Subject</label>
-                <input
-                  value={currentStep?.subject || ""}
-                  onChange={(e) => updateStep(activeStep, { subject: e.target.value })}
-                  placeholder="Enter subject line"
-                  style={{
-                    width: "100%", padding: "10px 14px", borderRadius: "var(--radius-lg)",
-                    border: "1px solid var(--border-default)", background: "var(--bg-surface)",
-                    fontSize: 15, fontWeight: 500, color: "var(--text-primary)",
-                    fontFamily: "var(--font-display)", outline: "none",
-                  }}
-                />
+                <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 6 }}>
+                  <input
+                    id="plain-subject-input"
+                    value={currentStep?.subject || ""}
+                    onChange={(e) => updateStep(activeStep, { subject: e.target.value })}
+                    placeholder="Enter subject line — use {{variables}}"
+                    style={{
+                      flex: 1, padding: "10px 14px", borderRadius: "var(--radius-lg)",
+                      border: "1px solid var(--border-default)", background: "var(--bg-surface)",
+                      fontSize: 15, fontWeight: 500, color: "var(--text-primary)",
+                      fontFamily: "var(--font-display)", outline: "none",
+                    }}
+                  />
+                  <button
+                    onClick={() => setShowSubjectVars((v) => !v)}
+                    title="Insert variable"
+                    style={{
+                      display: "flex", alignItems: "center", gap: 4, padding: "8px 10px",
+                      borderRadius: "var(--radius-md)", border: "1px solid var(--border-default)",
+                      background: showSubjectVars ? "var(--color-primary-subtle)" : "var(--bg-surface)",
+                      color: showSubjectVars ? "var(--color-primary)" : "var(--text-secondary)",
+                      cursor: "pointer", fontSize: 11, fontWeight: 500, flexShrink: 0,
+                    }}
+                  >
+                    <Variable size={12} /> {"{{}}"}
+                  </button>
+                  {showSubjectVars && (
+                    <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 6, zIndex: 20 }}>
+                      <VariablePicker
+                        onSelect={(v) => {
+                          const input = document.getElementById("plain-subject-input");
+                          const token = `{{${v.key}}}`;
+                          const start = input?.selectionStart ?? (currentStep?.subject || "").length;
+                          const end = input?.selectionEnd ?? start;
+                          const cur = currentStep?.subject || "";
+                          const next = cur.slice(0, start) + token + cur.slice(end);
+                          updateStep(activeStep, { subject: next });
+                          setShowSubjectVars(false);
+                          setTimeout(() => { input?.focus(); const pos = start + token.length; input?.setSelectionRange(pos, pos); }, 0);
+                        }}
+                        onClose={() => setShowSubjectVars(false)}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 4 }}>Supports variables like {"{{first_name}}"}, {"{{company_name}}"} — click {"{{}}"} to insert.</div>
               </div>
               {/* Body */}
               <div>

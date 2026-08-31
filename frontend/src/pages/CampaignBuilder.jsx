@@ -10,8 +10,9 @@ import {
   Zap, ChevronLeft, ChevronRight, ChevronDown,
   Edit2, RotateCw, Flag, X, PenSquare,
   Phone, MessageSquare, Send, MessageCircle,
-  FileText, Sparkles, Megaphone,
+  FileText, Sparkles, Megaphone, Variable,
 } from "lucide-react";
+import VariablePicker from "./campaigns/VariablePicker";
 
 const TIMEZONES = [
   "UTC", "US/Eastern", "US/Central", "US/Mountain", "US/Pacific",
@@ -1189,15 +1190,48 @@ function AudienceSection({
 
 function ChannelEditor({ step, updateStep }) {
   const [templatePicker, setTemplatePicker] = useState(false);
+  const [showSubjectVars, setShowSubjectVars] = useState(false);
   return (
     <>
       {(step.channel || "email") === "email" && (
         <>
-          <div className="text-tiny font-mono text-fg-tertiary mb-1">Subject</div>
-          <input value={step.subject} onChange={(e) => updateStep({ subject: e.target.value })}
-            data-testid="editor-subject"
-            className="w-full text-caption font-medium border-0 border-b border-line-default py-1.5 focus:outline-none focus:border-primary bg-transparent"
-            placeholder="Quick idea for {{company}}" />
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-tiny font-mono text-fg-tertiary">Subject</div>
+            <button
+              onClick={() => setShowSubjectVars((v) => !v)}
+              title="Insert variable"
+              data-testid="subject-variable-btn"
+              className="flex items-center gap-1 text-tiny font-medium px-1.5 py-0.5 rounded border hover:bg-ds-hover transition-colors"
+              style={{ borderColor: showSubjectVars ? "var(--color-primary)" : "var(--border-default)", color: showSubjectVars ? "var(--color-primary)" : "var(--text-tertiary)" }}
+            >
+              <Variable size={11} /> {"{{}}"}
+            </button>
+          </div>
+          <div style={{ position: "relative" }}>
+            <input value={step.subject} onChange={(e) => updateStep({ subject: e.target.value })}
+              data-testid="editor-subject"
+              id="campaign-subject-input"
+              className="w-full text-caption font-medium border-0 border-b border-line-default py-1.5 focus:outline-none focus:border-primary bg-transparent"
+              placeholder="Quick idea for {{company}}" />
+            {showSubjectVars && (
+              <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 6, zIndex: 20 }}>
+                <VariablePicker
+                  onSelect={(v) => {
+                    const input = document.getElementById("campaign-subject-input");
+                    const token = `{{${v.key}}}`;
+                    const start = input?.selectionStart ?? (step.subject || "").length;
+                    const end = input?.selectionEnd ?? start;
+                    const cur = step.subject || "";
+                    const next = cur.slice(0, start) + token + cur.slice(end);
+                    updateStep({ subject: next });
+                    setShowSubjectVars(false);
+                    setTimeout(() => { input?.focus(); const pos = start + token.length; input?.setSelectionRange(pos, pos); }, 0);
+                  }}
+                  onClose={() => setShowSubjectVars(false)}
+                />
+              </div>
+            )}
+          </div>
           <div className="mt-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="text-tiny font-mono text-fg-tertiary">Body</div>
