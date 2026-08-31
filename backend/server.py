@@ -1603,7 +1603,7 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
     campaign_steps = campaign.get("steps", [])
     step_template = campaign_steps[0] if campaign_steps else {}
 
-    is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain")
+    is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain", None)
     if is_template:
         # Template campaign — no AI research or opener, just store the template body as-is
         personalized = {
@@ -1794,13 +1794,19 @@ async def get_campaign_leads(cid: str, step: int = 0, user=Depends(current_user)
         {"_id": 0}
     ).to_list(500)
 
+    # Alias map for template variables vs stored Lead fields
+    VAR_ALIAS = {"company_name": "company", "company": "company_name", "job_title": "title", "title": "job_title"}
     def _resolve(s: str, lead: Dict[str, Any]) -> str:
         if not s:
             return s
         import re
         def rep(m):
             key = m.group(1).strip()
-            v = lead.get(key, "")
+            v = lead.get(key)
+            if v is None or v == "":
+                alias = VAR_ALIAS.get(key)
+                if alias:
+                    v = lead.get(alias, "")
             return v if v else m.group(0)
         return re.sub(r"\{\{\s*(\w+)\s*\}\}", rep, s)
 
@@ -1858,15 +1864,19 @@ async def generate_all_lead_emails(cid: str, user=Depends(current_user)):
     step_template = campaign_steps[0] if campaign_steps else {}
     results, errors = [], []
 
-    is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain")
+    is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain", None)
     if is_template:
-        # Bulk insert all personalized emails in one operation instead of N sequential update_one.
+        # Bulk insert all personalized emails with merge variables resolved per lead.
         now = now_iso()
+        lead_docs = await db.leads.find(
+            {"id": {"$in": to_generate}, "workspace_id": wid}, {"_id": 0}
+        ).to_list(len(to_generate))
+        lead_map = {ld["id"]: ld for ld in lead_docs}
         entries = [{
             "lead_id": lid,
-            "subject": step_template.get("subject", ""),
-            "body": (step_template.get("body", "") or ""),
-            "body_html": (step_template.get("body_html", "") or ""),
+            "subject": personalize(step_template.get("subject", ""), lead_map.get(lid, {})),
+            "body": personalize(step_template.get("body", "") or "", lead_map.get(lid, {})),
+            "body_html": personalize(step_template.get("body_html", "") or "", lead_map.get(lid, {})),
             "personalized_opener": "",
             "status": "draft",
             "generated_at": now,
@@ -1880,13 +1890,23 @@ async def generate_all_lead_emails(cid: str, user=Depends(current_user)):
         await _audit(user, "campaign.leads.email_generated_all", {"campaign_id": cid, "count": len(results)})
         return {"generated": len(results), "errors": errors}
 
+    # AI campaigns — delegate to the background run-engine pipeline
     if not await _rate_ok(user):
         raise HTTPException(429, "Daily AI quota exceeded")
-    for lid, outcome in zip(to_generate, outcomes):
-        if isinstance(outcome, Exception):
-            errors.append({"lead_id": lid, "error": str(outcome)})
-    await _audit(user, "campaign.leads.email_generated_all", {"campaign_id": cid, "count": len(results)})
-    return {"generated": len(results), "errors": errors}
+    gen_id = new_id()
+    job_doc = {
+        "id": gen_id, "workspace_id": wid, "campaign_id": cid,
+        "status": "pending", "total": len(to_generate), "done": 0,
+        "errors": [], "lead_ids": to_generate,
+        "current_batch_index": 0, "batch_size": 50,
+        "created_at": now_iso(), "updated_at": now_iso(),
+        "user_id": user["id"],
+        "campaign_type": campaign.get("campaign_type", "ai"),
+    }
+    await db.generation_jobs.insert_one(job_doc)
+    asyncio.create_task(_run_generation_job(gen_id, wid, cid, to_generate, campaign, user))
+    await _audit(user, "campaign.leads.email_generated_all", {"campaign_id": cid, "count": len(to_generate)})
+    return {"generated": len(to_generate), "job_id": gen_id, "message": f"Generating AI emails for {len(to_generate)} leads"}
 
 
 @api.delete("/campaigns/{cid}/leads/{lead_id}/email")
@@ -1973,7 +1993,7 @@ async def run_campaign_engine(cid: str, user=Depends(current_user)):
     if not lead_ids:
         raise HTTPException(400, "No leads assigned to campaign. Add leads first.")
 
-    is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain")
+    is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain", None)
     if not is_template:
         if not await _rate_ok(user):
             raise HTTPException(429, "Daily AI quota exceeded")
@@ -1998,15 +2018,23 @@ async def run_campaign_engine(cid: str, user=Depends(current_user)):
         campaign_steps = campaign.get("steps", [])
         step_template = campaign_steps[0] if campaign_steps else {}
         now = now_iso()
-        entries = [{
-            "lead_id": lid,
-            "subject": step_template.get("subject", ""),
-            "body": (step_template.get("body", "") or ""),
-            "body_html": (step_template.get("body_html", "") or ""),
-            "personalized_opener": "",
-            "status": "draft",
-            "generated_at": now,
-        } for lid in to_generate]
+        # Fetch all lead docs so we can personalize merge variables
+        lead_docs = await db.leads.find(
+            {"id": {"$in": to_generate}, "workspace_id": wid}, {"_id": 0}
+        ).to_list(len(to_generate))
+        lead_map = {ld["id"]: ld for ld in lead_docs}
+        entries = []
+        for lid in to_generate:
+            ld = lead_map.get(lid, {})
+            entries.append({
+                "lead_id": lid,
+                "subject": personalize(step_template.get("subject", ""), ld),
+                "body": personalize(step_template.get("body", "") or "", ld),
+                "body_html": personalize(step_template.get("body_html", "") or "", ld),
+                "personalized_opener": "",
+                "status": "draft",
+                "generated_at": now,
+            })
         if entries:
             await db.campaigns.update_one(
                 {"id": cid},
@@ -2095,7 +2123,7 @@ async def _run_generation_job(gen_id: str, wid: str, cid: str, to_generate: list
                         # Upsert personalized email
                         entry = {
                             "lead_id": lid,
-                            "subject": step_template.get("subject", ""),
+                            "subject": personalize(step_template.get("subject", ""), lead),
                             "body": merged_body,
                             "body_html": merged_html,
                             "personalized_opener": personalized_opener,
@@ -2345,16 +2373,17 @@ async def approve_campaign_lead_email(cid: str, lead_id: str, user=Depends(curre
     if result.modified_count == 0:
         # Template campaigns may not have a personalized_emails entry yet —
         # auto-create one so the user can approve without a separate generation step.
-        is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain")
+        is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain", None)
         if is_template:
             step_template = (campaign.get("steps") or [{}])[0]
+            lead_doc = await db.leads.find_one({"id": lead_id, "workspace_id": wid}, {"_id": 0}) or {}
             await db.campaigns.update_one(
                 {"id": cid},
                 {"$push": {"personalized_emails": {
                     "lead_id": lead_id,
-                    "subject": step_template.get("subject", ""),
-                    "body": step_template.get("body", "") or "",
-                    "body_html": step_template.get("body_html", "") or "",
+                    "subject": personalize(step_template.get("subject", ""), lead_doc),
+                    "body": personalize(step_template.get("body", "") or "", lead_doc),
+                    "body_html": personalize(step_template.get("body_html", "") or "", lead_doc),
                     "personalized_opener": "",
                     "status": "approved",
                     "generated_at": now_iso(),
@@ -2391,18 +2420,22 @@ async def approve_all_campaign_emails(cid: str, user=Depends(current_user)):
     if not campaign:
         raise HTTPException(404, "not found")
     # For template campaigns, auto-generate entries for any leads that don't have one yet.
-    is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain")
+    is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain", None)
     if is_template:
         step_template = (campaign.get("steps") or [{}])[0]
         existing = {p["lead_id"] for p in campaign.get("personalized_emails", [])}
         missing = [lid for lid in campaign.get("lead_ids", []) if lid not in existing]
         if missing:
             now = now_iso()
+            lead_docs = await db.leads.find(
+                {"id": {"$in": missing}, "workspace_id": wid}, {"_id": 0}
+            ).to_list(len(missing))
+            lmap = {ld["id"]: ld for ld in lead_docs}
             entries = [{
                 "lead_id": lid,
-                "subject": step_template.get("subject", ""),
-                "body": (step_template.get("body", "") or ""),
-                "body_html": (step_template.get("body_html", "") or ""),
+                "subject": personalize(step_template.get("subject", ""), lmap.get(lid, {})),
+                "body": personalize(step_template.get("body", "") or "", lmap.get(lid, {})),
+                "body_html": personalize(step_template.get("body_html", "") or "", lmap.get(lid, {})),
                 "personalized_opener": "",
                 "status": "draft",
                 "generated_at": now,

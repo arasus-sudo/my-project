@@ -35,6 +35,7 @@ export default function CampaignReview({ campaignId, onBack }) {
   const [busy, setBusy] = useState(false);
   const [previewStep, setPreviewStep] = useState(0);
   const [selectedReview, setSelectedReview] = useState([]);
+  const [signatures, setSignatures] = useState([]);
 
   const loadCampaignLeads = useCallback((step) => {
     if (!campaignId) return;
@@ -52,20 +53,20 @@ export default function CampaignReview({ campaignId, onBack }) {
   useEffect(() => {
     loadCampaign();
     loadCampaignLeads();
+    api.get("/signatures").then((r) => setSignatures(r.data || [])).catch(() => {});
   }, [loadCampaign, loadCampaignLeads]);
 
-  // Auto-trigger generation when campaign has leads but no personalized emails yet
-  // Guard: only if parent hasn't already triggered (check job already running)
+  // Auto-trigger generation when campaign has leads but no personalized emails yet.
+  // Uses a simple flag — run-engine is idempotent (skips already-done leads),
+  // so double-triggering is safe and better than missing generation entirely.
   const autoTriggeredRef = useRef(false);
   useEffect(() => {
     if (!campaign || !campaign.lead_ids?.length || generating) return;
     if ((campaign.personalized_emails?.length || 0) > 0) return;
     if (autoTriggeredRef.current) return;
-    // If campaign was just created (<3s ago), parent save already triggered run-engine — skip auto
-    const createdAt = campaign.created_at ? new Date(campaign.created_at).getTime() : 0;
-    if (Date.now() - createdAt < 3000) return;
     autoTriggeredRef.current = true;
-    const t = setTimeout(() => runEngine(), 800);
+    // Short delay so parent's own run-engine call (if any) fires first
+    const t = setTimeout(() => runEngine(), 1500);
     return () => clearTimeout(t);
   }, [campaign]);
 
@@ -271,7 +272,7 @@ export default function CampaignReview({ campaignId, onBack }) {
     );
   }
 
-  /* ── Leads assigned but no emails yet — auto-generating ── */
+  /* ── Leads assigned but no emails yet — offer generation ── */
   if (needsGeneration) {
     return (
       <div style={{
@@ -283,14 +284,26 @@ export default function CampaignReview({ campaignId, onBack }) {
           background: "var(--color-primary-subtle)", display: "flex",
           alignItems: "center", justifyContent: "center", marginBottom: 8,
         }}>
-          <Loader2 size={24} className="animate-spin" style={{ color: "var(--color-primary)" }} />
+          <Mail size={24} style={{ color: "var(--color-primary)" }} strokeWidth={1.5} />
         </div>
         <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-ui)", margin: 0 }}>
-          Starting email generation...
+          {stats.total} lead{stats.total === 1 ? "" : "s"} ready
         </h3>
         <p style={{ fontSize: 13, color: "var(--text-tertiary)", maxWidth: 360, textAlign: "center", lineHeight: "20px" }}>
-          Generating personalized emails for {stats.total} lead{stats.total === 1 ? "" : "s"}.
+          Click below to generate personalized emails for your audience.
         </p>
+        <button
+          onClick={runEngine}
+          style={{
+            padding: "10px 24px", borderRadius: "var(--radius-lg)",
+            border: "none", background: "var(--color-primary)", color: "#fff",
+            fontSize: 13, fontWeight: 600, cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 6,
+            marginTop: 8,
+          }}
+        >
+          <Play size={14} /> Generate Emails
+        </button>
       </div>
     );
   }
@@ -435,35 +448,43 @@ export default function CampaignReview({ campaignId, onBack }) {
             </div>
           </div>
 
-          {/* Email preview */}
-          <div style={{ flex: 1, overflow: "auto", padding: 20, background: "var(--bg-surface-sunken)" }}>
-            {currentLead.personalized ? (
-              <div style={{ maxWidth: 600, margin: "0 auto" }}>
-                <div style={{
-                  padding: 16, borderRadius: "var(--radius-lg)",
-                  background: "#fff", border: "1px solid var(--border-default)",
-                  boxShadow: "var(--shadow-sm)",
-                }}>
-                  {/* Subject */}
-                  <div style={{ marginBottom: 4, fontSize: 11, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>
-                    Subject:
+          {/* Email preview — show even before generation (template merge) and include signature */}
+          {(() => {
+            const activeSigHtml = campaign?.signature_id ? (signatures.find((s) => s.id === campaign.signature_id)?.content_html || "") : "";
+            const hasContent = currentLead && (currentLead.email_subject || currentLead.email_body_html || currentLead.email_body);
+            const bodyHtml = hasContent ? sanitizeHtml(currentLead.email_body_html || currentLead.email_body || "") + (activeSigHtml ? `<br><br>${activeSigHtml}` : "") : "";
+            return (
+              <div style={{ flex: 1, overflow: "auto", padding: 20, background: "var(--bg-surface-sunken)" }}>
+                {hasContent ? (
+                  <div style={{ maxWidth: 600, margin: "0 auto" }}>
+                    <div style={{
+                      padding: 16, borderRadius: "var(--radius-lg)",
+                      background: "#fff", border: "1px solid var(--border-default)",
+                      boxShadow: "var(--shadow-sm)",
+                    }}>
+                      {/* Subject */}
+                      <div style={{ marginBottom: 4, fontSize: 11, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>
+                        Subject:
+                      </div>
+                      <div style={{ fontSize: 16, fontWeight: 600, color: "#111", marginBottom: 16, fontFamily: "var(--font-display)" }}>
+                        {currentLead.email_subject || "(no subject)"}
+                      </div>
+                      {/* Body */}
+                      <div
+                        style={{ fontSize: 14, lineHeight: "22px", color: "#333" }}
+                        dangerouslySetInnerHTML={{ __html: bodyHtml }}
+                      />
+                      {activeSigHtml && <div style={{ marginTop: 8, fontSize: 10, color: "var(--text-tertiary)" }}>Signature included</div>}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: "#111", marginBottom: 16, fontFamily: "var(--font-display)" }}>
-                    {currentLead.personalized.subject || "(no subject)"}
+                ) : (
+                  <div style={{ textAlign: "center", padding: 40, color: "var(--text-tertiary)", fontSize: 13 }}>
+                    {campaignLeads.length === 0 ? "Select a lead to preview" : "No preview available — check template subject/body"}
                   </div>
-                  {/* Body */}
-                  <div
-                    style={{ fontSize: 14, lineHeight: "22px", color: "#333" }}
-                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(currentLead.personalized.body_html || currentLead.personalized.body || "") }}
-                  />
-                </div>
+                )}
               </div>
-            ) : (
-              <div style={{ textAlign: "center", padding: 40, color: "var(--text-tertiary)", fontSize: 13 }}>
-                Email not generated for this lead yet.
-              </div>
-            )}
-          </div>
+            );
+          })()}
 
           {/* Action bar */}
           <div style={{
