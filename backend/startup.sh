@@ -8,10 +8,10 @@ cd "$WWWROOT"
 # Set PYTHONPATH so vendored dependencies are found (GitHub Actions mode)
 if [ -d "$WWWROOT/vendor" ]; then
   export PYTHONPATH="$WWWROOT/vendor:$WWWROOT"
-  echo "[startup] vendor mode — PYTHONPATH=$PYTHONPATH"
+  echo "[startup] vendor mode - PYTHONPATH=$PYTHONPATH"
 else
   export PYTHONPATH="$WWWROOT"
-  echo "[startup] no vendor dir — PYTHONPATH=$PYTHONPATH"
+  echo "[startup] no vendor dir - PYTHONPATH=$PYTHONPATH"
 fi
 
 # Ensure startup script is executable and show what will run
