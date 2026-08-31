@@ -55,13 +55,17 @@ export default function CampaignReview({ campaignId, onBack }) {
   }, [loadCampaign, loadCampaignLeads]);
 
   // Auto-trigger generation when campaign has leads but no personalized emails yet
+  // Guard: only if parent hasn't already triggered (check job already running)
   const autoTriggeredRef = useRef(false);
   useEffect(() => {
     if (!campaign || !campaign.lead_ids?.length || generating) return;
-    if (campaign.personalized_emails?.length > 0) return;
+    if ((campaign.personalized_emails?.length || 0) > 0) return;
     if (autoTriggeredRef.current) return;
+    // If campaign was just created (<3s ago), parent save already triggered run-engine — skip auto
+    const createdAt = campaign.created_at ? new Date(campaign.created_at).getTime() : 0;
+    if (Date.now() - createdAt < 3000) return;
     autoTriggeredRef.current = true;
-    const t = setTimeout(() => runEngine(), 500);
+    const t = setTimeout(() => runEngine(), 800);
     return () => clearTimeout(t);
   }, [campaign]);
 
