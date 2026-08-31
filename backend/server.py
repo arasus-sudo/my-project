@@ -19,6 +19,11 @@ import re
 import json
 import base64
 import logging
+# Logger must be defined BEFORE any exception handler or early warning uses it.
+# Previously it was defined at the bottom of the file, causing NameError on cold start.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("pitcheq")
+
 import uuid
 import bcrypt
 import jwt
@@ -7858,10 +7863,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-logger = logging.getLogger("pitcheq")
-
 
 @app.on_event("shutdown")
 async def shutdown_db():
