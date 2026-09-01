@@ -72,6 +72,7 @@ export default function RichEmailEditor({ value, onChange, placeholder = "Write 
         codeBlock: false,
         blockquote: false,
         horizontalRule: false,
+        link: false,
       }),
       Link.configure({ openOnClick: false, autolink: true }),
       Image.configure({ inline: false, allowBase64: true }),
