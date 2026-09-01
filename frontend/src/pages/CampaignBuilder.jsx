@@ -235,7 +235,7 @@ export default function CampaignBuilder() {
         if (c.tags?.length) setCampaignTags(c.tags.join(", "));
         setBatchSize(c.batch_size || 10);
         setPhasedGeneration(c.phased_generation || false);
-        if (c.campaign_type) setCampaignType(c.campaign_type);
+        if (c.campaign_type) { const norm = {plain:"blank"}[c.campaign_type] || c.campaign_type; setCampaignType(norm); }
       });
       loadCampaignLeads();
       api.get(`/campaigns/${id}/batch-status`).then((r) => setBatchStatus(r.data)).catch(() => {});
@@ -244,7 +244,7 @@ export default function CampaignBuilder() {
 
   const deleteLeadEmail = async (leadId) => {
     try {
-      await api.delete(`/campaigns/${id}/leads/${leadId}/email`);
+      await api.delete(`/campaigns/${activeCampaignId || id}/leads/${leadId}/email`);
       toast.success("Email removed");
       loadCampaignLeads();
     } catch {
@@ -329,7 +329,7 @@ export default function CampaignBuilder() {
   // Approve / Reject
   const approveEmail = async (leadId) => {
     try {
-      await api.post(`/campaigns/${id}/leads/${leadId}/approve`);
+      await api.post(`/campaigns/${activeCampaignId || id}/leads/${leadId}/approve`);
       toast.success("Email approved");
       loadCampaignLeads();
     } catch { toast.error("Approval failed"); }
@@ -338,7 +338,7 @@ export default function CampaignBuilder() {
   const approveAllEmails = async () => {
     if (!id) return;
     try {
-      const { data } = await api.post(`/campaigns/${id}/leads/approve-all`);
+      const { data } = await api.post(`/campaigns/${activeCampaignId || id}/leads/approve-all`);
       toast.success(`${data.approved} email(s) approved`);
       loadCampaignLeads();
     } catch { toast.error("Approve-all failed"); }
@@ -348,7 +348,7 @@ export default function CampaignBuilder() {
     if (!id || !campaignLeads?.length) return;
     const allIds = campaignLeads.map((l) => l.id);
     try {
-      const { data } = await api.post(`/campaigns/${id}/leads/bulk-status`, { lead_ids: allIds, status: "rejected" });
+      const { data } = await api.post(`/campaigns/${activeCampaignId || id}/leads/bulk-status`, { lead_ids: allIds, status: "rejected" });
       toast.success(`${data.updated} email(s) rejected`);
       loadCampaignLeads();
     } catch { toast.error("Reject-all failed"); }
@@ -357,7 +357,7 @@ export default function CampaignBuilder() {
   const dismissAllEmails = async () => {
     if (!id) return;
     try {
-      await api.delete(`/campaigns/${id}/leads/email`);
+      await api.delete(`/campaigns/${activeCampaignId || id}/leads/email`);
       toast.success("All emails dismissed");
       setReviewMode(false);
       loadCampaignLeads();
@@ -366,7 +366,7 @@ export default function CampaignBuilder() {
 
   const rejectEmail = async (leadId) => {
     try {
-      await api.post(`/campaigns/${id}/leads/${leadId}/reject`);
+      await api.post(`/campaigns/${activeCampaignId || id}/leads/${leadId}/reject`);
       toast.success("Email rejected");
       loadCampaignLeads();
     } catch { toast.error("Rejection failed"); }
@@ -377,7 +377,7 @@ export default function CampaignBuilder() {
   const bulkSetReviewStatus = async (status) => {
     if (!id || selectedReview.length === 0) return;
     try {
-      const { data } = await api.post(`/campaigns/${id}/leads/bulk-status`, { lead_ids: selectedReview, status });
+      const { data } = await api.post(`/campaigns/${activeCampaignId || id}/leads/bulk-status`, { lead_ids: selectedReview, status });
       toast.success(`${data.updated} email(s) ${status}`);
       setSelectedReview([]);
       loadCampaignLeads();
@@ -392,7 +392,7 @@ export default function CampaignBuilder() {
     if (!id) return;
     setSendingTest(true);
     try {
-      const { data } = await api.post(`/campaigns/${id}/leads/${leadId}/send-test`);
+      const { data } = await api.post(`/campaigns/${activeCampaignId || id}/leads/${leadId}/send-test`);
       toast.success(data.mocked ? `Test recorded (no mailbox connected — see Mailboxes)` : `Test sent to ${data.sent_to}`);
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Test send failed");
@@ -408,7 +408,7 @@ export default function CampaignBuilder() {
     if (!id) return;
     setRegeneratingAll(true);
     try {
-      const { data } = await api.post(`/campaigns/${id}/leads/regenerate-all`);
+      const { data } = await api.post(`/campaigns/${activeCampaignId || id}/leads/regenerate-all`);
       toast.success(`Regenerated ${data.generated} email(s)`);
       if (data.errors?.length) console.warn("Regenerate errors:", data.errors);
       loadCampaignLeads();
@@ -424,7 +424,7 @@ export default function CampaignBuilder() {
     if (!id) return;
     setGeneratingEmail(leadId);
     try {
-      const { data } = await api.post(`/campaigns/${id}/leads/${leadId}/regenerate-opener`);
+      const { data } = await api.post(`/campaigns/${activeCampaignId || id}/leads/${leadId}/regenerate-opener`);
       toast.success("Opener regenerated");
       loadCampaignLeads();
     } catch (err) {
@@ -438,7 +438,7 @@ export default function CampaignBuilder() {
   const saveOpener = async (leadId, newOpener) => {
     if (!id) return;
     try {
-      await api.post(`/campaigns/${id}/leads/${leadId}/update-opener`, { opener: newOpener });
+      await api.post(`/campaigns/${activeCampaignId || id}/leads/${leadId}/update-opener`, { opener: newOpener });
       toast.success("Opener updated");
       loadCampaignLeads();
       setEditingOpener(null);
