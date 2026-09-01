@@ -134,7 +134,7 @@ export default function CampaignDetail() {
         steps: cleanSteps,
         lead_ids: selectedLeads,
         signature_id: includeSignature ? signatureId : null,
-        send_window_start, send_window_end, timezone,
+        send_window_start: sendWindowStart, send_window_end: sendWindowEnd, timezone,
       });
       toast.success("Saved");
       loadCampaign();
