@@ -57,6 +57,7 @@ export default function CampaignDetail() {
   const [timezone, setTimezone] = useState("UTC");
   const [leadDetails, setLeadDetails] = useState([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [leadMap, setLeadMap] = useState({});
 
   const loadCampaign = useCallback(() => {
     if (!id) return;
@@ -84,6 +85,17 @@ export default function CampaignDetail() {
     loadCampaign();
     api.get("/signatures").then((r) => setSignatures(r.data || [])).catch(() => {});
   }, [loadCampaign]);
+
+  // Fetch details for selected leads not yet in campaign (not yet saved) so the Lead tab shows names, not raw IDs like "21417da1..."
+  useEffect(() => {
+    const missing = selectedLeads.filter((lid) => !leadDetails.find((l) => l.id === lid) && !leadMap[lid]);
+    if (missing.length === 0) return;
+    Promise.all(missing.map((lid) => api.get(`/leads/${lid}`).then((r) => r.data).catch(() => null))).then((results) => {
+      const map = {};
+      results.forEach((r) => { if (r && r.id) map[r.id] = r; });
+      if (Object.keys(map).length) setLeadMap((prev) => ({ ...prev, ...map }));
+    });
+  }, [selectedLeads, leadDetails, leadMap]);
 
   const updateStep = useCallback((idx, patch) => {
     setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
@@ -505,7 +517,9 @@ export default function CampaignDetail() {
                   gap: 8,
                 }}>
                   {selectedLeads.map((lid) => {
-                    const detail = leadDetails.find((l) => l.id === lid);
+                    const detail = leadDetails.find((l) => l.id === lid) || leadMap[lid];
+                    const name = detail ? `${detail.first_name || ""} ${detail.last_name || ""}`.trim() : "";
+                    const email = detail?.email || "";
                     return (
                       <div key={lid} style={{
                         padding: "10px 14px", borderRadius: "var(--radius-lg)",
@@ -514,10 +528,13 @@ export default function CampaignDetail() {
                       }}>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {detail ? `${detail.first_name || ""} ${detail.last_name || ""}`.trim() || lid : lid}
+                            {name || email || lid}
                           </div>
-                          {detail?.email && (
-                            <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{detail.email}</div>
+                          {email && (
+                            <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>
+                          )}
+                          {!detail && !leadMap[lid] && (
+                            <div style={{ fontSize: 10, color: "var(--color-warning)", marginTop: 1 }}>Loading…</div>
                           )}
                         </div>
                         <button onClick={() => setSelectedLeads((prev) => prev.filter((x) => x !== lid))}
