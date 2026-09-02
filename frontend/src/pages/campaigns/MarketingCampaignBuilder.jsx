@@ -13,7 +13,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Save, Users, Loader2, Play, Eye,
+  ArrowLeft, Save, Users, Loader2, Play, Eye, Maximize2,
   Monitor, Smartphone, Moon, Megaphone, Sparkles, Variable, Code2,
 } from "lucide-react";
 import CampaignReview from "./CampaignReview";
@@ -134,7 +134,8 @@ export default function MarketingCampaignBuilder() {
   const [selectedLeads, setSelectedLeads] = useState([]);
   const [busy, setBusy] = useState(false);
   const [savedCampaignId, setSavedCampaignId] = useState(id || null);
-  const [previewMode, setPreviewMode] = useState("desktop"); // desktop | mobile | dark
+  const [previewMode, setPreviewMode] = useState("desktop"); // desktop | mobile | auto
+  const [darkPreview, setDarkPreview] = useState(false);
   const [showAudience, setShowAudience] = useState(false);
   const [signatureId, setSignatureId] = useState("");
   const [includeSignature, setIncludeSignature] = useState(true);
@@ -512,7 +513,7 @@ export default function MarketingCampaignBuilder() {
             {[
               { key: "desktop", icon: Monitor, label: "Desktop" },
               { key: "mobile", icon: Smartphone, label: "Mobile" },
-              { key: "dark", icon: Moon, label: "Dark" },
+              { key: "auto", icon: Maximize2, label: "Auto fit" },
             ].map((mode) => (
               <button
                 key={mode.key}
@@ -529,20 +530,35 @@ export default function MarketingCampaignBuilder() {
                 <mode.icon size={11} /> {mode.label}
               </button>
             ))}
+            <div style={{ marginLeft: "auto" }} />
+            <button
+              onClick={() => setDarkPreview(v => !v)}
+              style={{
+                padding: "4px 10px", borderRadius: "var(--radius-sm)",
+                border: "1px solid", cursor: "pointer", fontSize: 11,
+                display: "flex", alignItems: "center", gap: 4,
+                borderColor: darkPreview ? "var(--color-primary)" : "var(--border-default)",
+                background: darkPreview ? "var(--color-primary-subtle)" : "transparent",
+                color: darkPreview ? "var(--color-primary)" : "var(--text-tertiary)",
+              }}
+            >
+              <Moon size={11} /> Dark preview
+            </button>
           </div>
 
           {/* Preview area */}
           <div style={{ flex: 1, overflow: "auto", padding: 20, display: "flex", justifyContent: "center" }}>
             {html ? (
               <div style={{
-                width: previewMode === "mobile" ? 375 : 600,
+                width: previewMode === "mobile" ? 375 : previewMode === "auto" ? "fit-content" : 600,
+                minWidth: previewMode === "auto" ? "fit-content" : undefined,
                 borderRadius: "var(--radius-xl)",
                 border: "1px solid var(--border-default)",
                 background: "#fff",
                 overflow: "hidden",
                 transition: "width 300ms ease",
                 boxShadow: "var(--shadow-md)",
-                ...(previewMode === "dark" ? { filter: DARK_FILTER } : {}),
+                ...(darkPreview ? { filter: DARK_FILTER } : {}),
               }}>
                 {/* Inbox header */}
                 <div style={{
