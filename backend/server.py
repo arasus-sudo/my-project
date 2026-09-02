@@ -2683,7 +2683,7 @@ async def bulk_set_lead_status(cid: str, body: BulkStatusIn, user=Depends(curren
 
 
 @api.post("/campaigns/{cid}/leads/{lead_id}/send-test")
-async def send_test_campaign_email(cid: str, lead_id: str, user=Depends(current_user)):
+async def send_test_campaign_email(cid: str, lead_id: str, request: Request, user=Depends(current_user)):
     """Send the currently resolved preview for one lead to the logged-in
     user's own inbox — through the same transactional send path as booking
     confirmations (real Resend/mailbox if configured, safely mocked and
@@ -2724,6 +2724,13 @@ async def send_test_campaign_email(cid: str, lead_id: str, user=Depends(current_
         sig = await db.signatures.find_one({"id": sig_id, "workspace_id": wid}, {"_id": 0})
         if sig and sig.get("content_html") and body_html:
             body_html = body_html + "<br><br>" + sig["content_html"]
+
+    # Unsubscribe footer — mirrors the footer appended in sender._send_email
+    # so the test-send preview matches a real campaign send.
+    from optout import issue_unsubscribe, append_unsubscribe_footer
+    base = str(request.base_url).rstrip("/")
+    unsub_url = await issue_unsubscribe(wid, user.get("email") or "", base, lead_id=lead_id, campaign_id=cid)
+    body_html = append_unsubscribe_footer(body_html, unsub_url)
 
     import email_client
     banner = (

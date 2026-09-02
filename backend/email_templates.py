@@ -22,7 +22,6 @@ import re
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from server import (
@@ -605,7 +604,8 @@ async def test_send_template(tid: str, request: Request, user=Depends(current_us
         raise HTTPException(404, "template not found")
     email = user.get("email") or ""
     base = str(request.base_url).rstrip("/")
-    unsub_url = f"{base}/api/unsubscribe/{_unsub_token(user['workspace_id'], email)}"
+    from optout import issue_unsubscribe
+    unsub_url = await issue_unsubscribe(user["workspace_id"], email, base)
     ctx = _sample_ctx(unsub_url)
     compliance = t.get("compliance") or _compliance_defaults()
     html, text = await _render_doc(user, t.get("blocks_json") or [], t.get("style_json") or {},
@@ -621,39 +621,4 @@ async def test_send_template(tid: str, request: Request, user=Depends(current_us
     return result
 
 
-# ----------------------------- Public: one-click unsubscribe -------------------
 
-@email_public_router.get("/unsubscribe/{token}", response_class=HTMLResponse)
-async def unsubscribe_landing(token: str):
-    """PUBLIC. One-click unsubscribe from a template footer.
-
-    The token is a 32-hex HMAC over workspace_id|email, issued per recipient at
-    send time and carried in the footer link — it proves the address without
-    exposing it. A token seen for the first time is recorded; an already-seen
-    token returns the same confirmation page.
-    """
-    found = await db.unsubscribes.find_one({"token": token}, {"_id": 0})
-    if not found:
-        await db.unsubscribes.insert_one({
-            "id": new_id(), "token": token, "at": now_iso(), "source": "template_footer",
-        })
-    # Also add to opt-out list for permanent suppression
-    if found:
-        workspace_id = found.get("workspace_id")
-        email = found.get("email")
-        if workspace_id and email:
-            from optout import add_to_optout
-            await add_to_optout(workspace_id, email, "unsubscribed_via_link", "unsubscribe_link")
-    return _unsub_page("You've been unsubscribed. You've been removed from our mailing list and added to our opt-out list. You won't receive any emails from us unless you're manually re-added in the CRM.")
-
-
-def _unsub_page(message: str, muted: bool = False) -> str:
-    return f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Unsubscribed</title></head>
-<body style="margin:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-<div style="max-width:440px;margin:64px auto;padding:32px;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;">
-<h1 style="margin:0 0 8px;font-size:18px;color:#0f1729;">{message}</h1>
-<p style="margin:0;font-size:14px;line-height:1.6;color:#64748b;">This was processed automatically. If this wasn't you, ignore this page.</p>
-</div></body></html>"""

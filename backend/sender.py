@@ -655,6 +655,17 @@ async def _send_email(row: Dict[str, Any], lead: Dict[str, Any], base_url: str,
         return
 
     subject, html, text = _render(row, lead)
+
+    # Unsubscribe footer — issued per-recipient, appended before tracking so
+    # the unsubscribe link is included in click tracking.
+    from optout import issue_unsubscribe, append_unsubscribe_footer, append_unsubscribe_footer_text
+    unsub_url = await issue_unsubscribe(
+        row["workspace_id"], lead["email"], base_url,
+        lead_id=row["lead_id"], campaign_id=row["campaign_id"],
+    )
+    html = append_unsubscribe_footer(html, unsub_url)
+    text = append_unsubscribe_footer_text(text, unsub_url)
+
     if base_url:
         html = inject_tracking(html, row["workspace_id"], row["id"], base_url)
 
