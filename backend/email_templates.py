@@ -440,7 +440,8 @@ async def list_email_templates(
     q: Optional[str] = None,
     user=Depends(current_user),
 ):
-    query = {"workspace_id": user["workspace_id"], "blocks_json": {"$exists": True}}
+    # Templates are global - available to all workspaces
+    query = {"blocks_json": {"$exists": True}}
     if step_position:
         query["step_position"] = step_position
     if tone:

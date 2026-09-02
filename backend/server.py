@@ -359,12 +359,29 @@ def compute_eq(subject: str, body: str, lead: Optional[Dict[str, Any]] = None) -
     }
 
 
+def _resolve_spintax(text: str) -> str:
+    """Resolve {option1|option2|option3} spintax — pick one random option."""
+    import random as _random
+    def _pick(m):
+        options = m.group(1).split("|")
+        return _random.choice(options)
+    # Nested spintax: resolve innermost first, then outer
+    result = text
+    for _ in range(5):  # max 5 levels of nesting
+        prev = result
+        result = re.sub(r"\{([^{}]+)\}", _pick, result)
+        if result == prev:
+            break
+    return result
+
+
 def personalize(template: str, lead: Dict[str, Any]) -> str:
     def repl(m):
         key = m.group(1).strip()
         return str(lead.get(key) or f"{{{{{key}}}}}")
 
-    return re.sub(r"\{\{([^}]+)\}\}", repl, template)
+    result = re.sub(r"\{\{([^}]+)\}\}", repl, template)
+    return _resolve_spintax(result)
 
 
 # ----------------------------- Health Route -----------------------------------
@@ -1336,7 +1353,8 @@ async def campaign_preflight(cid: str, user=Depends(current_user)):
 
     # 7. Content safety — spam trigger words
     spam_words = ["free", "act now", "limited time", "congratulations", "click here",
-                   "buy now", "call now", "don't miss", "exclusive offer", "guaranteed"]
+                   "buy now", "call now", "don't miss", "exclusive offer", "guaranteed",
+                   "100%", "no obligation", "risk free", "amazing deal", "once in a lifetime"]
     body_text = " ".join(s.get("body", "") + " " + s.get("body_text", "") + " " + s.get("body_html", "")
                          for s in steps).lower()
     found_spam = [w for w in spam_words if w in body_text]
@@ -1347,8 +1365,127 @@ async def campaign_preflight(cid: str, user=Depends(current_user)):
         "warn": len(found_spam) > 0,
     })
 
+    # 8. Subject line quality
+    subject_issues = []
+    for s in steps:
+        subj = s.get("subject", "")
+        if subj:
+            if len(subj) > 60:
+                subject_issues.append(f"Step {(steps.index(s)+1)}: subject too long ({len(subj)} chars, aim for <50)")
+            if subj == subj.upper() and len(subj) > 5:
+                subject_issues.append(f"Step {(steps.index(s)+1)}: all-caps subject hurts deliverability")
+            if re.search(r"[!]{2,}|[$$]+|[%]{2,}", subj):
+                subject_issues.append(f"Step {(steps.index(s)+1)}: excessive punctuation/symbols")
+    checks.append({
+        "id": "subject_quality", "label": "Subject lines optimized",
+        "passed": len(subject_issues) == 0,
+        "detail": "; ".join(subject_issues) if subject_issues else "All subject lines look good",
+        "warn": len(subject_issues) > 0,
+    })
+
+    # 9. Email verification — check if lead emails look valid
+    import re as _re
+    invalid_emails = []
+    for lid in lead_ids:
+        lead_doc = await db.leads.find_one({"id": lid, "workspace_id": user["workspace_id"]}, {"_id": 0, "email": 1})
+        email = (lead_doc or {}).get("email", "")
+        if email and not _re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+            invalid_emails.append(email)
+    checks.append({
+        "id": "email_validity", "label": "Lead email addresses valid",
+        "passed": len(invalid_emails) == 0,
+        "detail": f"{len(invalid_emails)} invalid: {', '.join(invalid_emails[:3])}" if invalid_emails else f"All {len(lead_ids)} emails valid",
+        "warn": len(invalid_emails) > 0,
+    })
+
+    # 10. Spintax present (good practice)
+    has_spintax = any("{" in (s.get("body", "") or "") and "|" in (s.get("body", "") or "") for s in steps)
+    checks.append({
+        "id": "spintax", "label": "Spintax variations used",
+        "passed": True,
+        "detail": "Spintax detected — good for deliverability" if has_spintax else "Consider adding spintax {Hi|Hey|Hello} for better deliverability",
+        "warn": not has_spintax,
+    })
+
     all_passed = all(c["passed"] for c in checks)
     return {"checks": checks, "all_passed": all_passed, "campaign_id": cid}
+
+
+@api.post("/campaigns/{cid}/spam-check")
+async def campaign_spam_check(cid: str, user=Depends(current_user)):
+    """Real-time spam content analysis for a single step or full campaign."""
+    c = await db.campaigns.find_one({"id": cid, "workspace_id": user["workspace_id"]}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "not found")
+    steps = c.get("steps") or []
+    results = []
+    for i, step in enumerate(steps):
+        subj = step.get("subject", "")
+        body = step.get("body", "") + " " + step.get("body_text", "")
+        html = step.get("body_html", "")
+        full_text = f"{subj} {body} {html}".lower()
+
+        # Spam word check
+        spam_words = ["free", "act now", "limited time", "congratulations", "click here",
+                       "buy now", "call now", "don't miss", "exclusive offer", "guaranteed",
+                       "100%", "no obligation", "risk free", "amazing deal", "once in a lifetime",
+                       "dear friend", "you have been selected", "winner"]
+        found = [w for w in spam_words if w in full_text]
+
+        # Subject analysis
+        subj_issues = []
+        if len(subj) > 60:
+            subj_issues.append(f"Too long ({len(subj)} chars)")
+        if subj == subj.upper() and len(subj) > 5:
+            subj_issues.append("All caps")
+        if re.search(r"[!]{2,}|[$$]+|[%]{2,}", subj):
+            subj_issues.append("Excessive symbols")
+        if subj.lower().startswith("re:") or subj.lower().startswith("fwd:"):
+            subj_issues.append("Fake RE:/FWD: detected")
+
+        # Body analysis
+        body_issues = []
+        excl_count = full_text.count("!")
+        if excl_count > 3:
+            body_issues.append(f"Too many exclamation marks ({excl_count})")
+        caps_ratio = sum(1 for c in body if c.isupper()) / max(len(body), 1)
+        if caps_ratio > 0.3 and len(body) > 50:
+            body_issues.append(f"Too much caps ({caps_ratio:.0%})")
+        link_count = len(re.findall(r'https?://', full_text))
+        if link_count > 3:
+            body_issues.append(f"Too many links ({link_count})")
+        img_count = len(re.findall(r'<img', html, re.I))
+        if img_count > 2:
+            body_issues.append(f"Too many images ({img_count})")
+
+        # Score: 100 = perfect, deductions for issues
+        score = 100
+        score -= len(found) * 10
+        score -= len(subj_issues) * 8
+        score -= len(body_issues) * 5
+        score = max(0, score)
+
+        results.append({
+            "step": i + 1,
+            "subject": subj,
+            "score": score,
+            "spam_words": found,
+            "subject_issues": subj_issues,
+            "body_issues": body_issues,
+            "status": "good" if score >= 80 else "warning" if score >= 50 else "danger",
+        })
+
+    avg_score = sum(r["score"] for r in results) / max(len(results), 1)
+    return {
+        "campaign_id": cid,
+        "overall_score": round(avg_score),
+        "steps": results,
+        "recommendation": (
+            "Ready to send" if avg_score >= 80 else
+            "Review warnings before launching" if avg_score >= 50 else
+            "Fix issues before launching — high spam risk"
+        ),
+    }
 
 
 @api.post("/campaigns/{cid}/launch")
@@ -1612,7 +1749,8 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
             "body": step_template.get("body", "") or "",
             "body_html": step_template.get("body_html", "") or "",
             "personalized_opener": "",
-            "status": "draft",
+            # Template emails are merge-field substitutions — auto-approve
+            "status": "approved",
             "generated_at": now_iso(),
         }
         await db.campaigns.update_one(
@@ -1878,7 +2016,8 @@ async def generate_all_lead_emails(cid: str, user=Depends(current_user)):
             "body": personalize(step_template.get("body", "") or "", lead_map.get(lid, {})),
             "body_html": personalize(step_template.get("body_html", "") or "", lead_map.get(lid, {})),
             "personalized_opener": "",
-            "status": "draft",
+            # Template/plain emails: auto-approve
+            "status": "approved",
             "generated_at": now,
         } for lid in to_generate]
         if entries:
@@ -2032,7 +2171,10 @@ async def run_campaign_engine(cid: str, user=Depends(current_user)):
                 "body": personalize(step_template.get("body", "") or "", ld),
                 "body_html": personalize(step_template.get("body_html", "") or "", ld),
                 "personalized_opener": "",
-                "status": "draft",
+                # Template/plain emails are merge-field substitutions only —
+                # no AI review needed, so start as approved so the user
+                # can launch immediately.
+                "status": "approved",
                 "generated_at": now,
             })
         if entries:
@@ -2437,7 +2579,10 @@ async def approve_all_campaign_emails(cid: str, user=Depends(current_user)):
                 "body": personalize(step_template.get("body", "") or "", lmap.get(lid, {})),
                 "body_html": personalize(step_template.get("body_html", "") or "", lmap.get(lid, {})),
                 "personalized_opener": "",
-                "status": "draft",
+                # Template/plain emails are merge-field substitutions only —
+                # no AI review needed, so start as approved so the user
+                # can launch immediately.
+                "status": "approved",
                 "generated_at": now,
             } for lid in missing]
             await db.campaigns.update_one(

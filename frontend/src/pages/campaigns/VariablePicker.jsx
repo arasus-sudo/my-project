@@ -124,7 +124,8 @@ export default function VariablePicker({ onSelect, onClose }) {
                 <button
                   key={v.key}
                   onClick={() => {
-                    onSelect?.(v);
+                    // Spintax vars insert the raw text, not {{key}}
+                    onSelect?.(v._spintax ? { ...v, key: v._spintax } : v);
                     onClose?.();
                   }}
                   style={{
@@ -146,19 +147,23 @@ export default function VariablePicker({ onSelect, onClose }) {
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
-                  <Variable size={12} style={{ color: "var(--color-primary)", flexShrink: 0 }} />
+                  <Variable size={12} style={{ color: v._spintax ? "var(--color-warning)" : "var(--color-primary)", flexShrink: 0 }} />
                   <span style={{ flex: 1 }}>{v.label}</span>
                   <span
                     style={{
-                      fontSize: 11,
+                      fontSize: 10,
                       fontFamily: "var(--font-mono)",
-                      color: "var(--text-tertiary)",
-                      background: "var(--bg-surface-sunken)",
+                      color: v._spintax ? "var(--color-warning-text)" : "var(--text-tertiary)",
+                      background: v._spintax ? "var(--color-warning-subtle)" : "var(--bg-surface-sunken)",
                       padding: "1px 6px",
                       borderRadius: "var(--radius-xs)",
+                      maxWidth: 140,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    {`{{${v.key}}}`}
+                    {v._spintax || `{${v.key}}`}
                   </span>
                 </button>
               ))}

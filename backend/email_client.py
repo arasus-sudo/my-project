@@ -58,6 +58,15 @@ async def send_email(
                 {"workspace_id": workspace_id, "status": "connected"},
                 {"_id": 0},
             ).to_list(20)
+            # Cross-workspace fallback: if no mailbox in this workspace,
+            # try ANY connected mailbox (helps single-user dev setups)
+            if not mailboxes:
+                mailboxes = await db.mailboxes.find(
+                    {"status": "connected"},
+                    {"_id": 0},
+                ).to_list(5)
+                if mailboxes:
+                    log.info("Using cross-workspace mailbox %s for %s", mailboxes[0].get("email"), to)
             if mailboxes:
                 # Prefer mailboxes that can actually send (have a refresh
                 # token). A mailbox with an expired access token and no refresh

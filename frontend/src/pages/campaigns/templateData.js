@@ -77,10 +77,10 @@ export const TEMPLATES = {
       readingTime: "30s",
       variables: ["first_name", "company_name", "job_title", "industry", "pain_point"],
       structure: [
-        { day: 0, label: "Introduction", subject: "Quick thought on {{company_name}}'s {{pain_point}}" },
-        { day: 2, label: "Value Insight", subject: "How {{similar_company}} solved this" },
-        { day: 5, label: "Social Proof", subject: "The numbers behind the shift" },
-        { day: 8, label: "CTA", subject: "Worth 15 minutes?" },
+        { day: 0, label: "Introduction", subject: "Quick thought on {{company_name}}'s {{pain_point}}", body: "Hi {{first_name}},\n\nI noticed {{company_name}} has been growing in the {{industry}} space — congrats on the momentum.\n\nI work with {{job_title}}s at companies facing similar {{pain_point}} challenges, and I thought you might find this relevant.\n\nWould you be open to a quick 15-minute chat to explore if we can help?\n\nBest,\n{{sender_name}}" },
+        { day: 2, label: "Value Insight", subject: "How {{similar_company}} solved this", body: "Hi {{first_name}},\n\nFollowing up on my last email — I wanted to share how {{similar_company}} tackled their {{pain_point}} and saw measurable results within 90 days.\n\nI put together a brief case study that might be useful for {{company_name}}. Would you like me to send it over?\n\nBest,\n{{sender_name}}" },
+        { day: 5, label: "Social Proof", subject: "The numbers behind the shift", body: "Hi {{first_name}},\n\nQuick stat: companies in {{industry}} that addressed {{pain_point}} early saw 2.3x faster growth in the first year.\n\nI'd love to walk you through what that could look like for {{company_name}}.\n\nWorth a 15-minute call?\n\nBest,\n{{sender_name}}" },
+        { day: 8, label: "CTA", subject: "Worth 15 minutes?", body: "Hi {{first_name}},\n\nLast touch from me — I know {{job_title}}s at {{company_name}} are busy, so I'll keep this brief.\n\nIf {{pain_point}} is a priority for you this quarter, I'd love to help. If not, no worries at all.\n\nEither way, wishing you a great week.\n\nBest,\n{{sender_name}}" },
       ],
     },
     {
@@ -92,9 +92,9 @@ export const TEMPLATES = {
       readingTime: "25s",
       variables: ["first_name", "company_name", "recent_news", "job_title"],
       structure: [
-        { day: 0, label: "Research Hook", subject: "Congrats on {{recent_news}}, {{first_name}}" },
-        { day: 3, label: "Bridge to Solution", subject: "Where we might overlap" },
-        { day: 7, label: "Soft CTA", subject: "Open to a quick chat?" },
+        { day: 0, label: "Research Hook", subject: "Congrats on {{recent_news}}, {{first_name}}", body: "Hi {{first_name}},\n\nI came across {{recent_news}} — congratulations to you and the team at {{company_name}}. That's a big milestone.\n\nI work with {{job_title}}s at companies in similar growth phases, and I wanted to reach out to see if there's a way we could support what you're building.\n\nWould you be open to a quick intro call?\n\nBest,\n{{sender_name}}" },
+        { day: 3, label: "Bridge to Solution", subject: "Where we might overlap", body: "Hi {{first_name}},\n\nFollowing up — I've been thinking about how {{company_name}}'s growth trajectory connects with what we do at {{sender_company}}.\n\nWe've helped similar companies scale their operations without the growing pains. Would love to explore if there's a fit.\n\nBest,\n{{sender_name}}" },
+        { day: 7, label: "Soft CTA", subject: "Open to a quick chat?", body: "Hi {{first_name}},\n\nQuick check-in — I know your inbox is probably overflowing, so I'll keep this short.\n\nIf you're open to a 15-minute conversation about how {{company_name}} could benefit from what we do, I'd love to make that happen. If the timing isn't right, no worries at all.\n\nBest,\n{{sender_name}}" },
       ],
     },
     {
@@ -106,10 +106,10 @@ export const TEMPLATES = {
       readingTime: "30s",
       variables: ["first_name", "company_name", "industry", "pain_point", "job_title"],
       structure: [
-        { day: 0, label: "Pain Statement", subject: "The {{industry}} challenge nobody talks about" },
-        { day: 2, label: "Data Point", subject: "73% of {{industry}} teams face this" },
-        { day: 5, label: "Solution Angle", subject: "How we approach it differently" },
-        { day: 8, label: "CTA", subject: "Quick comparison?" },
+        { day: 0, label: "Pain Statement", subject: "The {{industry}} challenge nobody talks about", body: "Hi {{first_name}},\n\nEvery {{job_title}} I speak with in {{industry}} mentions the same thing — {{pain_point}} is slowing teams down, but nobody has a clean solution.\n\nI've been researching this space and found a few patterns that work. Would love to share what I've learned.\n\nOpen to a quick chat?\n\nBest,\n{{sender_name}}" },
+        { day: 2, label: "Data Point", subject: "73% of {{industry}} teams face this", body: "Hi {{first_name}},\n\nJust a quick follow-up — according to recent industry data, 73% of {{industry}} teams cite {{pain_point}} as their top operational challenge.\n\nWe've built something specifically to address this. Mind if I send you a 2-minute overview?\n\nBest,\n{{sender_name}}" },
+        { day: 5, label: "Solution Angle", subject: "How we approach it differently", body: "Hi {{first_name}},\n\nMost solutions for {{pain_point}} add more complexity. We took the opposite approach — simplified the workflow and cut setup time by 60%.\n\nWould be curious to hear if that resonates with what you're seeing at {{company_name}}.\n\nBest,\n{{sender_name}}" },
+        { day: 8, label: "CTA", subject: "Quick comparison?", body: "Hi {{first_name}},\n\nFinal note from me — I put together a one-page comparison of how our approach stacks up against what most {{industry}} teams are using today.\n\nHappy to send it over if useful. No strings attached.\n\nBest,\n{{sender_name}}" },
       ],
     },
     {
@@ -121,9 +121,9 @@ export const TEMPLATES = {
       readingTime: "20s",
       variables: ["first_name", "company_name", "industry", "job_title"],
       structure: [
-        { day: 0, label: "Results Hook", subject: "{{similar_company}} saved 40% on operations" },
-        { day: 3, label: "How It Works", subject: "The playbook behind it" },
-        { day: 7, label: "CTA", subject: "See if it fits {{company_name}}" },
+        { day: 0, label: "Results Hook", subject: "{{similar_company}} saved 40% on operations", body: "Hi {{first_name}},\n\n{{similar_company}} recently cut their operational costs by 40% using a new approach to {{pain_point}}. I thought it might be relevant for {{company_name}} too.\n\nWould you be open to a quick 15-minute call to walk through the details?\n\nBest,\n{{sender_name}}" },
+        { day: 3, label: "How It Works", subject: "The playbook behind it", body: "Hi {{first_name}},\n\nQuick follow-up — the playbook {{similar_company}} used boils down to 3 steps: audit, streamline, automate. Most teams skip step 1 and wonder why results don't stick.\n\nHappy to share the full breakdown if you're interested.\n\nBest,\n{{sender_name}}" },
+        { day: 7, label: "CTA", subject: "See if it fits {{company_name}}", body: "Hi {{first_name}},\n\nLast one from me — if {{pain_point}} is on your radar this quarter, we can run a free 10-minute assessment to see if our approach fits {{company_name}}.\n\nNo commitment, just a quick check. Interested?\n\nBest,\n{{sender_name}}" },
       ],
     },
     {
@@ -518,10 +518,10 @@ export const TEMPLATES = {
       readingTime: "30s",
       variables: ["first_name", "company_name", "product_name"],
       structure: [
-        { day: 0, label: "Teaser", subject: "Something big is coming" },
-        { day: 3, label: "Hint", subject: "A sneak peek for you, {{first_name}}" },
-        { day: 5, label: "Reveal", subject: "Introducing {{product_name}}" },
-        { day: 7, label: "CTA", subject: "Be first to try it" },
+        { day: 0, label: "Teaser", subject: "Something big is coming", body: "Hi {{first_name}},\n\nWe've been working on something behind the scenes that we're really excited about.\n\nI can't share all the details just yet, but I wanted to give you an early heads-up. Stay tuned — you'll be the first to know.\n\nBest,\n{{sender_name}}" },
+        { day: 3, label: "Hint", subject: "A sneak peek for you, {{first_name}}", body: "Hi {{first_name}},\n\nHere's a little teaser: we've built something that solves a problem {{company_name}} has probably dealt with more than once.\n\nThe full reveal is coming soon, but I wanted to give you an exclusive look.\n\nMore soon,\n{{sender_name}}" },
+        { day: 5, label: "Reveal", subject: "Introducing {{product_name}}", body: "Hi {{first_name}},\n\nThe wait is over — meet {{product_name}}.\n\nWe built this to help companies like {{company_name}} achieve better results in less time. Early users are already seeing significant improvements.\n\nCheck it out and let me know what you think.\n\nBest,\n{{sender_name}}" },
+        { day: 7, label: "CTA", subject: "Be first to try it", body: "Hi {{first_name}},\n\nWe're opening up early access to {{product_name}} for a limited number of teams.\n\nAs someone in the {{industry}} space, I thought {{company_name}} would be a great fit. Want me to reserve a spot for you?\n\nBest,\n{{sender_name}}" },
       ],
     },
     {
@@ -533,8 +533,8 @@ export const TEMPLATES = {
       readingTime: "20s",
       variables: ["first_name", "product_name"],
       structure: [
-        { day: 0, label: "Announcement", subject: "{{product_name}} is live!" },
-        { day: 3, label: "Reminder", subject: "Don't miss out" },
+        { day: 0, label: "Announcement", subject: "{{product_name}} is live!", body: "Hi {{first_name}},\n\nBig news — {{product_name}} is officially live!\n\nAfter months of development and feedback from teams like yours, we're thrilled to share what we've built. It's designed to make your workflow faster and more efficient.\n\nCheck it out and let me know if you have any questions.\n\nBest,\n{{sender_name}}" },
+        { day: 3, label: "Reminder", subject: "Don't miss out", body: "Hi {{first_name}},\n\nJust a quick reminder that {{product_name}} is now available. Teams that start this week get priority onboarding support.\n\nIf you've been thinking about it, now's the perfect time to jump in.\n\nBest,\n{{sender_name}}" },
       ],
     },
     {
@@ -1283,6 +1283,16 @@ export const VARIABLE_CATEGORIES = [
       { key: "recent_news", label: "Recent News" },
       { key: "trigger_event", label: "Trigger Event" },
       { key: "referral_name", label: "Referral Name" },
+    ],
+  },
+  {
+    label: "Spintax",
+    variables: [
+      { key: "spintax:greeting", label: "Greeting", _spintax: "{Hi|Hey|Hello|Hi there|Hey there}" },
+      { key: "spintax:opener", label: "Opener", _spintax: "{I noticed|I saw|I came across|I was looking at}" },
+      { key: "spintax:question", label: "Question", _spintax: "{I was wondering|I'm curious|Would you be open to|Are you open to}" },
+      { key: "spintax:closer", label: "Closer", _spintax: "{Best|Cheers|Thanks|Best regards|All the best}" },
+      { key: "spintax:cta", label: "CTA", _spintax: "{Would you be open to a quick chat?|Can we schedule a brief call?|Worth a 15-minute conversation?|Open to connecting?}" },
     ],
   },
 ];

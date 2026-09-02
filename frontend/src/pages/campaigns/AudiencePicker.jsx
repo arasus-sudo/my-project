@@ -389,10 +389,10 @@ export default function AudiencePicker({ selectedLeads = [], onSelect, onClose }
               "No leads selected"
             )}
           </span>
-          <button onClick={onClose} className="btn-primary" style={{
+          <button onClick={() => { onSelect(selectedLeads); onClose(); }} className="btn-primary" style={{
             padding: "7px 18px", fontSize: 12, display: "flex", alignItems: "center", gap: 5,
           }}>
-            <CheckCircle2 size={13} /> Confirm selection
+            <CheckCircle2 size={13} /> Confirm selection ({selectedLeads.length} lead{selectedLeads.length === 1 ? "" : "s"})
           </button>
         </div>
       </div>

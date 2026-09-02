@@ -398,6 +398,13 @@ export default function AITemplateWorkflow() {
           </div>
         )}
       </div>
+
+      <style>{`
+        @media (max-width: 768px) {
+          .ai-wiz-grid { grid-template-columns: 1fr !important; }
+          .hide-mobile { display: none !important; }
+        }
+      `}</style>
     </div>
   );
 }

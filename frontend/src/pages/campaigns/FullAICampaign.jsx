@@ -395,6 +395,13 @@ export default function FullAICampaign() {
             ))}
           </div>
         </div>
+
+      <style>{`
+        @media (max-width: 768px) {
+          .full-ai-grid { grid-template-columns: 1fr !important; }
+          .hide-mobile { display: none !important; }
+        }
+      `}      </style>
       </div>
     </div>
   );

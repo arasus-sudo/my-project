@@ -185,7 +185,14 @@ export default function CampaignReview({ campaignId, onBack }) {
     setSendingTest(true);
     try {
       const { data } = await api.post(`/campaigns/${campaignId}/leads/${leadId}/send-test`);
-      toast.success(data.mocked ? "Test recorded (no mailbox)" : `Sent to ${data.sent_to}`);
+      if (data.mocked) {
+        toast.info("Test recorded — no mailbox configured", {
+          description: `Would send to ${data.sent_to}. Go to Mailboxes to connect a sending account.`,
+          duration: 5000,
+        });
+      } else {
+        toast.success(`Test email sent to ${data.sent_to}`);
+      }
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Test failed");
     }
@@ -206,7 +213,7 @@ export default function CampaignReview({ campaignId, onBack }) {
   const launch = async () => {
     setBusy(true);
     try {
-      const { data } = await api.post(`/campaigns/${campaignId}/launch`);
+      const { data } = await api.post(`/campaigns/${campaignId}/launch?skip_pending=true`);
       toast.success(`Launched — ${data.queued} email(s) queued`);
       loadCampaign();
     } catch (err) {
@@ -338,9 +345,10 @@ export default function CampaignReview({ campaignId, onBack }) {
 
   /* ── Review mode ── */
   return (
-    <div style={{ display: "flex", height: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
       {/* LEFT: Lead list */}
-      <div style={{
+      <div className="cr-sidebar" style={{
         width: 260, flexShrink: 0, borderRight: "1px solid var(--border-default)",
         display: "flex", flexDirection: "column", background: "var(--bg-surface)",
       }}>
@@ -532,12 +540,13 @@ export default function CampaignReview({ campaignId, onBack }) {
         </div>
       )}
 
-      {/* BOTTOM: Launch bar */}
+    </div>{/* end flex row */}
+
+      {/* BOTTOM: Launch bar — flex child, not fixed */}
       <div style={{
-        position: "fixed", bottom: 0, left: 0, right: 0,
-        padding: "12px 20px", background: "var(--bg-surface)",
-        borderTop: "1px solid var(--border-default)", zIndex: 20,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "10px 20px", background: "var(--bg-surface)",
+        borderTop: "1px solid var(--border-default)", flexShrink: 0,
+        display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
@@ -555,7 +564,7 @@ export default function CampaignReview({ campaignId, onBack }) {
             color: "var(--text-secondary)", fontSize: 12, fontWeight: 500,
             cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
           }}>
-            <RefreshCw size={12} /> Regenerate
+            <RefreshCw size={12} /> <span className="hide-mobile">Regenerate</span>
           </button>
           {campaign.status === "active" ? (
             <button onClick={pause} style={{

@@ -28,7 +28,6 @@ const PITCH_NAV = [
   { to: "/app/campaigns/queue", label: "Queue", icon: Clock, tid: "nav-queue" },
   { to: "/app/intelligence", label: "Intelligence", icon: Search, tid: "nav-intelligence" },
   { to: "/app/services", label: "Services", icon: Layers, tid: "nav-services" },
-  { to: "/app/templates", label: "Templates", icon: FileText, tid: "nav-templates" },
   { to: "/app/inbox", label: "Inbox", icon: InboxIcon, tid: "nav-inbox" },
   { to: "/app/mailboxes", label: "Mailboxes", icon: Mail, tid: "nav-mailboxes" },
   { to: "/app/analytics", label: "Analytics", icon: BarChart3, tid: "nav-analytics" },
