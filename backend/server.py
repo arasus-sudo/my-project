@@ -288,6 +288,11 @@ class AIScoreIn(BaseModel):
     body: str
 
 
+class AIGenerateEmailIn(BaseModel):
+    prompt: str
+    template_type: str = "marketing"
+
+
 # ----------------------------- EQ Score Engine -------------------------------
 SPAM_WORDS = {
     "free", "guarantee", "act now", "limited time", "buy now", "click here",
@@ -3849,6 +3854,76 @@ async def ai_personalize(body: AIPersonalizeIn, user=Depends(current_user)):
     body_out = personalize(body_tpl, lead)
     eq = compute_eq(subject, body_out, lead)
     return {"subject": subject, "body": body_out, "eq": eq}
+
+
+@api.post("/ai/generate-email")
+async def ai_generate_email(body: AIGenerateEmailIn, user=Depends(current_user)):
+    """Generate a complete HTML email from a natural-language prompt (using the
+    configured LLM — phi-4 by default). Returns {html} that the marketing
+    builder renders live in its preview pane. Falls back to a plain body when
+    the model returns text (not markup), and to a template-string fallback if
+    the LLM call itself fails."""
+    if not body.prompt.strip():
+        raise HTTPException(400, "Describe the email you want first")
+
+    system = (
+        "You are an expert marketing email copywriter. Write a polished, "
+        "modern HTML email body for the described audience and goal. "
+        "Use inline CSS only (works in email clients): a max-width 600px centered "
+        "wrapper, a hero/headline section, short scannable body paragraphs, and a "
+        "clear call-to-action button. Support personalization by using the "
+        "{{first_name}} and {{company_name}} placeholders where natural. "
+        'Return ONLY the HTML markup for the email BODY (no <html>/<head>/<body> '
+        "wrapper, no markdown fences, no commentary)."
+    )
+    user_text = f"Template type: {body.template_type}\n\nPrompt:\n{body.prompt}"
+
+    fallback = (
+        "<div style=\"font-family:system-ui,-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;\">"
+        "<h1 style=\"font-size:22px;margin:0 0 8px;color:#111;\">Keep your team ahead</h1>"
+        "<p style=\"font-size:15px;line-height:24px;color:#374151;\">Hi {{first_name}},</p>"
+        "<p style=\"font-size:15px;line-height:24px;color:#374151;\">Quick update from us at {{company_name}} — "
+        "here's something worth your time.</p>"
+        "<p style=\"font-size:15px;line-height:24px;color:#374151;\">Let me know if you'd like to talk through it.</p>"
+        "</div>"
+    )
+
+    try:
+        from billing import charge_credits
+        await charge_credits(user["workspace_id"], "email_ai", meta={"kind": "generate_email"})
+        resp = await _llm_chat(system, user_text, f"generate-email-{user['id']}", user=user, max_tokens=4096)
+    except Exception as ex:
+        logging.warning("ai_generate_email LLM error: %s", ex)
+        return {"html": fallback, "mocked": True}
+
+    html = (resp or "").strip()
+    html = html.removeprefix("```html").removeprefix("```").removesuffix("```").strip()
+    if html.lower().startswith("<html"):
+        # Pull out just the body content so the builder preview doesn't nest a
+        # full document inside its email container.
+        m = re.search(r"<body[^>]*>([\s\S]*)</body>", html, re.I)
+        html = m.group(1).strip() if m else html
+    # phi-4 sometimes returns plain text (with a "Subject:" line) instead of
+    # markup. Detect markup absence and wrap paragraphs so the preview still
+    # renders as a readable email rather than a blob of raw text.
+    if not re.search(r"<[a-zA-Z][^>]*>", html):
+        # Drop a leading "Subject: ..." line into an <h1> so it reads as a headline.
+        m = re.match(r"(?is)^\s*(?:subject\s*:\s*)?([^\n]+)", html)
+        headline = m.group(1).strip() if m else ""
+        body = re.sub(r"(?is)^\s*(?:subject\s*:\s*)?([^\n]+)", "", html, count=1).strip()
+        paras = "".join(
+            f"<p style=\"font-size:15px;line-height:24px;color:#374151;margin:0 0 12px;\">{p.strip()}</p>"
+            for p in re.split(r"\n\s*\n", body) if p.strip()
+        )
+        html = (
+            "<div style=\"font-family:system-ui,-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;\">"
+            f"<h1 style=\"font-size:22px;margin:0 0 12px;color:#111;\">{headline}</h1>"
+            f"{paras}"
+            "</div>"
+        )
+    if not html:
+        html = fallback
+    return {"html": html}
 
 
 # ----------------------------- Dashboard -------------------------------------

@@ -14,7 +14,7 @@ import { api } from "../../lib/api";
 import { toast } from "sonner";
 import {
   ArrowLeft, Save, Users, Loader2, Play, Eye,
-  Monitor, Smartphone, Moon, Megaphone, Sparkles, Variable,
+  Monitor, Smartphone, Moon, Megaphone, Sparkles, Variable, Code2,
 } from "lucide-react";
 import CampaignReview from "./CampaignReview";
 import AudiencePicker from "./AudiencePicker";
@@ -141,6 +141,7 @@ export default function MarketingCampaignBuilder() {
   const [showTemplates, setShowTemplates] = useState(!html);
   const [steps] = useState([{ _key: "s_marketing", channel: "email", day: 0, condition: "always" }]);
   const [showSubjectVars, setShowSubjectVars] = useState(false);
+  const [composeMode, setComposeMode] = useState("template"); // template | ai | html
 
   useEffect(() => {
 
@@ -299,6 +300,35 @@ export default function MarketingCampaignBuilder() {
           display: "flex", flexDirection: "column", background: "var(--bg-surface)",
           overflow: "auto",
         }}>
+          {/* Compose mode selector */}
+          <div style={{ padding: 12, borderBottom: "1px solid var(--border-subtle)" }}>
+            <div style={{
+              display: "flex", gap: 4, padding: 3, borderRadius: "var(--radius-lg)",
+              background: "var(--bg-surface-sunken)", border: "1px solid var(--border-subtle)",
+            }}>
+              {[
+                { key: "template", label: "Templates" },
+                { key: "ai", label: "AI Generate" },
+                { key: "html", label: "HTML Code" },
+              ].map((m) => (
+                <button
+                  key={m.key}
+                  onClick={() => { setComposeMode(m.key); if (m.key === "template") setShowTemplates(true); }}
+                  style={{
+                    flex: 1, padding: "6px 8px", borderRadius: "var(--radius-md)",
+                    border: "none", fontSize: 12, fontWeight: 500, cursor: "pointer",
+                    background: composeMode === m.key ? "var(--bg-surface)" : "transparent",
+                    color: composeMode === m.key ? "var(--color-primary)" : "var(--text-secondary)",
+                    boxShadow: composeMode === m.key ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+                    transition: "all 150ms ease",
+                  }}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Subject */}
           <div style={{ padding: 16, borderBottom: "1px solid var(--border-subtle)" }}>
             <label style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", display: "block", marginBottom: 6 }}>
@@ -362,6 +392,7 @@ export default function MarketingCampaignBuilder() {
           </div>
 
           {/* AI Generate */}
+          {composeMode === "ai" && (
           <div style={{ padding: 16, borderBottom: "1px solid var(--border-subtle)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
               <Sparkles size={13} style={{ color: "var(--color-intel)" }} />
@@ -388,8 +419,45 @@ export default function MarketingCampaignBuilder() {
               {generatingAi ? "Generating..." : "Generate Email"}
             </button>
           </div>
+          )}
+
+          {/* HTML Code mode */}
+          {composeMode === "html" && (
+          <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+            <div style={{ padding: 16, borderBottom: "1px solid var(--border-subtle)", flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <Code2 size={13} style={{ color: "var(--color-primary)" }} />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>Paste HTML Code</span>
+                </div>
+                <span style={{ fontSize: 10, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>{html.length} chars</span>
+              </div>
+              <textarea
+                id="marketing-html-input"
+                value={html}
+                onChange={(e) => setHtml(e.target.value)}
+                placeholder={"<div style=\"font-family:system-ui;max-width:600px;margin:0 auto;padding:32px;\">\n  <h1>Your full HTML email here</h1>\n  <p>Supports {{first_name}}, {{company_name}} placeholders</p>\n</div>"}
+                spellCheck={false}
+                style={{
+                  flex: 1, width: "100%", minHeight: 320, padding: "10px 12px",
+                  borderRadius: "var(--radius-md)", border: "1px solid var(--border-default)",
+                  fontSize: 12, outline: "none", resize: "none",
+                  fontFamily: "var(--font-mono)", lineHeight: "18px",
+                  color: "var(--text-primary)", background: "var(--bg-surface-sunken)",
+                  whiteSpace: "pre", overflow: "auto",
+                }}
+              />
+              <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 6, lineHeight: "15px" }}>
+                Paste the full HTML of your email. It renders live in the preview on the right.
+                Use <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-primary)" }}>{"{{first_name}}"}</span>,{" "}
+                <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-primary)" }}>{"{{company_name}}"}</span> placeholders.
+              </div>
+            </div>
+          </div>
+          )}
 
           {/* Templates */}
+          {composeMode === "template" && (
           <div style={{ padding: 16 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 10 }}>
               Templates
@@ -429,6 +497,7 @@ export default function MarketingCampaignBuilder() {
               />
             </div>
           </div>
+          )}
         </div>
 
         {/* RIGHT: Live preview */}
@@ -484,7 +553,7 @@ export default function MarketingCampaignBuilder() {
                   <div style={{ fontSize: 11, color: "#6B7280" }}>{previewText || ""}</div>
                 </div>
                 {/* Email body */}
-                <div dangerouslySetInnerHTML={{ __html: html }} style={{ lineHeight: 0 }} />
+                <div dangerouslySetInnerHTML={{ __html: html }} style={{ background: "#fff" }} />
               </div>
             ) : (
               <div style={{
