@@ -43,11 +43,18 @@ MAX_EMAILS_PER_LEAD_PER_DAY = 1
 
 
 def _resolve_spintax(text: str) -> str:
-    """Parse and resolve spintax: '{Hi|Hello|Hey}' -> random pick."""
+    """Parse and resolve spintax: '{Hi|Hello|Hey}' -> random pick.
+
+    Only `{...}` blocks containing a `|` are treated as spintax. Without the
+    `|` requirement, CSS style rules (`.btn { background: #fff; }`) match the
+    brace pattern and get truncated, silently destroying an HTML template's
+    stylesheet. This matches the suite's own spintax definition (a `{` plus a
+    `|` — see the deliverability check in server.py).
+    """
     import random
     def _replace(m):
         return random.choice(m.group(1).split("|"))
-    return re.sub(r"\{([^}]+)\}", _replace, text or "")
+    return re.sub(r"\{([^}]*\|[^}]*)\}", _replace, text or "")
 
 CHANNEL_ICONS = {
     "email": "✉", "phone_call": "📞", "sms": "💬", "whatsapp": "📱",

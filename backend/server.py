@@ -370,11 +370,14 @@ def _resolve_spintax(text: str) -> str:
     def _pick(m):
         options = m.group(1).split("|")
         return _random.choice(options)
-    # Nested spintax: resolve innermost first, then outer
+    # Nested spintax: resolve innermost first, then outer. Only `{...}` blocks
+    # containing a `|` are spintax — without that guard, CSS rules like
+    # `.btn { background: #fff; }` match the brace pattern and get truncated,
+    # silently destroying an HTML template's stylesheet.
     result = text
     for _ in range(5):  # max 5 levels of nesting
         prev = result
-        result = re.sub(r"\{([^{}]+)\}", _pick, result)
+        result = re.sub(r"\{([^{}]*\|[^{}]*)\}", _pick, result)
         if result == prev:
             break
     return result

@@ -164,3 +164,25 @@ def test_unsubscribe_token_is_stable_and_unguessable():
     assert a == b
     assert a != c
     assert len(a) == 32
+
+
+def test_personalize_preserves_css_braces():
+    """Spintax resolution must only touch real {a|b} alternations, never CSS
+    style blocks. Regression: the old brace regex stripped every `{...}` in an
+    HTML `<style>` block, corrupting pasted templates on generation."""
+    tpl = (
+        ".btn { background: #2563eb; }\n"
+        "a { text-decoration: none; }\n"
+        "@media (max-width: 600px) { .x { color: red } }\n"
+        "Hey {{first_name}}"
+    )
+    out = server.personalize(tpl, {"first_name": "Alex"})
+    # merge field is substituted
+    assert "Alex" in out and "{{first_name}}" not in out
+    # CSS braces survive (the 2 merge-token brace pairs are consumed by
+    # substitution, so compare against the 4 surviving CSS rules)
+    assert out.count("{") == 4 and out.count("}") == 4
+    assert ".btn {" in out and "text-decoration" in out and "@media" in out
+    # genuine spintax still resolves
+    spun = server.personalize("Pick {a|b|c} word", {})
+    assert spun in ("Pick a word", "Pick b word", "Pick c word")
