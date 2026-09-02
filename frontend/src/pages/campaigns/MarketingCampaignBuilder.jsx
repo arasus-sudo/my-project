@@ -121,6 +121,18 @@ const HTML_TEMPLATES = [
 /* ── Dark CSS filter for preview ─────────────────────── */
 const DARK_FILTER = "brightness(0.85) saturate(1.1) invert(1) hue-rotate(180deg)";
 
+/* ── Unsubscribe footer preview ────────────────────────
+   Mirrors the email-safe footer the backend appends at send time
+   (optout.append_unsubscribe_footer). Shown in the composed preview only —
+   the real per-recipient unsubscribe link is issued at send. Using href="#"
+   keeps the preview from navigating anywhere. */
+const UNSUB_FOOTER_PREVIEW = `
+<div style="max-width:600px;margin:0 auto;padding:0 24px;background:#fff;font-family:system-ui,-apple-system,sans-serif;">
+  <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:12px;line-height:1.6;color:#64748b;">
+    You're receiving this because you previously connected with us. <a href="#" style="color:#64748b;text-decoration:underline;">Unsubscribe</a> from future marketing emails.
+  </div>
+</div>`;
+
 export default function MarketingCampaignBuilder() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -569,7 +581,10 @@ export default function MarketingCampaignBuilder() {
                   <div style={{ fontSize: 11, color: "#6B7280" }}>{previewText || ""}</div>
                 </div>
                 {/* Email body */}
-                <div dangerouslySetInnerHTML={{ __html: html }} style={{ background: "#fff" }} />
+                <div
+                  dangerouslySetInnerHTML={{ __html: html + UNSUB_FOOTER_PREVIEW }}
+                  style={{ background: "#fff" }}
+                />
               </div>
             ) : (
               <div style={{
