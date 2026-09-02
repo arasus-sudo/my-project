@@ -547,7 +547,7 @@ export default function MarketingCampaignBuilder() {
           </div>
 
           {/* Preview area */}
-          <div style={{ flex: 1, overflow: "auto", padding: 20, display: "flex", justifyContent: "center" }}>
+          <div style={{ flex: 1, overflow: "auto", padding: 20, display: "flex", justifyContent: "center", alignItems: "flex-start" }}>
             {html ? (
               <div style={{
                 width: previewMode === "mobile" ? 375 : previewMode === "auto" ? "fit-content" : 600,

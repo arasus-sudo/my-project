@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { PageHeader } from "../components/AppLayout";
@@ -72,15 +73,29 @@ function ApprovalAdminCard({ onChanged }) {
 
 export default function Signatures() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const isOrgAdmin = user?.role === "org_admin" || user?.is_admin;
   const [sigs, setSigs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null); // signature object, or "new", or null
+  const [returnTo, setReturnTo] = useState(searchParams.get("return") || null);
 
   const load = () => {
     api.get("/signatures").then((r) => { setSigs(r.data || []); setLoading(false); }).catch(() => setLoading(false));
   };
   useEffect(() => { load(); }, []);
+
+  // ?new=1 — open the full builder immediately (from the campaign builder's
+  // "Create new signature". returnTo sends the user back there after saving.
+  useEffect(() => {
+    if (searchParams.get("new") === "1") { setEditing("new"); }
+  }, [searchParams]);
+
+  const leaveBuilder = () => {
+    setEditing(null);
+    load();
+    if (returnTo) { window.location.href = returnTo; }
+  };
 
   const remove = async (sid) => {
     if (!window.confirm("Delete this signature?")) return;
@@ -114,7 +129,7 @@ export default function Signatures() {
     return (
       <SignatureBuilder
         signature={editing === "new" ? null : editing}
-        onBack={() => { setEditing(null); load(); }}
+        onBack={leaveBuilder}
         onSaved={onSaved}
       />
     );

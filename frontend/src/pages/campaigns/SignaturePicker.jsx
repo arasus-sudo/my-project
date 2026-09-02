@@ -14,9 +14,10 @@
  *  - onToggleInclude: (val: boolean) => void
  */
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../lib/api";
 import { toast } from "sonner";
-import { PenSquare, Trash2, Plus, Loader2, Check } from "lucide-react";
+import { Trash2, Plus, Loader2, Check } from "lucide-react";
 
 export default function SignaturePicker({
   signatureId = "",
@@ -24,12 +25,9 @@ export default function SignaturePicker({
   includeSignature = true,
   onToggleInclude,
 }) {
+  const navigate = useNavigate();
   const [signatures, setSignatures] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newHtml, setNewHtml] = useState("");
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     api.get("/signatures")
@@ -45,27 +43,6 @@ export default function SignaturePicker({
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
-
-  const createSignature = async () => {
-    if (!newName.trim()) { toast.error("Name is required"); return; }
-    if (!newHtml.trim()) { toast.error("Content is required"); return; }
-    setSaving(true);
-    try {
-      const txt = newHtml.replace(/<[^>]+>/g, "").trim();
-      const { data } = await api.post("/signatures", {
-        name: newName, content_html: newHtml, content_text: txt,
-      });
-      setSignatures((prev) => [data, ...prev]);
-      onSelect(data.id);
-      setShowCreate(false);
-      setNewName("");
-      setNewHtml("");
-      toast.success("Signature created");
-    } catch {
-      toast.error("Failed to create signature");
-    }
-    setSaving(false);
-  };
 
   const deleteSignature = async (sid) => {
     if (!window.confirm("Delete this signature?")) return;
@@ -122,7 +99,7 @@ export default function SignaturePicker({
 
       {includeSignature && (
         <>
-          {/* Signature list */}
+          {/* Saved signatures list */}
           <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
             {signatures.map((sig) => (
               <div
@@ -172,64 +149,10 @@ export default function SignaturePicker({
             ))}
           </div>
 
-          {/* Create new */}
-          {!showCreate ? (
-            <button onClick={() => setShowCreate(true)} style={{
-              width: "100%", padding: "6px 12px", borderRadius: "var(--radius-md)",
-              border: "1px dashed var(--border-default)", background: "transparent",
-              cursor: "pointer", fontSize: 11, color: "var(--text-secondary)",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-            }}>
-              <Plus size={11} /> Create signature
-            </button>
-          ) : (
-            <div style={{
-              padding: 10, borderRadius: "var(--radius-md)",
-              border: "1px solid var(--border-default)", background: "var(--bg-surface-sunken)",
-            }}>
-              <input
-                value={newName} onChange={(e) => setNewName(e.target.value)}
-                placeholder="Signature name"
-                style={{
-                  width: "100%", padding: "6px 8px", borderRadius: "var(--radius-sm)",
-                  border: "1px solid var(--border-default)", fontSize: 12, outline: "none",
-                  marginBottom: 6,
-                }}
-              />
-              <textarea
-                value={newHtml} onChange={(e) => setNewHtml(e.target.value)}
-                placeholder="Paste HTML signature or type plain text..."
-                rows={4}
-                style={{
-                  width: "100%", padding: "6px 8px", borderRadius: "var(--radius-sm)",
-                  border: "1px solid var(--border-default)", fontSize: 11, outline: "none",
-                  resize: "vertical", fontFamily: "var(--font-mono)", lineHeight: "16px",
-                }}
-              />
-              <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                <button onClick={() => setShowCreate(false)} style={{
-                  padding: "4px 10px", borderRadius: "var(--radius-sm)",
-                  border: "1px solid var(--border-default)", background: "transparent",
-                  fontSize: 11, cursor: "pointer", color: "var(--text-tertiary)",
-                }}>
-                  Cancel
-                </button>
-                <button onClick={createSignature} disabled={saving} style={{
-                  padding: "4px 10px", borderRadius: "var(--radius-sm)",
-                  border: "none", background: "var(--color-primary)", color: "#fff",
-                  fontSize: 11, fontWeight: 500, cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: 4,
-                }}>
-                  {saving ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />} Save
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Preview */}
+          {/* Preview of selected signature */}
           {selected && selected.content_html && (
             <div style={{
-              marginTop: 8, padding: 10, borderRadius: "var(--radius-md)",
+              marginBottom: 8, padding: 10, borderRadius: "var(--radius-md)",
               border: "1px solid var(--border-subtle)", background: "var(--bg-surface)",
             }}>
               <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginBottom: 4 }}>Preview</div>
@@ -238,6 +161,17 @@ export default function SignaturePicker({
               />
             </div>
           )}
+
+          {/* Create new — always at the bottom, opens full builder */}
+          <button onClick={() => navigate(`/app/signatures?new=1&return=${encodeURIComponent(window.location.pathname)}`)} style={{
+            width: "100%", padding: "6px 12px", borderRadius: "var(--radius-md)",
+            border: "1px dashed var(--border-default)", background: "transparent",
+            cursor: "pointer", fontSize: 11, color: "var(--text-secondary)",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+            marginTop: 2,
+          }}>
+            <Plus size={11} /> Create new signature
+          </button>
         </>
       )}
     </div>
