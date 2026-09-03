@@ -17,6 +17,7 @@ import {
   Trash2, Copy, ArrowRight,
 } from "lucide-react";
 import StatusPill from "../../components/primitives/StatusPill";
+import { revealEmailFragment } from "../../lib/emailPreview";
 
 /* ── Helper ─────────────────────────────────────────────────── */
 const sanitizeHtml = (html) => {
@@ -460,7 +461,12 @@ export default function CampaignReview({ campaignId, onBack }) {
           {(() => {
             const activeSigHtml = campaign?.signature_id ? (signatures.find((s) => s.id === campaign.signature_id)?.content_html || "") : "";
             const hasContent = currentLead && (currentLead.email_subject || currentLead.email_body_html || currentLead.email_body);
-            const bodyHtml = hasContent ? sanitizeHtml(currentLead.email_body_html || currentLead.email_body || "") + (activeSigHtml ? `<br><br>${activeSigHtml}` : "") : "";
+            // Render a faithful fragment (strip <html>/<head>/<body> wrappers,
+            // keep <style>) so pasted full-document HTML previews like the send.
+            const renderedBody = hasContent
+              ? revealEmailFragment(sanitizeHtml(currentLead.email_body_html || currentLead.email_body || ""))
+              : "";
+            const bodyHtml = renderedBody + (activeSigHtml ? `<br><br>${activeSigHtml}` : "");
             return (
               <div style={{ flex: 1, overflow: "auto", padding: 20, background: "var(--bg-surface-sunken)" }}>
                 {hasContent ? (

@@ -173,6 +173,7 @@ function App() {
               <Route path="campaigns/create/ai-template" element={<AITemplateWorkflow />} />
               <Route path="campaigns/create/ai" element={<FullAICampaign />} />
               <Route path="campaigns/create/marketing" element={<MarketingCampaignBuilder />} />
+              <Route path="campaigns/edit/marketing/:id" element={<MarketingCampaignBuilder />} />
               <Route path="campaigns/:id" element={<CampaignDetail />} />
 {/* CRM routes */}
               <Route path="crm" element={<CRM />} />

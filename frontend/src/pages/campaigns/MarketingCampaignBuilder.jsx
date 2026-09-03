@@ -20,6 +20,7 @@ import CampaignReview from "./CampaignReview";
 import AudiencePicker from "./AudiencePicker";
 import SignaturePicker from "./SignaturePicker";
 import VariablePicker from "./VariablePicker";
+import { revealEmailFragment } from "../../lib/emailPreview";
 
 /* ── HTML Templates ──────────────────────────────────── */
 const HTML_TEMPLATES = [
@@ -136,7 +137,7 @@ const UNSUB_FOOTER_PREVIEW = `
 export default function MarketingCampaignBuilder() {
   const { id } = useParams();
   const nav = useNavigate();
-  const [phase, setPhase] = useState(id ? "review" : "compose");
+  const [phase, setPhase] = useState("compose");
   const [name, setName] = useState("Marketing campaign");
   const [subject, setSubject] = useState("");
   const [previewText, setPreviewText] = useState("");
@@ -155,6 +156,26 @@ export default function MarketingCampaignBuilder() {
   const [steps] = useState([{ _key: "s_marketing", channel: "email", day: 0, condition: "always" }]);
   const [showSubjectVars, setShowSubjectVars] = useState(false);
   const [composeMode, setComposeMode] = useState("template"); // template | ai | html
+  const [reviewKey, setReviewKey] = useState(0);
+  const [savingAudience, setSavingAudience] = useState(false);
+
+  const persistAudience = async (leads) => {
+    setSelectedLeads(leads);
+    setShowAudience(false);
+    if (!savedCampaignId) { setPhase("compose"); return; }
+    setSavingAudience(true);
+    try {
+      await api.post(`/campaigns/${savedCampaignId}/leads/batch`, { lead_ids: leads });
+      try { await api.post(`/campaigns/${savedCampaignId}/run-engine`); } catch (e) {
+        toast.warning("Leads added — generation: " + (e?.response?.data?.detail || e.message));
+      }
+      setReviewKey((k) => k + 1);
+      toast.success("Audience updated");
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Failed to update audience");
+    }
+    setSavingAudience(false);
+  };
 
   useEffect(() => {
 
@@ -165,8 +186,22 @@ export default function MarketingCampaignBuilder() {
         if (c.steps?.[0]) {
           setHtml(c.steps[0].body_html || "");
           setSubject(c.steps[0].subject || "");
+          setPreviewText(c.steps[0].preview_text || "");
         }
         setSelectedLeads(c.lead_ids || []);
+        // Editing an existing campaign: land in the composer so the saved HTML
+        // is editable. Only auto-jump to review when leads already have
+        // generated emails (matches PlainCampaignBuilder).
+        if ((c.lead_ids?.length || 0) > 0 && (c.personalized_emails?.length || 0) > 0) {
+          setPhase("review");
+        } else {
+          setPhase("compose");
+        }
+        // If the stored body is real HTML, open the HTML editor (not the
+        // template grid) so the user sees exactly what they authored.
+        if ((c.steps?.[0]?.body_html || "").trim()) {
+          setComposeMode("html");
+        }
       });
     }
   }, [id]);
@@ -207,7 +242,7 @@ export default function MarketingCampaignBuilder() {
         const { data } = await api.post("/campaigns", payload);
         cid = data.id;
         setSavedCampaignId(cid);
-        window.history.replaceState(null, "", `/app/campaigns/${cid}`);
+        window.history.replaceState(null, "", `/app/campaigns/edit/marketing/${cid}`);
         toast.success("Campaign created");
       } else {
         await api.put(`/campaigns/${cid}`, payload);
@@ -226,6 +261,9 @@ export default function MarketingCampaignBuilder() {
           toast.warning("Saved, but generation failed: " + (err?.response?.data?.detail || err.message));
         }
       }
+      // Move to the review screen so preview / approve / add-leads / launch are
+      // reachable in the same session — matches PlainCampaignBuilder.
+      setPhase("review");
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Save failed");
     }
@@ -251,10 +289,27 @@ export default function MarketingCampaignBuilder() {
             <span style={{ color: "var(--text-tertiary)", fontSize: 13 }}>/</span>
             <span style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>{name}</span>
           </div>
+          <button onClick={() => setShowAudience(true)} disabled={savingAudience} style={{
+            display: "flex", alignItems: "center", gap: 5, padding: "6px 12px",
+            borderRadius: "var(--radius-lg)", border: "1px solid var(--border-default)",
+            background: selectedLeads.length > 0 ? "var(--color-primary-subtle)" : "var(--bg-surface)",
+            color: selectedLeads.length > 0 ? "var(--color-primary)" : "var(--text-secondary)",
+            fontSize: 12, fontWeight: 500, cursor: "pointer",
+          }}>
+            {savingAudience ? <Loader2 size={13} className="animate-spin" /> : <Users size={13} />}
+            {selectedLeads.length > 0 ? `${selectedLeads.length} leads` : "Add leads"}
+          </button>
         </div>
         <div style={{ flex: 1, overflow: "hidden" }}>
-          <CampaignReview campaignId={savedCampaignId} />
+          <CampaignReview key={reviewKey} campaignId={savedCampaignId} />
         </div>
+        {showAudience && (
+          <AudiencePicker
+            selectedLeads={selectedLeads}
+            onSelect={persistAudience}
+            onClose={() => setShowAudience(false)}
+          />
+        )}
       </div>
     );
   }
@@ -582,7 +637,7 @@ export default function MarketingCampaignBuilder() {
                 </div>
                 {/* Email body */}
                 <div
-                  dangerouslySetInnerHTML={{ __html: html + UNSUB_FOOTER_PREVIEW }}
+                  dangerouslySetInnerHTML={{ __html: revealEmailFragment(html) + UNSUB_FOOTER_PREVIEW }}
                   style={{ background: "#fff" }}
                 />
               </div>

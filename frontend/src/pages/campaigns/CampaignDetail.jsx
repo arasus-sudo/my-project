@@ -227,6 +227,19 @@ export default function CampaignDetail() {
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {(campaign.campaign_type === "marketing") && (
+            <button
+              onClick={() => nav(`/app/campaigns/edit/marketing/${id}`)}
+              style={{
+                display: "flex", alignItems: "center", gap: 5, padding: "6px 12px",
+                borderRadius: "var(--radius-lg)", border: "1px solid var(--border-default)",
+                background: "var(--bg-surface)", color: "var(--text-secondary)",
+                fontSize: 12, fontWeight: 500, cursor: "pointer",
+              }}
+            >
+              <Edit2 size={13} /> Edit HTML
+            </button>
+          )}
           <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>
             {steps.length} steps · {selectedLeads.length} leads
           </span>
