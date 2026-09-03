@@ -105,11 +105,16 @@ async def enqueue_campaign(workspace_id: str, campaign: Dict[str, Any]) -> Dict[
             signature_html = sig.get("content_html", "")
             signature_text = sig.get("content_text", "")
 
-    # Build personalized email lookup (lead_id -> email data, only approved)
-    personalized_map = {}
-    for p in campaign.get("personalized_emails", []):
-        if p.get("status") == "approved":
-            personalized_map[p["lead_id"]] = p
+    # Build personalized email lookup (lead_id -> email data, only approved).
+    # Emails live in the campaign_emails collection (one doc per lead) rather
+    # than inline on the campaign, keeping the campaign doc under Mongo's 16 MB
+    # cap once a campaign holds many multi-KB HTML bodies.
+    personalized_map = {
+        p["lead_id"]: p for p in await db.campaign_emails.find(
+            {"workspace_id": workspace_id, "campaign_id": campaign["id"], "status": "approved"},
+            {"_id": 0},
+        ).to_list(100000)
+    }
 
     # Cumulative spacing per step, so each additional recipient of a step lands
     # a few minutes after the previous one instead of all at the same instant.

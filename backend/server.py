@@ -392,6 +392,58 @@ def personalize(template: str, lead: Dict[str, Any]) -> str:
     return _resolve_spintax(result)
 
 
+# ----------------------- Campaign Emails (per-lead) ---------------------------
+# Personalized email bodies (with multi-KB `body_html` blobs) used to be stored
+# inline in the campaign's `personalized_emails` array. Once a campaign holds
+# enough HTML emails that array exceeds MongoDB's 16 MB document cap and every
+# write to the campaign fails with `DocumentTooLarge` ("email generation getting
+# failed"). Each generated email now lives in its own document in the
+# `campaign_emails` collection, keyed by (workspace_id, campaign_id, lead_id),
+# so campaign documents stay small and the cap no longer applies.
+
+
+async def _campaign_emails_q(wid: str, cid: str, projection=None):
+    """Query filter scoping campaign email docs to one workspace+campaign."""
+    q = {"workspace_id": wid, "campaign_id": cid}
+    proj = {"_id": 0}
+    if projection:
+        proj.update(projection)
+    return q, proj
+
+
+async def _campaign_emails_list(wid: str, cid: str, projection=None, approved_only=False):
+    q, proj = await _campaign_emails_q(wid, cid, projection)
+    if approved_only:
+        q["status"] = "approved"
+    return await db.campaign_emails.find(q, proj).to_list(100000)
+
+
+async def _campaign_emails_map(wid: str, cid: str, approved_only=False):
+    """lead_id -> entry map for a campaign's generated emails."""
+    return {p["lead_id"]: p for p in await _campaign_emails_list(wid, cid, approved_only=approved_only)}
+
+
+async def _campaign_emails_status_map(wid: str, cid: str):
+    """lead_id -> {status} lightweight map (no body blobs) for counts/checks."""
+    return {p["lead_id"]: p for p in await _campaign_emails_list(
+        wid, cid, projection={"lead_id": 1, "status": 1, "generated_at": 1})}
+
+
+async def _upsert_campaign_email(wid: str, cid: str, entry: Dict[str, Any]) -> None:
+    """Insert or replace the personalized email doc for one lead in a campaign."""
+    doc = dict(entry)
+    doc["workspace_id"] = wid
+    doc["campaign_id"] = cid
+    lead_id = doc.get("lead_id")
+    if not lead_id:
+        raise ValueError("campaign email entry missing lead_id")
+    await db.campaign_emails.update_one(
+        {"workspace_id": wid, "campaign_id": cid, "lead_id": lead_id},
+        {"$set": doc},
+        upsert=True,
+    )
+
+
 # ----------------------------- Health Route -----------------------------------
 @api.get("/health")
 async def health():
@@ -962,6 +1014,8 @@ async def delete_campaign(cid: str, user=Depends(current_user)):
     if result.deleted_count == 0:
         raise HTTPException(404, "Campaign not found")
     # Also clean up related data
+    await db.campaign_emails.delete_many({"campaign_id": cid})
+    await db.generated_emails.delete_many({"campaign_id": cid})
     await db.send_queue.delete_many({"campaign_id": cid})
     await db.events.delete_many({"campaign_id": cid})
     await db.conversations.delete_many({"campaign_id": cid})
@@ -1301,7 +1355,7 @@ async def campaign_preflight(cid: str, user=Depends(current_user)):
     })
 
     # 3. Personalization reviewed
-    pmap = {p["lead_id"]: p for p in c.get("personalized_emails", [])}
+    pmap = await _campaign_emails_status_map(user["workspace_id"], cid)
     approved = sum(1 for lid in lead_ids if pmap.get(lid, {}).get("status") == "approved")
     ungen = sum(1 for lid in lead_ids if lid not in pmap)
     checks.append({
@@ -1524,7 +1578,7 @@ async def launch_campaign(cid: str, skip_pending: bool = False, user=Depends(cur
 
     lead_ids = c.get("lead_ids") or []
     if lead_ids:
-        pmap = {p["lead_id"]: p for p in c.get("personalized_emails", [])}
+        pmap = await _campaign_emails_status_map(user["workspace_id"], cid)
         missing = [lid for lid in lead_ids if lid not in pmap]
         drafts = [lid for lid in lead_ids if pmap.get(lid, {}).get("status") == "draft"]
         if missing or drafts:
@@ -1761,10 +1815,7 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
             "status": "approved",
             "generated_at": now_iso(),
         }
-        await db.campaigns.update_one(
-            {"id": cid},
-            {"$push": {"personalized_emails": personalized}}
-        )
+        await _upsert_campaign_email(wid, cid, personalized)
         await _audit(user, "campaign.lead.email_generated", {"campaign_id": cid, "lead_id": lead_id})
         return personalized
 
@@ -1893,10 +1944,7 @@ async def generate_campaign_lead_email(cid: str, lead_id: str, user=Depends(curr
         "status": "draft",
         "generated_at": now_iso(),
     }
-    await db.campaigns.update_one(
-        {"id": cid},
-        {"$push": {"personalized_emails": personalized}}
-    )
+    await _upsert_campaign_email(wid, cid, personalized)
     await db.generated_emails.insert_one({
         "id": new_id(), "workspace_id": wid,
         "campaign_id": cid, "lead_id": lead_id, "step": 0,
@@ -1925,11 +1973,11 @@ async def get_campaign_leads(cid: str, step: int = 0, user=Depends(current_user)
     renders them at send time (that step's template with the lead's opener
     applied), so the preview matches what would actually go out."""
     wid = user["workspace_id"]
-    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0, "personalized_emails": 1, "lead_ids": 1, "steps": 1})
+    campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0, "lead_ids": 1, "steps": 1})
     if not campaign:
         raise HTTPException(404, "not found")
     lead_ids = campaign.get("lead_ids", [])
-    personalized = campaign.get("personalized_emails", [])
+    personalized = await _campaign_emails_list(wid, cid)
     personalization_map = {p["lead_id"]: p for p in personalized}
     steps = campaign.get("steps") or []
     step_idx = step if 0 <= step < len(steps) else 0
@@ -2001,8 +2049,8 @@ async def generate_all_lead_emails(cid: str, user=Depends(current_user)):
     if not campaign:
         raise HTTPException(404, "not found")
     lead_ids = campaign.get("lead_ids", [])
-    personalized = campaign.get("personalized_emails", [])
-    already_done = {p["lead_id"] for p in personalized}
+    personalized = await _campaign_emails_status_map(wid, cid)
+    already_done = set(personalized)
     to_generate = [lid for lid in lead_ids if lid not in already_done]
     if not to_generate:
         return {"generated": 0, "message": "All leads already have personalized emails"}
@@ -2028,11 +2076,8 @@ async def generate_all_lead_emails(cid: str, user=Depends(current_user)):
             "status": "approved",
             "generated_at": now,
         } for lid in to_generate]
-        if entries:
-            await db.campaigns.update_one(
-                {"id": cid},
-                {"$push": {"personalized_emails": {"$each": entries}}}
-            )
+        for e in entries:
+            await _upsert_campaign_email(wid, cid, e)
         results = list(to_generate)
         await _audit(user, "campaign.leads.email_generated_all", {"campaign_id": cid, "count": len(results)})
         return {"generated": len(results), "errors": errors}
@@ -2063,9 +2108,8 @@ async def delete_campaign_lead_email(cid: str, lead_id: str, user=Depends(curren
     campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
     if not campaign:
         raise HTTPException(404, "not found")
-    await db.campaigns.update_one(
-        {"id": cid},
-        {"$pull": {"personalized_emails": {"lead_id": lead_id}}}
+    await db.campaign_emails.delete_one(
+        {"workspace_id": wid, "campaign_id": cid, "lead_id": lead_id}
     )
     return {"ok": True}
 
@@ -2074,11 +2118,10 @@ async def delete_campaign_lead_email(cid: str, lead_id: str, user=Depends(curren
 async def delete_all_campaign_lead_emails(cid: str, user=Depends(current_user)):
     """Delete ALL personalized emails in a campaign (dismiss all)."""
     wid = user["workspace_id"]
-    result = await db.campaigns.update_one(
-        {"id": cid, "workspace_id": wid},
-        {"$set": {"personalized_emails": []}}
+    result = await db.campaign_emails.delete_many(
+        {"workspace_id": wid, "campaign_id": cid}
     )
-    if result.modified_count == 0:
+    if result.deleted_count == 0:
         raise HTTPException(404, "Campaign not found or no emails to delete")
     return {"ok": True, "deleted": True}
 
@@ -2111,9 +2154,7 @@ async def add_leads_to_campaign(cid: str, body: Dict[str, Any], user=Depends(cur
         batch_size = campaign.get("batch_size", 10)
         total = len(campaign.get("lead_ids", [])) + len(new_ids)
         # Compute starting batch for these new leads
-        existing_personalized = campaign.get("personalized_emails", [])
-        existing_batches = {p["lead_id"]: p.get("batch", 1) for p in existing_personalized}
-        start_idx = len(existing_personalized)
+        start_idx = len(await _campaign_emails_status_map(wid, cid))
         batch_updates = {}
         for i, lid in enumerate(new_ids):
             bn = ((start_idx + i) // batch_size) + 1
@@ -2154,8 +2195,8 @@ async def run_campaign_engine(cid: str, user=Depends(current_user)):
             raise HTTPException(400, f"Batch {current_batch} has no leads assigned. Advance the batch or disable phased generation.")
         lead_ids = batch_lead_ids
 
-    personalized = campaign.get("personalized_emails", [])
-    to_generate = [lid for lid in lead_ids if lid not in {p["lead_id"] for p in personalized}]
+    personalized = await _campaign_emails_status_map(wid, cid)
+    to_generate = [lid for lid in lead_ids if lid not in personalized]
     if not to_generate:
         return {"generated": 0, "job_id": "", "message": "All leads already have personalized emails"}
 
@@ -2185,11 +2226,8 @@ async def run_campaign_engine(cid: str, user=Depends(current_user)):
                 "status": "approved",
                 "generated_at": now,
             })
-        if entries:
-            await db.campaigns.update_one(
-                {"id": cid},
-                {"$push": {"personalized_emails": {"$each": entries}}}
-            )
+        for e in entries:
+            await _upsert_campaign_email(wid, cid, e)
         return {"generated": len(to_generate), "job_id": "", "message": f"Emails ready for {len(to_generate)} leads"}
 
     # Create a generation job record for tracking
@@ -2281,15 +2319,7 @@ async def _run_generation_job(gen_id: str, wid: str, cid: str, to_generate: list
                             "status": "draft",
                             "generated_at": now_iso(),
                         }
-                        await db.campaigns.update_one(
-                            {"id": cid, "personalized_emails.lead_id": lid},
-                            {"$set": {"personalized_emails.$": entry}}
-                        )
-                        # If no existing entry, push new one
-                        result = await db.campaigns.update_one(
-                            {"id": cid, "personalized_emails.lead_id": {"$ne": lid}},
-                            {"$push": {"personalized_emails": entry}}
-                        )
+                        await _upsert_campaign_email(wid, cid, entry)
                         
                         # Update job progress
                         await db.generation_jobs.update_one(
@@ -2407,8 +2437,8 @@ async def advance_campaign_batch(cid: str, user=Depends(current_user)):
     # Trigger generation for the new batch using new job system
     if not await _rate_ok(user):
         raise HTTPException(429, "Daily AI quota exceeded")
-    personalized = campaign.get("personalized_emails", [])
-    to_generate = [lid for lid in batch_lead_ids if lid not in {p["lead_id"] for p in personalized}]
+    personalized = await _campaign_emails_status_map(wid, cid)
+    to_generate = [lid for lid in batch_lead_ids if lid not in personalized]
     if to_generate:
         gen_id = new_id()
         job_doc = {
@@ -2444,8 +2474,8 @@ async def campaign_batch_status(cid: str, user=Depends(current_user)):
     current_batch = campaign.get("current_batch", 1)
     lead_ids = campaign.get("lead_ids", [])
     lead_batches = campaign.get("lead_batches", {})
-    personalized = campaign.get("personalized_emails", [])
-    personalized_by_lead = {p["lead_id"]: p for p in personalized}
+    personalized = await _campaign_emails_status_map(wid, cid)
+    personalized_by_lead = personalized
 
     batches = {}
     for lid in lead_ids:
@@ -2492,17 +2522,9 @@ async def regenerate_lead_opener(cid: str, lead_id: str, user=Depends(current_us
     if not lead:
         raise HTTPException(404, "Lead not found")
     
-    # Get existing personalized email to find the research
-    personalized = None
-    for p in campaign.get("personalized_emails", []):
-        if p["lead_id"] == lead_id:
-            personalized = p
-            break
-    
-    # Remove old personalized email
-    await db.campaigns.update_one(
-        {"id": cid},
-        {"$pull": {"personalized_emails": {"lead_id": lead_id}}}
+    # Remove the old personalized email; regenerate uses the single-lead endpoint.
+    await db.campaign_emails.delete_one(
+        {"workspace_id": wid, "campaign_id": cid, "lead_id": lead_id}
     )
     
     # Re-generate using the single-lead endpoint logic
@@ -2516,29 +2538,30 @@ async def approve_campaign_lead_email(cid: str, lead_id: str, user=Depends(curre
     campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
     if not campaign:
         raise HTTPException(404, "not found")
-    result = await db.campaigns.update_one(
-        {"id": cid, "personalized_emails.lead_id": lead_id},
-        {"$set": {"personalized_emails.$.status": "approved"}}
+    existing = await db.campaign_emails.find_one(
+        {"workspace_id": wid, "campaign_id": cid, "lead_id": lead_id}, {"_id": 0, "status": 1}
     )
-    if result.modified_count == 0:
-        # Template campaigns may not have a personalized_emails entry yet —
+    if existing:
+        await db.campaign_emails.update_one(
+            {"workspace_id": wid, "campaign_id": cid, "lead_id": lead_id},
+            {"$set": {"status": "approved"}}
+        )
+    else:
+        # Template campaigns may not have a personalized email yet —
         # auto-create one so the user can approve without a separate generation step.
         is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain", None)
         if is_template:
             step_template = (campaign.get("steps") or [{}])[0]
             lead_doc = await db.leads.find_one({"id": lead_id, "workspace_id": wid}, {"_id": 0}) or {}
-            await db.campaigns.update_one(
-                {"id": cid},
-                {"$push": {"personalized_emails": {
-                    "lead_id": lead_id,
-                    "subject": personalize(step_template.get("subject", ""), lead_doc),
-                    "body": personalize(step_template.get("body", "") or "", lead_doc),
-                    "body_html": personalize(step_template.get("body_html", "") or "", lead_doc),
-                    "personalized_opener": "",
-                    "status": "approved",
-                    "generated_at": now_iso(),
-                }}}
-            )
+            await _upsert_campaign_email(wid, cid, {
+                "lead_id": lead_id,
+                "subject": personalize(step_template.get("subject", ""), lead_doc),
+                "body": personalize(step_template.get("body", "") or "", lead_doc),
+                "body_html": personalize(step_template.get("body_html", "") or "", lead_doc),
+                "personalized_opener": "",
+                "status": "approved",
+                "generated_at": now_iso(),
+            })
         else:
             raise HTTPException(404, "Personalized email not found")
     await _audit(user, "campaign.lead.email_approved", {"campaign_id": cid, "lead_id": lead_id})
@@ -2552,9 +2575,9 @@ async def reject_campaign_lead_email(cid: str, lead_id: str, user=Depends(curren
     campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
     if not campaign:
         raise HTTPException(404, "not found")
-    result = await db.campaigns.update_one(
-        {"id": cid, "personalized_emails.lead_id": lead_id},
-        {"$set": {"personalized_emails.$.status": "rejected"}}
+    result = await db.campaign_emails.update_one(
+        {"workspace_id": wid, "campaign_id": cid, "lead_id": lead_id},
+        {"$set": {"status": "rejected"}}
     )
     if result.modified_count == 0:
         raise HTTPException(404, "Personalized email not found")
@@ -2573,7 +2596,7 @@ async def approve_all_campaign_emails(cid: str, user=Depends(current_user)):
     is_template = campaign.get("campaign_type") in ("blank", "template", "marketing", "plain", None)
     if is_template:
         step_template = (campaign.get("steps") or [{}])[0]
-        existing = {p["lead_id"] for p in campaign.get("personalized_emails", [])}
+        existing = set((await _campaign_emails_status_map(wid, cid)).keys())
         missing = [lid for lid in campaign.get("lead_ids", []) if lid not in existing]
         if missing:
             now = now_iso()
@@ -2593,14 +2616,11 @@ async def approve_all_campaign_emails(cid: str, user=Depends(current_user)):
                 "status": "approved",
                 "generated_at": now,
             } for lid in missing]
-            await db.campaigns.update_one(
-                {"id": cid},
-                {"$push": {"personalized_emails": {"$each": entries}}}
-            )
-    result = await db.campaigns.update_one(
-        {"id": cid},
-        {"$set": {"personalized_emails.$[elem].status": "approved"}},
-        array_filters=[{"elem.status": {"$in": ["draft", None]}}],
+            for e in entries:
+                await _upsert_campaign_email(wid, cid, e)
+    result = await db.campaign_emails.update_many(
+        {"workspace_id": wid, "campaign_id": cid, "status": {"$in": ["draft", None]}},
+        {"$set": {"status": "approved"}},
     )
     count = result.modified_count
     await _audit(user, "campaign.leads.email_approved_all", {"campaign_id": cid, "count": count})
@@ -2627,16 +2647,16 @@ async def update_lead_opener(cid: str, lead_id: str, body: Dict[str, Any], user=
     template_html = step_template.get("body_html", "")
     merged_body = template_body.replace("{{personalized_opener}}", new_opener)
     merged_html = template_html.replace("{{personalized_opener}}", new_opener) if template_html else ""
-    result = await db.campaigns.update_one(
-        {"id": cid, "personalized_emails.lead_id": lead_id},
+    result = await db.campaign_emails.update_one(
+        {"workspace_id": wid, "campaign_id": cid, "lead_id": lead_id},
         {"$set": {
-            "personalized_emails.$.personalized_opener": new_opener,
-            "personalized_emails.$.body": merged_body,
-            "personalized_emails.$.body_html": merged_html,
-            "personalized_emails.$.status": "draft",
+            "personalized_opener": new_opener,
+            "body": merged_body,
+            "body_html": merged_html,
+            "status": "draft",
         }}
     )
-    if result.modified_count == 0:
+    if result.matched_count == 0:
         # No existing entry for this lead — never AI-generated. Create a
         # manual draft entry instead of requiring generation first.
         entry = {
@@ -2645,12 +2665,7 @@ async def update_lead_opener(cid: str, lead_id: str, body: Dict[str, Any], user=
             "personalized_opener": new_opener, "status": "draft",
             "generated_at": now_iso(), "manual": True,
         }
-        result2 = await db.campaigns.update_one(
-            {"id": cid, "workspace_id": wid},
-            {"$push": {"personalized_emails": entry}},
-        )
-        if result2.modified_count == 0:
-            raise HTTPException(404, "Campaign not found")
+        await _upsert_campaign_email(wid, cid, entry)
     await _audit(user, "campaign.lead.opener_updated", {"campaign_id": cid, "lead_id": lead_id})
     return {"status": "draft", "personalized_opener": new_opener, "body": merged_body}
 
@@ -2672,14 +2687,14 @@ async def bulk_set_lead_status(cid: str, body: BulkStatusIn, user=Depends(curren
     campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0, "personalized_emails": 1})
     if not campaign:
         raise HTTPException(404, "not found")
-    id_set = set(body.lead_ids)
-    matched = sum(1 for p in campaign.get("personalized_emails", []) if p["lead_id"] in id_set)
+    matched = await db.campaign_emails.count_documents(
+        {"workspace_id": wid, "campaign_id": cid, "lead_id": {"$in": body.lead_ids}}
+    )
     if matched == 0:
         return {"updated": 0}
-    await db.campaigns.update_one(
-        {"id": cid},
-        {"$set": {"personalized_emails.$[elem].status": body.status}},
-        array_filters=[{"elem.lead_id": {"$in": body.lead_ids}}],
+    await db.campaign_emails.update_many(
+        {"workspace_id": wid, "campaign_id": cid, "lead_id": {"$in": body.lead_ids}},
+        {"$set": {"status": body.status}},
     )
     await _audit(user, "campaign.leads.bulk_status", {"campaign_id": cid, "count": matched, "status": body.status})
     return {"updated": matched, "status": body.status}
@@ -2709,8 +2724,9 @@ async def send_test_campaign_email(cid: str, lead_id: str, request: Request, use
                 s = s.replace("{{" + k + "}}", v)
         return s
 
-    personalized = campaign.get("personalized_emails", [])
-    entry = next((p for p in personalized if p["lead_id"] == lead_id), None)
+    entry = await db.campaign_emails.find_one(
+        {"workspace_id": wid, "campaign_id": cid, "lead_id": lead_id}, {"_id": 0}
+    )
     step_template = (campaign.get("steps") or [{}])[0]
     if entry:
         subject = _resolve(entry.get("subject", ""))
@@ -2808,20 +2824,7 @@ async def regenerate_all_lead_emails(cid: str, user=Depends(current_user)):
                     "status": "draft", "generated_at": now_iso(),
                 }
                 # Overwrite in place if this lead already has an entry, otherwise append.
-                result = await db.campaigns.update_one(
-                    {"id": cid, "personalized_emails.lead_id": lid},
-                    {"$set": {
-                        "personalized_emails.$.subject": entry["subject"],
-                        "personalized_emails.$.body": entry["body"],
-                        "personalized_emails.$.body_html": entry["body_html"],
-                        "personalized_emails.$.personalized_opener": entry["personalized_opener"],
-                        "personalized_emails.$.research": entry["research"],
-                        "personalized_emails.$.status": "draft",
-                        "personalized_emails.$.generated_at": entry["generated_at"],
-                    }},
-                )
-                if result.modified_count == 0:
-                    await db.campaigns.update_one({"id": cid}, {"$push": {"personalized_emails": entry}})
+                await _upsert_campaign_email(wid, cid, entry)
             except Exception as ex:
                 errors.append({"lead_id": lid, "error": str(ex)})
 
@@ -7910,9 +7913,51 @@ async def _create_indexes():
         await db.agent_registry.create_index([("workspace_id", 1), ("agent_key", 1)], unique=True)
         await db.optout.create_index([("workspace_id", 1), ("email", 1)], unique=True)
         await db.optout.create_index([("workspace_id", 1), ("active", 1)])
+        await db.campaign_emails.create_index([("workspace_id", 1), ("campaign_id", 1), ("lead_id", 1)], unique=True)
+        await db.campaign_emails.create_index([("campaign_id", 1), ("status", 1)])
         logger.info("indexes ensured")
     except Exception as ex:
         logger.warning("index setup: %s", ex)
+
+
+@app.on_event("startup")
+async def _migrate_campaign_emails():
+    """One-time backfill: move legacy inline `personalized_emails` arrays off the
+    campaign docs into the campaign_emails collection. This is the migration
+    half of the fix for `DocumentTooLarge` ("email generation getting failed") —
+    storing the multi-KB HTML bodies inline on the campaign doc blows Mongo's
+    16 MB cap. Idempotent: skips entries that already exist in the new store and
+    clears the source field once migrated."""
+    if MONGO_IS_FALLBACK:
+        return
+    try:
+        migrated = 0
+        async for camp in db.campaigns.find(
+            {"personalized_emails": {"$exists": True, "$ne": []}},
+            {"_id": 0, "id": 1, "workspace_id": 1, "personalized_emails": 1},
+        ):
+            wid = camp.get("workspace_id")
+            cid = camp.get("id")
+            entries = camp.get("personalized_emails") or []
+            if not wid or not cid or not entries:
+                continue
+            for e in entries:
+                if not e or "lead_id" not in e:
+                    continue
+                await db.campaign_emails.update_one(
+                    {"workspace_id": wid, "campaign_id": cid, "lead_id": e["lead_id"]},
+                    {"$setOnInsert": dict(e, workspace_id=wid, campaign_id=cid)},
+                    upsert=True,
+                )
+                migrated += 1
+            await db.campaigns.update_one(
+                {"id": cid},
+                {"$unset": {"personalized_emails": ""}},
+            )
+        if migrated:
+            logger.info("migrated %d legacy campaign emails into campaign_emails", migrated)
+    except Exception as ex:
+        logger.warning("campaign emails migration: %s", ex)
 
 
 # Background jobs. In-process (APScheduler) rather than a separate queue — the only
