@@ -28,6 +28,7 @@ export default function SignaturePicker({
   const navigate = useNavigate();
   const [signatures, setSignatures] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     api.get("/signatures")
@@ -99,8 +100,12 @@ export default function SignaturePicker({
 
       {includeSignature && (
         <>
-          {/* Saved signatures list */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+          {/* Saved signatures list — capped height + scroll so a growing set of
+              signatures never stretches the controls column to half the page */}
+          <div style={{
+            display: "flex", flexDirection: "column", gap: 4, marginBottom: 8,
+            maxHeight: 160, overflowY: "auto", paddingRight: 2,
+          }}>
             {signatures.map((sig) => (
               <div
                 key={sig.id}
@@ -149,16 +154,29 @@ export default function SignaturePicker({
             ))}
           </div>
 
-          {/* Preview of selected signature */}
+          {/* Preview of selected signature — collapsible & collapsed by default so
+              a tall signature doesn't take up half the page */}
           {selected && selected.content_html && (
-            <div style={{
-              marginBottom: 8, padding: 10, borderRadius: "var(--radius-md)",
-              border: "1px solid var(--border-subtle)", background: "var(--bg-surface)",
-            }}>
-              <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginBottom: 4 }}>Preview</div>
-              <div dangerouslySetInnerHTML={{ __html: selected.content_html }}
-                style={{ fontSize: 12, lineHeight: "18px", color: "var(--text-secondary)" }}
-              />
+            <div style={{ marginBottom: 8, padding: "6px 10px", borderRadius: "var(--radius-md)", border: "1px solid var(--border-subtle)", background: "var(--bg-surface)" }}>
+              <button
+                type="button"
+                onClick={() => setShowPreview((v) => !v)}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  width: "100%", border: "none", background: "none", padding: 0,
+                  cursor: "pointer", color: "var(--text-secondary)", fontSize: 11, fontWeight: 500,
+                }}
+              >
+                Preview
+                <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>{showPreview ? "hide" : "show"}</span>
+              </button>
+              {showPreview && (
+                <div style={{ marginTop: 6, maxHeight: 120, overflow: "auto" }}>
+                  <div dangerouslySetInnerHTML={{ __html: selected.content_html }}
+                    style={{ fontSize: 12, lineHeight: "18px", color: "var(--text-secondary)" }}
+                  />
+                </div>
+              )}
             </div>
           )}
 
