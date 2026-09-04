@@ -979,6 +979,17 @@ async def get_campaign(cid: str, user=Depends(current_user)):
     if not c:
         raise HTTPException(404, "not found")
     c["stats"] = await _campaign_stats(cid, user["workspace_id"])
+    # Personalized emails live in the campaign_emails collection (one doc per
+    # lead) so the campaign doc stays small; expose the counts here so the UI can
+    # tell whether emails have been generated without reading a large array.
+    c["personalized_count"], c["approved_count"] = await asyncio.gather(
+        db.campaign_emails.count_documents(
+            {"workspace_id": user["workspace_id"], "campaign_id": cid}
+        ),
+        db.campaign_emails.count_documents(
+            {"workspace_id": user["workspace_id"], "campaign_id": cid, "status": "approved"}
+        ),
+    )
     return c
 
 

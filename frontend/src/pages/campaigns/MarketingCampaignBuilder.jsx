@@ -192,7 +192,7 @@ export default function MarketingCampaignBuilder() {
         // Editing an existing campaign: land in the composer so the saved HTML
         // is editable. Only auto-jump to review when leads already have
         // generated emails (matches PlainCampaignBuilder).
-        if ((c.lead_ids?.length || 0) > 0 && (c.personalized_emails?.length || 0) > 0) {
+        if ((c.lead_ids?.length || 0) > 0 && (c.personalized_count || 0) > 0) {
           setPhase("review");
         } else {
           setPhase("compose");

@@ -114,7 +114,7 @@ export default function PlainCampaignBuilder() {
         if (c.send_window_start) setSendWindowStart(c.send_window_start);
         if (c.send_window_end) setSendWindowEnd(c.send_window_end);
         if (c.timezone) setTimezone(c.timezone);
-        if ((c.lead_ids?.length || 0) > 0 && (c.personalized_emails?.length || 0) > 0) {
+        if ((c.lead_ids?.length || 0) > 0 && (c.personalized_count || 0) > 0) {
           setPhase("review");
         }
       });

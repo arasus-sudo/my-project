@@ -63,7 +63,7 @@ export default function CampaignReview({ campaignId, onBack }) {
   const autoTriggeredRef = useRef(false);
   useEffect(() => {
     if (!campaign || !campaign.lead_ids?.length || generating) return;
-    if ((campaign.personalized_emails?.length || 0) > 0) return;
+    if ((campaign.personalized_count || 0) > 0) return;
     if (autoTriggeredRef.current) return;
     autoTriggeredRef.current = true;
     // Short delay so parent's own run-engine call (if any) fires first
@@ -82,6 +82,7 @@ export default function CampaignReview({ campaignId, onBack }) {
         pollGeneration(campaignId, data.job_id, data.generating);
       } else {
         loadCampaignLeads();
+        loadCampaign();
         setGenerating(false);
         setGenProgress(null);
         toast.success("Emails ready");
@@ -105,6 +106,7 @@ export default function CampaignReview({ campaignId, onBack }) {
           setGenerating(false);
           setGenProgress(null);
           loadCampaignLeads();
+          loadCampaign();
           return;
         }
         setGenProgress({ done: job.done || 0, total: job.total || total || 0 });
@@ -114,6 +116,7 @@ export default function CampaignReview({ campaignId, onBack }) {
           setGenerating(false);
           setGenProgress(null);
           loadCampaignLeads();
+          loadCampaign();
           toast.success(`Generated ${job.done} email${job.done === 1 ? "" : "s"}`);
         }
       } catch {
@@ -245,7 +248,7 @@ export default function CampaignReview({ campaignId, onBack }) {
   const steps = campaign?.steps || [];
   const currentLead = campaignLeads[reviewIndex];
   const hasLeads = (campaign?.lead_ids?.length || 0) > 0;
-  const personalizedCount = campaign?.personalized_emails?.length || 0;
+  const personalizedCount = campaign?.personalized_count || 0;
   const needsGeneration = hasLeads && personalizedCount === 0 && !generating;
 
   if (!campaign) {
