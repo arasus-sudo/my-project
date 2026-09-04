@@ -22,6 +22,15 @@ import SignaturePicker from "./SignaturePicker";
 import VariablePicker from "./VariablePicker";
 import { revealEmailFragment } from "../../lib/emailPreview";
 
+/* ── Timezones ───────────────────────────────────────── */
+const TIMEZONES = [
+  "UTC", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+  "America/Toronto", "America/Sao_Paulo", "Europe/London", "Europe/Paris", "Europe/Berlin",
+  "Europe/Madrid", "Europe/Amsterdam", "Europe/Dublin", "Africa/Johannesburg",
+  "Asia/Dubai", "Asia/Kolkata", "Asia/Singapore", "Asia/Hong_Kong", "Asia/Shanghai",
+  "Asia/Tokyo", "Asia/Seoul", "Australia/Sydney", "Australia/Melbourne", "Pacific/Auckland",
+];
+
 /* ── HTML Templates ──────────────────────────────────── */
 const HTML_TEMPLATES = [
   {
@@ -158,6 +167,9 @@ export default function MarketingCampaignBuilder() {
   const [composeMode, setComposeMode] = useState("template"); // template | ai | html
   const [reviewKey, setReviewKey] = useState(0);
   const [savingAudience, setSavingAudience] = useState(false);
+  const [timezone, setTimezone] = useState("UTC");
+  const [sendWindowStart, setSendWindowStart] = useState("09:00");
+  const [sendWindowEnd, setSendWindowEnd] = useState("17:00");
 
   const persistAudience = async (leads) => {
     setSelectedLeads(leads);
@@ -186,6 +198,11 @@ export default function MarketingCampaignBuilder() {
           setPreviewText(c.steps[0].preview_text || "");
         }
         setSelectedLeads(c.lead_ids || []);
+        if (c.timezone) setTimezone(c.timezone);
+        if (c.send_window_start) setSendWindowStart(c.send_window_start);
+        if (c.send_window_end) setSendWindowEnd(c.send_window_end);
+        if (c.signature_id) { setSignatureId(c.signature_id); setIncludeSignature(true); }
+        else setIncludeSignature(false);
         // Editing an existing campaign: land in the composer so the saved HTML
         // is editable. Only auto-jump to review when leads already have
         // generated emails (matches PlainCampaignBuilder).
@@ -233,6 +250,7 @@ export default function MarketingCampaignBuilder() {
         name, campaign_type: "marketing", steps: [stepData],
         lead_ids: selectedLeads,
         signature_id: includeSignature ? signatureId : null,
+        timezone, send_window_start: sendWindowStart, send_window_end: sendWindowEnd,
       };
       let cid = savedCampaignId;
       if (!cid) {
@@ -584,6 +602,24 @@ export default function MarketingCampaignBuilder() {
                 includeSignature={includeSignature}
                 onToggleInclude={setIncludeSignature}
               />
+            </div>
+
+            {/* Sending window */}
+            <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 12, marginTop: 12 }}>
+              <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary)", display: "block", marginBottom: 8 }}>Sending window</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                <input type="time" value={sendWindowStart} onChange={(e) => setSendWindowStart(e.target.value)}
+                  style={{ flex: 1, padding: "5px 6px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-default)", fontSize: 11, fontFamily: "var(--font-mono)", background: "var(--bg-surface)" }} />
+                <span style={{ color: "var(--text-tertiary)", fontSize: 11 }}>to</span>
+                <input type="time" value={sendWindowEnd} onChange={(e) => setSendWindowEnd(e.target.value)}
+                  style={{ flex: 1, padding: "5px 6px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-default)", fontSize: 11, fontFamily: "var(--font-mono)", background: "var(--bg-surface)" }} />
+              </div>
+              <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-tertiary)", display: "block", marginBottom: 3 }}>Timezone</label>
+              <select value={timezone} onChange={(e) => setTimezone(e.target.value)}
+                style={{ width: "100%", padding: "5px 6px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-default)", fontSize: 11, background: "var(--bg-surface)" }}>
+                {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+              </select>
+              <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 6 }}>Emails are sent only within this window, in the chosen timezone.</div>
             </div>
           </div>
           )}
