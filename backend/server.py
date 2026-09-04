@@ -1997,14 +1997,17 @@ async def get_campaign_leads(cid: str, step: int = 0, user=Depends(current_user)
     leads = await db.leads.find(
         {"id": {"$in": lead_ids}, "workspace_id": wid},
         {"_id": 0}
-    ).to_list(500)
+    ).to_list(len(lead_ids) or 1)
 
     # Alias map for template variables vs stored Lead fields
     VAR_ALIAS = {"company_name": "company", "company": "company_name", "job_title": "title", "title": "job_title"}
+    # Compiled once outside the per-lead loop (the previous version recompiled
+    # the pattern for every lead × field, which showed up as real latency on
+    # large campaigns).
+    _VAR_RE = re.compile(r"\{\{\s*(\w+)\s*\}\}")
     def _resolve(s: str, lead: Dict[str, Any]) -> str:
         if not s:
             return s
-        import re
         def rep(m):
             key = m.group(1).strip()
             v = lead.get(key)
@@ -2013,7 +2016,7 @@ async def get_campaign_leads(cid: str, step: int = 0, user=Depends(current_user)
                 if alias:
                     v = lead.get(alias, "")
             return v if v else m.group(0)
-        return re.sub(r"\{\{\s*(\w+)\s*\}\}", rep, s)
+        return _VAR_RE.sub(rep, s)
 
     result = []
     for lead in leads:

@@ -19,6 +19,10 @@ log = logging.getLogger(__name__)
 MAX_PER_TICK = 5
 RETRY_BACKOFF_MIN = 15
 
+# Compiled once — the per-call compile of this pattern in the merge-field
+# helpers was redundant churn on every enqueue/send.
+_MERGE_FIELD_RE = re.compile(r"\{\{\s*(\w+)\s*\}\}")
+
 # Gap between two consecutive sends of the same step, randomized per recipient.
 # A launch that fires every email at the same instant is the single clearest
 # automation signal to mailbox providers; 2–5 minutes is the range cold-email
@@ -966,12 +970,11 @@ async def _mark_sent(mailbox: Dict[str, Any]):
 
 def _render(row: Dict[str, Any], lead: Dict[str, Any]) -> tuple:
     """Substitute {{merge_fields}} then resolve spintax for email."""
-    import re
 
     def sub(s: str) -> str:
         def rep(m):
             return str(lead.get(m.group(1).strip(), "") or "")
-        return re.sub(r"\{\{\s*(\w+)\s*\}\}", rep, s or "")
+        return _MERGE_FIELD_RE.sub(rep, s or "")
 
     subject = _resolve_spintax(sub(row.get("subject", "")))
     text = _resolve_spintax(sub(row.get("body_text", "")))
@@ -982,11 +985,9 @@ def _render(row: Dict[str, Any], lead: Dict[str, Any]) -> tuple:
 
 def _merge_fields(text: str, lead: Dict[str, Any]) -> str:
     """Substitute {{merge_fields}} in any text string."""
-    import re
-
     def rep(m):
         return str(lead.get(m.group(1).strip(), "") or "")
-    return re.sub(r"\{\{\s*(\w+)\s*\}\}", rep, text or "")
+    return _MERGE_FIELD_RE.sub(rep, text or "")
 
 
 def _next_window_slot(target: datetime, win_start: str, win_end: str,
