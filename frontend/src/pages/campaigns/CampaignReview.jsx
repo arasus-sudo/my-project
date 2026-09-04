@@ -8,7 +8,7 @@
  *   3. Approve / Reject each email
  *   4. Launch when ready
  */
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../../lib/api";
 import { toast } from "sonner";
 import {
@@ -57,26 +57,12 @@ export default function CampaignReview({ campaignId, onBack }) {
     api.get("/signatures").then((r) => setSignatures(r.data || [])).catch(() => {});
   }, [loadCampaign, loadCampaignLeads]);
 
-  // Auto-trigger generation when campaign has leads but no personalized emails yet.
-  // Uses a simple flag — run-engine is idempotent (skips already-done leads),
-  // so double-triggering is safe and better than missing generation entirely.
-  const autoTriggeredRef = useRef(false);
-  useEffect(() => {
-    if (!campaign || !campaign.lead_ids?.length || generating) return;
-    if ((campaign.personalized_count || 0) > 0) return;
-    if (autoTriggeredRef.current) return;
-    autoTriggeredRef.current = true;
-    // Short delay so parent's own run-engine call (if any) fires first
-    const t = setTimeout(() => runEngine(), 1500);
-    return () => clearTimeout(t);
-  }, [campaign]);
-
-  /* ── Generation ── */
-  const runEngine = async () => {
+  {/* ── Generation ── */}
+  const runEngine = async (limit = 500) => {
     setGenerating(true);
     setGenProgress({ done: 0, total: 0 });
     try {
-      const { data } = await api.post(`/campaigns/${campaignId}/run-engine`);
+      const { data } = await api.post(`/campaigns/${campaignId}/run-engine?limit=${limit}`);
       if (data.job_id) {
         setGenProgress({ done: 0, total: data.generating || 0 });
         pollGeneration(campaignId, data.job_id, data.generating);
@@ -85,7 +71,11 @@ export default function CampaignReview({ campaignId, onBack }) {
         loadCampaign();
         setGenerating(false);
         setGenProgress(null);
-        toast.success("Emails ready");
+        if (data.remaining > 0) {
+          toast.success(`${data.generated} generated · ${data.remaining} remaining — generate next batch`);
+        } else {
+          toast.success("All emails ready");
+        }
       }
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Generation failed");
@@ -247,9 +237,10 @@ export default function CampaignReview({ campaignId, onBack }) {
 
   const steps = campaign?.steps || [];
   const currentLead = campaignLeads[reviewIndex];
-  const hasLeads = (campaign?.lead_ids?.length || 0) > 0;
-  const personalizedCount = campaign?.personalized_count || 0;
-  const needsGeneration = hasLeads && personalizedCount === 0 && !generating;
+  const hasLeads = campaignLeads.length > 0;
+  const generatedCount = campaignLeads.filter((l) => !!l.personalized).length;
+  const remainingCount = campaignLeads.length - generatedCount;
+  const needsGeneration = hasLeads && generatedCount === 0 && !generating;
 
   if (!campaign) {
     return (
@@ -350,6 +341,43 @@ export default function CampaignReview({ campaignId, onBack }) {
   /* ── Review mode ── */
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Chunked-generation banner: shows while some leads still need emails */}
+      {remainingCount > 0 && !generating && (
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+          padding: "8px 20px", borderBottom: "1px solid var(--color-warning-border)",
+          background: "var(--color-warning-subtle)", flexShrink: 0,
+        }}>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
+            <AlertTriangle size={13} style={{ color: "var(--color-warning-text)" }} />
+            <span>
+              <strong style={{ color: "var(--color-primary)" }}>{generatedCount}</strong> generated ·{" "}
+              <strong>{remainingCount}</strong> remaining (batches of 500)
+            </span>
+          </div>
+          <button
+            onClick={() => runEngine(500)}
+            style={{
+              padding: "5px 12px", borderRadius: "var(--radius-md)", border: "none",
+              background: "var(--color-primary)", color: "#fff", fontSize: 12, fontWeight: 600,
+              cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
+            }}
+          >
+            <Play size={12} /> Generate next {Math.min(remainingCount, 500)}
+          </button>
+        </div>
+      )}
+      {generating && genProgress && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, padding: "8px 20px",
+          borderBottom: "1px solid var(--border-default)", background: "var(--bg-surface)", flexShrink: 0,
+        }}>
+          <Loader2 size={13} className="animate-spin" style={{ color: "var(--color-primary)" }} />
+          <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+            Generating emails… {genProgress.done} of {genProgress.total || "?"}
+          </span>
+        </div>
+      )}
     <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
       {/* LEFT: Lead list */}
       <div className="cr-sidebar" style={{
@@ -567,6 +595,16 @@ export default function CampaignReview({ campaignId, onBack }) {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {stats.draft > 0 && (
+            <button onClick={approveAll} title="Approve all generated emails" style={{
+              padding: "7px 14px", borderRadius: "var(--radius-lg)",
+              border: "1px solid var(--color-success-border)", background: "var(--color-success-subtle)",
+              color: "var(--color-success-text)", fontSize: 12, fontWeight: 600,
+              cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
+            }}>
+              <Check size={12} /> Approve All
+            </button>
+          )}
           <button onClick={regenerateAll} disabled={generating} style={{
             padding: "7px 14px", borderRadius: "var(--radius-lg)",
             border: "1px solid var(--border-default)", background: "var(--bg-surface)",
@@ -585,13 +623,26 @@ export default function CampaignReview({ campaignId, onBack }) {
               <Pause size={12} /> Pause
             </button>
           ) : (
-            <button onClick={launch} disabled={busy || stats.approved === 0} style={{
-              padding: "7px 16px", borderRadius: "var(--radius-lg)",
-              border: "none", background: stats.approved > 0 ? "var(--color-primary)" : "var(--bg-surface-sunken)",
-              color: stats.approved > 0 ? "#fff" : "var(--text-disabled)",
-              fontSize: 12, fontWeight: 600, cursor: stats.approved > 0 ? "pointer" : "default",
-              display: "flex", alignItems: "center", gap: 5,
-            }}>
+            <button
+              onClick={launch}
+              disabled={busy || stats.approved === 0 || remainingCount > 0 || stats.draft > 0}
+              title={
+                remainingCount > 0
+                  ? `Generate all ${remainingCount} remaining emails before launching`
+                  : stats.draft > 0
+                    ? `Approve or reject ${stats.draft} pending email(s) before launching`
+                    : ""
+              }
+              style={{
+                padding: "7px 16px", borderRadius: "var(--radius-lg)",
+                border: "none",
+                background: (stats.approved > 0 && remainingCount === 0 && stats.draft === 0) ? "var(--color-primary)" : "var(--bg-surface-sunken)",
+                color: (stats.approved > 0 && remainingCount === 0 && stats.draft === 0) ? "#fff" : "var(--text-disabled)",
+                fontSize: 12, fontWeight: 600,
+                cursor: (stats.approved > 0 && remainingCount === 0 && stats.draft === 0) ? "pointer" : "default",
+                display: "flex", alignItems: "center", gap: 5,
+              }}
+            >
               {busy ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />} Launch
             </button>
           )}

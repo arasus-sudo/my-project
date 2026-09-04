@@ -166,11 +166,8 @@ export default function MarketingCampaignBuilder() {
     setSavingAudience(true);
     try {
       await api.post(`/campaigns/${savedCampaignId}/leads/batch`, { lead_ids: leads });
-      try { await api.post(`/campaigns/${savedCampaignId}/run-engine`); } catch (e) {
-        toast.warning("Leads added — generation: " + (e?.response?.data?.detail || e.message));
-      }
       setReviewKey((k) => k + 1);
-      toast.success("Audience updated");
+      toast.success(`Audience updated — ${leads.length} leads`);
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Failed to update audience");
     }
@@ -248,26 +245,42 @@ export default function MarketingCampaignBuilder() {
         await api.put(`/campaigns/${cid}`, payload);
         toast.success("Campaign saved");
       }
-      // Auto-trigger email generation if leads are selected
-      if (cid && selectedLeads.length > 0) {
-        try {
-          const engine = await api.post(`/campaigns/${cid}/run-engine`);
-          if (engine.data.job_id) {
-            toast.success(`Generating emails for ${engine.data.generating} leads`);
-          } else {
-            toast.success(`Emails ready for ${engine.data.generated || 0} leads`);
-          }
-        } catch (err) {
-          toast.warning("Saved, but generation failed: " + (err?.response?.data?.detail || err.message));
-        }
-      }
-      // Move to the review screen so preview / approve / add-leads / launch are
-      // reachable in the same session — matches PlainCampaignBuilder.
-      setPhase("review");
+      return cid;
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Save failed");
+      return null;
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
+  };
+
+  const handleSave = async () => {
+    await save();
+  };
+
+  // Explicit generation — generates one chunk (up to 500) then moves to the
+  // review screen, where remaining leads can be generated batch-by-batch.
+  const handleSaveAndGenerate = async () => {
+    if (selectedLeads.length === 0) {
+      toast.warning("Add at least one lead, then generate");
+      return;
+    }
+    const cid = await save();
+    if (!cid) return;
+    setBusy(true);
+    try {
+      const engine = await api.post(`/campaigns/${cid}/run-engine?limit=500`);
+      if (engine.data.remaining > 0) {
+        toast.success(`${engine.data.generated} generated · ${engine.data.remaining} remaining — generate the rest in review`);
+      } else {
+        toast.success("Emails ready");
+      }
+    } catch (err) {
+      toast.warning("Saved, but generation failed: " + (err?.response?.data?.detail || err.message));
+    } finally {
+      setBusy(false);
+      setPhase("review");
+    }
   };
 
   /* ── Review phase ── */
@@ -352,10 +365,18 @@ export default function MarketingCampaignBuilder() {
             <Users size={13} />
             {selectedLeads.length > 0 ? `${selectedLeads.length} leads` : "Pick audience"}
           </button>
-          <button onClick={save} disabled={busy || !html} className="btn-primary" style={{
+          <button onClick={handleSave} disabled={busy || !html} style={{
+            padding: "6px 14px", fontSize: 12, display: "flex", alignItems: "center", gap: 5,
+            borderRadius: "var(--radius-lg)", border: "1px solid var(--border-default)",
+            background: "var(--bg-surface)", color: "var(--text-secondary)",
+            cursor: busy || !html ? "default" : "pointer",
+          }}>
+            <Save size={12} /> Save
+          </button>
+          <button onClick={handleSaveAndGenerate} disabled={busy || !html} className="btn-primary" style={{
             padding: "6px 14px", fontSize: 12, display: "flex", alignItems: "center", gap: 5,
           }}>
-            {busy ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Save & Generate
+            {busy ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />} Save & Generate
           </button>
         </div>
       </div>

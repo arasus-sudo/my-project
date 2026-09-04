@@ -2182,8 +2182,13 @@ async def add_leads_to_campaign(cid: str, body: Dict[str, Any], user=Depends(cur
 
 
 @api.post("/campaigns/{cid}/run-engine")
-async def run_campaign_engine(cid: str, user=Depends(current_user)):
-    """Start background generation of personalized emails for all leads."""
+async def run_campaign_engine(cid: str, limit: int = 0, user=Depends(current_user)):
+    """Start generation of personalized emails for a campaign's leads.
+
+    `limit` (query param, optional) caps how many leads this call generates, so a
+    large audience can be generated in deterministic chunks (e.g. 500 at a time)
+    from the UI instead of one giant run. `0` / missing generates everything in
+    one go. The response includes `remaining` = leads still without an email."""
     wid = user["workspace_id"]
     campaign = await db.campaigns.find_one({"id": cid, "workspace_id": wid}, {"_id": 0})
     if not campaign:
@@ -2207,9 +2212,11 @@ async def run_campaign_engine(cid: str, user=Depends(current_user)):
         lead_ids = batch_lead_ids
 
     personalized = await _campaign_emails_status_map(wid, cid)
-    to_generate = [lid for lid in lead_ids if lid not in personalized]
-    if not to_generate:
-        return {"generated": 0, "job_id": "", "message": "All leads already have personalized emails"}
+    to_generate_all = [lid for lid in lead_ids if lid not in personalized]
+    if not to_generate_all:
+        return {"generated": 0, "job_id": "", "message": "All leads already have personalized emails", "remaining": 0}
+    to_generate = to_generate_all if limit <= 0 else to_generate_all[:limit]
+    remaining = len(to_generate_all) - len(to_generate)
 
     # Template campaigns have no AI work — generate synchronously so
     # personalized_emails exist immediately and the user can approve right away.
@@ -2231,15 +2238,15 @@ async def run_campaign_engine(cid: str, user=Depends(current_user)):
                 "body": personalize(step_template.get("body", "") or "", ld),
                 "body_html": personalize(step_template.get("body_html", "") or "", ld),
                 "personalized_opener": "",
-                # Template/plain emails are merge-field substitutions only —
-                # no AI review needed, so start as approved so the user
-                # can launch immediately.
-                "status": "approved",
+                # Template/plain emails are merge-field substitutions only,
+                # but still start as draft so the user explicitly approves them
+                # (or uses approve-all) before launch — never auto-approved.
+                "status": "draft",
                 "generated_at": now,
             })
         for e in entries:
             await _upsert_campaign_email(wid, cid, e)
-        return {"generated": len(to_generate), "job_id": "", "message": f"Emails ready for {len(to_generate)} leads"}
+        return {"generated": len(to_generate), "job_id": "", "message": f"Emails ready for {len(to_generate)} leads", "remaining": remaining}
 
     # Create a generation job record for tracking
     gen_id = new_id()
@@ -2263,7 +2270,7 @@ async def run_campaign_engine(cid: str, user=Depends(current_user)):
 
     # Start background processing
     asyncio.create_task(_run_generation_job(gen_id, wid, cid, to_generate, campaign, user))
-    return {"job_id": gen_id, "generating": len(to_generate), "message": f"Generating emails for {len(to_generate)} leads in background"}
+    return {"job_id": gen_id, "generating": len(to_generate), "remaining": remaining, "message": f"Generating emails for {len(to_generate)} leads in background"}
 
 async def _run_generation_job(gen_id: str, wid: str, cid: str, to_generate: list, campaign: dict, user: dict):
     """Background task: generate personalized emails in batches with retry logic."""
@@ -2621,10 +2628,10 @@ async def approve_all_campaign_emails(cid: str, user=Depends(current_user)):
                 "body": personalize(step_template.get("body", "") or "", lmap.get(lid, {})),
                 "body_html": personalize(step_template.get("body_html", "") or "", lmap.get(lid, {})),
                 "personalized_opener": "",
-                # Template/plain emails are merge-field substitutions only —
-                # no AI review needed, so start as approved so the user
-                # can launch immediately.
-                "status": "approved",
+                # Template/plain emails are merge-field substitutions only.
+                # Create as draft so the approve-all update below marks them
+                # approved just like every other generated lead.
+                "status": "draft",
                 "generated_at": now,
             } for lid in missing]
             for e in entries:
