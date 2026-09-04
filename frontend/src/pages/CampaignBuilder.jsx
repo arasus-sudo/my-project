@@ -685,26 +685,6 @@ export default function CampaignBuilder() {
                 } catch (err) { toast.error(err?.response?.data?.detail || "Failed"); }
               }} className="btn-secondary"><LayoutTemplate size={12} /> Template</button>
             )}
-            {status === "active" ? (
-              <button
-                data-testid="pause-campaign"
-                onClick={pauseCampaign}
-                disabled={busy || !id}
-                className="btn-secondary"
-              >
-                <Pause size={12} /> Pause
-              </button>
-            ) : (
-              <button
-                data-testid="launch-campaign"
-                onClick={() => launch()}
-                disabled={busy || !id || leadStats.approved === 0}
-                title={leadStats.approved === 0 ? "Approve at least one lead before launching" : ""}
-                className="btn-primary"
-              >
-                <Play size={12} /> {status === "paused" ? "Resume" : "Launch"}
-              </button>
-            )}
           </div>
         }
       />
